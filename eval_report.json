@@ -1,0 +1,865 @@
+{
+  "timestamp": "2026-03-19T01:44:02.764591",
+  "total": 60,
+  "accuracy": {
+    "pods": 100.0,
+    "image": 100.0,
+    "port": 100.0,
+    "memory": 100.0,
+    "all": 100.0
+  },
+  "per_number_accuracy": {
+    "1": 100.0,
+    "2": 100.0,
+    "3": 100.0,
+    "4": 100.0,
+    "5": 100.0,
+    "6": 100.0,
+    "7": 100.0,
+    "8": 100.0,
+    "9": 100.0,
+    "10": 100.0
+  },
+  "details": [
+    {
+      "input": "deploy 1 pod of nginx:latest for web-frontend",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 1,
+        "image": "nginx:latest",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "start 2 replicas of redis:7-alpine for cache-server",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 2,
+        "image": "redis:7-alpine",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "launch 3 postgres:15 pods named db-primary",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 3,
+        "image": "postgres:15",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "spin up 4 node:20-alpine containers for api-gateway",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 4,
+        "image": "node:20-alpine",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "run 5 python:3.11-slim pods for data-processor",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 5,
+        "image": "python:3.11-slim",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "create 6 golang:1.21-alpine pods for scheduler",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 6,
+        "image": "golang:1.21-alpine",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "deploy 7 mysql:8.0 pods named db-replica",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 7,
+        "image": "mysql:8.0",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "start 8 mongo:6 containers for search-engine",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 8,
+        "image": "mongo:6",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "launch 9 openjdk:17-slim pods for report-generator",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 9,
+        "image": "openjdk:17-slim",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "spin up 10 nginx:1.25-alpine pods for proxy-server",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 10,
+        "image": "nginx:1.25-alpine",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "部署 1 個 web-frontend 的 pod，使用 nginx:latest",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 1,
+        "image": "nginx:latest",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "幫我起 2 個 cache-server，映像檔是 redis:7-alpine",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 2,
+        "image": "redis:7-alpine",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "建立 db-primary 服務，3 個 replica，使用 postgres:15",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 3,
+        "image": "postgres:15",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "我需要 4 個 api-gateway pod，image 用 node:20-alpine",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 4,
+        "image": "node:20-alpine",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "請部署 5 個 python:3.11-slim 作為 data-processor",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 5,
+        "image": "python:3.11-slim",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "把 scheduler 部署起來，6 個 pod，golang:1.21-alpine",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 6,
+        "image": "golang:1.21-alpine",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "幫我建立 7 個 mysql:8.0 的 db-replica",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 7,
+        "image": "mysql:8.0",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "起 8 個 mongo:6 容器，叫做 search-engine",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 8,
+        "image": "mongo:6",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "部署 9 個 openjdk:17-slim 的 report-generator",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 9,
+        "image": "openjdk:17-slim",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "建立 10 個 nginx:1.25-alpine pod，命名為 proxy-server",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 10,
+        "image": "nginx:1.25-alpine",
+        "port": null,
+        "memory": null
+      }
+    },
+    {
+      "input": "deploy 1 nginx:latest pod for web-frontend, port 80",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 1,
+        "image": "nginx:latest",
+        "port": 80,
+        "memory": null
+      }
+    },
+    {
+      "input": "start 2 node:20-alpine pods for api-gateway, port 3000",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 2,
+        "image": "node:20-alpine",
+        "port": 3000,
+        "memory": null
+      }
+    },
+    {
+      "input": "run 3 postgres:15 pods for db-primary, container port 5432",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 3,
+        "image": "postgres:15",
+        "port": 5432,
+        "memory": null
+      }
+    },
+    {
+      "input": "launch 4 redis:7-alpine pods, port 6379",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 4,
+        "image": "redis:7-alpine",
+        "port": 6379,
+        "memory": null
+      }
+    },
+    {
+      "input": "deploy 5 mysql:8.0 pods named db-replica, port 3306",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 5,
+        "image": "mysql:8.0",
+        "port": 3306,
+        "memory": null
+      }
+    },
+    {
+      "input": "start 6 python:3.11-slim pods, expose port 5000",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 6,
+        "image": "python:3.11-slim",
+        "port": 5000,
+        "memory": null
+      }
+    },
+    {
+      "input": "spin up 7 mongo:6 pods for search-engine, port 27017",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 7,
+        "image": "mongo:6",
+        "port": 27017,
+        "memory": null
+      }
+    },
+    {
+      "input": "create 8 golang:1.21-alpine pods, container port 8080",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 8,
+        "image": "golang:1.21-alpine",
+        "port": 8080,
+        "memory": null
+      }
+    },
+    {
+      "input": "launch 9 nginx:1.25-alpine pods for proxy, port 443",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 9,
+        "image": "nginx:1.25-alpine",
+        "port": 443,
+        "memory": null
+      }
+    },
+    {
+      "input": "run 10 openjdk:17-slim pods, expose port 8443",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 10,
+        "image": "openjdk:17-slim",
+        "port": 8443,
+        "memory": null
+      }
+    },
+    {
+      "input": "部署 1 個 web-frontend，image nginx:latest，開放 port 80",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 1,
+        "image": "nginx:latest",
+        "port": 80,
+        "memory": null
+      }
+    },
+    {
+      "input": "幫我跑 2 個 api-gateway，用 node:20-alpine，port 3000",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 2,
+        "image": "node:20-alpine",
+        "port": 3000,
+        "memory": null
+      }
+    },
+    {
+      "input": "建立 3 個 db-primary，image postgres:15，port 5432",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 3,
+        "image": "postgres:15",
+        "port": 5432,
+        "memory": null
+      }
+    },
+    {
+      "input": "起 4 個 redis:7-alpine 容器，開 port 6379",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 4,
+        "image": "redis:7-alpine",
+        "port": 6379,
+        "memory": null
+      }
+    },
+    {
+      "input": "部署 5 個 mysql:8.0 的 db-replica，container port 3306",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 5,
+        "image": "mysql:8.0",
+        "port": 3306,
+        "memory": null
+      }
+    },
+    {
+      "input": "建立 6 個 python:3.11-slim pod，開放 port 5000",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 6,
+        "image": "python:3.11-slim",
+        "port": 5000,
+        "memory": null
+      }
+    },
+    {
+      "input": "起 7 個 mongo:6 的 search-engine，port 27017",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 7,
+        "image": "mongo:6",
+        "port": 27017,
+        "memory": null
+      }
+    },
+    {
+      "input": "部署 8 個 golang:1.21-alpine pod，container port 8080",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 8,
+        "image": "golang:1.21-alpine",
+        "port": 8080,
+        "memory": null
+      }
+    },
+    {
+      "input": "幫我跑 9 個 nginx:1.25-alpine 的 proxy，port 443",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 9,
+        "image": "nginx:1.25-alpine",
+        "port": 443,
+        "memory": null
+      }
+    },
+    {
+      "input": "建立 10 個 openjdk:17-slim pod，開放 port 8443",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 10,
+        "image": "openjdk:17-slim",
+        "port": 8443,
+        "memory": null
+      }
+    },
+    {
+      "input": "deploy 1 nginx:latest pod for web-frontend, memory 256Mi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 1,
+        "image": "nginx:latest",
+        "port": null,
+        "memory": "256Mi"
+      }
+    },
+    {
+      "input": "start 2 python:3.11-slim pods, memory 512Mi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 2,
+        "image": "python:3.11-slim",
+        "port": null,
+        "memory": "512Mi"
+      }
+    },
+    {
+      "input": "launch 3 elasticsearch:8.11.0 pods, memory 2Gi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 3,
+        "image": "elasticsearch:8.11.0",
+        "port": null,
+        "memory": "2Gi"
+      }
+    },
+    {
+      "input": "run 4 redis:7-alpine pods, memory 128Mi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 4,
+        "image": "redis:7-alpine",
+        "port": null,
+        "memory": "128Mi"
+      }
+    },
+    {
+      "input": "deploy 5 postgres:15 pods, set memory to 1Gi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 5,
+        "image": "postgres:15",
+        "port": null,
+        "memory": "1Gi"
+      }
+    },
+    {
+      "input": "start 6 node:20-alpine pods, memory limit 512Mi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 6,
+        "image": "node:20-alpine",
+        "port": null,
+        "memory": "512Mi"
+      }
+    },
+    {
+      "input": "create 7 golang:1.21-alpine pods, memory 256Mi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 7,
+        "image": "golang:1.21-alpine",
+        "port": null,
+        "memory": "256Mi"
+      }
+    },
+    {
+      "input": "spin up 8 mysql:8.0 pods, ram limit 1Gi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 8,
+        "image": "mysql:8.0",
+        "port": null,
+        "memory": "1Gi"
+      }
+    },
+    {
+      "input": "launch 9 mongo:6 pods, memory 512Mi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 9,
+        "image": "mongo:6",
+        "port": null,
+        "memory": "512Mi"
+      }
+    },
+    {
+      "input": "deploy 10 openjdk:17-slim pods, memory limit 256Mi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 10,
+        "image": "openjdk:17-slim",
+        "port": null,
+        "memory": "256Mi"
+      }
+    },
+    {
+      "input": "部署 1 個 web-frontend，image nginx:latest，記憶體限制 256Mi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 1,
+        "image": "nginx:latest",
+        "port": null,
+        "memory": "256Mi"
+      }
+    },
+    {
+      "input": "幫我跑 2 個 data-processor，python:3.11-slim，記憶體 512Mi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 2,
+        "image": "python:3.11-slim",
+        "port": null,
+        "memory": "512Mi"
+      }
+    },
+    {
+      "input": "建立 3 個 elasticsearch:8.11.0 pod，memory 2Gi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 3,
+        "image": "elasticsearch:8.11.0",
+        "port": null,
+        "memory": "2Gi"
+      }
+    },
+    {
+      "input": "起 4 個 redis:7-alpine 容器，記憶體 128Mi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 4,
+        "image": "redis:7-alpine",
+        "port": null,
+        "memory": "128Mi"
+      }
+    },
+    {
+      "input": "部署 5 個 postgres:15 pod，記憶體設定 1Gi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 5,
+        "image": "postgres:15",
+        "port": null,
+        "memory": "1Gi"
+      }
+    },
+    {
+      "input": "幫我起 6 個 node:20-alpine，memory limit 512Mi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 6,
+        "image": "node:20-alpine",
+        "port": null,
+        "memory": "512Mi"
+      }
+    },
+    {
+      "input": "建立 7 個 golang:1.21-alpine pod，記憶體 256Mi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 7,
+        "image": "golang:1.21-alpine",
+        "port": null,
+        "memory": "256Mi"
+      }
+    },
+    {
+      "input": "起 8 個 mysql:8.0 的 db-replica，ram 限制 1Gi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 8,
+        "image": "mysql:8.0",
+        "port": null,
+        "memory": "1Gi"
+      }
+    },
+    {
+      "input": "部署 9 個 mongo:6 容器，記憶體 512Mi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 9,
+        "image": "mongo:6",
+        "port": null,
+        "memory": "512Mi"
+      }
+    },
+    {
+      "input": "建立 10 個 openjdk:17-slim pod，記憶體限制 256Mi",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 10,
+        "image": "openjdk:17-slim",
+        "port": null,
+        "memory": "256Mi"
+      }
+    }
+  ]
+}

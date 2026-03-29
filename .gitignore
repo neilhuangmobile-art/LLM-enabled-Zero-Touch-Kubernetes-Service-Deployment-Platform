@@ -1,0 +1,9 @@
+llama3_k8s_lora_results/
+llama3_merged/
+dataset/
+__pycache__/
+*.bak.*
+*.pyc
+*.safetensors
+*.bin
+.env
