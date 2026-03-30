@@ -1,0 +1,211 @@
+# observability/alert_rules.yaml
+# Prometheus Alerting Rules — 零接觸部署平台監控告警規則
+#
+# 研究報告依據：
+#   「主動監控與告警使代理能夠在問題惡化為停機事件之前
+#    即時響應，實現真正的預防性 SRE」
+#
+# 套用方式：
+#   kubectl apply -f observability/alert_rules.yaml
+#   （需要 Prometheus Operator 或手動掛載到 Prometheus 設定）
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: k8s-platform-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+    app: k8s-zero-touch-platform
+
+spec:
+  groups:
+
+    # ── Pod 健康告警 ─────────────────────────────────────────────
+    - name: pod_health
+      interval: 30s
+      rules:
+
+        - alert: PodCrashLooping
+          expr: |
+            rate(kube_pod_container_status_restarts_total[15m]) * 60 > 0.5
+          for: 5m
+          labels:
+            severity: critical
+            team: sre
+          annotations:
+            summary: "Pod {{ $labels.pod }} 正在 CrashLoop"
+            description: |
+              Pod {{ $labels.namespace }}/{{ $labels.pod }}
+              容器 {{ $labels.container }} 在過去 15 分鐘重啟超過每分鐘 0.5 次。
+              建議：執行自癒流程 python healer/pod_watcher.py --heal -n {{ $labels.namespace }}
+
+        - alert: PodOOMKilled
+          expr: |
+            kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+          for: 0m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "Pod {{ $labels.pod }} 因 OOM 被終止"
+            description: |
+              Pod {{ $labels.namespace }}/{{ $labels.pod }}
+              容器 {{ $labels.container }} 因記憶體不足被系統終止。
+              建議：增加 resources.limits.memory（執行 increase_memory 補救動作）
+
+        - alert: PodNotReady
+          expr: |
+            kube_pod_status_ready{condition="true"} == 0
+            unless on(pod, namespace)
+            kube_pod_status_phase{phase=~"Succeeded|Failed"} == 1
+          for: 10m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "Pod {{ $labels.pod }} 持續 NotReady 超過 10 分鐘"
+            description: |
+              Pod {{ $labels.namespace }}/{{ $labels.pod }} 已超過 10 分鐘未就緒。
+              建議：檢查 readinessProbe 設定或相依服務是否正常。
+
+        - alert: PodImagePullFailed
+          expr: |
+            kube_pod_container_status_waiting_reason{
+              reason=~"ImagePullBackOff|ErrImagePull"
+            } == 1
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Pod {{ $labels.pod }} 映像拉取失敗"
+            description: |
+              Pod {{ $labels.namespace }}/{{ $labels.pod }} 無法拉取映像。
+              原因：{{ $labels.reason }}
+              建議：確認映像 tag 是否存在，或檢查 imagePullSecrets 設定。
+
+    # ── 資源使用告警 ─────────────────────────────────────────────
+    - name: resource_usage
+      interval: 60s
+      rules:
+
+        - alert: HighCPUUsage
+          expr: |
+            sum by (pod, namespace) (
+              rate(container_cpu_usage_seconds_total{container!=""}[5m])
+            ) > 0.9
+          for: 15m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "Pod {{ $labels.pod }} CPU 使用率持續偏高"
+            description: |
+              Pod {{ $labels.namespace }}/{{ $labels.pod }} CPU 使用率
+              超過 0.9 核心已持續 15 分鐘。
+              建議：考慮水平擴展（增加 replicas）或調整 CPU limits。
+
+        - alert: HighMemoryUsage
+          expr: |
+            (
+              sum by (pod, namespace) (container_memory_working_set_bytes{container!=""})
+              /
+              sum by (pod, namespace) (kube_pod_container_resource_limits{resource="memory"})
+            ) > 0.85
+          for: 10m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "Pod {{ $labels.pod }} 記憶體使用率超過 85%"
+            description: |
+              Pod {{ $labels.namespace }}/{{ $labels.pod }} 記憶體使用率
+              超過 limits 的 85%，有 OOMKill 風險。
+              建議：預先執行 increase_memory 補救動作避免被殺。
+
+        - alert: NodeDiskPressure
+          expr: |
+            kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "Node {{ $labels.node }} 磁碟壓力"
+            description: |
+              Node {{ $labels.node }} 正在 DiskPressure 狀態，
+              可能導致 Pod 驅逐（Eviction）。
+              建議：立即清理無用映像（docker image prune）或擴充節點磁碟。
+
+    # ── Deployment 健康告警 ──────────────────────────────────────
+    - name: deployment_health
+      interval: 60s
+      rules:
+
+        - alert: DeploymentReplicasMismatch
+          expr: |
+            kube_deployment_spec_replicas
+            !=
+            kube_deployment_status_replicas_available
+          for: 10m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "Deployment {{ $labels.deployment }} 副本數不符"
+            description: |
+              Deployment {{ $labels.namespace }}/{{ $labels.deployment }}
+              目標副本數與可用副本數不一致已超過 10 分鐘。
+              建議：檢查 Pod 狀態與事件日誌。
+
+        - alert: DeploymentRolloutStuck
+          expr: |
+            kube_deployment_status_condition{
+              condition="Progressing",status="false"
+            } == 1
+          for: 15m
+          labels:
+            severity: critical
+            team: sre
+          annotations:
+            summary: "Deployment {{ $labels.deployment }} 滾動更新卡住"
+            description: |
+              Deployment {{ $labels.namespace }}/{{ $labels.deployment }}
+              的滾動更新已超過 15 分鐘無法完成。
+              建議：考慮執行回滾 python gitops/rollback.py {{ $labels.deployment }} -n {{ $labels.namespace }}
+
+    # ── 平台自身告警 ─────────────────────────────────────────────
+    - name: platform_health
+      interval: 120s
+      rules:
+
+        - alert: ModelServerDown
+          expr: |
+            up{job="model-server"} == 0
+          for: 2m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "LLM Model Server 離線"
+            description: |
+              LLaMA Model Server（core/model_server.py）已離線超過 2 分鐘。
+              LLM 生成能力將降級為規則型分析。
+              建議：重啟 Model Server：python core/model_server.py
+
+        - alert: LLMInferenceLatencyHigh
+          expr: |
+            histogram_quantile(0.95,
+              rate(model_server_inference_duration_seconds_bucket[5m])
+            ) > 30
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "LLM 推論延遲過高（P95 > 30s）"
+            description: |
+              Model Server 的 P95 推論延遲超過 30 秒。
+              可能原因：GPU 資源不足、模型量化問題、或請求堆積。

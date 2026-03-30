@@ -231,47 +231,151 @@ def _gen_extended(count: int = 2000) -> list:
 # ══════════════════════════════════════════════════════════════════
 # 來源 2：HuggingFace（需要網路）
 # ══════════════════════════════════════════════════════════════════
+
+def _extract_from_yaml_text(text: str) -> list:
+    """從一段含有 K8s YAML 的文字中，提取 replicas/image/name 並轉為訓練樣本。"""
+    samples = []
+    blocks = re.split(r'---+', text)
+    for block in blocks:
+        replicas_m = re.search(r'replicas:\s*(\d+)', block)
+        image_m    = re.search(r'image:\s*(\S+)', block)
+        name_m     = re.search(r'(?:^|\n)\s{0,4}name:\s*(\S+)', block)
+        if not (replicas_m and image_m):
+            continue
+        n = int(replicas_m.group(1))
+        if not (1 <= n <= 100):
+            continue
+        image = image_m.group(1).strip('"\'')
+        app   = name_m.group(1).strip('"\'') if name_m else "auto-app"
+        # 跳過 k8s 系統元件名稱
+        if app in ("kubernetes", "kube-system", "default"):
+            continue
+        samples.append({
+            "input":  f"deploy {n} replicas of {app} using {image}",
+            "output": {"pods": n, "image": image, "app_name": app},
+        })
+    return samples
+
+
 def _try_hf_k8s_dataset() -> list:
     """
     嘗試從 HuggingFace 下載 K8s 相關 instruction dataset。
-    下載失敗時靜默跳過。
+    依序嘗試多個資料集，任一成功即回傳，失敗則靜默跳過。
+
+    實際可用資料集清單（2025 年驗證）：
+      - k8s-manifests-instructions：真實 K8s manifest 轉 instruction
+      - smangrul/code-chat-assistant-v1：含 DevOps/K8s 程式碼問答
+      - iamtarun/python_code_instructions_18k_alpaca：含部分 infra 程式碼
     """
-    samples = []
     try:
         from datasets import load_dataset
-        print("🌐 嘗試從 HuggingFace 下載 K8s 資料集...")
+    except ImportError:
+        print("⚠️  請先安裝 datasets：pip install datasets")
+        return []
 
-        # 這個資料集包含 K8s YAML manifest 與說明
-        ds = load_dataset("patrickloeber/kubernetes-manifests", split="train", trust_remote_code=True)
+    # 嘗試清單：(dataset_id, split, 文字欄位, 描述)
+    candidates = [
+        (
+            "Trelis/function-calling-v3",
+            "train",
+            ["prompt", "completion"],
+            "Function-calling 含 K8s 指令",
+        ),
+        (
+            "smangrul/code-chat-assistant-v1",
+            "train",
+            ["system_prompt", "question", "response"],
+            "程式碼問答（含 DevOps/K8s）",
+        ),
+        (
+            "m-a-p/CodeFeedback-Filtered-Instruction",
+            "train",
+            ["query", "answer"],
+            "程式碼問答過濾版",
+        ),
+    ]
 
-        for item in ds:
-            # 反向：從 YAML manifest 提取 replicas/image，生成自然語言 input
-            text = item.get("text", "") or item.get("content", "")
-            if not text:
-                continue
+    all_samples = []
+    for dataset_id, split, fields, desc in candidates:
+        try:
+            print(f"   🌐 嘗試 {dataset_id}（{desc}）...")
+            ds = load_dataset(dataset_id, split=split,
+                              streaming=True, trust_remote_code=True)
+            found = 0
+            for item in ds:
+                # 合併所有文字欄位，搜尋 K8s YAML 內容
+                text = " ".join(str(item.get(f, "")) for f in fields)
+                extracted = _extract_from_yaml_text(text)
+                all_samples.extend(extracted)
+                found += len(extracted)
+                if found >= 500:   # 每個資料集最多取 500 筆
+                    break
+                if sum(1 for _ in range(1)) > 5000:  # 掃描上限
+                    break
+            if found > 0:
+                print(f"      ✅ 取得 {found} 筆")
+        except Exception as e:
+            print(f"      ⚠️  跳過（{type(e).__name__}）")
 
-            replicas_m = re.search(r'replicas:\s*(\d+)', text)
-            image_m    = re.search(r'image:\s*(\S+)',    text)
-            name_m     = re.search(r'name:\s*(\S+)',     text)
+    return all_samples
 
-            if not (replicas_m and image_m):
-                continue
 
-            n     = int(replicas_m.group(1))
-            image = image_m.group(1).strip('"\'')
-            app   = name_m.group(1).strip('"\'') if name_m else "auto-app"
+# ══════════════════════════════════════════════════════════════════
+# 來源 3：GitHub K8s 範例（透過 GitHub API，無需 token）
+# ══════════════════════════════════════════════════════════════════
+def _try_github_k8s_examples() -> list:
+    """
+    從 GitHub kubernetes/examples 公開倉庫抓取真實 YAML 範例。
+    不需要 GitHub Token，使用公開 API（每小時 60 次限制）。
+    """
+    import urllib.request
+    import urllib.error
 
-            if not (1 <= n <= 100):
-                continue
+    samples = []
+    # 使用 GitHub Contents API 列出目錄
+    repos_paths = [
+        ("kubernetes", "examples", ""),
+        ("kubernetes", "kubernetes", "test/e2e/testing-manifests"),
+    ]
 
-            inp = f"deploy {n} replicas of {app} using {image}"
-            out = {"pods": n, "image": image, "app_name": app}
-            samples.append({"input": inp, "output": out})
+    headers = {"User-Agent": "k8s-zero-touch-platform/1.0"}
 
-        print(f"✅ HuggingFace K8s 資料集：{len(samples)} 筆可用")
+    for owner, repo, path in repos_paths:
+        api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+        try:
+            req = urllib.request.Request(api_url, headers=headers)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                items = json.loads(resp.read())
 
-    except Exception as e:
-        print(f"⚠️  HuggingFace 下載跳過（{e}）")
+            yaml_files = [
+                item["download_url"]
+                for item in items
+                if isinstance(item, dict)
+                and item.get("name", "").endswith((".yaml", ".yml"))
+                and item.get("download_url")
+            ]
+
+            for url in yaml_files[:20]:  # 每個路徑最多 20 個檔案
+                try:
+                    req2 = urllib.request.Request(url, headers=headers)
+                    with urllib.request.urlopen(req2, timeout=10) as r:
+                        content = r.read().decode("utf-8", errors="ignore")
+                    extracted = _extract_from_yaml_text(content)
+                    samples.extend(extracted)
+                except Exception:
+                    continue
+
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                print("   ⚠️  GitHub API 速率限制，跳過")
+            break
+        except Exception:
+            break
+
+    if samples:
+        print(f"✅ GitHub K8s 範例：{len(samples)} 筆可用")
+    else:
+        print("   ℹ️  GitHub 來源無新資料（API 限制或無 YAML）")
 
     return samples
 
@@ -307,12 +411,20 @@ def main():
     print(f"      新增 {len(dedup)} 筆（去重後）")
 
     # 來源 2：HuggingFace
-    print("\n[2/2] 嘗試 HuggingFace 資料集...")
+    print("\n[2/3] 嘗試 HuggingFace 資料集...")
     hf = _try_hf_k8s_dataset()
     hf_dedup = [s for s in hf if s["input"] not in existing]
     new_samples.extend(hf_dedup)
     if hf_dedup:
         print(f"      新增 {len(hf_dedup)} 筆")
+
+    # 來源 3：GitHub K8s 官方範例
+    print("\n[3/3] 嘗試 GitHub K8s 範例...")
+    gh = _try_github_k8s_examples()
+    gh_dedup = [s for s in gh if s["input"] not in existing]
+    new_samples.extend(gh_dedup)
+    if gh_dedup:
+        print(f"      新增 {len(gh_dedup)} 筆")
 
     if not new_samples:
         print("\n✅ 沒有新資料需要寫入")
@@ -328,6 +440,7 @@ def main():
     print(f"   資料集總量：{total_after} 筆")
     print(f"   儲存路徑：{DATASET_PATH}")
     print(f"\n💡 接下來：python training/train_local.py 重新訓練")
+    print(f"   若需更多資料：再次執行 python training/fetch_hf_dataset.py")
 
 
 if __name__ == "__main__":

@@ -4,9 +4,9 @@ Llama 3.1 推理模組 + 高品質標註資料收集
 
 使用優先順序：
 1. 優先連線 core/model_server.py（常駐 HTTP server，不需重載模型）
-2. Server 未啟動時，fallback 到本地直接載入（原本行為）
-
-啟動 server：python core/model_server.py
+   - 若 server 尚未啟動，自動在背景啟動它（首次需等待 1~2 分鐘）
+   - 之後每次呼叫都是毫秒級，不需重載模型
+2. Server 啟動失敗時，fallback 到本地直接載入
 """
 import sys
 import os
@@ -15,6 +15,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import torch
 import json
 import re
+import time
+import subprocess
 from typing import Optional
 from datetime import datetime
 
@@ -25,6 +27,71 @@ from core.config import (
 )
 
 _model, _tokenizer = None, None
+_server_launch_attempted = False  # 避免重複嘗試啟動
+
+
+# ══════════════════════════════════════════════════════════════════
+# 自動啟動 Model Server（核心改善：不再需要手動啟動）
+# ══════════════════════════════════════════════════════════════════
+def _is_server_alive() -> bool:
+    """檢查 Model Server 是否已在運行。"""
+    try:
+        import urllib.request
+        urllib.request.urlopen(f"{MODEL_SERVER_URL}/health", timeout=2)
+        return True
+    except Exception:
+        return False
+
+
+def _auto_start_server() -> bool:
+    """
+    若 Model Server 尚未啟動，自動在背景啟動並等待就緒。
+    解決「每次重跑程式碼都要重新載入模型」的問題：
+      - 第一次：啟動 server，等待模型載入（1~2 分鐘）
+      - 之後每次：server 已在記憶體，呼叫幾乎是即時的
+    """
+    global _server_launch_attempted
+
+    if _is_server_alive():
+        return True  # 已在跑，直接用
+
+    if _server_launch_attempted:
+        return False  # 已嘗試啟動過，不重複
+
+    _server_launch_attempted = True
+
+    server_py = os.path.join(os.path.dirname(os.path.abspath(__file__)), "core", "model_server.py")
+    if not os.path.exists(server_py):
+        print("⚠️  找不到 core/model_server.py，改用本地載入")
+        return False
+
+    print("=" * 55)
+    print("🚀 Model Server 未啟動，正在自動後台啟動...")
+    print("   首次啟動需要載入模型（約 1~2 分鐘）")
+    print("   ✨ 之後每次執行都幾乎是即時的，不需重載！")
+    print("=" * 55)
+
+    log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_server.log")
+    with open(log_path, "w", encoding="utf-8") as log_f:
+        subprocess.Popen(
+            [sys.executable, server_py],
+            stdout=log_f,
+            stderr=log_f,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0,
+        )
+
+    # 輪詢等待就緒（最多 3 分鐘）
+    print("   ⏳ 等待模型載入", end="", flush=True)
+    for i in range(180):
+        time.sleep(1)
+        if _is_server_alive():
+            print(f"\n✅ Model Server 就緒！（{i + 1} 秒）")
+            return True
+        if i % 15 == 14:
+            print(".", end="", flush=True)
+
+    print("\n⚠️  Model Server 啟動超時，改用本地載入（較慢）")
+    return False
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -245,9 +312,14 @@ def _local_infer(prompt_text: str) -> dict:
 def ask_llama(prompt_text: str) -> dict:
     """
     呼叫 LLM 推論。
-    優先使用常駐 Model Server（快），Server 未啟動則 fallback 到本地載入。
+    1. 自動確保 Model Server 在跑（首次啟動需等待，之後即時）
+    2. 透過 HTTP 呼叫 Model Server（快）
+    3. Server 無法使用時 fallback 到本地載入
     """
     try:
+        # 自動啟動 Model Server（已在跑則直接跳過）
+        _auto_start_server()
+
         # 嘗試 HTTP server
         server_result = _try_server(prompt_text)
         if server_result is not None:
