@@ -1,37 +1,66 @@
 """
 llama_client.py
 Llama 3.1 推理模組 + 高品質標註資料收集
+
+使用優先順序：
+1. 優先連線 core/model_server.py（常駐 HTTP server，不需重載模型）
+2. Server 未啟動時，fallback 到本地直接載入（原本行為）
+
+啟動 server：python core/model_server.py
 """
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import torch
 import json
-import os
 import re
 from typing import Optional
 from datetime import datetime
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from peft import PeftModel
 
-BASE_MODEL   = "meta-llama/Llama-3.1-8B-Instruct"
-ADAPTER_PATH = r"D:\k8s_new\llama3_k8s_lora_results"
-DATASET_PATH = r"D:\k8s_new\dataset\finetune_samples.jsonl"
+# 從 config 引用，不再硬編碼路徑
+from core.config import (
+    BASE_MODEL, ADAPTER_PATH, DATASET_PATH,
+    SYSTEM_PROMPT, MODEL_SERVER_URL,
+)
 
 _model, _tokenizer = None, None
 
-SYSTEM_PROMPT = (
-    "You are an AI that converts Kubernetes deployment requests into JSON.\n"
-    "ONLY output a valid JSON object. No explanation, no markdown, no extra text.\n"
-    "Required fields: pods (integer), image (string), app_name (string)\n"
-    "Optional fields: port (integer), memory (string, e.g. 256Mi)\n"
-    'Example: {"pods": 3, "image": "nginx:latest", "app_name": "web-frontend", "port": 80}'
-)
+
+# ══════════════════════════════════════════════════════════════════
+# HTTP Client（優先使用 Model Server）
+# ══════════════════════════════════════════════════════════════════
+def _try_server(prompt_text: str) -> Optional[dict]:
+    """嘗試呼叫常駐 Model Server。未啟動時回傳 None（觸發 fallback）。"""
+    try:
+        import urllib.request
+        body = json.dumps({"prompt": prompt_text}).encode()
+        req  = urllib.request.Request(
+            f"{MODEL_SERVER_URL}/infer",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read())
+            return data.get("result")
+    except Exception:
+        return None  # server 未啟動，靜默 fallback
 
 
+# ══════════════════════════════════════════════════════════════════
+# 本地直接載入（Fallback）
+# ══════════════════════════════════════════════════════════════════
 def _load_model_once():
     global _model, _tokenizer
     if _model is not None:
         return _model, _tokenizer
 
+    from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+    from peft import PeftModel
+
     print("🧹 正在清理顯存並載入 Llama 3.1 GPU 專家模型 (4-bit 量化)...")
+    print("💡 提示：執行 'python core/model_server.py' 可避免每次重載模型")
     torch.cuda.empty_cache()
 
     bnb_config = BitsAndBytesConfig(
@@ -46,7 +75,7 @@ def _load_model_once():
     base = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL,
         quantization_config=bnb_config,
-        device_map={"": 0}
+        device_map={"": 0},
     )
     base.config.use_cache = True
 
@@ -61,20 +90,14 @@ def _load_model_once():
     return _model, _tokenizer
 
 
+# ══════════════════════════════════════════════════════════════════
+# 解析輔助
+# ══════════════════════════════════════════════════════════════════
 def _extract_first_json(text: str) -> Optional[str]:
-    """
-    從字串中精確抽出第一個完整的 JSON 物件。
-    做法：找到第一個 { 之後，逐字追蹤括號深度，
-    遇到配對的 } 就停，完全不依賴 regex 的貪婪匹配。
-    """
     start = text.find("{")
     if start == -1:
         return None
-
-    depth     = 0
-    in_string = False
-    escape    = False
-
+    depth, in_string, escape = 0, False, False
     for i in range(start, len(text)):
         ch = text[i]
         if escape:
@@ -94,26 +117,16 @@ def _extract_first_json(text: str) -> Optional[str]:
             depth -= 1
             if depth == 0:
                 return text[start:i + 1]
-
     return None
 
 
 def _fix_nulls(text: str) -> str:
-    """把 JSON 裡的 null 值換成字串 NULL，讓 json.loads 能正常解析"""
     return re.sub(r'(?<=:)\s*null\b', ' "NULL"', text)
 
 
 def _parse(text: str) -> Optional[dict]:
-    """
-    從任意字串中解析出 K8s JSON，四層策略：
-    1. 抽出第一個完整 JSON → 修 null → 解析
-    2. json_repair
-    3. Regex 手動萃取
-    """
-    # 先抽出第一個完整 JSON 區塊
     snippet = _extract_first_json(text)
     if snippet:
-        # 修 null 再解析
         fixed = _fix_nulls(snippet)
         try:
             result = json.loads(fixed)
@@ -122,7 +135,6 @@ def _parse(text: str) -> Optional[dict]:
         except Exception:
             pass
 
-    # 策略 2：json_repair
     try:
         from json_repair import repair_json
         target = snippet or text
@@ -133,7 +145,6 @@ def _parse(text: str) -> Optional[dict]:
     except Exception:
         pass
 
-    # 策略 3：Regex 手動萃取（最後防線）
     src = snippet or text
     pods_m  = re.search(r'"(?:pods|replicas)"\s*:\s*(\d+)', src)
     image_m = re.search(r'"image"\s*:\s*"([^"]+)"',         src)
@@ -163,79 +174,87 @@ def _validate(result: dict) -> bool:
     if "error" in result:
         return False
     try:
-        pods_int = int(result.get("pods", 0))
-        return 1 <= pods_int <= 100
+        return 1 <= int(result.get("pods", 0)) <= 100
     except (ValueError, TypeError):
         return False
 
 
-def ask_llama(prompt_text: str) -> dict:
-    try:
-        model, tokenizer = _load_model_once()
+def _local_infer(prompt_text: str) -> dict:
+    """本地直接推論（fallback 路徑）。"""
+    model, tokenizer = _load_model_once()
 
-        full_prompt = (
-            f"### System\n{SYSTEM_PROMPT}\n\n"
-            f"### User\n{prompt_text}\n"
-            "### Assistant\n{"
+    full_prompt = (
+        f"### System\n{SYSTEM_PROMPT}\n\n"
+        f"### User\n{prompt_text}\n"
+        "### Assistant\n{"
+    )
+
+    inputs    = tokenizer(full_prompt, return_tensors="pt").to("cuda")
+    input_len = inputs["input_ids"].shape[1]
+
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=128,
+            temperature=0.3,
+            do_sample=True,
+            top_p=0.9,
+            repetition_penalty=1.2,
+            eos_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.eos_token_id,
         )
 
-        inputs    = tokenizer(full_prompt, return_tensors="pt").to("cuda")
-        input_len = inputs["input_ids"].shape[1]
+    new_tokens = outputs[0][input_len:]
+    generated  = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+    if not generated.startswith("{"):
+        generated = "{" + generated
 
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=128,
-                temperature=0.3,
-                do_sample=True,
-                top_p=0.9,
-                repetition_penalty=1.2,
-                eos_token_id=tokenizer.eos_token_id,
-                pad_token_id=tokenizer.eos_token_id,
-            )
+    print(f"[DEBUG] 模型原始輸出：{generated}")
 
-        new_tokens = outputs[0][input_len:]
-        generated  = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+    snippet = _extract_first_json(generated)
+    if not snippet:
+        raise ValueError(f"找不到完整 JSON，原始輸出：{generated}")
 
-        # 補回預填的 {
-        if not generated.startswith("{"):
-            generated = "{" + generated
+    snippet = re.sub(r':\s*null\b', ': "NULL"', snippet)
+    result  = _parse(snippet)
 
-        print(f"[DEBUG] 模型原始輸出：{generated}")
-
-        # 直接抽出第一個完整 JSON，垃圾內容完全無視
-        snippet = _extract_first_json(generated)
-        if not snippet:
-            raise ValueError(f"找不到完整 JSON，原始輸出：{generated}")
-
-        # 修 null 再解析
-        snippet = re.sub(r':\s*null\b', ': "NULL"', snippet)
-        print(f"[DEBUG] 抽出 JSON：{snippet}")
-
-        result = _parse(snippet)
-
-        if result and _validate(result):
-            result.setdefault("image",    "nginx:latest")
-            result.setdefault("app_name", "auto-app")
-            result["pods"] = int(result["pods"])
-
-            if "port" in result:
-                try:
-                    p = int(result["port"])
-                    if 1 <= p <= 65535:
-                        result["port"] = p
-                    else:
-                        del result["port"]
-                except (ValueError, TypeError):
+    if result and _validate(result):
+        result.setdefault("image",    "nginx:latest")
+        result.setdefault("app_name", "auto-app")
+        result["pods"] = int(result["pods"])
+        if "port" in result:
+            try:
+                p = int(result["port"])
+                if 1 <= p <= 65535:
+                    result["port"] = p
+                else:
                     del result["port"]
+            except (ValueError, TypeError):
+                del result["port"]
+        if "memory" in result:
+            if not re.match(r"^\d+(Mi|Gi|Ki|M|G)$", str(result["memory"])):
+                del result["memory"]
+        return result
 
-            if "memory" in result:
-                if not re.match(r"^\d+(Mi|Gi|Ki|M|G)$", str(result["memory"])):
-                    del result["memory"]
+    raise ValueError(f"驗證失敗，解析結果：{result}")
 
-            return result
 
-        raise ValueError(f"驗證失敗，解析結果：{result}")
+# ══════════════════════════════════════════════════════════════════
+# 公開 API
+# ══════════════════════════════════════════════════════════════════
+def ask_llama(prompt_text: str) -> dict:
+    """
+    呼叫 LLM 推論。
+    優先使用常駐 Model Server（快），Server 未啟動則 fallback 到本地載入。
+    """
+    try:
+        # 嘗試 HTTP server
+        server_result = _try_server(prompt_text)
+        if server_result is not None:
+            return server_result
+
+        # Fallback：本地直接載入
+        return _local_infer(prompt_text)
 
     except Exception as e:
         return {"error": "解析失敗", "raw": str(e)}
@@ -256,10 +275,6 @@ def save_gold_sample(user_input: str, corrected_json: dict):
     user_input = user_input.strip()
     if user_input.isdigit():
         user_input = f"deploy {user_input} pods"
-
-    dataset_dir = os.path.dirname(DATASET_PATH)
-    if dataset_dir and not os.path.exists(dataset_dir):
-        os.makedirs(dataset_dir)
 
     sample = {
         "input" : user_input,

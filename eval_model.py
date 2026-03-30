@@ -13,17 +13,9 @@ from datetime import datetime
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from peft import PeftModel
 
-BASE_MODEL   = "meta-llama/Llama-3.1-8B-Instruct"
-ADAPTER_PATH = r"D:\k8s_new\llama3_k8s_lora_results"
-REPORT_PATH  = r"D:\k8s_new\eval_report.json"
-
-SYSTEM_PROMPT = (
-    "You are an AI that converts Kubernetes deployment requests into JSON.\n"
-    "ONLY output a valid JSON object. No explanation, no markdown, no extra text.\n"
-    "Required fields: pods (integer), image (string), app_name (string)\n"
-    "Optional fields: port (integer), memory (string, e.g. 256Mi)\n"
-    'Example: {"pods": 3, "image": "nginx:latest", "app_name": "web-frontend", "port": 80}'
-)
+import sys as _sys
+_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from core.config import BASE_MODEL, ADAPTER_PATH, EVAL_REPORT as REPORT_PATH, SYSTEM_PROMPT
 
 # ==============================
 # 測試案例：pods 1~10 各類情境

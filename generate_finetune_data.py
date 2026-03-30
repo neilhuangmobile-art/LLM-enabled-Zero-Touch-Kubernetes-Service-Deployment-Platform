@@ -193,9 +193,10 @@ def generate():
 
 
 def main():
-    DATASET_DIR  = r"D:\k8s_new\dataset"
-    DATASET_PATH = os.path.join(DATASET_DIR, "finetune_samples.jsonl")
-    os.makedirs(DATASET_DIR, exist_ok=True)
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from core.config import DATASET_PATH
+    os.makedirs(os.path.dirname(DATASET_PATH), exist_ok=True)
 
     samples = generate()
 
