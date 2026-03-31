@@ -42,3 +42,18 @@ SYSTEM_PROMPT = (
 # ── 確保目錄存在（import 時自動建立）────────────────────────────
 for _d in [DATASET_DIR, YAML_DIR, REPORTS_DIR]:
     os.makedirs(_d, exist_ok=True)
+
+
+def ensure_utf8_output():
+    """
+    確保 stdout/stderr 以 UTF-8 輸出，解決 Windows cp950 無法顯示
+    中文符號（✓ ✗ ⚠ 等）的問題。在所有 CLI 入口點呼叫一次即可。
+    """
+    import sys
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name)
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass

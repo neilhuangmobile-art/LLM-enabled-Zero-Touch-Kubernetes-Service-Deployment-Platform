@@ -1,14 +1,20 @@
 """
 0_touch_generate_pods.py
 AI Kubernetes 部署助手主程式
-執行：python 0_touch_generate_pods.py
+執行：python 0_touch_generate_pods.py（任意目錄皆可）
 """
 import sys
 import os
+# 讓任意目錄都能正確找到專案模組
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from core.config import ensure_utf8_output
+ensure_utf8_output()
+
 import time
 import yaml
 from kubernetes import client, config
 from llama_client import ask_llama, save_gold_sample
+from core.config import YAML_DIR
 
 # ==============================
 # 設定
@@ -17,7 +23,7 @@ DEFAULT_IMAGE = "nginx:latest"
 APP_DEFAULT   = "auto-app"
 DEFAULT_PORT  = 80
 NS            = "default"
-SAVE_DIR     = r"D:\k8s_new"
+SAVE_DIR      = YAML_DIR   # 由 core/config.py 統一管理，不再硬編碼
 
 
 
@@ -69,9 +75,30 @@ def build_svc(app, port=80):
     )
 
 
+def _build_manifest_dict(app, img, pods, port=80, memory=None):
+    """建立純 dict manifest，供代理評估使用（不依賴 kubernetes client 物件）。"""
+    container = {"name": app, "image": img, "ports": [{"containerPort": port}]}
+    if memory:
+        container["resources"] = {
+            "requests": {"memory": memory, "cpu": "100m"},
+            "limits":   {"memory": memory, "cpu": "500m"},
+        }
+    return {
+        "apiVersion": "apps/v1", "kind": "Deployment",
+        "metadata":   {"name": app, "namespace": NS},
+        "spec": {
+            "replicas": pods,
+            "selector": {"matchLabels": {"app": app}},
+            "template": {
+                "metadata": {"labels": {"app": app}},
+                "spec":     {"containers": [container]},
+            },
+        },
+    }
+
+
 def save_yaml(app, deployment, service):
-    if not os.path.exists(SAVE_DIR):
-        os.makedirs(SAVE_DIR)
+    os.makedirs(SAVE_DIR, exist_ok=True)
     path = os.path.join(SAVE_DIR, f"{app}.yaml")
     with open(path, "w", encoding="utf-8") as f:
         f.write(yaml.dump(deployment.to_dict()))
@@ -182,6 +209,25 @@ def main():
 
     # 存入標註庫（只呼叫一次）
     save_gold_sample(user_query, final_json)
+
+    # ── 多代理評估（安全 / 成本 / 效能）────────────────────────────
+    print("\n🤖 代理評估中...")
+    try:
+        from agents.orchestrator import orchestrate, print_result
+        manifest_dict = _build_manifest_dict(app, img, pods, port, memory)
+        orch_result   = orchestrate(manifest_dict, save_report=True)
+        print_result(orch_result)
+
+        if orch_result["decision"] == "block":
+            print("\n❌ 部署已被代理阻斷，請修復上述問題後再試")
+            return
+        if orch_result["decision"] == "warn":
+            ans = input("\n⚠️  有警告，仍要繼續部署？(y/N): ").strip().lower()
+            if ans != "y":
+                print("已取消部署")
+                return
+    except ImportError:
+        print("   （agents 模組未載入，跳過代理評估）")
 
     # 執行 K8s 部署
     print(f"\n🚀 開始部署 {app} ...")

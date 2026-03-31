@@ -11,6 +11,8 @@ Llama 3.1 推理模組 + 高品質標註資料收集
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from core.config import ensure_utf8_output
+ensure_utf8_output()
 
 import torch
 import json
@@ -28,6 +30,24 @@ from core.config import (
 
 _model, _tokenizer = None, None
 _server_launch_attempted = False  # 避免重複嘗試啟動
+
+
+# ══════════════════════════════════════════════════════════════════
+# RAG 知識增強（選用，索引不存在時自動跳過）
+# ══════════════════════════════════════════════════════════════════
+def _try_augment_with_rag(prompt_text: str) -> str:
+    """
+    嘗試以 K8s 知識庫增強 prompt，防止 LLM 幻覺。
+    若索引未建立或 rag 模組不可用，靜默回傳原始 prompt。
+    """
+    try:
+        from rag.retriever import augment_prompt
+        augmented = augment_prompt(prompt_text, top_k=2, max_context_chars=500)
+        if augmented != prompt_text:
+            print("[RAG] 知識增強已注入")
+        return augmented
+    except Exception:
+        return prompt_text  # 靜默降級，不影響主流程
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -317,16 +337,19 @@ def ask_llama(prompt_text: str) -> dict:
     3. Server 無法使用時 fallback 到本地載入
     """
     try:
+        # RAG 知識增強（索引不存在時自動跳過）
+        enhanced = _try_augment_with_rag(prompt_text)
+
         # 自動啟動 Model Server（已在跑則直接跳過）
         _auto_start_server()
 
         # 嘗試 HTTP server
-        server_result = _try_server(prompt_text)
+        server_result = _try_server(enhanced)
         if server_result is not None:
             return server_result
 
         # Fallback：本地直接載入
-        return _local_infer(prompt_text)
+        return _local_infer(enhanced)
 
     except Exception as e:
         return {"error": "解析失敗", "raw": str(e)}
