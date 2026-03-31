@@ -20,7 +20,7 @@ import re
 import time
 import subprocess
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 # 從 config 引用，不再硬編碼路徑
 from core.config import (
@@ -82,13 +82,13 @@ def _auto_start_server() -> bool:
 
     server_py = os.path.join(os.path.dirname(os.path.abspath(__file__)), "core", "model_server.py")
     if not os.path.exists(server_py):
-        print("⚠️  找不到 core/model_server.py，改用本地載入")
+        print("[Model Server] 找不到 core/model_server.py，改用本地載入")
         return False
 
     print("=" * 55)
-    print("🚀 Model Server 未啟動，正在自動後台啟動...")
+    print("[Model Server] 未啟動，正在自動後台啟動...")
     print("   首次啟動需要載入模型（約 1~2 分鐘）")
-    print("   ✨ 之後每次執行都幾乎是即時的，不需重載！")
+    print("   之後每次執行都幾乎是即時的，不需重載")
     print("=" * 55)
 
     log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_server.log")
@@ -101,16 +101,16 @@ def _auto_start_server() -> bool:
         )
 
     # 輪詢等待就緒（最多 3 分鐘）
-    print("   ⏳ 等待模型載入", end="", flush=True)
+    print("   等待模型載入", end="", flush=True)
     for i in range(180):
         time.sleep(1)
         if _is_server_alive():
-            print(f"\n✅ Model Server 就緒！（{i + 1} 秒）")
+            print(f"\n[Model Server] 就緒！（{i + 1} 秒）")
             return True
         if i % 15 == 14:
             print(".", end="", flush=True)
 
-    print("\n⚠️  Model Server 啟動超時，改用本地載入（較慢）")
+    print("\n[Model Server] 啟動超時，改用本地載入（較慢）")
     return False
 
 
@@ -128,7 +128,7 @@ def _try_server(prompt_text: str) -> Optional[dict]:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=300) as resp:
             data = json.loads(resp.read())
             return data.get("result")
     except Exception:
@@ -146,8 +146,8 @@ def _load_model_once():
     from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
     from peft import PeftModel
 
-    print("🧹 正在清理顯存並載入 Llama 3.1 GPU 專家模型 (4-bit 量化)...")
-    print("💡 提示：執行 'python core/model_server.py' 可避免每次重載模型")
+    print("[Local] 正在清理顯存並載入 Llama 3.1 GPU 專家模型 (4-bit 量化)...")
+    print("[Local] 提示：執行 'python core/model_server.py' 可避免每次重載模型")
     torch.cuda.empty_cache()
 
     bnb_config = BitsAndBytesConfig(
@@ -167,10 +167,10 @@ def _load_model_once():
     base.config.use_cache = True
 
     if os.path.exists(ADAPTER_PATH):
-        print(f"✅ 偵測到微調權重，正在合併：{ADAPTER_PATH}")
+        print(f"[Local] 偵測到微調權重，正在合併：{ADAPTER_PATH}")
         _model = PeftModel.from_pretrained(base, ADAPTER_PATH)
     else:
-        print("⚠️  未找到 LoRA 權重，使用原始基礎模型")
+        print("[Local] 未找到 LoRA 權重，使用原始基礎模型")
         _model = base
 
     _model.eval()
@@ -357,14 +357,14 @@ def ask_llama(prompt_text: str) -> dict:
 
 def save_gold_sample(user_input: str, corrected_json: dict):
     if "error" in corrected_json:
-        print("⚠️  有 error，跳過存檔")
+        print("[Dataset] 有 error，跳過存檔")
         return
 
     try:
         pods = int(corrected_json.get("pods", 0))
         assert 1 <= pods <= 100
     except Exception:
-        print("⚠️  pods 異常，跳過存檔")
+        print("[Dataset] pods 異常，跳過存檔")
         return
 
     user_input = user_input.strip()
@@ -380,10 +380,10 @@ def save_gold_sample(user_input: str, corrected_json: dict):
             **( {"port":   corrected_json["port"]}   if "port"   in corrected_json else {} ),
             **( {"memory": corrected_json["memory"]} if "memory" in corrected_json else {} ),
         },
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
     with open(DATASET_PATH, "a", encoding="utf-8") as f:
         f.write(json.dumps(sample, ensure_ascii=False) + "\n")
 
-    print(f"📝 已存入：{sample['input']} → {sample['output']}")
+    print(f"[Dataset] 已存入：{sample['input']} → {sample['output']}")

@@ -8,10 +8,17 @@ Zero-Touch K8s 部署平台 — 高品質 Web Demo
 開啟瀏覽器：http://localhost:5000
 """
 
-import os, re, time, threading, json
-import torch
-from datetime import datetime
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from core.config import ensure_utf8_output
+ensure_utf8_output()
+
+import threading, json, urllib.request
 from flask import Flask, request, jsonify, render_template_string
+
+from core.config import YAML_DIR, MODEL_SERVER_URL
+from llama_client import ask_llama, save_gold_sample
 
 # ── Kubernetes（有 K8s 環境才啟用）──────────────────────────
 K8S_ENABLED = False
@@ -20,198 +27,25 @@ try:
     import yaml as yaml_lib
     k8s_config.load_kube_config()
     K8S_ENABLED = True
-    print("✅ Kubernetes 已連線")
+    print("[K8s] 已連線")
 except Exception as e:
-    print(f"⚠️  K8s 未連線（模擬模式）：{e}")
+    print(f"[K8s] 未連線（模擬模式）：{e}")
 
 # ── 設定 ────────────────────────────────────────────────────
-BASE_MODEL   = "meta-llama/Llama-3.1-8B-Instruct"
-ADAPTER_PATH = r"D:\k8s_new\llama3_k8s_lora_results"
-DATASET_PATH = r"D:\k8s_new\dataset\finetune_samples.jsonl"
-SAVE_DIR     = r"D:\k8s_new"
-NS           = "default"
-
-SYSTEM_PROMPT = (
-    "You are an AI that converts Kubernetes deployment requests into JSON.\n"
-    "ONLY output a valid JSON object. No explanation, no markdown, no extra text.\n"
-    "Required fields: pods (integer), image (string), app_name (string)\n"
-    "Optional fields: port (integer), memory (string, e.g. 256Mi)\n"
-    'Example: {"pods": 3, "image": "nginx:latest", "app_name": "web-frontend", "port": 80}'
-)
-
-# ── 全域模型（啟動時預載，之後複用）────────────────────────
-_model     = None
-_tokenizer = None
-_model_ready = False
-_model_loading = False
+NS = "default"
 
 app = Flask(__name__)
 
-# ════════════════════════════════════════════════════════════
-# 模型載入
-# ════════════════════════════════════════════════════════════
-def load_model_background():
-    global _model, _tokenizer, _model_ready, _model_loading
-    _model_loading = True
+
+def _model_status():
+    """檢查 Model Server 健康狀態。"""
     try:
-        from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-        from peft import PeftModel
-
-        print("🧹 載入 LLaMA-3 模型中（啟動後只需載入一次）...")
-        bnb = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16,
-        )
-        _tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
-        _tokenizer.pad_token = _tokenizer.eos_token
-
-        base = AutoModelForCausalLM.from_pretrained(
-            BASE_MODEL, quantization_config=bnb, device_map={"": 0}
-        )
-        if os.path.exists(ADAPTER_PATH):
-            _model = PeftModel.from_pretrained(base, ADAPTER_PATH)
-            print(f"✅ LoRA 模型載入完成")
-        else:
-            _model = base
-            print("⚠️  使用原始模型（未找到 LoRA 權重）")
-        _model.eval()
-        _model_ready = True
-    except Exception as e:
-        print(f"❌ 模型載入失敗，切換模擬模式：{e}")
-        _model_ready = False
-    finally:
-        _model_loading = False
-
-
-# ════════════════════════════════════════════════════════════
-# AI 解析（Regex 版，與 eval_model.py 完全一致，不依賴 JSON 格式）
-# ════════════════════════════════════════════════════════════
-def _parse_with_regex(raw: str) -> dict:
-    """從模型原始輸出用 regex 抓欄位，穩定不出錯"""
-    first_line = raw.split("\n")[0].strip()
-
-    pods_m  = re.search(r'"pods"\s*:\s*(\d+)',       first_line)
-    image_m = re.search(r'"image"\s*:\s*"([^"]+)"',  first_line)
-    app_m   = re.search(r'"app_name"\s*:\s*"([^"]+)"',first_line)
-    port_m  = re.search(r'"port"\s*:\s*(\d+)',        first_line)
-    mem_m   = re.search(r'"memory"\s*:\s*"([^"]+)"',  first_line)
-
-    pods = int(pods_m.group(1)) if pods_m else None
-    if pods is None or not (1 <= pods <= 100):
-        return {"error": "pods 解析失敗"}
-
-    result = {
-        "pods"    : pods,
-        "image"   : image_m.group(1) if image_m else "nginx:latest",
-        "app_name": app_m.group(1)   if app_m   else "auto-app",
-        "port"    : int(port_m.group(1)) if port_m else 80,
-    }
-    if mem_m:
-        result["memory"] = mem_m.group(1)
-    return result
-
-
-def _simulate_parse(text: str) -> dict:
-    """模型未載入時的模擬解析（Demo 備用）"""
-    lower = text.lower()
-    images = {
-        "redis":"redis:7-alpine","nginx":"nginx:latest",
-        "postgres":"postgres:15","pg":"postgres:15",
-        "mysql":"mysql:8.0","mongo":"mongo:6",
-        "node":"node:20-alpine","python":"python:3.11-slim",
-        "golang":"golang:1.21-alpine","go":"golang:1.21-alpine",
-        "java":"openjdk:17-slim","grafana":"grafana/grafana:latest",
-        "rabbitmq":"rabbitmq:3-management","elasticsearch":"elasticsearch:8.11.0",
-        "kafka":"apache/kafka:latest","traefik":"traefik:v3.0",
-    }
-    apps = {
-        "redis":"cache-server","nginx":"web-frontend",
-        "postgres":"db-primary","pg":"db-primary",
-        "mysql":"db-replica","mongo":"search-engine",
-        "node":"api-gateway","python":"data-processor",
-        "golang":"scheduler","grafana":"metrics-server",
-        "rabbitmq":"message-broker","elasticsearch":"search-engine",
-    }
-    image = app_name = None
-    for k, v in images.items():
-        if k in lower:
-            image    = v
-            app_name = apps.get(k, "auto-app")
-            break
-    image    = image    or "nginx:latest"
-    app_name = app_name or "auto-app"
-
-    n = re.search(r'(\d+)', text)
-    pods = max(1, min(int(n.group(1)) if n else 1, 10))
-
-    port_m = re.search(r'port\s*[：:]?\s*(\d+)|(\d+)\s*port', lower)
-    port   = int(port_m.group(1) or port_m.group(2)) if port_m else 80
-
-    mem_m  = re.search(r'(\d+)\s*(mi|gi|mb|gb)', lower)
-    memory = None
-    if mem_m:
-        num  = mem_m.group(1)
-        unit = mem_m.group(2).replace("mb","Mi").replace("gb","Gi").capitalize()
-        memory = f"{num}{unit}"
-
-    result = {"pods": pods, "image": image, "app_name": app_name, "port": port}
-    if memory:
-        result["memory"] = memory
-    return result
-
-
-def ask_llama(prompt_text: str) -> dict:
-    if not _model_ready or _model is None:
-        return _simulate_parse(prompt_text)
-    try:
-        full_prompt = (
-            f"### System\n{SYSTEM_PROMPT}\n\n"
-            f"### User\n{prompt_text}\n"
-            "### Assistant\n{"
-        )
-        inputs    = _tokenizer(full_prompt, return_tensors="pt").to("cuda")
-        input_len = inputs["input_ids"].shape[1]
-
-        with torch.no_grad():
-            outputs = _model.generate(
-                **inputs,
-                max_new_tokens=80,
-                do_sample=False,
-                eos_token_id=_tokenizer.eos_token_id,
-                pad_token_id=_tokenizer.eos_token_id,
-            )
-        new_tokens = outputs[0][input_len:]
-        raw = _tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-        if not raw.startswith("{"):
-            raw = "{" + raw
-        return _parse_with_regex(raw)
-    except Exception as e:
-        return _simulate_parse(prompt_text)
-
-
-def save_gold_sample(user_input: str, result: dict):
-    if "error" in result:
-        return
-    try:
-        pods = int(result.get("pods", 0))
-        assert 1 <= pods <= 100
+        with urllib.request.urlopen(f"{MODEL_SERVER_URL}/health", timeout=2) as resp:
+            data = json.loads(resp.read())
+            return data.get("model_loaded", False), False
     except Exception:
-        return
-    sample = {
-        "input": user_input,
-        "output": {
-            "pods"    : pods,
-            "image"   : result.get("image",    "nginx:latest"),
-            "app_name": result.get("app_name", "auto-app"),
-            **( {"port":   result["port"]}   if "port"   in result else {} ),
-            **( {"memory": result["memory"]} if "memory" in result else {} ),
-        },
-        "timestamp": datetime.utcnow().isoformat(),
-    }
-    os.makedirs(os.path.dirname(DATASET_PATH), exist_ok=True)
-    with open(DATASET_PATH, "a", encoding="utf-8") as f:
-        f.write(json.dumps(sample, ensure_ascii=False) + "\n")
+        return False, True  # 未就緒，視為載入中
+
 
 
 # ════════════════════════════════════════════════════════════
@@ -266,7 +100,8 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None):
             core.create_namespaced_service(NS, svc)
 
         # 儲存 YAML
-        path = os.path.join(SAVE_DIR, f"{app_name}.yaml")
+        os.makedirs(YAML_DIR, exist_ok=True)
+        path = os.path.join(YAML_DIR, f"{app_name}.yaml")
         with open(path, "w", encoding="utf-8") as f:
             f.write(yaml_lib.dump(deploy.to_dict()))
             f.write("---\n")
@@ -1037,9 +872,10 @@ def index():
 
 @app.route("/api/status")
 def api_status():
+    ready, loading = _model_status()
     return jsonify({
-        "model_ready"  : _model_ready,
-        "model_loading": _model_loading,
+        "model_ready"  : ready,
+        "model_loading": loading,
         "k8s"          : K8S_ENABLED,
     })
 
@@ -1091,14 +927,11 @@ def api_deployments():
 # ════════════════════════════════════════════════════════════
 if __name__ == "__main__":
     print("=" * 60)
-    print("  🚀 ZeroTouch K8s Web Demo")
+    print("  ZeroTouch K8s Web Demo")
     print("=" * 60)
     print(f"  K8s   : {'已連線' if K8S_ENABLED else '模擬模式'}")
     print(f"  開啟瀏覽器：http://localhost:5000")
+    print("  Model Server 將在首次推論時自動啟動")
     print("=" * 60)
-
-    # 背景預載模型（不阻塞 Flask 啟動）
-    t = threading.Thread(target=load_model_background, daemon=True)
-    t.start()
 
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)

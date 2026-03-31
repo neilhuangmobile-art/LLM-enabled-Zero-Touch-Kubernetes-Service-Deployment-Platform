@@ -1,0 +1,70 @@
+# 通用部署模板 — 替換 <PLACEHOLDERS> 後使用
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: <APP_NAME>
+  namespace: default
+  labels:
+    app: <APP_NAME>
+spec:
+  replicas: <REPLICAS>
+  selector:
+    matchLabels:
+      app: <APP_NAME>
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: <APP_NAME>
+    spec:
+      containers:
+        - name: <APP_NAME>
+          image: <IMAGE>
+          ports:
+            - containerPort: <PORT>
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          readinessProbe:
+            tcpSocket:
+              port: <PORT>
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: <PORT>
+            initialDelaySeconds: 30
+            periodSeconds: 20
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - <APP_NAME>
+                topologyKey: kubernetes.io/hostname
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: <APP_NAME>-svc
+  namespace: default
+spec:
+  selector:
+    app: <APP_NAME>
+  ports:
+    - port: <PORT>
+      targetPort: <PORT>
+  type: LoadBalancer

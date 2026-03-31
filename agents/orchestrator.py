@@ -34,7 +34,7 @@ from typing import Dict, Any, List, Optional
 # ════════════════════════════════════════════════════════════════
 
 # 安全分數低於此值 → block（不允許部署）
-SECURITY_BLOCK_THRESHOLD = 60
+SECURITY_BLOCK_THRESHOLD = 40  # BLOCK 只針對 critical 問題（privileged / hostNetwork / hostPID）
 
 # 安全分數在此範圍 → warn（允許但警告）
 SECURITY_WARN_THRESHOLD  = 80

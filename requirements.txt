@@ -26,3 +26,6 @@ json_repair>=0.20.0
 
 # RAG 向量索引（sentence-transformers 為選用，未安裝時自動改用 TF-IDF）
 sentence-transformers>=2.6.0
+
+# GitOps（選用，未安裝時 gitops 整合自動跳過）
+gitpython>=3.1.0
