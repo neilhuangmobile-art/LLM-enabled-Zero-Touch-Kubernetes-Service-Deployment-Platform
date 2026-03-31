@@ -1,0 +1,195 @@
+{
+  "decision": "warn",
+  "reason": "發現 2 個警告，建議處理後再部署",
+  "blockers": [],
+  "warnings": [
+    "[安全] 安全分數偏低（75/100），建議在部署前修復 HIGH 問題",
+    "[效能] 容器 'auto-app' 缺少 readinessProbe，流量可能在應用程式就緒前就被路由進來"
+  ],
+  "agents": {
+    "security": {
+      "agent": "security_agent",
+      "ok": true,
+      "score": 75,
+      "issues": [
+        {
+          "rule_id": "GUARD-WARN",
+          "name": "基礎驗證警告",
+          "severity": "medium",
+          "message": "[0] Deployment/auto-app: 容器 'auto-app' 使用了 'latest' 或無版本 tag（nginx:latest），生產環境建議使用固定版本",
+          "patch": null
+        },
+        {
+          "rule_id": "SEC-006",
+          "name": "使用 latest tag",
+          "severity": "medium",
+          "message": "容器 'auto-app'：使用 :latest tag 導致部署不可重現，且無法有效進行映像安全掃描（image=nginx:latest）",
+          "patch": null
+        },
+        {
+          "rule_id": "SEC-007",
+          "name": "缺少 readOnlyRootFilesystem",
+          "severity": "low",
+          "message": "容器 'auto-app'：建議設定 readOnlyRootFilesystem=true，防止容器修改自身映像",
+          "patch": {
+            "securityContext": {
+              "readOnlyRootFilesystem": true
+            }
+          }
+        }
+      ],
+      "patches": [
+        {
+          "rule_id": "SEC-007",
+          "name": "缺少 readOnlyRootFilesystem",
+          "patch": {
+            "securityContext": {
+              "readOnlyRootFilesystem": true
+            }
+          }
+        }
+      ],
+      "summary": "~ 2 個 MEDIUM 問題，  1 個 LOW 問題（安全分數：75/100）"
+    },
+    "cost": {
+      "agent": "cost_agent",
+      "ok": true,
+      "issues": [],
+      "cost_estimate": {
+        "replicas": 3,
+        "cpu_cores": 0.3,
+        "memory_gib": 0.38,
+        "estimated_usd": 12.15,
+        "note": "粗估值（基於 AWS c5 On-Demand，僅供參考）"
+      },
+      "summary": "✓ 資源配置合理，月費估算：$12.15 USD"
+    },
+    "perf": {
+      "agent": "perf_agent",
+      "ok": false,
+      "issues": [
+        {
+          "type": "missing_rolling_update_config",
+          "severity": "low",
+          "message": "未明確設定 rollingUpdate 參數，建議明確指定 maxSurge 和 maxUnavailable",
+          "recommendation": {
+            "spec": {
+              "strategy": {
+                "type": "RollingUpdate",
+                "rollingUpdate": {
+                  "maxSurge": 1,
+                  "maxUnavailable": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "missing_readiness_probe",
+          "severity": "high",
+          "message": "容器 'auto-app' 缺少 readinessProbe，流量可能在應用程式就緒前就被路由進來",
+          "recommendation": {
+            "readinessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8080
+              },
+              "initialDelaySeconds": 10,
+              "periodSeconds": 5,
+              "failureThreshold": 3
+            }
+          }
+        },
+        {
+          "type": "missing_liveness_probe",
+          "severity": "medium",
+          "message": "容器 'auto-app' 缺少 livenessProbe，死鎖或假死的容器不會被自動重啟",
+          "recommendation": {
+            "livenessProbe": {
+              "httpGet": {
+                "path": "/health",
+                "port": 8080
+              },
+              "initialDelaySeconds": 30,
+              "periodSeconds": 10,
+              "failureThreshold": 3
+            }
+          }
+        },
+        {
+          "type": "missing_anti_affinity",
+          "severity": "low",
+          "message": "未設定 podAntiAffinity，多個副本可能調度到同一節點，節點故障時全部停機",
+          "recommendation": {
+            "affinity": {
+              "podAntiAffinity": {
+                "preferredDuringSchedulingIgnoredDuringExecution": [
+                  {
+                    "weight": 100,
+                    "podAffinityTerm": {
+                      "labelSelector": {
+                        "matchExpressions": [
+                          {
+                            "key": "app",
+                            "operator": "In",
+                            "values": [
+                              "auto-app"
+                            ]
+                          }
+                        ]
+                      },
+                      "topologyKey": "kubernetes.io/hostname"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "hpa_yaml": {
+        "apiVersion": "autoscaling/v2",
+        "kind": "HorizontalPodAutoscaler",
+        "metadata": {
+          "name": "auto-app-hpa",
+          "namespace": "default"
+        },
+        "spec": {
+          "scaleTargetRef": {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "name": "auto-app"
+          },
+          "minReplicas": 2,
+          "maxReplicas": 10,
+          "metrics": [
+            {
+              "type": "Resource",
+              "resource": {
+                "name": "cpu",
+                "target": {
+                  "type": "Utilization",
+                  "averageUtilization": 70
+                }
+              }
+            },
+            {
+              "type": "Resource",
+              "resource": {
+                "name": "memory",
+                "target": {
+                  "type": "Utilization",
+                  "averageUtilization": 80
+                }
+              }
+            }
+          ]
+        }
+      },
+      "app_type": "web",
+      "summary": "✗ 發現 4 個效能問題（1 個需立即處理）"
+    }
+  },
+  "elapsed_ms": 6.1,
+  "report_path": null
+}

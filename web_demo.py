@@ -19,6 +19,7 @@ from flask import Flask, request, jsonify, render_template_string
 
 from core.config import YAML_DIR, MODEL_SERVER_URL
 from llama_client import ask_llama, save_gold_sample
+from core.claude_client import claude_chat, is_available as claude_available
 
 # ── Kubernetes（有 K8s 環境才啟用）──────────────────────────
 K8S_ENABLED = False
@@ -343,6 +344,24 @@ textarea:disabled{opacity:0.5;cursor:not-allowed}
 .empty-icon{font-size:32px;margin-bottom:10px;opacity:0.4}
 .empty-text{font-size:12px}
 
+/* ── CHAT ── */
+.chat-wrap{display:flex;flex-direction:column;height:100%}
+.chat-messages{flex:1;overflow-y:auto;padding:4px 0 12px;display:flex;flex-direction:column;gap:10px}
+.chat-msg{max-width:82%;padding:10px 14px;border-radius:12px;font-size:12px;line-height:1.7;word-break:break-word}
+.chat-msg.user{align-self:flex-end;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.22);color:#fff}
+.chat-msg.ai{align-self:flex-start;background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--text)}
+.chat-msg.ai pre{background:rgba(0,0,0,0.35);border-radius:6px;padding:8px 10px;margin-top:7px;overflow-x:auto;font-size:11px;white-space:pre-wrap}
+.chat-msg.ai code{background:rgba(0,0,0,0.25);padding:1px 5px;border-radius:3px;font-size:11px}
+.chat-thinking{font-size:11px;color:var(--muted);min-height:18px;padding:2px 0}
+.chat-input-row{display:flex;gap:8px;padding:10px 0 0;border-top:1px solid var(--border);flex-shrink:0}
+.chat-input{flex:1;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;outline:none;resize:none}
+.chat-input:focus{border-color:rgba(0,255,136,0.4)}
+.chat-send{padding:9px 14px;border-radius:8px;border:none;cursor:pointer;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.28);color:var(--green);font-size:12px;font-family:'JetBrains Mono',monospace;white-space:nowrap;transition:background 0.2s}
+.chat-send:hover{background:rgba(0,255,136,0.2)}
+.chat-send:disabled{opacity:0.3;cursor:not-allowed}
+.chat-api-badge{font-size:9px;color:var(--muted);padding:3px 0 8px}
+.chat-api-badge span{color:var(--green)}
+
 /* ── REFRESH BTN ── */
 .refresh-btn{
   font-size:10px;padding:5px 12px;border-radius:6px;
@@ -441,6 +460,7 @@ textarea:disabled{opacity:0.5;cursor:not-allowed}
       <button class="rtab active" onclick="showTab('deps',this)">DEPLOYMENTS</button>
       <button class="rtab" onclick="showTab('pods',this)">PODS <span id="pods-badge" style="font-size:9px;color:var(--muted)"></span></button>
       <button class="rtab" onclick="showTab('stats',this)">MODEL STATS</button>
+      <button class="rtab" onclick="showTab('chat',this)">AI CHAT</button>
       <button class="refresh-btn" onclick="refreshK8s()">↻ 刷新</button>
     </div>
 
@@ -484,6 +504,20 @@ textarea:disabled{opacity:0.5;cursor:not-allowed}
         <div class="stat-row"><span class="stat-key">Total Deployments</span><span class="stat-val" id="stat-deps">0</span></div>
         <div class="stat-row"><span class="stat-key">Running Pods</span><span class="stat-val" id="stat-pods">0</span></div>
       </div>
+    <!-- Chat tab -->
+    <div class="rtab-content" id="tab-chat" style="display:none;flex-direction:column">
+      <div class="chat-wrap">
+        <div class="chat-api-badge" id="chat-api-badge">後端：<span>檢查中...</span></div>
+        <div class="chat-messages" id="chat-messages">
+          <div class="chat-msg ai">你好！我是 K8s AI 助手（由 Claude 驅動）。你可以問我任何 Kubernetes 問題，或讓我幫你規劃部署方案。</div>
+        </div>
+        <div class="chat-thinking" id="chat-thinking"></div>
+        <div class="chat-input-row">
+          <textarea class="chat-input" id="chat-input" rows="2" placeholder="問我任何 K8s 問題... （Enter 送出，Shift+Enter 換行）"></textarea>
+          <button class="chat-send" id="chat-send-btn" onclick="chatSend()">送出</button>
+        </div>
+      </div>
+    </div>
     </div>
   </div>
 </div>
@@ -591,8 +625,9 @@ function fill(text){
 }
 
 function showTab(name, btn){
-  ['deps','pods','stats'].forEach(t=>{
-    document.getElementById('tab-'+t).style.display = t===name?'':'none';
+  ['deps','pods','stats','chat'].forEach(t=>{
+    const el = document.getElementById('tab-'+t);
+    if(el) el.style.display = t===name ? (t==='chat'?'flex':'') : 'none';
   });
   document.querySelectorAll('.rtab').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
@@ -855,6 +890,79 @@ setInterval(()=>{
 // ── 定期刷新 K8s 狀態（30秒）──────────────────────────────
 setInterval(refreshK8s, 30000);
 
+// ── Chat ──────────────────────────────────────────────────
+let chatHistory = [];
+
+async function initChat(){
+  try{
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    const badge = document.getElementById('chat-api-badge');
+    if(d.claude_api){
+      badge.innerHTML = '後端：<span>Claude API (claude-opus-4-6)</span>';
+    } else {
+      badge.innerHTML = '後端：<span style="color:var(--amber)">本地 LLaMA（需設定 ANTHROPIC_API_KEY 啟用 Claude）</span>';
+    }
+  }catch(e){}
+}
+
+async function chatSend(){
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if(!msg) return;
+
+  input.value = '';
+  input.disabled = true;
+  document.getElementById('chat-send-btn').disabled = true;
+  document.getElementById('chat-thinking').textContent = 'AI 思考中...';
+
+  appendChatMsg(msg, 'user');
+
+  try{
+    const resp = await fetch('/api/chat', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({message: msg, history: chatHistory})
+    });
+    const data = await resp.json();
+    chatHistory.push({role:'user', content: msg});
+    chatHistory.push({role:'assistant', content: data.reply});
+    if(chatHistory.length > 40) chatHistory = chatHistory.slice(-40);
+    appendChatMsg(data.reply, 'ai');
+  }catch(e){
+    appendChatMsg('[錯誤] 無法連線到 API', 'ai');
+  }finally{
+    document.getElementById('chat-thinking').textContent = '';
+    input.disabled = false;
+    document.getElementById('chat-send-btn').disabled = false;
+    input.focus();
+  }
+}
+
+function appendChatMsg(text, role){
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  const escaped = text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  div.innerHTML = escaped
+    .replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/\n/g, '<br>');
+  const msgs = document.getElementById('chat-messages');
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  const ci = document.getElementById('chat-input');
+  if(ci){
+    ci.addEventListener('keydown', e=>{
+      if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); chatSend(); }
+    });
+  }
+  initChat();
+});
+
 // ── 啟動 ──────────────────────────────────────────────────
 initSystem();
 </script>
@@ -877,7 +985,25 @@ def api_status():
         "model_ready"  : ready,
         "model_loading": loading,
         "k8s"          : K8S_ENABLED,
+        "claude_api"   : claude_available(),
     })
+
+
+@app.route("/api/chat", methods=["POST"])
+def api_chat():
+    data    = request.get_json() or {}
+    message = data.get("message", "").strip()
+    history = data.get("history", [])
+
+    if not message:
+        return jsonify({"error": "訊息不能為空"}), 400
+
+    # Keep history bounded
+    if len(history) > 40:
+        history = history[-40:]
+
+    reply = claude_chat(message, history)
+    return jsonify({"reply": reply})
 
 
 @app.route("/api/deploy", methods=["POST"])

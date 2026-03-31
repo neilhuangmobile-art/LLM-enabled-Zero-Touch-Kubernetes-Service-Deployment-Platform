@@ -83,7 +83,7 @@ def _load():
         print("[Model Server] 未偵測到 GPU，使用 CPU（速度較慢）")
         base = AutoModelForCausalLM.from_pretrained(
             BASE_MODEL,
-            torch_dtype=torch.float16,
+            dtype=torch.float16,
             device_map="cpu",
             low_cpu_mem_usage=True,
         )

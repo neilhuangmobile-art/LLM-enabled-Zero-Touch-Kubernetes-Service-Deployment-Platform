@@ -331,16 +331,27 @@ def _local_infer(prompt_text: str) -> dict:
 # ══════════════════════════════════════════════════════════════════
 def ask_llama(prompt_text: str) -> dict:
     """
-    呼叫 LLM 推論。
-    1. 自動確保 Model Server 在跑（首次啟動需等待，之後即時）
-    2. 透過 HTTP 呼叫 Model Server（快）
-    3. Server 無法使用時 fallback 到本地載入
+    呼叫 LLM 推論（優先順序）：
+    1. Claude API — 毫秒級，無需 GPU（需設定 ANTHROPIC_API_KEY）
+    2. RAG 增強 + Model Server HTTP（常駐本地 LLaMA）
+    3. Fallback：本地直接載入
     """
     try:
+        # 1. Claude API（最快，需 ANTHROPIC_API_KEY）
+        try:
+            from core.claude_client import claude_parse_k8s, is_available as claude_available
+            if claude_available():
+                result = claude_parse_k8s(prompt_text)
+                if result is not None:
+                    print("[Claude API] 解析成功")
+                    return result
+        except Exception:
+            pass
+
         # RAG 知識增強（索引不存在時自動跳過）
         enhanced = _try_augment_with_rag(prompt_text)
 
-        # 自動啟動 Model Server（已在跑則直接跳過）
+        # 2. 自動啟動 Model Server（已在跑則直接跳過）
         _auto_start_server()
 
         # 嘗試 HTTP server
@@ -348,7 +359,7 @@ def ask_llama(prompt_text: str) -> dict:
         if server_result is not None:
             return server_result
 
-        # Fallback：本地直接載入
+        # 3. Fallback：本地直接載入
         return _local_infer(enhanced)
 
     except Exception as e:

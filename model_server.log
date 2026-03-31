@@ -1,4 +1,8 @@
-`torch_dtype` is deprecated! Use `dtype` instead!
 [Model Server] 正在載入模型（只需這一次）...
 [Model Server] 未偵測到 GPU，使用 CPU（速度較慢）
-Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:07<00:22,  7.39s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:14<00:14,  7.39s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:22<00:07,  7.49s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:24<00:00,  5.22s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:24<00:00,  6.03s/it]
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:07<00:22,  7.50s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:14<00:14,  7.36s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:22<00:07,  7.52s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:24<00:00,  5.22s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:24<00:00,  6.04s/it]
+forrtl: error (200): program aborting due to window-CLOSE event
+Image              PC                Routine            Line        Source             
+KERNELBASE.dll     00007FF8975E9DED  Unknown               Unknown  Unknown
+KERNEL32.DLL       00007FF89910E8D7  Unknown               Unknown  Unknown
+ntdll.dll          00007FF89ABEC48C  Unknown               Unknown  Unknown
