@@ -1,0 +1,600 @@
+{"input": "create cache-server: image=postgres:15, replicas=1, port=3000", "output": {"pods": 1, "image": "postgres:15", "app_name": "cache-server", "port": 3000}}
+{"input": "launch 2 instances of node:20-alpine for web-frontend", "output": {"pods": 2, "image": "node:20-alpine", "app_name": "web-frontend"}}
+{"input": "run rabbitmq:3-management as order-service, 3 pods, memory=2Gi", "output": {"pods": 3, "image": "rabbitmq:3-management", "app_name": "order-service", "memory": "2Gi"}}
+{"input": "spin up 8 redis:7-alpine containers named data-processor", "output": {"pods": 8, "image": "redis:7-alpine", "app_name": "data-processor"}}
+{"input": "幫忙建 1 個 pod 跑 db-primary，容器用 node:18-slim", "output": {"pods": 1, "image": "node:18-slim", "app_name": "db-primary"}}
+{"input": "部署 7 個 payment-service，image traefik:v3.0，開放 4567 port", "output": {"pods": 7, "image": "traefik:v3.0", "app_name": "payment-service", "port": 4567}}
+{"input": "spin up 9 redis:latest containers named data-processor", "output": {"pods": 9, "image": "redis:latest", "app_name": "data-processor"}}
+{"input": "建立 cache-server deployment，traefik:v3.0，5 個副本，開 port 3000", "output": {"pods": 5, "image": "traefik:v3.0", "app_name": "cache-server", "port": 3000}}
+{"input": "幫我跑 message-broker，1 個 pod，用 node:18-slim，記憶體 2Gi", "output": {"pods": 1, "image": "node:18-slim", "app_name": "message-broker", "memory": "2Gi"}}
+{"input": "部署 6 個 data-processor，image python:3.11-slim，開放 3000 port", "output": {"pods": 6, "image": "python:3.11-slim", "app_name": "data-processor", "port": 3000}}
+{"input": "幫我起 9 個 api-gateway，映像檔是 rabbitmq:3-management", "output": {"pods": 9, "image": "rabbitmq:3-management", "app_name": "api-gateway"}}
+{"input": "please deploy 2 postgres:14-alpine pods as proxy-server", "output": {"pods": 2, "image": "postgres:14-alpine", "app_name": "proxy-server"}}
+{"input": "部署 email-worker：image=node:18-slim，replicas=2，memory=256Mi", "output": {"pods": 2, "image": "node:18-slim", "app_name": "email-worker", "memory": "256Mi"}}
+{"input": "我需要 2 個 notification-service pod，image 用 node:18-slim", "output": {"pods": 2, "image": "node:18-slim", "app_name": "notification-service"}}
+{"input": "我需要 2 個 report-generator pod，image 用 postgres:14-alpine", "output": {"pods": 2, "image": "postgres:14-alpine", "app_name": "report-generator"}}
+{"input": "start 2 replicas of payment-service with image node:20-alpine", "output": {"pods": 2, "image": "node:20-alpine", "app_name": "payment-service"}}
+{"input": "launch file-storage: 5 pods, grafana/grafana:latest, ram limit 512Mi", "output": {"pods": 5, "image": "grafana/grafana:latest", "app_name": "file-storage", "memory": "512Mi"}}
+{"input": "起一個 report-generator 的 deployment，5 個副本，postgres:15", "output": {"pods": 5, "image": "postgres:15", "app_name": "report-generator"}}
+{"input": "起 2 個 redis:7-alpine 的 proxy-server，memory limit 2Gi", "output": {"pods": 2, "image": "redis:7-alpine", "app_name": "proxy-server", "memory": "2Gi"}}
+{"input": "部署 search-engine：image=openjdk:17-slim，replicas=5，memory=2Gi", "output": {"pods": 5, "image": "openjdk:17-slim", "app_name": "search-engine", "memory": "2Gi"}}
+{"input": "create user-service: image=mysql:8.0, replicas=8, port=27017", "output": {"pods": 8, "image": "mysql:8.0", "app_name": "user-service", "port": 27017}}
+{"input": "launch notification-service: 2 pods, traefik:v3.0, ram limit 2Gi", "output": {"pods": 2, "image": "traefik:v3.0", "app_name": "notification-service", "memory": "2Gi"}}
+{"input": "建立 proxy-server，redis:latest，5 個副本，ram 限制 512Mi", "output": {"pods": 5, "image": "redis:latest", "app_name": "proxy-server", "memory": "512Mi"}}
+{"input": "create deployment notification-service with 6 replicas and grafana/grafana:latest", "output": {"pods": 6, "image": "grafana/grafana:latest", "app_name": "notification-service"}}
+{"input": "部署 6 個 email-worker，image mongo:6，記憶體限制 256Mi", "output": {"pods": 6, "image": "mongo:6", "app_name": "email-worker", "memory": "256Mi"}}
+{"input": "部署 redis:latest 服務叫做 proxy-server，要 5 個", "output": {"pods": 5, "image": "redis:latest", "app_name": "proxy-server"}}
+{"input": "bring up 3-pod deployment for report-generator using prom/prometheus:latest", "output": {"pods": 3, "image": "prom/prometheus:latest", "app_name": "report-generator"}}
+{"input": "please deploy 6 traefik:v3.0 pods as search-engine", "output": {"pods": 6, "image": "traefik:v3.0", "app_name": "search-engine"}}
+{"input": "部署 6 個 proxy-server，image traefik:v3.0，記憶體限制 128Mi", "output": {"pods": 6, "image": "traefik:v3.0", "app_name": "proxy-server", "memory": "128Mi"}}
+{"input": "start 10 replicas of cache-server with image nginx:1.25-alpine", "output": {"pods": 10, "image": "nginx:1.25-alpine", "app_name": "cache-server"}}
+{"input": "deploy 3 pods of email-worker using rabbitmq:3-management", "output": {"pods": 3, "image": "rabbitmq:3-management", "app_name": "email-worker"}}
+{"input": "幫忙建 1 個 pod 跑 data-processor，容器用 mysql:8.0", "output": {"pods": 1, "image": "mysql:8.0", "app_name": "data-processor"}}
+{"input": "啟動 log-collector：7 個 pod，使用 redis:7-alpine 映像", "output": {"pods": 7, "image": "redis:7-alpine", "app_name": "log-collector"}}
+{"input": "部署 10 個 image-resizer 的 pod，使用 node:18-slim", "output": {"pods": 10, "image": "node:18-slim", "app_name": "image-resizer"}}
+{"input": "start auth-service with 6 replicas, image node:20-alpine, open port 9090", "output": {"pods": 6, "image": "node:20-alpine", "app_name": "auth-service", "port": 9090}}
+{"input": "start search-engine with 4 replicas (grafana/grafana:latest), set memory to 1Gi", "output": {"pods": 4, "image": "grafana/grafana:latest", "app_name": "search-engine", "memory": "1Gi"}}
+{"input": "幫我跑 payment-service，10 個 pod，image: mongo:6", "output": {"pods": 10, "image": "mongo:6", "app_name": "payment-service"}}
+{"input": "k8s 部署 notification-service，image=mongo:6，replicas=6", "output": {"pods": 6, "image": "mongo:6", "app_name": "notification-service"}}
+{"input": "create deployment order-service with 4 replicas and rabbitmq:3-management", "output": {"pods": 4, "image": "rabbitmq:3-management", "app_name": "order-service"}}
+{"input": "run postgres:15 as scheduler, 1 pods, memory=2Gi", "output": {"pods": 1, "image": "postgres:15", "app_name": "scheduler", "memory": "2Gi"}}
+{"input": "部署 elasticsearch:8.11.0 服務叫做 message-broker，要 6 個", "output": {"pods": 6, "image": "elasticsearch:8.11.0", "app_name": "message-broker"}}
+{"input": "get log-collector running: 8 pods, node:18-slim", "output": {"pods": 8, "image": "node:18-slim", "app_name": "log-collector"}}
+{"input": "create log-collector: image=elasticsearch:8.11.0, replicas=8, port=6379", "output": {"pods": 8, "image": "elasticsearch:8.11.0", "app_name": "log-collector", "port": 6379}}
+{"input": "部署 image-resizer：image=mysql:8.0，replicas=6，memory=256Mi", "output": {"pods": 6, "image": "mysql:8.0", "app_name": "image-resizer", "memory": "256Mi"}}
+{"input": "幫我跑 metrics-server，1 個 pod，用 prom/prometheus:latest，port 5432", "output": {"pods": 1, "image": "prom/prometheus:latest", "app_name": "metrics-server", "port": 5432}}
+{"input": "create user-service: image=rabbitmq:3-management, replicas=3, port=5432", "output": {"pods": 3, "image": "rabbitmq:3-management", "app_name": "user-service", "port": 5432}}
+{"input": "start db-primary with 8 replicas, image openjdk:17-slim, open port 443", "output": {"pods": 8, "image": "openjdk:17-slim", "app_name": "db-primary", "port": 443}}
+{"input": "get cache-server running: 3 pods, prom/prometheus:latest", "output": {"pods": 3, "image": "prom/prometheus:latest", "app_name": "cache-server"}}
+{"input": "launch order-service: 1 pods, grafana/grafana:latest, ram limit 2Gi", "output": {"pods": 1, "image": "grafana/grafana:latest", "app_name": "order-service", "memory": "2Gi"}}
+{"input": "start auth-service with 4 replicas (node:20-alpine), set memory to 1Gi", "output": {"pods": 4, "image": "node:20-alpine", "app_name": "auth-service", "memory": "1Gi"}}
+{"input": "create report-generator: image=traefik:v3.0, replicas=7, port=9090", "output": {"pods": 7, "image": "traefik:v3.0", "app_name": "report-generator", "port": 9090}}
+{"input": "run elasticsearch:8.11.0 as log-collector, 2 pods, port 27017", "output": {"pods": 2, "image": "elasticsearch:8.11.0", "app_name": "log-collector", "port": 27017}}
+{"input": "幫我跑 image-resizer，7 個 pod，image: redis:7-alpine", "output": {"pods": 7, "image": "redis:7-alpine", "app_name": "image-resizer"}}
+{"input": "run golang:1.21-alpine as log-collector, 6 pods, memory=256Mi", "output": {"pods": 6, "image": "golang:1.21-alpine", "app_name": "log-collector", "memory": "256Mi"}}
+{"input": "部署 user-service：image=redis:latest，replicas=8，port=8080", "output": {"pods": 8, "image": "redis:latest", "app_name": "user-service", "port": 8080}}
+{"input": "部署 5 個 scheduler，image mongo:6，記憶體限制 256Mi", "output": {"pods": 5, "image": "mongo:6", "app_name": "scheduler", "memory": "256Mi"}}
+{"input": "建立 image-resizer 服務，3 個 replica，使用 nginx:1.25-alpine", "output": {"pods": 3, "image": "nginx:1.25-alpine", "app_name": "image-resizer"}}
+{"input": "啟動 notification-service：7 個 pod，使用 traefik:v3.0 映像", "output": {"pods": 7, "image": "traefik:v3.0", "app_name": "notification-service"}}
+{"input": "create data-processor: image=python:3.11-slim, replicas=4, port=3000", "output": {"pods": 4, "image": "python:3.11-slim", "app_name": "data-processor", "port": 3000}}
+{"input": "起 4 個 openjdk:17-slim 的 report-generator，memory limit 2Gi", "output": {"pods": 4, "image": "openjdk:17-slim", "app_name": "report-generator", "memory": "2Gi"}}
+{"input": "launch message-broker: 2 pods, redis:7-alpine, ram limit 1Gi", "output": {"pods": 2, "image": "redis:7-alpine", "app_name": "message-broker", "memory": "1Gi"}}
+{"input": "spin up 6 prom/prometheus:latest containers named file-storage", "output": {"pods": 6, "image": "prom/prometheus:latest", "app_name": "file-storage"}}
+{"input": "請部署 traefik:v3.0 作為 message-broker，需要 7 個副本", "output": {"pods": 7, "image": "traefik:v3.0", "app_name": "message-broker"}}
+{"input": "setup message-broker service with 10 replicas of rabbitmq:3-management", "output": {"pods": 10, "image": "rabbitmq:3-management", "app_name": "message-broker"}}
+{"input": "起 5 個 golang:1.21-alpine 的 email-worker，container port 8443", "output": {"pods": 5, "image": "golang:1.21-alpine", "app_name": "email-worker", "port": 8443}}
+{"input": "create db-primary: image=apache/kafka:latest, replicas=2, port=8080", "output": {"pods": 2, "image": "apache/kafka:latest", "app_name": "db-primary", "port": 8080}}
+{"input": "start scheduler with 2 replicas, image prom/prometheus:latest, open port 3001", "output": {"pods": 2, "image": "prom/prometheus:latest", "app_name": "scheduler", "port": 3001}}
+{"input": "deploy 1 pods of scheduler using redis:latest, memory limit 256Mi", "output": {"pods": 1, "image": "redis:latest", "app_name": "scheduler", "memory": "256Mi"}}
+{"input": "please deploy 7 rabbitmq:3-management pods as proxy-server", "output": {"pods": 7, "image": "rabbitmq:3-management", "app_name": "proxy-server"}}
+{"input": "please deploy 10 golang:1.21-alpine pods as db-primary", "output": {"pods": 10, "image": "golang:1.21-alpine", "app_name": "db-primary"}}
+{"input": "provision 5 pods running mysql:8.0 for proxy-server", "output": {"pods": 5, "image": "mysql:8.0", "app_name": "proxy-server"}}
+{"input": "建立 log-collector deployment，traefik:v3.0，1 個副本，開 port 6379", "output": {"pods": 1, "image": "traefik:v3.0", "app_name": "log-collector", "port": 6379}}
+{"input": "k8s: create payment-service, image=postgres:14-alpine, replicas=2", "output": {"pods": 2, "image": "postgres:14-alpine", "app_name": "payment-service"}}
+{"input": "部署 api-gateway：image=mongo:6，replicas=2，port=6379", "output": {"pods": 2, "image": "mongo:6", "app_name": "api-gateway", "port": 6379}}
+{"input": "launch 4 email-worker pods (redis:latest), container port 5432", "output": {"pods": 4, "image": "redis:latest", "app_name": "email-worker", "port": 5432}}
+{"input": "起 6 個 openjdk:17-slim 的 order-service，memory limit 2Gi", "output": {"pods": 6, "image": "openjdk:17-slim", "app_name": "order-service", "memory": "2Gi"}}
+{"input": "spin up 6 rabbitmq:3-management containers named file-storage", "output": {"pods": 6, "image": "rabbitmq:3-management", "app_name": "file-storage"}}
+{"input": "scale payment-service to 7 pods using nginx:1.25-alpine", "output": {"pods": 7, "image": "nginx:1.25-alpine", "app_name": "payment-service"}}
+{"input": "幫我跑 scheduler，1 個 pod，image: node:18-slim", "output": {"pods": 1, "image": "node:18-slim", "app_name": "scheduler"}}
+{"input": "start api-gateway with 1 replicas, image python:3.11-slim, open port 3001", "output": {"pods": 1, "image": "python:3.11-slim", "app_name": "api-gateway", "port": 3001}}
+{"input": "launch 1 instances of openjdk:17-slim for auth-service", "output": {"pods": 1, "image": "openjdk:17-slim", "app_name": "auth-service"}}
+{"input": "run rabbitmq:3-management as file-storage, 4 pods, port 3001", "output": {"pods": 4, "image": "rabbitmq:3-management", "app_name": "file-storage", "port": 3001}}
+{"input": "新增 metrics-server deployment，7 個 pod，跑 apache/kafka:latest", "output": {"pods": 7, "image": "apache/kafka:latest", "app_name": "metrics-server"}}
+{"input": "部署 node:20-alpine 服務叫做 user-service，要 3 個", "output": {"pods": 3, "image": "node:20-alpine", "app_name": "user-service"}}
+{"input": "新增 log-collector deployment，9 個 pod，跑 openjdk:17-slim", "output": {"pods": 9, "image": "openjdk:17-slim", "app_name": "log-collector"}}
+{"input": "initialize user-service using nginx:1.25-alpine, need 4 pods", "output": {"pods": 4, "image": "nginx:1.25-alpine", "app_name": "user-service"}}
+{"input": "scale search-engine to 3 pods using postgres:14-alpine", "output": {"pods": 3, "image": "postgres:14-alpine", "app_name": "search-engine"}}
+{"input": "bring up 8-pod deployment for notification-service using golang:1.21-alpine", "output": {"pods": 8, "image": "golang:1.21-alpine", "app_name": "notification-service"}}
+{"input": "scale search-engine to 6 pods using mongo:6", "output": {"pods": 6, "image": "mongo:6", "app_name": "search-engine"}}
+{"input": "launch 2 db-primary pods (python:3.11-slim), container port 4567", "output": {"pods": 2, "image": "python:3.11-slim", "app_name": "db-primary", "port": 4567}}
+{"input": "建立 proxy-server deployment，rabbitmq:3-management，3 個副本，開 port 4567", "output": {"pods": 3, "image": "rabbitmq:3-management", "app_name": "proxy-server", "port": 4567}}
+{"input": "部署 3 個 payment-service，image redis:7-alpine，開放 5000 port", "output": {"pods": 3, "image": "redis:7-alpine", "app_name": "payment-service", "port": 5000}}
+{"input": "spin up 10 golang:1.21-alpine containers named notification-service", "output": {"pods": 10, "image": "golang:1.21-alpine", "app_name": "notification-service"}}
+{"input": "bring up 9-pod deployment for web-frontend using redis:7-alpine", "output": {"pods": 9, "image": "redis:7-alpine", "app_name": "web-frontend"}}
+{"input": "起 2 個 elasticsearch:8.11.0 的 scheduler，memory limit 256Mi", "output": {"pods": 2, "image": "elasticsearch:8.11.0", "app_name": "scheduler", "memory": "256Mi"}}
+{"input": "起 2 個 nginx:1.25-alpine 的 report-generator，memory limit 256Mi", "output": {"pods": 2, "image": "nginx:1.25-alpine", "app_name": "report-generator", "memory": "256Mi"}}
+{"input": "deploy 4 pods of email-worker using traefik:v3.0", "output": {"pods": 4, "image": "traefik:v3.0", "app_name": "email-worker"}}
+{"input": "建立 cache-server deployment，apache/kafka:latest，5 個副本，開 port 80", "output": {"pods": 5, "image": "apache/kafka:latest", "app_name": "cache-server", "port": 80}}
+{"input": "create deployment search-engine with 10 replicas and apache/kafka:latest", "output": {"pods": 10, "image": "apache/kafka:latest", "app_name": "search-engine"}}
+{"input": "start proxy-server with 5 replicas (golang:1.21-alpine), set memory to 256Mi", "output": {"pods": 5, "image": "golang:1.21-alpine", "app_name": "proxy-server", "memory": "256Mi"}}
+{"input": "deploy 6 pods of web-frontend using postgres:14-alpine, expose port 5000", "output": {"pods": 6, "image": "postgres:14-alpine", "app_name": "web-frontend", "port": 5000}}
+{"input": "scale cache-server to 7 pods using rabbitmq:3-management", "output": {"pods": 7, "image": "rabbitmq:3-management", "app_name": "cache-server"}}
+{"input": "setup log-collector service with 2 replicas of python:3.10-alpine", "output": {"pods": 2, "image": "python:3.10-alpine", "app_name": "log-collector"}}
+{"input": "launch 6 auth-service pods (openjdk:17-slim), container port 5432", "output": {"pods": 6, "image": "openjdk:17-slim", "app_name": "auth-service", "port": 5432}}
+{"input": "please deploy 3 node:18-slim pods as user-service", "output": {"pods": 3, "image": "node:18-slim", "app_name": "user-service"}}
+{"input": "please deploy 1 redis:7-alpine pods as message-broker", "output": {"pods": 1, "image": "redis:7-alpine", "app_name": "message-broker"}}
+{"input": "start image-resizer with 1 replicas, image openjdk:17-slim, open port 3000", "output": {"pods": 1, "image": "openjdk:17-slim", "app_name": "image-resizer", "port": 3000}}
+{"input": "please deploy 6 apache/kafka:latest pods as web-frontend", "output": {"pods": 6, "image": "apache/kafka:latest", "app_name": "web-frontend"}}
+{"input": "run auth-service with 1 pods, image: node:20-alpine", "output": {"pods": 1, "image": "node:20-alpine", "app_name": "auth-service"}}
+{"input": "start web-frontend with 1 replicas, image mysql:8.0, open port 5000", "output": {"pods": 1, "image": "mysql:8.0", "app_name": "web-frontend", "port": 5000}}
+{"input": "起 1 個 grafana/grafana:latest 的 metrics-server，container port 80", "output": {"pods": 1, "image": "grafana/grafana:latest", "app_name": "metrics-server", "port": 80}}
+{"input": "launch 7 instances of redis:latest for message-broker", "output": {"pods": 7, "image": "redis:latest", "app_name": "message-broker"}}
+{"input": "部署 2 個 db-primary，image postgres:15，記憶體限制 1Gi", "output": {"pods": 2, "image": "postgres:15", "app_name": "db-primary", "memory": "1Gi"}}
+{"input": "spin up 4 elasticsearch:8.11.0 containers named notification-service", "output": {"pods": 4, "image": "elasticsearch:8.11.0", "app_name": "notification-service"}}
+{"input": "部署 node:20-alpine 服務叫做 file-storage，要 4 個", "output": {"pods": 4, "image": "node:20-alpine", "app_name": "file-storage"}}
+{"input": "部署 5 個 web-frontend，image mongo:6，記憶體限制 256Mi", "output": {"pods": 5, "image": "mongo:6", "app_name": "web-frontend", "memory": "256Mi"}}
+{"input": "run scheduler with 6 pods, image: elasticsearch:8.11.0", "output": {"pods": 6, "image": "elasticsearch:8.11.0", "app_name": "scheduler"}}
+{"input": "launch scheduler: 6 pods, postgres:14-alpine, ram limit 256Mi", "output": {"pods": 6, "image": "postgres:14-alpine", "app_name": "scheduler", "memory": "256Mi"}}
+{"input": "幫忙建 3 個 pod 跑 user-service，容器用 traefik:v3.0", "output": {"pods": 3, "image": "traefik:v3.0", "app_name": "user-service"}}
+{"input": "建立 db-primary，redis:latest，6 個副本，ram 限制 512Mi", "output": {"pods": 6, "image": "redis:latest", "app_name": "db-primary", "memory": "512Mi"}}
+{"input": "幫我跑 scheduler，3 個 pod，用 traefik:v3.0，記憶體 512Mi", "output": {"pods": 3, "image": "traefik:v3.0", "app_name": "scheduler", "memory": "512Mi"}}
+{"input": "建立 image-resizer，grafana/grafana:latest，4 個副本，ram 限制 256Mi", "output": {"pods": 4, "image": "grafana/grafana:latest", "app_name": "image-resizer", "memory": "256Mi"}}
+{"input": "run python:3.10-alpine as image-resizer, 3 pods, memory=2Gi", "output": {"pods": 3, "image": "python:3.10-alpine", "app_name": "image-resizer", "memory": "2Gi"}}
+{"input": "run traefik:v3.0 as metrics-server, 6 pods, port 8443", "output": {"pods": 6, "image": "traefik:v3.0", "app_name": "metrics-server", "port": 8443}}
+{"input": "k8s 部署 order-service，image=node:18-slim，replicas=1", "output": {"pods": 1, "image": "node:18-slim", "app_name": "order-service"}}
+{"input": "launch log-collector: 5 pods, node:20-alpine, ram limit 2Gi", "output": {"pods": 5, "image": "node:20-alpine", "app_name": "log-collector", "memory": "2Gi"}}
+{"input": "建立 user-service deployment，rabbitmq:3-management，3 個副本，開 port 80", "output": {"pods": 3, "image": "rabbitmq:3-management", "app_name": "user-service", "port": 80}}
+{"input": "建立 scheduler 服務，7 個 replica，使用 postgres:14-alpine", "output": {"pods": 7, "image": "postgres:14-alpine", "app_name": "scheduler"}}
+{"input": "run postgres:15 as notification-service, 3 pods, port 8443", "output": {"pods": 3, "image": "postgres:15", "app_name": "notification-service", "port": 8443}}
+{"input": "部署 5 個 log-collector，image redis:7-alpine，記憶體限制 2Gi", "output": {"pods": 5, "image": "redis:7-alpine", "app_name": "log-collector", "memory": "2Gi"}}
+{"input": "run postgres:15 as proxy-server, 3 pods, memory=512Mi", "output": {"pods": 3, "image": "postgres:15", "app_name": "proxy-server", "memory": "512Mi"}}
+{"input": "建立 api-gateway deployment，mysql:8.0，5 個副本，開 port 5000", "output": {"pods": 5, "image": "mysql:8.0", "app_name": "api-gateway", "port": 5000}}
+{"input": "create report-generator: image=mongo:6, replicas=7, port=8443", "output": {"pods": 7, "image": "mongo:6", "app_name": "report-generator", "port": 8443}}
+{"input": "launch 3 payment-service pods (apache/kafka:latest), container port 27017", "output": {"pods": 3, "image": "apache/kafka:latest", "app_name": "payment-service", "port": 27017}}
+{"input": "run node:20-alpine as order-service, 5 pods, port 8080", "output": {"pods": 5, "image": "node:20-alpine", "app_name": "order-service", "port": 8080}}
+{"input": "起 7 個 rabbitmq:3-management 的 order-service，container port 5432", "output": {"pods": 7, "image": "rabbitmq:3-management", "app_name": "order-service", "port": 5432}}
+{"input": "create scheduler deployment, image node:18-slim, 4 replicas, 128Mi memory", "output": {"pods": 4, "image": "node:18-slim", "app_name": "scheduler", "memory": "128Mi"}}
+{"input": "起 2 個 traefik:v3.0 的 file-storage，memory limit 512Mi", "output": {"pods": 2, "image": "traefik:v3.0", "app_name": "file-storage", "memory": "512Mi"}}
+{"input": "start auth-service with 6 replicas, image rabbitmq:3-management, open port 443", "output": {"pods": 6, "image": "rabbitmq:3-management", "app_name": "auth-service", "port": 443}}
+{"input": "幫我跑 proxy-server，7 個 pod，image: mongo:6", "output": {"pods": 7, "image": "mongo:6", "app_name": "proxy-server"}}
+{"input": "部署 1 個 api-gateway，image openjdk:17-slim，記憶體限制 512Mi", "output": {"pods": 1, "image": "openjdk:17-slim", "app_name": "api-gateway", "memory": "512Mi"}}
+{"input": "setup metrics-server service with 7 replicas of postgres:14-alpine", "output": {"pods": 7, "image": "postgres:14-alpine", "app_name": "metrics-server"}}
+{"input": "請部署 golang:1.21-alpine 作為 db-primary，需要 8 個副本", "output": {"pods": 8, "image": "golang:1.21-alpine", "app_name": "db-primary"}}
+{"input": "部署 scheduler：image=mysql:8.0，replicas=8，port=5432", "output": {"pods": 8, "image": "mysql:8.0", "app_name": "scheduler", "port": 5432}}
+{"input": "起 4 個 traefik:v3.0 的 file-storage，container port 5000", "output": {"pods": 4, "image": "traefik:v3.0", "app_name": "file-storage", "port": 5000}}
+{"input": "幫忙建 7 個 pod 跑 api-gateway，容器用 mysql:8.0", "output": {"pods": 7, "image": "mysql:8.0", "app_name": "api-gateway"}}
+{"input": "我要 9 個 metrics-server 的 replica，image 是 python:3.11-slim", "output": {"pods": 9, "image": "python:3.11-slim", "app_name": "metrics-server"}}
+{"input": "部署 1 個 report-generator，image rabbitmq:3-management，記憶體限制 512Mi", "output": {"pods": 1, "image": "rabbitmq:3-management", "app_name": "report-generator", "memory": "512Mi"}}
+{"input": "get user-service running: 8 pods, nginx:1.25-alpine", "output": {"pods": 8, "image": "nginx:1.25-alpine", "app_name": "user-service"}}
+{"input": "create search-engine: image=redis:latest, replicas=3, port=8080", "output": {"pods": 3, "image": "redis:latest", "app_name": "search-engine", "port": 8080}}
+{"input": "起 6 個 mongo:6 的 api-gateway，memory limit 128Mi", "output": {"pods": 6, "image": "mongo:6", "app_name": "api-gateway", "memory": "128Mi"}}
+{"input": "launch 2 user-service pods (redis:7-alpine), container port 443", "output": {"pods": 2, "image": "redis:7-alpine", "app_name": "user-service", "port": 443}}
+{"input": "幫我跑 report-generator，9 個 pod，image: grafana/grafana:latest", "output": {"pods": 9, "image": "grafana/grafana:latest", "app_name": "report-generator"}}
+{"input": "run redis:7-alpine as payment-service, 1 pods, memory=256Mi", "output": {"pods": 1, "image": "redis:7-alpine", "app_name": "payment-service", "memory": "256Mi"}}
+{"input": "建立 search-engine deployment，nginx:latest，5 個副本，開 port 9090", "output": {"pods": 5, "image": "nginx:latest", "app_name": "search-engine", "port": 9090}}
+{"input": "deploy 5 pods of order-service using redis:latest, expose port 27017", "output": {"pods": 5, "image": "redis:latest", "app_name": "order-service", "port": 27017}}
+{"input": "deploy 6 pods of proxy-server using mongo:6, expose port 27017", "output": {"pods": 6, "image": "mongo:6", "app_name": "proxy-server", "port": 27017}}
+{"input": "幫我跑 web-frontend，3 個 pod，image: openjdk:17-slim", "output": {"pods": 3, "image": "openjdk:17-slim", "app_name": "web-frontend"}}
+{"input": "幫我跑 search-engine，5 個 pod，image: grafana/grafana:latest", "output": {"pods": 5, "image": "grafana/grafana:latest", "app_name": "search-engine"}}
+{"input": "請部署 rabbitmq:3-management 作為 image-resizer，需要 3 個副本", "output": {"pods": 3, "image": "rabbitmq:3-management", "app_name": "image-resizer"}}
+{"input": "deploy 1 pods of image-resizer using golang:1.21-alpine, expose port 6379", "output": {"pods": 1, "image": "golang:1.21-alpine", "app_name": "image-resizer", "port": 6379}}
+{"input": "部署 1 個 scheduler，image mongo:6，記憶體限制 256Mi", "output": {"pods": 1, "image": "mongo:6", "app_name": "scheduler", "memory": "256Mi"}}
+{"input": "起 3 個 apache/kafka:latest 的 report-generator，memory limit 2Gi", "output": {"pods": 3, "image": "apache/kafka:latest", "app_name": "report-generator", "memory": "2Gi"}}
+{"input": "幫我跑 order-service，3 個 pod，用 rabbitmq:3-management，記憶體 512Mi", "output": {"pods": 3, "image": "rabbitmq:3-management", "app_name": "order-service", "memory": "512Mi"}}
+{"input": "部署 db-primary：image=nginx:1.25-alpine，replicas=3，memory=128Mi", "output": {"pods": 3, "image": "nginx:1.25-alpine", "app_name": "db-primary", "memory": "128Mi"}}
+{"input": "k8s 部署 data-processor，image=rabbitmq:3-management，replicas=8", "output": {"pods": 8, "image": "rabbitmq:3-management", "app_name": "data-processor"}}
+{"input": "k8s: create email-worker, image=grafana/grafana:latest, replicas=4", "output": {"pods": 4, "image": "grafana/grafana:latest", "app_name": "email-worker"}}
+{"input": "i need 9 pods for report-generator running mysql:8.0", "output": {"pods": 9, "image": "mysql:8.0", "app_name": "report-generator"}}
+{"input": "run grafana/grafana:latest as report-generator, 5 pods, memory=2Gi", "output": {"pods": 5, "image": "grafana/grafana:latest", "app_name": "report-generator", "memory": "2Gi"}}
+{"input": "建立 file-storage 服務，8 個 replica，使用 python:3.11-slim", "output": {"pods": 8, "image": "python:3.11-slim", "app_name": "file-storage"}}
+{"input": "start cache-server with 4 replicas (apache/kafka:latest), set memory to 2Gi", "output": {"pods": 4, "image": "apache/kafka:latest", "app_name": "cache-server", "memory": "2Gi"}}
+{"input": "建立 payment-service 服務，8 個 replica，使用 openjdk:17-slim", "output": {"pods": 8, "image": "openjdk:17-slim", "app_name": "payment-service"}}
+{"input": "start report-generator with 5 replicas (redis:7-alpine), set memory to 2Gi", "output": {"pods": 5, "image": "redis:7-alpine", "app_name": "report-generator", "memory": "2Gi"}}
+{"input": "scale web-frontend to 9 pods using elasticsearch:8.11.0", "output": {"pods": 9, "image": "elasticsearch:8.11.0", "app_name": "web-frontend"}}
+{"input": "create web-frontend deployment, image python:3.10-alpine, 4 replicas, 2Gi memory", "output": {"pods": 4, "image": "python:3.10-alpine", "app_name": "web-frontend", "memory": "2Gi"}}
+{"input": "deploy 5 pods of db-primary using python:3.11-slim, expose port 5432", "output": {"pods": 5, "image": "python:3.11-slim", "app_name": "db-primary", "port": 5432}}
+{"input": "起 5 個 openjdk:17-slim 的 user-service，container port 443", "output": {"pods": 5, "image": "openjdk:17-slim", "app_name": "user-service", "port": 443}}
+{"input": "please deploy 3 prom/prometheus:latest pods as file-storage", "output": {"pods": 3, "image": "prom/prometheus:latest", "app_name": "file-storage"}}
+{"input": "launch user-service: 1 pods, golang:1.21-alpine, ram limit 2Gi", "output": {"pods": 1, "image": "golang:1.21-alpine", "app_name": "user-service", "memory": "2Gi"}}
+{"input": "新增 file-storage deployment，2 個 pod，跑 postgres:14-alpine", "output": {"pods": 2, "image": "postgres:14-alpine", "app_name": "file-storage"}}
+{"input": "我要 3 個 image-resizer 的 replica，image 是 prom/prometheus:latest", "output": {"pods": 3, "image": "prom/prometheus:latest", "app_name": "image-resizer"}}
+{"input": "我要 2 個 file-storage 的 replica，image 是 redis:latest", "output": {"pods": 2, "image": "redis:latest", "app_name": "file-storage"}}
+{"input": "k8s 部署 order-service，image=traefik:v3.0，replicas=6", "output": {"pods": 6, "image": "traefik:v3.0", "app_name": "order-service"}}
+{"input": "initialize payment-service using redis:latest, need 4 pods", "output": {"pods": 4, "image": "redis:latest", "app_name": "payment-service"}}
+{"input": "deploy 7 pods of cache-server using nginx:1.25-alpine", "output": {"pods": 7, "image": "nginx:1.25-alpine", "app_name": "cache-server"}}
+{"input": "create web-frontend: image=python:3.10-alpine, replicas=3, port=3001", "output": {"pods": 3, "image": "python:3.10-alpine", "app_name": "web-frontend", "port": 3001}}
+{"input": "部署 7 個 user-service，image python:3.10-alpine，開放 3001 port", "output": {"pods": 7, "image": "python:3.10-alpine", "app_name": "user-service", "port": 3001}}
+{"input": "起一個 metrics-server 的 deployment，9 個副本，rabbitmq:3-management", "output": {"pods": 9, "image": "rabbitmq:3-management", "app_name": "metrics-server"}}
+{"input": "起 5 個 nginx:1.25-alpine 的 notification-service，memory limit 512Mi", "output": {"pods": 5, "image": "nginx:1.25-alpine", "app_name": "notification-service", "memory": "512Mi"}}
+{"input": "建立 scheduler deployment，postgres:15，2 個副本，開 port 5432", "output": {"pods": 2, "image": "postgres:15", "app_name": "scheduler", "port": 5432}}
+{"input": "起 3 個 prom/prometheus:latest 的 payment-service，memory limit 256Mi", "output": {"pods": 3, "image": "prom/prometheus:latest", "app_name": "payment-service", "memory": "256Mi"}}
+{"input": "i need 1 pods for order-service running openjdk:17-slim", "output": {"pods": 1, "image": "openjdk:17-slim", "app_name": "order-service"}}
+{"input": "please deploy 8 openjdk:17-slim pods as report-generator", "output": {"pods": 8, "image": "openjdk:17-slim", "app_name": "report-generator"}}
+{"input": "run search-engine with 3 pods, image: nginx:latest", "output": {"pods": 3, "image": "nginx:latest", "app_name": "search-engine"}}
+{"input": "create user-service: image=elasticsearch:8.11.0, replicas=4, port=3001", "output": {"pods": 4, "image": "elasticsearch:8.11.0", "app_name": "user-service", "port": 3001}}
+{"input": "run grafana/grafana:latest as web-frontend, 6 pods, memory=2Gi", "output": {"pods": 6, "image": "grafana/grafana:latest", "app_name": "web-frontend", "memory": "2Gi"}}
+{"input": "起 7 個 golang:1.21-alpine 的 scheduler，container port 4567", "output": {"pods": 7, "image": "golang:1.21-alpine", "app_name": "scheduler", "port": 4567}}
+{"input": "建立 email-worker deployment，redis:7-alpine，7 個副本，開 port 6379", "output": {"pods": 7, "image": "redis:7-alpine", "app_name": "email-worker", "port": 6379}}
+{"input": "run node:20-alpine as data-processor, 2 pods, memory=2Gi", "output": {"pods": 2, "image": "node:20-alpine", "app_name": "data-processor", "memory": "2Gi"}}
+{"input": "get report-generator running: 3 pods, nginx:1.25-alpine", "output": {"pods": 3, "image": "nginx:1.25-alpine", "app_name": "report-generator"}}
+{"input": "k8s: create data-processor, image=grafana/grafana:latest, replicas=8", "output": {"pods": 8, "image": "grafana/grafana:latest", "app_name": "data-processor"}}
+{"input": "起 3 個 postgres:15 的 web-frontend，container port 9090", "output": {"pods": 3, "image": "postgres:15", "app_name": "web-frontend", "port": 9090}}
+{"input": "幫我跑 user-service，3 個 pod，用 golang:1.21-alpine，記憶體 128Mi", "output": {"pods": 3, "image": "golang:1.21-alpine", "app_name": "user-service", "memory": "128Mi"}}
+{"input": "起 2 個 node:18-slim 的 message-broker，container port 5000", "output": {"pods": 2, "image": "node:18-slim", "app_name": "message-broker", "port": 5000}}
+{"input": "start api-gateway with 4 replicas (postgres:15), set memory to 2Gi", "output": {"pods": 4, "image": "postgres:15", "app_name": "api-gateway", "memory": "2Gi"}}
+{"input": "launch auth-service: 5 pods, node:20-alpine, ram limit 512Mi", "output": {"pods": 5, "image": "node:20-alpine", "app_name": "auth-service", "memory": "512Mi"}}
+{"input": "start payment-service with 1 replicas (redis:7-alpine), set memory to 1Gi", "output": {"pods": 1, "image": "redis:7-alpine", "app_name": "payment-service", "memory": "1Gi"}}
+{"input": "起 8 個 postgres:15 的 email-worker，container port 80", "output": {"pods": 8, "image": "postgres:15", "app_name": "email-worker", "port": 80}}
+{"input": "start auth-service with 2 replicas (mysql:8.0), set memory to 256Mi", "output": {"pods": 2, "image": "mysql:8.0", "app_name": "auth-service", "memory": "256Mi"}}
+{"input": "deploy 8 pods of api-gateway using redis:latest", "output": {"pods": 8, "image": "redis:latest", "app_name": "api-gateway"}}
+{"input": "把 auth-service 擴展到 8 個 pod，用 openjdk:17-slim", "output": {"pods": 8, "image": "openjdk:17-slim", "app_name": "auth-service"}}
+{"input": "部署 1 個 image-resizer，image python:3.10-alpine，開放 8443 port", "output": {"pods": 1, "image": "python:3.10-alpine", "app_name": "image-resizer", "port": 8443}}
+{"input": "建立 file-storage 服務，4 個 replica，使用 elasticsearch:8.11.0", "output": {"pods": 4, "image": "elasticsearch:8.11.0", "app_name": "file-storage"}}
+{"input": "建立 search-engine，openjdk:17-slim，6 個副本，ram 限制 256Mi", "output": {"pods": 6, "image": "openjdk:17-slim", "app_name": "search-engine", "memory": "256Mi"}}
+{"input": "launch file-storage: 2 pods, python:3.10-alpine, ram limit 512Mi", "output": {"pods": 2, "image": "python:3.10-alpine", "app_name": "file-storage", "memory": "512Mi"}}
+{"input": "我要 1 個 metrics-server 的 replica，image 是 python:3.11-slim", "output": {"pods": 1, "image": "python:3.11-slim", "app_name": "metrics-server"}}
+{"input": "幫我起 3 個 cache-server，映像檔是 postgres:15", "output": {"pods": 3, "image": "postgres:15", "app_name": "cache-server"}}
+{"input": "幫忙建 3 個 pod 跑 image-resizer，容器用 redis:latest", "output": {"pods": 3, "image": "redis:latest", "app_name": "image-resizer"}}
+{"input": "我需要 9 個 search-engine pod，image 用 redis:7-alpine", "output": {"pods": 9, "image": "redis:7-alpine", "app_name": "search-engine"}}
+{"input": "啟動 file-storage：2 個 pod，使用 redis:latest 映像", "output": {"pods": 2, "image": "redis:latest", "app_name": "file-storage"}}
+{"input": "請部署 prom/prometheus:latest 作為 message-broker，需要 7 個副本", "output": {"pods": 7, "image": "prom/prometheus:latest", "app_name": "message-broker"}}
+{"input": "新增 message-broker deployment，9 個 pod，跑 python:3.10-alpine", "output": {"pods": 9, "image": "python:3.10-alpine", "app_name": "message-broker"}}
+{"input": "please deploy 5 rabbitmq:3-management pods as api-gateway", "output": {"pods": 5, "image": "rabbitmq:3-management", "app_name": "api-gateway"}}
+{"input": "部署 proxy-server：image=nginx:1.25-alpine，replicas=1，memory=1Gi", "output": {"pods": 1, "image": "nginx:1.25-alpine", "app_name": "proxy-server", "memory": "1Gi"}}
+{"input": "部署 3 個 log-collector，image mongo:6，記憶體限制 128Mi", "output": {"pods": 3, "image": "mongo:6", "app_name": "log-collector", "memory": "128Mi"}}
+{"input": "setup data-processor service with 10 replicas of apache/kafka:latest", "output": {"pods": 10, "image": "apache/kafka:latest", "app_name": "data-processor"}}
+{"input": "initialize data-processor using nginx:latest, need 4 pods", "output": {"pods": 4, "image": "nginx:latest", "app_name": "data-processor"}}
+{"input": "k8s 部署 image-resizer，image=redis:latest，replicas=3", "output": {"pods": 3, "image": "redis:latest", "app_name": "image-resizer"}}
+{"input": "launch user-service: 1 pods, node:18-slim, ram limit 1Gi", "output": {"pods": 1, "image": "node:18-slim", "app_name": "user-service", "memory": "1Gi"}}
+{"input": "get auth-service running: 3 pods, golang:1.21-alpine", "output": {"pods": 3, "image": "golang:1.21-alpine", "app_name": "auth-service"}}
+{"input": "bring up 2-pod deployment for notification-service using apache/kafka:latest", "output": {"pods": 2, "image": "apache/kafka:latest", "app_name": "notification-service"}}
+{"input": "provision 10 pods running python:3.10-alpine for search-engine", "output": {"pods": 10, "image": "python:3.10-alpine", "app_name": "search-engine"}}
+{"input": "launch message-broker: 6 pods, grafana/grafana:latest, ram limit 2Gi", "output": {"pods": 6, "image": "grafana/grafana:latest", "app_name": "message-broker", "memory": "2Gi"}}
+{"input": "start proxy-server with 1 replicas, image node:20-alpine, open port 80", "output": {"pods": 1, "image": "node:20-alpine", "app_name": "proxy-server", "port": 80}}
+{"input": "initialize scheduler using traefik:v3.0, need 7 pods", "output": {"pods": 7, "image": "traefik:v3.0", "app_name": "scheduler"}}
+{"input": "部署 order-service：image=grafana/grafana:latest，replicas=2，port=8080", "output": {"pods": 2, "image": "grafana/grafana:latest", "app_name": "order-service", "port": 8080}}
+{"input": "部署 9 個 file-storage 的 pod，使用 openjdk:17-slim", "output": {"pods": 9, "image": "openjdk:17-slim", "app_name": "file-storage"}}
+{"input": "部署 6 個 cache-server，image nginx:latest，開放 5432 port", "output": {"pods": 6, "image": "nginx:latest", "app_name": "cache-server", "port": 5432}}
+{"input": "setup web-frontend service with 2 replicas of rabbitmq:3-management", "output": {"pods": 2, "image": "rabbitmq:3-management", "app_name": "web-frontend"}}
+{"input": "start 3 replicas of user-service with image traefik:v3.0", "output": {"pods": 3, "image": "traefik:v3.0", "app_name": "user-service"}}
+{"input": "run email-worker with 4 pods, image: node:20-alpine", "output": {"pods": 4, "image": "node:20-alpine", "app_name": "email-worker"}}
+{"input": "create deployment auth-service with 6 replicas and node:18-slim", "output": {"pods": 6, "image": "node:18-slim", "app_name": "auth-service"}}
+{"input": "部署 3 個 report-generator，image node:20-alpine，記憶體限制 256Mi", "output": {"pods": 3, "image": "node:20-alpine", "app_name": "report-generator", "memory": "256Mi"}}
+{"input": "幫我起 10 個 db-primary，映像檔是 rabbitmq:3-management", "output": {"pods": 10, "image": "rabbitmq:3-management", "app_name": "db-primary"}}
+{"input": "請部署 traefik:v3.0 作為 email-worker，需要 10 個副本", "output": {"pods": 10, "image": "traefik:v3.0", "app_name": "email-worker"}}
+{"input": "please deploy 6 postgres:15 pods as data-processor", "output": {"pods": 6, "image": "postgres:15", "app_name": "data-processor"}}
+{"input": "initialize report-generator using mongo:6, need 5 pods", "output": {"pods": 5, "image": "mongo:6", "app_name": "report-generator"}}
+{"input": "部署 5 個 file-storage，image node:20-alpine，記憶體限制 256Mi", "output": {"pods": 5, "image": "node:20-alpine", "app_name": "file-storage", "memory": "256Mi"}}
+{"input": "建立 log-collector，node:18-slim，6 個副本，ram 限制 512Mi", "output": {"pods": 6, "image": "node:18-slim", "app_name": "log-collector", "memory": "512Mi"}}
+{"input": "start report-generator with 5 replicas (redis:latest), set memory to 512Mi", "output": {"pods": 5, "image": "redis:latest", "app_name": "report-generator", "memory": "512Mi"}}
+{"input": "provision 10 pods running nginx:1.25-alpine for report-generator", "output": {"pods": 10, "image": "nginx:1.25-alpine", "app_name": "report-generator"}}
+{"input": "run payment-service with 8 pods, image: node:20-alpine", "output": {"pods": 8, "image": "node:20-alpine", "app_name": "payment-service"}}
+{"input": "我需要 2 個 data-processor pod，image 用 node:18-slim", "output": {"pods": 2, "image": "node:18-slim", "app_name": "data-processor"}}
+{"input": "run rabbitmq:3-management as web-frontend, 7 pods, port 443", "output": {"pods": 7, "image": "rabbitmq:3-management", "app_name": "web-frontend", "port": 443}}
+{"input": "please deploy 10 redis:7-alpine pods as auth-service", "output": {"pods": 10, "image": "redis:7-alpine", "app_name": "auth-service"}}
+{"input": "run email-worker with 8 pods, image: prom/prometheus:latest", "output": {"pods": 8, "image": "prom/prometheus:latest", "app_name": "email-worker"}}
+{"input": "我要 2 個 report-generator 的 replica，image 是 mongo:6", "output": {"pods": 2, "image": "mongo:6", "app_name": "report-generator"}}
+{"input": "起 3 個 python:3.10-alpine 的 notification-service，memory limit 512Mi", "output": {"pods": 3, "image": "python:3.10-alpine", "app_name": "notification-service", "memory": "512Mi"}}
+{"input": "部署 traefik:v3.0 服務叫做 cache-server，要 9 個", "output": {"pods": 9, "image": "traefik:v3.0", "app_name": "cache-server"}}
+{"input": "部署 5 個 scheduler 的 pod，使用 traefik:v3.0", "output": {"pods": 5, "image": "traefik:v3.0", "app_name": "scheduler"}}
+{"input": "幫我起 5 個 file-storage，映像檔是 grafana/grafana:latest", "output": {"pods": 5, "image": "grafana/grafana:latest", "app_name": "file-storage"}}
+{"input": "launch 1 instances of mongo:6 for image-resizer", "output": {"pods": 1, "image": "mongo:6", "app_name": "image-resizer"}}
+{"input": "launch 1 instances of node:18-slim for db-primary", "output": {"pods": 1, "image": "node:18-slim", "app_name": "db-primary"}}
+{"input": "create metrics-server deployment, image apache/kafka:latest, 3 replicas, 128Mi memory", "output": {"pods": 3, "image": "apache/kafka:latest", "app_name": "metrics-server", "memory": "128Mi"}}
+{"input": "create deployment notification-service with 9 replicas and elasticsearch:8.11.0", "output": {"pods": 9, "image": "elasticsearch:8.11.0", "app_name": "notification-service"}}
+{"input": "建立 auth-service deployment，node:18-slim，7 個副本，開 port 3001", "output": {"pods": 7, "image": "node:18-slim", "app_name": "auth-service", "port": 3001}}
+{"input": "deploy 1 pods of metrics-server using node:20-alpine, expose port 3001", "output": {"pods": 1, "image": "node:20-alpine", "app_name": "metrics-server", "port": 3001}}
+{"input": "create file-storage deployment, image elasticsearch:8.11.0, 3 replicas, 256Mi memory", "output": {"pods": 3, "image": "elasticsearch:8.11.0", "app_name": "file-storage", "memory": "256Mi"}}
+{"input": "我要 7 個 data-processor 的 replica，image 是 node:18-slim", "output": {"pods": 7, "image": "node:18-slim", "app_name": "data-processor"}}
+{"input": "get api-gateway running: 6 pods, mongo:6", "output": {"pods": 6, "image": "mongo:6", "app_name": "api-gateway"}}
+{"input": "create db-primary deployment, image apache/kafka:latest, 6 replicas, 512Mi memory", "output": {"pods": 6, "image": "apache/kafka:latest", "app_name": "db-primary", "memory": "512Mi"}}
+{"input": "create message-broker deployment, image postgres:14-alpine, 5 replicas, 1Gi memory", "output": {"pods": 5, "image": "postgres:14-alpine", "app_name": "message-broker", "memory": "1Gi"}}
+{"input": "please deploy 6 node:18-slim pods as auth-service", "output": {"pods": 6, "image": "node:18-slim", "app_name": "auth-service"}}
+{"input": "start 2 replicas of api-gateway with image mongo:6", "output": {"pods": 2, "image": "mongo:6", "app_name": "api-gateway"}}
+{"input": "start proxy-server with 2 replicas (node:18-slim), set memory to 1Gi", "output": {"pods": 2, "image": "node:18-slim", "app_name": "proxy-server", "memory": "1Gi"}}
+{"input": "幫我跑 file-storage，3 個 pod，image: elasticsearch:8.11.0", "output": {"pods": 3, "image": "elasticsearch:8.11.0", "app_name": "file-storage"}}
+{"input": "run python:3.11-slim as auth-service, 7 pods, port 6379", "output": {"pods": 7, "image": "python:3.11-slim", "app_name": "auth-service", "port": 6379}}
+{"input": "provision 6 pods running node:20-alpine for notification-service", "output": {"pods": 6, "image": "node:20-alpine", "app_name": "notification-service"}}
+{"input": "部署 6 個 order-service 的 pod，使用 node:18-slim", "output": {"pods": 6, "image": "node:18-slim", "app_name": "order-service"}}
+{"input": "我需要 8 個 file-storage pod，image 用 nginx:1.25-alpine", "output": {"pods": 8, "image": "nginx:1.25-alpine", "app_name": "file-storage"}}
+{"input": "幫我跑 api-gateway，2 個 pod，用 golang:1.21-alpine，記憶體 1Gi", "output": {"pods": 2, "image": "golang:1.21-alpine", "app_name": "api-gateway", "memory": "1Gi"}}
+{"input": "啟動 log-collector：10 個 pod，使用 grafana/grafana:latest 映像", "output": {"pods": 10, "image": "grafana/grafana:latest", "app_name": "log-collector"}}
+{"input": "deploy 8 pods of email-worker using traefik:v3.0, expose port 6379", "output": {"pods": 8, "image": "traefik:v3.0", "app_name": "email-worker", "port": 6379}}
+{"input": "建立 metrics-server，mongo:6，3 個副本，ram 限制 1Gi", "output": {"pods": 3, "image": "mongo:6", "app_name": "metrics-server", "memory": "1Gi"}}
+{"input": "launch auth-service: 3 pods, apache/kafka:latest, ram limit 2Gi", "output": {"pods": 3, "image": "apache/kafka:latest", "app_name": "auth-service", "memory": "2Gi"}}
+{"input": "幫忙建 10 個 pod 跑 cache-server，容器用 python:3.11-slim", "output": {"pods": 10, "image": "python:3.11-slim", "app_name": "cache-server"}}
+{"input": "新增 report-generator deployment，1 個 pod，跑 node:18-slim", "output": {"pods": 1, "image": "node:18-slim", "app_name": "report-generator"}}
+{"input": "部署 payment-service：image=postgres:14-alpine，replicas=7，port=3000", "output": {"pods": 7, "image": "postgres:14-alpine", "app_name": "payment-service", "port": 3000}}
+{"input": "launch 5 instances of postgres:15 for report-generator", "output": {"pods": 5, "image": "postgres:15", "app_name": "report-generator"}}
+{"input": "run node:18-slim as email-worker, 3 pods, memory=128Mi", "output": {"pods": 3, "image": "node:18-slim", "app_name": "email-worker", "memory": "128Mi"}}
+{"input": "deploy 2 pods of notification-service using apache/kafka:latest, memory limit 512Mi", "output": {"pods": 2, "image": "apache/kafka:latest", "app_name": "notification-service", "memory": "512Mi"}}
+{"input": "run openjdk:17-slim as metrics-server, 4 pods, port 8080", "output": {"pods": 4, "image": "openjdk:17-slim", "app_name": "metrics-server", "port": 8080}}
+{"input": "幫我起 6 個 cache-server，映像檔是 python:3.11-slim", "output": {"pods": 6, "image": "python:3.11-slim", "app_name": "cache-server"}}
+{"input": "把 auth-service 擴展到 4 個 pod，用 mysql:8.0", "output": {"pods": 4, "image": "mysql:8.0", "app_name": "auth-service"}}
+{"input": "k8s: create report-generator, image=node:20-alpine, replicas=2", "output": {"pods": 2, "image": "node:20-alpine", "app_name": "report-generator"}}
+{"input": "run redis:7-alpine as file-storage, 8 pods, port 443", "output": {"pods": 8, "image": "redis:7-alpine", "app_name": "file-storage", "port": 443}}
+{"input": "k8s 部署 report-generator，image=openjdk:17-slim，replicas=2", "output": {"pods": 2, "image": "openjdk:17-slim", "app_name": "report-generator"}}
+{"input": "k8s: create auth-service, image=python:3.10-alpine, replicas=4", "output": {"pods": 4, "image": "python:3.10-alpine", "app_name": "auth-service"}}
+{"input": "建立 data-processor，nginx:latest，6 個副本，ram 限制 128Mi", "output": {"pods": 6, "image": "nginx:latest", "app_name": "data-processor", "memory": "128Mi"}}
+{"input": "幫我跑 notification-service，5 個 pod，用 postgres:14-alpine，port 9090", "output": {"pods": 5, "image": "postgres:14-alpine", "app_name": "notification-service", "port": 9090}}
+{"input": "起 5 個 mongo:6 的 data-processor，memory limit 256Mi", "output": {"pods": 5, "image": "mongo:6", "app_name": "data-processor", "memory": "256Mi"}}
+{"input": "k8s: create db-primary, image=traefik:v3.0, replicas=9", "output": {"pods": 9, "image": "traefik:v3.0", "app_name": "db-primary"}}
+{"input": "建立 6 個 golang:1.21-alpine 容器，命名為 image-resizer", "output": {"pods": 6, "image": "golang:1.21-alpine", "app_name": "image-resizer"}}
+{"input": "start metrics-server with 4 replicas, image grafana/grafana:latest, open port 443", "output": {"pods": 4, "image": "grafana/grafana:latest", "app_name": "metrics-server", "port": 443}}
+{"input": "launch 2 data-processor pods (elasticsearch:8.11.0), container port 3000", "output": {"pods": 2, "image": "elasticsearch:8.11.0", "app_name": "data-processor", "port": 3000}}
+{"input": "deploy 2 pods of log-collector using elasticsearch:8.11.0, memory limit 512Mi", "output": {"pods": 2, "image": "elasticsearch:8.11.0", "app_name": "log-collector", "memory": "512Mi"}}
+{"input": "setup payment-service service with 9 replicas of apache/kafka:latest", "output": {"pods": 9, "image": "apache/kafka:latest", "app_name": "payment-service"}}
+{"input": "啟動 api-gateway：10 個 pod，使用 python:3.10-alpine 映像", "output": {"pods": 10, "image": "python:3.10-alpine", "app_name": "api-gateway"}}
+{"input": "啟動 search-engine：4 個 pod，使用 grafana/grafana:latest 映像", "output": {"pods": 4, "image": "grafana/grafana:latest", "app_name": "search-engine"}}
+{"input": "create metrics-server deployment, image nginx:1.25-alpine, 1 replicas, 2Gi memory", "output": {"pods": 1, "image": "nginx:1.25-alpine", "app_name": "metrics-server", "memory": "2Gi"}}
+{"input": "部署 user-service：image=golang:1.21-alpine，replicas=1，port=5432", "output": {"pods": 1, "image": "golang:1.21-alpine", "app_name": "user-service", "port": 5432}}
+{"input": "建立 auth-service deployment，golang:1.21-alpine，5 個副本，開 port 80", "output": {"pods": 5, "image": "golang:1.21-alpine", "app_name": "auth-service", "port": 80}}
+{"input": "create api-gateway: image=mongo:6, replicas=5, port=6379", "output": {"pods": 5, "image": "mongo:6", "app_name": "api-gateway", "port": 6379}}
+{"input": "啟動 payment-service：7 個 pod，使用 mongo:6 映像", "output": {"pods": 7, "image": "mongo:6", "app_name": "payment-service"}}
+{"input": "建立 data-processor deployment，redis:latest，6 個副本，開 port 9090", "output": {"pods": 6, "image": "redis:latest", "app_name": "data-processor", "port": 9090}}
+{"input": "deploy 6 pods of user-service using golang:1.21-alpine, expose port 4567", "output": {"pods": 6, "image": "golang:1.21-alpine", "app_name": "user-service", "port": 4567}}
+{"input": "幫我跑 proxy-server，9 個 pod，image: mongo:6", "output": {"pods": 9, "image": "mongo:6", "app_name": "proxy-server"}}
+{"input": "建立 metrics-server deployment，rabbitmq:3-management，7 個副本，開 port 6379", "output": {"pods": 7, "image": "rabbitmq:3-management", "app_name": "metrics-server", "port": 6379}}
+{"input": "i need 6 pods for user-service running mongo:6", "output": {"pods": 6, "image": "mongo:6", "app_name": "user-service"}}
+{"input": "幫我跑 scheduler，1 個 pod，image: golang:1.21-alpine", "output": {"pods": 1, "image": "golang:1.21-alpine", "app_name": "scheduler"}}
+{"input": "我要 1 個 user-service 的 replica，image 是 mongo:6", "output": {"pods": 1, "image": "mongo:6", "app_name": "user-service"}}
+{"input": "bring up 1-pod deployment for auth-service using redis:7-alpine", "output": {"pods": 1, "image": "redis:7-alpine", "app_name": "auth-service"}}
+{"input": "launch 3 auth-service pods (nginx:1.25-alpine), container port 5000", "output": {"pods": 3, "image": "nginx:1.25-alpine", "app_name": "auth-service", "port": 5000}}
+{"input": "幫我跑 cache-server，4 個 pod，image: openjdk:17-slim", "output": {"pods": 4, "image": "openjdk:17-slim", "app_name": "cache-server"}}
+{"input": "起 4 個 mongo:6 的 report-generator，container port 5000", "output": {"pods": 4, "image": "mongo:6", "app_name": "report-generator", "port": 5000}}
+{"input": "起 5 個 rabbitmq:3-management 的 image-resizer，memory limit 128Mi", "output": {"pods": 5, "image": "rabbitmq:3-management", "app_name": "image-resizer", "memory": "128Mi"}}
+{"input": "create user-service: image=postgres:15, replicas=3, port=5000", "output": {"pods": 3, "image": "postgres:15", "app_name": "user-service", "port": 5000}}
+{"input": "部署 7 個 file-storage，image apache/kafka:latest，開放 8443 port", "output": {"pods": 7, "image": "apache/kafka:latest", "app_name": "file-storage", "port": 8443}}
+{"input": "幫我跑 message-broker，7 個 pod，image: mysql:8.0", "output": {"pods": 7, "image": "mysql:8.0", "app_name": "message-broker"}}
+{"input": "部署 mongo:6 服務叫做 proxy-server，要 10 個", "output": {"pods": 10, "image": "mongo:6", "app_name": "proxy-server"}}
+{"input": "我要 7 個 scheduler 的 replica，image 是 apache/kafka:latest", "output": {"pods": 7, "image": "apache/kafka:latest", "app_name": "scheduler"}}
+{"input": "create api-gateway: image=postgres:15, replicas=2, port=3000", "output": {"pods": 2, "image": "postgres:15", "app_name": "api-gateway", "port": 3000}}
+{"input": "deploy 6 pods of auth-service using mongo:6, expose port 8080", "output": {"pods": 6, "image": "mongo:6", "app_name": "auth-service", "port": 8080}}
+{"input": "請部署 nginx:1.25-alpine 作為 order-service，需要 8 個副本", "output": {"pods": 8, "image": "nginx:1.25-alpine", "app_name": "order-service"}}
+{"input": "幫我跑 image-resizer，4 個 pod，image: grafana/grafana:latest", "output": {"pods": 4, "image": "grafana/grafana:latest", "app_name": "image-resizer"}}
+{"input": "launch 1 instances of redis:7-alpine for web-frontend", "output": {"pods": 1, "image": "redis:7-alpine", "app_name": "web-frontend"}}
+{"input": "新增 data-processor deployment，3 個 pod，跑 golang:1.21-alpine", "output": {"pods": 3, "image": "golang:1.21-alpine", "app_name": "data-processor"}}
+{"input": "幫我跑 report-generator，2 個 pod，用 golang:1.21-alpine，記憶體 2Gi", "output": {"pods": 2, "image": "golang:1.21-alpine", "app_name": "report-generator", "memory": "2Gi"}}
+{"input": "起 3 個 redis:7-alpine 的 email-worker，container port 27017", "output": {"pods": 3, "image": "redis:7-alpine", "app_name": "email-worker", "port": 27017}}
+{"input": "新增 db-primary deployment，4 個 pod，跑 node:18-slim", "output": {"pods": 4, "image": "node:18-slim", "app_name": "db-primary"}}
+{"input": "run payment-service with 6 pods, image: node:20-alpine", "output": {"pods": 6, "image": "node:20-alpine", "app_name": "payment-service"}}
+{"input": "deploy 7 pods of web-frontend using node:20-alpine, expose port 8443", "output": {"pods": 7, "image": "node:20-alpine", "app_name": "web-frontend", "port": 8443}}
+{"input": "部署 image-resizer：image=grafana/grafana:latest，replicas=3，port=5432", "output": {"pods": 3, "image": "grafana/grafana:latest", "app_name": "image-resizer", "port": 5432}}
+{"input": "幫忙建 8 個 pod 跑 db-primary，容器用 golang:1.21-alpine", "output": {"pods": 8, "image": "golang:1.21-alpine", "app_name": "db-primary"}}
+{"input": "deploy 1 pods of api-gateway using node:18-slim, expose port 8080", "output": {"pods": 1, "image": "node:18-slim", "app_name": "api-gateway", "port": 8080}}
+{"input": "起 4 個 python:3.10-alpine 的 file-storage，container port 80", "output": {"pods": 4, "image": "python:3.10-alpine", "app_name": "file-storage", "port": 80}}
+{"input": "create deployment search-engine with 5 replicas and python:3.11-slim", "output": {"pods": 5, "image": "python:3.11-slim", "app_name": "search-engine"}}
+{"input": "起 2 個 redis:latest 的 message-broker，container port 8443", "output": {"pods": 2, "image": "redis:latest", "app_name": "message-broker", "port": 8443}}
+{"input": "deploy 6 pods of proxy-server using python:3.11-slim, memory limit 2Gi", "output": {"pods": 6, "image": "python:3.11-slim", "app_name": "proxy-server", "memory": "2Gi"}}
+{"input": "部署 nginx:1.25-alpine 服務叫做 scheduler，要 5 個", "output": {"pods": 5, "image": "nginx:1.25-alpine", "app_name": "scheduler"}}
+{"input": "run nginx:1.25-alpine as user-service, 1 pods, memory=2Gi", "output": {"pods": 1, "image": "nginx:1.25-alpine", "app_name": "user-service", "memory": "2Gi"}}
+{"input": "部署 9 個 payment-service 的 pod，使用 node:20-alpine", "output": {"pods": 9, "image": "node:20-alpine", "app_name": "payment-service"}}
+{"input": "bring up 2-pod deployment for file-storage using openjdk:17-slim", "output": {"pods": 2, "image": "openjdk:17-slim", "app_name": "file-storage"}}
+{"input": "建立 api-gateway 服務，10 個 replica，使用 postgres:15", "output": {"pods": 10, "image": "postgres:15", "app_name": "api-gateway"}}
+{"input": "initialize metrics-server using postgres:15, need 5 pods", "output": {"pods": 5, "image": "postgres:15", "app_name": "metrics-server"}}
+{"input": "建立 user-service，python:3.10-alpine，3 個副本，ram 限制 1Gi", "output": {"pods": 3, "image": "python:3.10-alpine", "app_name": "user-service", "memory": "1Gi"}}
+{"input": "deploy 4 pods of db-primary using mysql:8.0", "output": {"pods": 4, "image": "mysql:8.0", "app_name": "db-primary"}}
+{"input": "建立 2 個 python:3.11-slim 容器，命名為 order-service", "output": {"pods": 2, "image": "python:3.11-slim", "app_name": "order-service"}}
+{"input": "部署 notification-service：image=golang:1.21-alpine，replicas=6，memory=256Mi", "output": {"pods": 6, "image": "golang:1.21-alpine", "app_name": "notification-service", "memory": "256Mi"}}
+{"input": "部署 1 個 report-generator，image postgres:15，記憶體限制 512Mi", "output": {"pods": 1, "image": "postgres:15", "app_name": "report-generator", "memory": "512Mi"}}
+{"input": "建立 notification-service deployment，traefik:v3.0，3 個副本，開 port 3000", "output": {"pods": 3, "image": "traefik:v3.0", "app_name": "notification-service", "port": 3000}}
+{"input": "run python:3.10-alpine as cache-server, 2 pods, memory=1Gi", "output": {"pods": 2, "image": "python:3.10-alpine", "app_name": "cache-server", "memory": "1Gi"}}
+{"input": "部署 8 個 email-worker，image postgres:15，開放 6379 port", "output": {"pods": 8, "image": "postgres:15", "app_name": "email-worker", "port": 6379}}
+{"input": "起 4 個 apache/kafka:latest 的 log-collector，container port 8080", "output": {"pods": 4, "image": "apache/kafka:latest", "app_name": "log-collector", "port": 8080}}
+{"input": "run rabbitmq:3-management as email-worker, 4 pods, memory=2Gi", "output": {"pods": 4, "image": "rabbitmq:3-management", "app_name": "email-worker", "memory": "2Gi"}}
+{"input": "bring up 5-pod deployment for file-storage using python:3.11-slim", "output": {"pods": 5, "image": "python:3.11-slim", "app_name": "file-storage"}}
+{"input": "啟動 image-resizer：3 個 pod，使用 node:18-slim 映像", "output": {"pods": 3, "image": "node:18-slim", "app_name": "image-resizer"}}
+{"input": "把 web-frontend 擴展到 5 個 pod，用 nginx:1.25-alpine", "output": {"pods": 5, "image": "nginx:1.25-alpine", "app_name": "web-frontend"}}
+{"input": "deploy 5 pods of api-gateway using openjdk:17-slim", "output": {"pods": 5, "image": "openjdk:17-slim", "app_name": "api-gateway"}}
+{"input": "幫忙建 7 個 pod 跑 user-service，容器用 python:3.11-slim", "output": {"pods": 7, "image": "python:3.11-slim", "app_name": "user-service"}}
+{"input": "幫我跑 data-processor，2 個 pod，用 rabbitmq:3-management，記憶體 512Mi", "output": {"pods": 2, "image": "rabbitmq:3-management", "app_name": "data-processor", "memory": "512Mi"}}
+{"input": "把 log-collector 擴展到 4 個 pod，用 node:20-alpine", "output": {"pods": 4, "image": "node:20-alpine", "app_name": "log-collector"}}
+{"input": "新增 image-resizer deployment，4 個 pod，跑 node:20-alpine", "output": {"pods": 4, "image": "node:20-alpine", "app_name": "image-resizer"}}
+{"input": "spin up 9 elasticsearch:8.11.0 containers named search-engine", "output": {"pods": 9, "image": "elasticsearch:8.11.0", "app_name": "search-engine"}}
+{"input": "部署 payment-service：image=postgres:14-alpine，replicas=5，memory=512Mi", "output": {"pods": 5, "image": "postgres:14-alpine", "app_name": "payment-service", "memory": "512Mi"}}
+{"input": "幫我跑 message-broker，8 個 pod，image: postgres:14-alpine", "output": {"pods": 8, "image": "postgres:14-alpine", "app_name": "message-broker"}}
+{"input": "起一個 order-service 的 deployment，7 個副本，rabbitmq:3-management", "output": {"pods": 7, "image": "rabbitmq:3-management", "app_name": "order-service"}}
+{"input": "start proxy-server with 1 replicas, image grafana/grafana:latest, open port 5000", "output": {"pods": 1, "image": "grafana/grafana:latest", "app_name": "proxy-server", "port": 5000}}
+{"input": "deploy 5 pods of web-frontend using golang:1.21-alpine, expose port 5000", "output": {"pods": 5, "image": "golang:1.21-alpine", "app_name": "web-frontend", "port": 5000}}
+{"input": "please deploy 3 grafana/grafana:latest pods as payment-service", "output": {"pods": 3, "image": "grafana/grafana:latest", "app_name": "payment-service"}}
+{"input": "部署 user-service：image=prom/prometheus:latest，replicas=6，port=8443", "output": {"pods": 6, "image": "prom/prometheus:latest", "app_name": "user-service", "port": 8443}}
+{"input": "幫我起 2 個 order-service，映像檔是 node:18-slim", "output": {"pods": 2, "image": "node:18-slim", "app_name": "order-service"}}
+{"input": "provision 10 pods running redis:7-alpine for user-service", "output": {"pods": 10, "image": "redis:7-alpine", "app_name": "user-service"}}
+{"input": "setup proxy-server service with 5 replicas of python:3.10-alpine", "output": {"pods": 5, "image": "python:3.10-alpine", "app_name": "proxy-server"}}
+{"input": "部署 data-processor：image=rabbitmq:3-management，replicas=1，port=8080", "output": {"pods": 1, "image": "rabbitmq:3-management", "app_name": "data-processor", "port": 8080}}
+{"input": "請部署 node:18-slim 作為 cache-server，需要 8 個副本", "output": {"pods": 8, "image": "node:18-slim", "app_name": "cache-server"}}
+{"input": "新增 proxy-server deployment，1 個 pod，跑 mongo:6", "output": {"pods": 1, "image": "mongo:6", "app_name": "proxy-server"}}
+{"input": "部署 grafana/grafana:latest 服務叫做 user-service，要 3 個", "output": {"pods": 3, "image": "grafana/grafana:latest", "app_name": "user-service"}}
+{"input": "新增 message-broker deployment，5 個 pod，跑 traefik:v3.0", "output": {"pods": 5, "image": "traefik:v3.0", "app_name": "message-broker"}}
+{"input": "我要 10 個 auth-service 的 replica，image 是 mysql:8.0", "output": {"pods": 10, "image": "mysql:8.0", "app_name": "auth-service"}}
+{"input": "幫我起 1 個 cache-server，映像檔是 grafana/grafana:latest", "output": {"pods": 1, "image": "grafana/grafana:latest", "app_name": "cache-server"}}
+{"input": "部署 1 個 search-engine，image python:3.11-slim，記憶體限制 1Gi", "output": {"pods": 1, "image": "python:3.11-slim", "app_name": "search-engine", "memory": "1Gi"}}
+{"input": "launch 5 instances of nginx:1.25-alpine for data-processor", "output": {"pods": 5, "image": "nginx:1.25-alpine", "app_name": "data-processor"}}
+{"input": "initialize auth-service using nginx:1.25-alpine, need 9 pods", "output": {"pods": 9, "image": "nginx:1.25-alpine", "app_name": "auth-service"}}
+{"input": "start 2 replicas of data-processor with image mongo:6", "output": {"pods": 2, "image": "mongo:6", "app_name": "data-processor"}}
+{"input": "幫我跑 metrics-server，2 個 pod，用 mongo:6，記憶體 512Mi", "output": {"pods": 2, "image": "mongo:6", "app_name": "metrics-server", "memory": "512Mi"}}
+{"input": "部署 1 個 log-collector，image node:18-slim，開放 443 port", "output": {"pods": 1, "image": "node:18-slim", "app_name": "log-collector", "port": 443}}
+{"input": "幫我跑 web-frontend，6 個 pod，用 python:3.10-alpine，port 5000", "output": {"pods": 6, "image": "python:3.10-alpine", "app_name": "web-frontend", "port": 5000}}
+{"input": "建立 8 個 apache/kafka:latest 容器，命名為 db-primary", "output": {"pods": 8, "image": "apache/kafka:latest", "app_name": "db-primary"}}
+{"input": "幫我跑 message-broker，7 個 pod，image: elasticsearch:8.11.0", "output": {"pods": 7, "image": "elasticsearch:8.11.0", "app_name": "message-broker"}}
+{"input": "create deployment user-service with 9 replicas and apache/kafka:latest", "output": {"pods": 9, "image": "apache/kafka:latest", "app_name": "user-service"}}
+{"input": "k8s: create user-service, image=elasticsearch:8.11.0, replicas=8", "output": {"pods": 8, "image": "elasticsearch:8.11.0", "app_name": "user-service"}}
+{"input": "deploy 4 pods of scheduler using mongo:6", "output": {"pods": 4, "image": "mongo:6", "app_name": "scheduler"}}
+{"input": "新增 data-processor deployment，10 個 pod，跑 redis:latest", "output": {"pods": 10, "image": "redis:latest", "app_name": "data-processor"}}
+{"input": "新增 search-engine deployment，7 個 pod，跑 elasticsearch:8.11.0", "output": {"pods": 7, "image": "elasticsearch:8.11.0", "app_name": "search-engine"}}
+{"input": "create email-worker deployment, image python:3.10-alpine, 6 replicas, 256Mi memory", "output": {"pods": 6, "image": "python:3.10-alpine", "app_name": "email-worker", "memory": "256Mi"}}
+{"input": "deploy 4 pods of web-frontend using python:3.10-alpine, memory limit 512Mi", "output": {"pods": 4, "image": "python:3.10-alpine", "app_name": "web-frontend", "memory": "512Mi"}}
+{"input": "起 5 個 prom/prometheus:latest 的 metrics-server，container port 8443", "output": {"pods": 5, "image": "prom/prometheus:latest", "app_name": "metrics-server", "port": 8443}}
+{"input": "建立 api-gateway deployment，mysql:8.0，4 個副本，開 port 80", "output": {"pods": 4, "image": "mysql:8.0", "app_name": "api-gateway", "port": 80}}
+{"input": "run mongo:6 as search-engine, 5 pods, memory=256Mi", "output": {"pods": 5, "image": "mongo:6", "app_name": "search-engine", "memory": "256Mi"}}
+{"input": "launch db-primary: 6 pods, grafana/grafana:latest, ram limit 256Mi", "output": {"pods": 6, "image": "grafana/grafana:latest", "app_name": "db-primary", "memory": "256Mi"}}
+{"input": "部署 cache-server：image=mysql:8.0，replicas=1，port=3000", "output": {"pods": 1, "image": "mysql:8.0", "app_name": "cache-server", "port": 3000}}
+{"input": "get email-worker running: 1 pods, redis:7-alpine", "output": {"pods": 1, "image": "redis:7-alpine", "app_name": "email-worker"}}
+{"input": "get message-broker running: 10 pods, redis:7-alpine", "output": {"pods": 10, "image": "redis:7-alpine", "app_name": "message-broker"}}
+{"input": "spin up 1 python:3.11-slim containers named proxy-server", "output": {"pods": 1, "image": "python:3.11-slim", "app_name": "proxy-server"}}
+{"input": "provision 3 pods running nginx:latest for file-storage", "output": {"pods": 3, "image": "nginx:latest", "app_name": "file-storage"}}
+{"input": "run rabbitmq:3-management as proxy-server, 8 pods, port 6379", "output": {"pods": 8, "image": "rabbitmq:3-management", "app_name": "proxy-server", "port": 6379}}
+{"input": "setup user-service service with 7 replicas of python:3.11-slim", "output": {"pods": 7, "image": "python:3.11-slim", "app_name": "user-service"}}
+{"input": "建立 file-storage deployment，nginx:1.25-alpine，3 個副本，開 port 6379", "output": {"pods": 3, "image": "nginx:1.25-alpine", "app_name": "file-storage", "port": 6379}}
+{"input": "幫我跑 cache-server，4 個 pod，image: prom/prometheus:latest", "output": {"pods": 4, "image": "prom/prometheus:latest", "app_name": "cache-server"}}
+{"input": "launch 8 log-collector pods (node:20-alpine), container port 9090", "output": {"pods": 8, "image": "node:20-alpine", "app_name": "log-collector", "port": 9090}}
+{"input": "起 3 個 python:3.10-alpine 的 log-collector，container port 5000", "output": {"pods": 3, "image": "python:3.10-alpine", "app_name": "log-collector", "port": 5000}}
+{"input": "create notification-service deployment, image openjdk:17-slim, 6 replicas, 2Gi memory", "output": {"pods": 6, "image": "openjdk:17-slim", "app_name": "notification-service", "memory": "2Gi"}}
+{"input": "起一個 user-service 的 deployment，4 個副本，node:20-alpine", "output": {"pods": 4, "image": "node:20-alpine", "app_name": "user-service"}}
+{"input": "create file-storage: image=prom/prometheus:latest, replicas=2, port=3001", "output": {"pods": 2, "image": "prom/prometheus:latest", "app_name": "file-storage", "port": 3001}}
+{"input": "我要 5 個 file-storage 的 replica，image 是 node:20-alpine", "output": {"pods": 5, "image": "node:20-alpine", "app_name": "file-storage"}}
+{"input": "launch 5 log-collector pods (postgres:15), container port 27017", "output": {"pods": 5, "image": "postgres:15", "app_name": "log-collector", "port": 27017}}
+{"input": "deploy 4 pods of log-collector using postgres:15, memory limit 512Mi", "output": {"pods": 4, "image": "postgres:15", "app_name": "log-collector", "memory": "512Mi"}}
+{"input": "幫我起 2 個 metrics-server，映像檔是 grafana/grafana:latest", "output": {"pods": 2, "image": "grafana/grafana:latest", "app_name": "metrics-server"}}
+{"input": "建立 9 個 rabbitmq:3-management 容器，命名為 image-resizer", "output": {"pods": 9, "image": "rabbitmq:3-management", "app_name": "image-resizer"}}
+{"input": "建立 8 個 postgres:15 容器，命名為 web-frontend", "output": {"pods": 8, "image": "postgres:15", "app_name": "web-frontend"}}
+{"input": "k8s 部署 web-frontend，image=node:18-slim，replicas=10", "output": {"pods": 10, "image": "node:18-slim", "app_name": "web-frontend"}}
+{"input": "scale metrics-server to 4 pods using python:3.11-slim", "output": {"pods": 4, "image": "python:3.11-slim", "app_name": "metrics-server"}}
+{"input": "部署 auth-service：image=grafana/grafana:latest，replicas=2，memory=256Mi", "output": {"pods": 2, "image": "grafana/grafana:latest", "app_name": "auth-service", "memory": "256Mi"}}
+{"input": "建立 cache-server 服務，4 個 replica，使用 redis:7-alpine", "output": {"pods": 4, "image": "redis:7-alpine", "app_name": "cache-server"}}
+{"input": "建立 report-generator deployment，golang:1.21-alpine，5 個副本，開 port 27017", "output": {"pods": 5, "image": "golang:1.21-alpine", "app_name": "report-generator", "port": 27017}}
+{"input": "deploy 4 pods of payment-service using nginx:latest", "output": {"pods": 4, "image": "nginx:latest", "app_name": "payment-service"}}
+{"input": "run nginx:1.25-alpine as cache-server, 7 pods, port 4567", "output": {"pods": 7, "image": "nginx:1.25-alpine", "app_name": "cache-server", "port": 4567}}
+{"input": "get db-primary running: 4 pods, redis:7-alpine", "output": {"pods": 4, "image": "redis:7-alpine", "app_name": "db-primary"}}
+{"input": "部署 3 個 proxy-server 的 pod，使用 elasticsearch:8.11.0", "output": {"pods": 3, "image": "elasticsearch:8.11.0", "app_name": "proxy-server"}}
+{"input": "建立 message-broker deployment，traefik:v3.0，7 個副本，開 port 80", "output": {"pods": 7, "image": "traefik:v3.0", "app_name": "message-broker", "port": 80}}
+{"input": "create notification-service deployment, image apache/kafka:latest, 6 replicas, 1Gi memory", "output": {"pods": 6, "image": "apache/kafka:latest", "app_name": "notification-service", "memory": "1Gi"}}
+{"input": "run python:3.10-alpine as scheduler, 7 pods, port 9090", "output": {"pods": 7, "image": "python:3.10-alpine", "app_name": "scheduler", "port": 9090}}
+{"input": "deploy 4 pods of metrics-server using elasticsearch:8.11.0, expose port 5432", "output": {"pods": 4, "image": "elasticsearch:8.11.0", "app_name": "metrics-server", "port": 5432}}
+{"input": "幫我跑 message-broker，2 個 pod，用 redis:7-alpine，port 8443", "output": {"pods": 2, "image": "redis:7-alpine", "app_name": "message-broker", "port": 8443}}
+{"input": "start scheduler with 1 replicas, image python:3.10-alpine, open port 4567", "output": {"pods": 1, "image": "python:3.10-alpine", "app_name": "scheduler", "port": 4567}}
+{"input": "把 report-generator 擴展到 1 個 pod，用 nginx:1.25-alpine", "output": {"pods": 1, "image": "nginx:1.25-alpine", "app_name": "report-generator"}}
+{"input": "起 1 個 rabbitmq:3-management 的 email-worker，memory limit 128Mi", "output": {"pods": 1, "image": "rabbitmq:3-management", "app_name": "email-worker", "memory": "128Mi"}}
+{"input": "部署 4 個 scheduler，image openjdk:17-slim，開放 3000 port", "output": {"pods": 4, "image": "openjdk:17-slim", "app_name": "scheduler", "port": 3000}}
+{"input": "i need 9 pods for metrics-server running elasticsearch:8.11.0", "output": {"pods": 9, "image": "elasticsearch:8.11.0", "app_name": "metrics-server"}}
+{"input": "起 3 個 postgres:14-alpine 的 search-engine，memory limit 256Mi", "output": {"pods": 3, "image": "postgres:14-alpine", "app_name": "search-engine", "memory": "256Mi"}}
+{"input": "create deployment notification-service with 9 replicas and node:18-slim", "output": {"pods": 9, "image": "node:18-slim", "app_name": "notification-service"}}
+{"input": "scale report-generator to 4 pods using elasticsearch:8.11.0", "output": {"pods": 4, "image": "elasticsearch:8.11.0", "app_name": "report-generator"}}
+{"input": "我需要 1 個 proxy-server pod，image 用 postgres:15", "output": {"pods": 1, "image": "postgres:15", "app_name": "proxy-server"}}
+{"input": "建立 email-worker deployment，prom/prometheus:latest，2 個副本，開 port 3001", "output": {"pods": 2, "image": "prom/prometheus:latest", "app_name": "email-worker", "port": 3001}}
+{"input": "我要 7 個 email-worker 的 replica，image 是 nginx:latest", "output": {"pods": 7, "image": "nginx:latest", "app_name": "email-worker"}}
+{"input": "k8s: create payment-service, image=python:3.10-alpine, replicas=4", "output": {"pods": 4, "image": "python:3.10-alpine", "app_name": "payment-service"}}
+{"input": "deploy 3 pods of cache-server using node:18-slim, expose port 5432", "output": {"pods": 3, "image": "node:18-slim", "app_name": "cache-server", "port": 5432}}
+{"input": "run traefik:v3.0 as db-primary, 1 pods, port 5000", "output": {"pods": 1, "image": "traefik:v3.0", "app_name": "db-primary", "port": 5000}}
+{"input": "幫我跑 message-broker，4 個 pod，用 grafana/grafana:latest，port 3001", "output": {"pods": 4, "image": "grafana/grafana:latest", "app_name": "message-broker", "port": 3001}}
+{"input": "deploy 1 pods of order-service using golang:1.21-alpine", "output": {"pods": 1, "image": "golang:1.21-alpine", "app_name": "order-service"}}
+{"input": "起 2 個 redis:latest 的 search-engine，container port 3001", "output": {"pods": 2, "image": "redis:latest", "app_name": "search-engine", "port": 3001}}
+{"input": "launch db-primary: 2 pods, node:18-slim, ram limit 256Mi", "output": {"pods": 2, "image": "node:18-slim", "app_name": "db-primary", "memory": "256Mi"}}
+{"input": "幫我跑 report-generator，4 個 pod，用 prom/prometheus:latest，記憶體 1Gi", "output": {"pods": 4, "image": "prom/prometheus:latest", "app_name": "report-generator", "memory": "1Gi"}}
+{"input": "建立 user-service 服務，1 個 replica，使用 openjdk:17-slim", "output": {"pods": 1, "image": "openjdk:17-slim", "app_name": "user-service"}}
+{"input": "起一個 metrics-server 的 deployment，9 個副本，rabbitmq:3-management", "output": {"pods": 9, "image": "rabbitmq:3-management", "app_name": "metrics-server"}}
+{"input": "run redis:7-alpine as file-storage, 6 pods, memory=512Mi", "output": {"pods": 6, "image": "redis:7-alpine", "app_name": "file-storage", "memory": "512Mi"}}
+{"input": "launch 4 search-engine pods (python:3.11-slim), container port 8080", "output": {"pods": 4, "image": "python:3.11-slim", "app_name": "search-engine", "port": 8080}}
+{"input": "啟動 proxy-server：5 個 pod，使用 node:20-alpine 映像", "output": {"pods": 5, "image": "node:20-alpine", "app_name": "proxy-server"}}
+{"input": "建立 api-gateway deployment，python:3.10-alpine，3 個副本，開 port 8443", "output": {"pods": 3, "image": "python:3.10-alpine", "app_name": "api-gateway", "port": 8443}}
+{"input": "幫我跑 email-worker，1 個 pod，用 apache/kafka:latest，port 3001", "output": {"pods": 1, "image": "apache/kafka:latest", "app_name": "email-worker", "port": 3001}}
+{"input": "run prom/prometheus:latest as proxy-server, 2 pods, memory=256Mi", "output": {"pods": 2, "image": "prom/prometheus:latest", "app_name": "proxy-server", "memory": "256Mi"}}
+{"input": "launch 2 instances of apache/kafka:latest for metrics-server", "output": {"pods": 2, "image": "apache/kafka:latest", "app_name": "metrics-server"}}
+{"input": "launch db-primary: 1 pods, grafana/grafana:latest, ram limit 2Gi", "output": {"pods": 1, "image": "grafana/grafana:latest", "app_name": "db-primary", "memory": "2Gi"}}
+{"input": "i need 10 pods for scheduler running prom/prometheus:latest", "output": {"pods": 10, "image": "prom/prometheus:latest", "app_name": "scheduler"}}
+{"input": "把 data-processor 擴展到 5 個 pod，用 node:20-alpine", "output": {"pods": 5, "image": "node:20-alpine", "app_name": "data-processor"}}
+{"input": "setup db-primary service with 2 replicas of prom/prometheus:latest", "output": {"pods": 2, "image": "prom/prometheus:latest", "app_name": "db-primary"}}
+{"input": "launch message-broker: 5 pods, mysql:8.0, ram limit 256Mi", "output": {"pods": 5, "image": "mysql:8.0", "app_name": "message-broker", "memory": "256Mi"}}
+{"input": "我需要 1 個 user-service pod，image 用 node:18-slim", "output": {"pods": 1, "image": "node:18-slim", "app_name": "user-service"}}
+{"input": "start file-storage with 3 replicas (redis:7-alpine), set memory to 128Mi", "output": {"pods": 3, "image": "redis:7-alpine", "app_name": "file-storage", "memory": "128Mi"}}
+{"input": "launch 1 user-service pods (node:20-alpine), container port 8080", "output": {"pods": 1, "image": "node:20-alpine", "app_name": "user-service", "port": 8080}}
+{"input": "幫我跑 auth-service，6 個 pod，用 python:3.11-slim，port 3000", "output": {"pods": 6, "image": "python:3.11-slim", "app_name": "auth-service", "port": 3000}}
+{"input": "建立 scheduler deployment，traefik:v3.0，8 個副本，開 port 5432", "output": {"pods": 8, "image": "traefik:v3.0", "app_name": "scheduler", "port": 5432}}
+{"input": "run report-generator with 7 pods, image: grafana/grafana:latest", "output": {"pods": 7, "image": "grafana/grafana:latest", "app_name": "report-generator"}}
+{"input": "create file-storage: image=node:18-slim, replicas=1, port=27017", "output": {"pods": 1, "image": "node:18-slim", "app_name": "file-storage", "port": 27017}}
+{"input": "launch 6 instances of python:3.10-alpine for api-gateway", "output": {"pods": 6, "image": "python:3.10-alpine", "app_name": "api-gateway"}}
+{"input": "k8s: create payment-service, image=mysql:8.0, replicas=5", "output": {"pods": 5, "image": "mysql:8.0", "app_name": "payment-service"}}
+{"input": "部署 node:18-slim 服務叫做 log-collector，要 1 個", "output": {"pods": 1, "image": "node:18-slim", "app_name": "log-collector"}}
+{"input": "幫我跑 file-storage，3 個 pod，用 grafana/grafana:latest，port 27017", "output": {"pods": 3, "image": "grafana/grafana:latest", "app_name": "file-storage", "port": 27017}}
+{"input": "create scheduler deployment, image postgres:15, 5 replicas, 256Mi memory", "output": {"pods": 5, "image": "postgres:15", "app_name": "scheduler", "memory": "256Mi"}}
+{"input": "get order-service running: 5 pods, rabbitmq:3-management", "output": {"pods": 5, "image": "rabbitmq:3-management", "app_name": "order-service"}}
+{"input": "起 4 個 mysql:8.0 的 auth-service，memory limit 2Gi", "output": {"pods": 4, "image": "mysql:8.0", "app_name": "auth-service", "memory": "2Gi"}}
+{"input": "deploy 3 pods of search-engine using prom/prometheus:latest, expose port 443", "output": {"pods": 3, "image": "prom/prometheus:latest", "app_name": "search-engine", "port": 443}}
+{"input": "k8s 部署 report-generator，image=nginx:1.25-alpine，replicas=8", "output": {"pods": 8, "image": "nginx:1.25-alpine", "app_name": "report-generator"}}
+{"input": "部署 7 個 data-processor 的 pod，使用 openjdk:17-slim", "output": {"pods": 7, "image": "openjdk:17-slim", "app_name": "data-processor"}}
+{"input": "run elasticsearch:8.11.0 as user-service, 6 pods, memory=2Gi", "output": {"pods": 6, "image": "elasticsearch:8.11.0", "app_name": "user-service", "memory": "2Gi"}}
+{"input": "建立 log-collector，golang:1.21-alpine，1 個副本，ram 限制 2Gi", "output": {"pods": 1, "image": "golang:1.21-alpine", "app_name": "log-collector", "memory": "2Gi"}}
+{"input": "部署 cache-server：image=nginx:1.25-alpine，replicas=3，memory=2Gi", "output": {"pods": 3, "image": "nginx:1.25-alpine", "app_name": "cache-server", "memory": "2Gi"}}
+{"input": "deploy 2 pods of log-collector using postgres:15, expose port 8443", "output": {"pods": 2, "image": "postgres:15", "app_name": "log-collector", "port": 8443}}
+{"input": "please deploy 5 postgres:14-alpine pods as email-worker", "output": {"pods": 5, "image": "postgres:14-alpine", "app_name": "email-worker"}}
+{"input": "run node:20-alpine as report-generator, 2 pods, memory=256Mi", "output": {"pods": 2, "image": "node:20-alpine", "app_name": "report-generator", "memory": "256Mi"}}
+{"input": "scale message-broker to 1 pods using golang:1.21-alpine", "output": {"pods": 1, "image": "golang:1.21-alpine", "app_name": "message-broker"}}
+{"input": "k8s: create db-primary, image=mongo:6, replicas=4", "output": {"pods": 4, "image": "mongo:6", "app_name": "db-primary"}}
+{"input": "起一個 proxy-server 的 deployment，2 個副本，nginx:1.25-alpine", "output": {"pods": 2, "image": "nginx:1.25-alpine", "app_name": "proxy-server"}}
+{"input": "部署 redis:latest 服務叫做 search-engine，要 2 個", "output": {"pods": 2, "image": "redis:latest", "app_name": "search-engine"}}
+{"input": "deploy 4 pods of message-broker using node:20-alpine, memory limit 256Mi", "output": {"pods": 4, "image": "node:20-alpine", "app_name": "message-broker", "memory": "256Mi"}}
+{"input": "create data-processor: image=redis:latest, replicas=8, port=5432", "output": {"pods": 8, "image": "redis:latest", "app_name": "data-processor", "port": 5432}}
+{"input": "部署 3 個 db-primary，image apache/kafka:latest，記憶體限制 2Gi", "output": {"pods": 3, "image": "apache/kafka:latest", "app_name": "db-primary", "memory": "2Gi"}}
+{"input": "create order-service deployment, image postgres:14-alpine, 3 replicas, 512Mi memory", "output": {"pods": 3, "image": "postgres:14-alpine", "app_name": "order-service", "memory": "512Mi"}}
+{"input": "provision 9 pods running traefik:v3.0 for search-engine", "output": {"pods": 9, "image": "traefik:v3.0", "app_name": "search-engine"}}
+{"input": "initialize cache-server using python:3.10-alpine, need 2 pods", "output": {"pods": 2, "image": "python:3.10-alpine", "app_name": "cache-server"}}
+{"input": "bring up 1-pod deployment for auth-service using python:3.10-alpine", "output": {"pods": 1, "image": "python:3.10-alpine", "app_name": "auth-service"}}
+{"input": "please deploy 6 node:20-alpine pods as notification-service", "output": {"pods": 6, "image": "node:20-alpine", "app_name": "notification-service"}}
+{"input": "deploy 1 pods of email-worker using node:18-slim, expose port 8080", "output": {"pods": 1, "image": "node:18-slim", "app_name": "email-worker", "port": 8080}}
+{"input": "部署 3 個 report-generator，image node:18-slim，開放 5432 port", "output": {"pods": 3, "image": "node:18-slim", "app_name": "report-generator", "port": 5432}}
+{"input": "幫我跑 message-broker，2 個 pod，用 node:18-slim，記憶體 128Mi", "output": {"pods": 2, "image": "node:18-slim", "app_name": "message-broker", "memory": "128Mi"}}
+{"input": "launch 5 instances of python:3.11-slim for notification-service", "output": {"pods": 5, "image": "python:3.11-slim", "app_name": "notification-service"}}
+{"input": "部署 nginx:1.25-alpine 服務叫做 user-service，要 4 個", "output": {"pods": 4, "image": "nginx:1.25-alpine", "app_name": "user-service"}}
+{"input": "起 3 個 rabbitmq:3-management 的 metrics-server，memory limit 1Gi", "output": {"pods": 3, "image": "rabbitmq:3-management", "app_name": "metrics-server", "memory": "1Gi"}}
+{"input": "launch 4 instances of grafana/grafana:latest for cache-server", "output": {"pods": 4, "image": "grafana/grafana:latest", "app_name": "cache-server"}}
+{"input": "launch auth-service: 2 pods, nginx:1.25-alpine, ram limit 512Mi", "output": {"pods": 2, "image": "nginx:1.25-alpine", "app_name": "auth-service", "memory": "512Mi"}}
+{"input": "起 3 個 redis:7-alpine 的 file-storage，container port 8080", "output": {"pods": 3, "image": "redis:7-alpine", "app_name": "file-storage", "port": 8080}}
+{"input": "部署 db-primary：image=golang:1.21-alpine，replicas=3，memory=1Gi", "output": {"pods": 3, "image": "golang:1.21-alpine", "app_name": "db-primary", "memory": "1Gi"}}
+{"input": "幫我跑 payment-service，6 個 pod，用 nginx:latest，記憶體 2Gi", "output": {"pods": 6, "image": "nginx:latest", "app_name": "payment-service", "memory": "2Gi"}}
+{"input": "scale report-generator to 2 pods using postgres:15", "output": {"pods": 2, "image": "postgres:15", "app_name": "report-generator"}}
+{"input": "create deployment proxy-server with 7 replicas and redis:7-alpine", "output": {"pods": 7, "image": "redis:7-alpine", "app_name": "proxy-server"}}
+{"input": "create deployment proxy-server with 1 replicas and redis:7-alpine", "output": {"pods": 1, "image": "redis:7-alpine", "app_name": "proxy-server"}}
+{"input": "run mysql:8.0 as data-processor, 6 pods, port 9090", "output": {"pods": 6, "image": "mysql:8.0", "app_name": "data-processor", "port": 9090}}
+{"input": "幫我起 4 個 order-service，映像檔是 elasticsearch:8.11.0", "output": {"pods": 4, "image": "elasticsearch:8.11.0", "app_name": "order-service"}}
+{"input": "k8s 部署 cache-server，image=postgres:14-alpine，replicas=8", "output": {"pods": 8, "image": "postgres:14-alpine", "app_name": "cache-server"}}
+{"input": "start api-gateway with 5 replicas (redis:latest), set memory to 2Gi", "output": {"pods": 5, "image": "redis:latest", "app_name": "api-gateway", "memory": "2Gi"}}
+{"input": "建立 db-primary deployment，redis:7-alpine，2 個副本，開 port 3000", "output": {"pods": 2, "image": "redis:7-alpine", "app_name": "db-primary", "port": 3000}}
+{"input": "部署 cache-server：image=nginx:latest，replicas=4，memory=256Mi", "output": {"pods": 4, "image": "nginx:latest", "app_name": "cache-server", "memory": "256Mi"}}
+{"input": "bring up 4-pod deployment for metrics-server using redis:latest", "output": {"pods": 4, "image": "redis:latest", "app_name": "metrics-server"}}
+{"input": "部署 message-broker：image=traefik:v3.0，replicas=1，port=3000", "output": {"pods": 1, "image": "traefik:v3.0", "app_name": "message-broker", "port": 3000}}
+{"input": "幫忙建 10 個 pod 跑 scheduler，容器用 grafana/grafana:latest", "output": {"pods": 10, "image": "grafana/grafana:latest", "app_name": "scheduler"}}
+{"input": "run node:18-slim as log-collector, 3 pods, port 4567", "output": {"pods": 3, "image": "node:18-slim", "app_name": "log-collector", "port": 4567}}
+{"input": "k8s 部署 email-worker，image=python:3.10-alpine，replicas=4", "output": {"pods": 4, "image": "python:3.10-alpine", "app_name": "email-worker"}}
+{"input": "部署 10 個 metrics-server 的 pod，使用 python:3.11-slim", "output": {"pods": 10, "image": "python:3.11-slim", "app_name": "metrics-server"}}
+{"input": "部署 nginx:latest 服務叫做 scheduler，要 10 個", "output": {"pods": 10, "image": "nginx:latest", "app_name": "scheduler"}}
+{"input": "幫我起 4 個 cache-server，映像檔是 rabbitmq:3-management", "output": {"pods": 4, "image": "rabbitmq:3-management", "app_name": "cache-server"}}
+{"input": "部署 4 個 data-processor，image elasticsearch:8.11.0，記憶體限制 256Mi", "output": {"pods": 4, "image": "elasticsearch:8.11.0", "app_name": "data-processor", "memory": "256Mi"}}
+{"input": "start 8 replicas of cache-server with image nginx:1.25-alpine", "output": {"pods": 8, "image": "nginx:1.25-alpine", "app_name": "cache-server"}}
+{"input": "k8s: create data-processor, image=postgres:14-alpine, replicas=3", "output": {"pods": 3, "image": "postgres:14-alpine", "app_name": "data-processor"}}
+{"input": "幫我起 7 個 metrics-server，映像檔是 mysql:8.0", "output": {"pods": 7, "image": "mysql:8.0", "app_name": "metrics-server"}}
+{"input": "建立 message-broker deployment，node:20-alpine，1 個副本，開 port 443", "output": {"pods": 1, "image": "node:20-alpine", "app_name": "message-broker", "port": 443}}
+{"input": "launch message-broker: 4 pods, openjdk:17-slim, ram limit 256Mi", "output": {"pods": 4, "image": "openjdk:17-slim", "app_name": "message-broker", "memory": "256Mi"}}
+{"input": "幫我跑 report-generator，6 個 pod，用 grafana/grafana:latest，記憶體 2Gi", "output": {"pods": 6, "image": "grafana/grafana:latest", "app_name": "report-generator", "memory": "2Gi"}}
+{"input": "把 db-primary 擴展到 1 個 pod，用 python:3.10-alpine", "output": {"pods": 1, "image": "python:3.10-alpine", "app_name": "db-primary"}}
+{"input": "部署 db-primary：image=postgres:14-alpine，replicas=4，memory=1Gi", "output": {"pods": 4, "image": "postgres:14-alpine", "app_name": "db-primary", "memory": "1Gi"}}
+{"input": "幫忙建 9 個 pod 跑 scheduler，容器用 python:3.11-slim", "output": {"pods": 9, "image": "python:3.11-slim", "app_name": "scheduler"}}
+{"input": "部署 proxy-server：image=golang:1.21-alpine，replicas=2，memory=1Gi", "output": {"pods": 2, "image": "golang:1.21-alpine", "app_name": "proxy-server", "memory": "1Gi"}}
+{"input": "i need 8 pods for log-collector running postgres:14-alpine", "output": {"pods": 8, "image": "postgres:14-alpine", "app_name": "log-collector"}}
+{"input": "please deploy 2 redis:7-alpine pods as metrics-server", "output": {"pods": 2, "image": "redis:7-alpine", "app_name": "metrics-server"}}
+{"input": "幫我跑 db-primary，1 個 pod，用 grafana/grafana:latest，port 4567", "output": {"pods": 1, "image": "grafana/grafana:latest", "app_name": "db-primary", "port": 4567}}
+{"input": "部署 2 個 image-resizer，image python:3.11-slim，記憶體限制 256Mi", "output": {"pods": 2, "image": "python:3.11-slim", "app_name": "image-resizer", "memory": "256Mi"}}
+{"input": "起 3 個 redis:latest 的 notification-service，memory limit 128Mi", "output": {"pods": 3, "image": "redis:latest", "app_name": "notification-service", "memory": "128Mi"}}
+{"input": "scale auth-service to 4 pods using golang:1.21-alpine", "output": {"pods": 4, "image": "golang:1.21-alpine", "app_name": "auth-service"}}
+{"input": "deploy 5 pods of proxy-server using redis:latest, memory limit 256Mi", "output": {"pods": 5, "image": "redis:latest", "app_name": "proxy-server", "memory": "256Mi"}}
+{"input": "launch report-generator: 3 pods, nginx:latest, ram limit 128Mi", "output": {"pods": 3, "image": "nginx:latest", "app_name": "report-generator", "memory": "128Mi"}}
+{"input": "create deployment log-collector with 7 replicas and openjdk:17-slim", "output": {"pods": 7, "image": "openjdk:17-slim", "app_name": "log-collector"}}
+{"input": "幫我跑 payment-service，6 個 pod，用 mongo:6，port 443", "output": {"pods": 6, "image": "mongo:6", "app_name": "payment-service", "port": 443}}
+{"input": "deploy 5 pods of search-engine using openjdk:17-slim, memory limit 2Gi", "output": {"pods": 5, "image": "openjdk:17-slim", "app_name": "search-engine", "memory": "2Gi"}}
+{"input": "launch message-broker: 5 pods, grafana/grafana:latest, ram limit 2Gi", "output": {"pods": 5, "image": "grafana/grafana:latest", "app_name": "message-broker", "memory": "2Gi"}}
+{"input": "我需要 10 個 db-primary pod，image 用 redis:7-alpine", "output": {"pods": 10, "image": "redis:7-alpine", "app_name": "db-primary"}}
+{"input": "create deployment auth-service with 6 replicas and redis:7-alpine", "output": {"pods": 6, "image": "redis:7-alpine", "app_name": "auth-service"}}
+{"input": "建立 report-generator 服務，6 個 replica，使用 redis:7-alpine", "output": {"pods": 6, "image": "redis:7-alpine", "app_name": "report-generator"}}
+{"input": "spin up 4 openjdk:17-slim containers named order-service", "output": {"pods": 4, "image": "openjdk:17-slim", "app_name": "order-service"}}
+{"input": "建立 5 個 mysql:8.0 容器，命名為 scheduler", "output": {"pods": 5, "image": "mysql:8.0", "app_name": "scheduler"}}
+{"input": "get image-resizer running: 4 pods, traefik:v3.0", "output": {"pods": 4, "image": "traefik:v3.0", "app_name": "image-resizer"}}
+{"input": "部署 8 個 file-storage，image traefik:v3.0，開放 80 port", "output": {"pods": 8, "image": "traefik:v3.0", "app_name": "file-storage", "port": 80}}
+{"input": "scale file-storage to 4 pods using apache/kafka:latest", "output": {"pods": 4, "image": "apache/kafka:latest", "app_name": "file-storage"}}
+{"input": "bring up 10-pod deployment for search-engine using mysql:8.0", "output": {"pods": 10, "image": "mysql:8.0", "app_name": "search-engine"}}
+{"input": "setup api-gateway service with 6 replicas of nginx:1.25-alpine", "output": {"pods": 6, "image": "nginx:1.25-alpine", "app_name": "api-gateway"}}
+{"input": "initialize report-generator using nginx:latest, need 5 pods", "output": {"pods": 5, "image": "nginx:latest", "app_name": "report-generator"}}
+{"input": "建立 db-primary，nginx:1.25-alpine，6 個副本，ram 限制 128Mi", "output": {"pods": 6, "image": "nginx:1.25-alpine", "app_name": "db-primary", "memory": "128Mi"}}
+{"input": "start 7 replicas of notification-service with image redis:latest", "output": {"pods": 7, "image": "redis:latest", "app_name": "notification-service"}}
+{"input": "部署 report-generator：image=prom/prometheus:latest，replicas=1，memory=256Mi", "output": {"pods": 1, "image": "prom/prometheus:latest", "app_name": "report-generator", "memory": "256Mi"}}
+{"input": "幫忙建 6 個 pod 跑 web-frontend，容器用 openjdk:17-slim", "output": {"pods": 6, "image": "openjdk:17-slim", "app_name": "web-frontend"}}
+{"input": "部署 3 個 user-service，image rabbitmq:3-management，記憶體限制 512Mi", "output": {"pods": 3, "image": "rabbitmq:3-management", "app_name": "user-service", "memory": "512Mi"}}
+{"input": "部署 email-worker：image=openjdk:17-slim，replicas=2，memory=1Gi", "output": {"pods": 2, "image": "openjdk:17-slim", "app_name": "email-worker", "memory": "1Gi"}}
+{"input": "initialize data-processor using postgres:15, need 7 pods", "output": {"pods": 7, "image": "postgres:15", "app_name": "data-processor"}}
+{"input": "幫我跑 cache-server，7 個 pod，image: redis:7-alpine", "output": {"pods": 7, "image": "redis:7-alpine", "app_name": "cache-server"}}
+{"input": "create payment-service: image=nginx:latest, replicas=2, port=443", "output": {"pods": 2, "image": "nginx:latest", "app_name": "payment-service", "port": 443}}
+{"input": "請部署 golang:1.21-alpine 作為 message-broker，需要 6 個副本", "output": {"pods": 6, "image": "golang:1.21-alpine", "app_name": "message-broker"}}
+{"input": "start order-service with 3 replicas (postgres:14-alpine), set memory to 512Mi", "output": {"pods": 3, "image": "postgres:14-alpine", "app_name": "order-service", "memory": "512Mi"}}
+{"input": "start api-gateway with 5 replicas (nginx:1.25-alpine), set memory to 128Mi", "output": {"pods": 5, "image": "nginx:1.25-alpine", "app_name": "api-gateway", "memory": "128Mi"}}
+{"input": "run python:3.11-slim as log-collector, 4 pods, memory=2Gi", "output": {"pods": 4, "image": "python:3.11-slim", "app_name": "log-collector", "memory": "2Gi"}}
+{"input": "部署 3 個 db-primary 的 pod，使用 elasticsearch:8.11.0", "output": {"pods": 3, "image": "elasticsearch:8.11.0", "app_name": "db-primary"}}
+{"input": "launch 2 report-generator pods (mysql:8.0), container port 6379", "output": {"pods": 2, "image": "mysql:8.0", "app_name": "report-generator", "port": 6379}}
+{"input": "部署 5 個 api-gateway，image redis:7-alpine，記憶體限制 1Gi", "output": {"pods": 5, "image": "redis:7-alpine", "app_name": "api-gateway", "memory": "1Gi"}}
+{"input": "start api-gateway with 6 replicas (apache/kafka:latest), set memory to 1Gi", "output": {"pods": 6, "image": "apache/kafka:latest", "app_name": "api-gateway", "memory": "1Gi"}}
+{"input": "把 search-engine 擴展到 6 個 pod，用 python:3.11-slim", "output": {"pods": 6, "image": "python:3.11-slim", "app_name": "search-engine"}}
+{"input": "幫我跑 order-service，4 個 pod，用 elasticsearch:8.11.0，記憶體 1Gi", "output": {"pods": 4, "image": "elasticsearch:8.11.0", "app_name": "order-service", "memory": "1Gi"}}
+{"input": "部署 2 個 db-primary，image rabbitmq:3-management，開放 8080 port", "output": {"pods": 2, "image": "rabbitmq:3-management", "app_name": "db-primary", "port": 8080}}
+{"input": "起一個 user-service 的 deployment，8 個副本，mongo:6", "output": {"pods": 8, "image": "mongo:6", "app_name": "user-service"}}
+{"input": "create file-storage: image=python:3.10-alpine, replicas=8, port=8443", "output": {"pods": 8, "image": "python:3.10-alpine", "app_name": "file-storage", "port": 8443}}
+{"input": "幫我起 1 個 email-worker，映像檔是 mysql:8.0", "output": {"pods": 1, "image": "mysql:8.0", "app_name": "email-worker"}}
+{"input": "建立 3 個 redis:7-alpine 容器，命名為 notification-service", "output": {"pods": 3, "image": "redis:7-alpine", "app_name": "notification-service"}}
+{"input": "run node:20-alpine as search-engine, 5 pods, port 8080", "output": {"pods": 5, "image": "node:20-alpine", "app_name": "search-engine", "port": 8080}}
