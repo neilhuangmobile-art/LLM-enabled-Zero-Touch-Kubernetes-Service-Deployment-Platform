@@ -1,55 +1,219 @@
 """
-web_demo.py  v4  —  ZeroTouch K8s Platform
-Multi-chat + Conversational AI (LLaMA) + Real K8s + Edit form
+web_demo.py  —  ZeroTouch K8s Platform v2
+Clean white UI + Login/Register + Pod Details + AI Chat + Real K8s
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from core.config import ensure_utf8_output
 ensure_utf8_output()
 
-import threading, json, urllib.request, hashlib, secrets, time
+import threading, json, urllib.request, hashlib, secrets, re, uuid
 from datetime import datetime
-from flask import Flask, request, jsonify, render_template_string, session, redirect
+from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
 
 from core.config import YAML_DIR, MODEL_SERVER_URL
 from llama_client import ask_llama, save_gold_sample
+from core.claude_client import claude_chat, is_available as claude_available
 
+
+# ══════════════════════════════════════════════════════════════════
+# 資料集欄位 enrichment (is_k8s / language / complexity / namespace / output)
+#   - 不修改 ask_llama() 本體,避免影響推論流程
+#   - 在 /api/deploy 收到解析結果後,補上資料集所需的所有欄位
+#   - 同時也是「線上版的標註器」:未來收集 gold sample 時可直接寫成
+#     k8s_prompt_dataset 標準格式
+# ══════════════════════════════════════════════════════════════════
+
+# K8s / Trash talk 關鍵字 (用於 is_k8s 分類)
+_K8S_KEYWORDS = (
+    # 英文
+    "pod", "pods", "deploy", "deployment", "service", "svc", "ingress",
+    "namespace", "configmap", "secret", "helm", "kubectl", "replica", "replicas",
+    "container", "image", "yaml", "manifest", "kubernetes", "k8s", "cluster",
+    "node", "autoscal", "hpa", "pvc", "volume", "rbac", "networkpolicy",
+    "nginx", "redis", "mysql", "postgres", "python", "node:",
+    # 繁體中文
+    "部署", "服務", "命名空間", "容器", "映像", "副本", "節點", "叢集",
+    "資源", "記憶體", "埠號", "監聽",
+)
+
+_TRASH_TALK_KEYWORDS = (
+    "roast", "taunt", "banter", "trash talk", "opponent", "hype my team",
+    "嘴砲", "酸對手", "羞辱",
+)
+
+# namespace 抓取 (中英雙語 + 混合句)
+_NS_PATTERNS = [
+    re.compile(r'\bnamespace\s+(?:設為|設定為|為|是|to)?\s*([a-z0-9][-a-z0-9]*)', re.IGNORECASE),
+    re.compile(r'\bns\s*[:=]\s*([a-z0-9][-a-z0-9]*)', re.IGNORECASE),
+    re.compile(r'\bin\s+namespace\s+([a-z0-9][-a-z0-9]*)', re.IGNORECASE),
+    re.compile(r'命名空間\s*(?:為|是|設為|設定為)?\s*([a-z0-9][-a-z0-9]*)'),
+]
+
+# complexity 評分用的「進階特徵」關鍵字
+_COMPLEX_FEATURES = (
+    "ingress", "configmap", "secret", "helm", "autoscal", "hpa",
+    "rbac", "networkpolicy", "pvc", "persistentvolume", "rolling",
+    "blue-green", "canary", "istio", "service mesh", "kustomize",
+    "tls", "probe", "readiness", "liveness",
+    # 中文
+    "藍綠", "金絲雀", "滾動", "探針", "自動擴", "持久化",
+)
+
+_MULTI_APP_PATTERNS = [
+    re.compile(r'\b(\d+)\s+(?:applications|apps|services|微服務|個應用)', re.IGNORECASE),
+    re.compile(r'\bmulti[-\s]?app', re.IGNORECASE),
+]
+
+
+def _detect_language(text: str) -> str:
+    """偵測語言。中文字元 >= 10% 視為 zh-tw,否則 en。"""
+    if not text:
+        return "en"
+    cjk_count = sum(1 for ch in text if '\u4e00' <= ch <= '\u9fff')
+    return "zh-tw" if cjk_count / max(len(text), 1) > 0.1 else "en"
+
+
+def _detect_is_k8s(text: str, parsed: dict) -> bool:
+    """
+    判斷 prompt 是否為 K8s 請求。
+    規則:
+      1. 命中 trash talk 關鍵字 → False (強訊號)
+      2. 命中 K8s 關鍵字 或 ask_llama 解析成功 → True
+      3. 其他 → False
+    """
+    low = text.lower()
+    if any(kw in low for kw in _TRASH_TALK_KEYWORDS):
+        return False
+    if any(kw in low for kw in _K8S_KEYWORDS):
+        return True
+    if parsed and isinstance(parsed, dict) and "pods" in parsed:
+        return True
+    return False
+
+
+def _detect_namespace(text: str, parsed: dict) -> str:
+    """從 prompt 抓 namespace;抓不到回傳 default。"""
+    if parsed and parsed.get("namespace"):
+        return str(parsed["namespace"])
+    for pat in _NS_PATTERNS:
+        m = pat.search(text)
+        if m:
+            return m.group(1)
+    return "default"
+
+
+def _detect_complexity(text: str) -> str:
+    """
+    啟發式 complexity 評分:
+      - 長度分數: < 80 字 → 0 ; < 200 字 → 1 ; >= 200 字 → 2
+      - 進階特徵: 每命中 1 個關鍵字 +1
+      - 多應用: multi-app 模式 +2
+    分數區間: 0-1 simple ; 2-3 medium ; >=4 complex
+    """
+    score = 0
+    low = text.lower()
+    length = len(text)
+    if length >= 200:
+        score += 2
+    elif length >= 80:
+        score += 1
+    score += sum(1 for kw in _COMPLEX_FEATURES if kw in low)
+    for pat in _MULTI_APP_PATTERNS:
+        m = pat.search(text)
+        if m:
+            try:
+                if int(m.group(1)) >= 2:
+                    score += 2
+            except (IndexError, ValueError):
+                score += 2
+            break
+    if score >= 4:
+        return "complex"
+    if score >= 2:
+        return "medium"
+    return "simple"
+
+
+def enrich_parsed_result(user_input: str, parsed: dict) -> dict:
+    """
+    把 ask_llama() 的原始解析結果包裝成資料集標準格式:
+        {
+          "id":         "k8s-xxxxxxxx",
+          "prompt":     <原始輸入>,
+          "output":     <ask_llama 解析的結構>,
+          "is_k8s":     true/false,
+          "complexity": "simple"/"medium"/"complex",
+          "namespace":  "default" / 抓到的 namespace,
+          "language":   "en" / "zh-tw"
+        }
+    回傳的 dict 同時保留原本扁平欄位 (app_name/image/pods/port/memory) ,
+    讓既有的部署邏輯與前端 stats 不需改動。
+    """
+    if not isinstance(parsed, dict):
+        parsed = {}
+
+    language   = _detect_language(user_input)
+    is_k8s     = _detect_is_k8s(user_input, parsed)
+    namespace  = _detect_namespace(user_input, parsed)
+    complexity = _detect_complexity(user_input)
+
+    # 標準 output 結構 (資料集 ground truth)
+    output_block = {
+        "app_name": parsed.get("app_name"),
+        "image":    parsed.get("image"),
+        "pods":     parsed.get("pods"),
+        "port":     parsed.get("port"),
+        "memory":   parsed.get("memory"),
+    }
+    output_block = {k: v for k, v in output_block.items() if v is not None}
+
+    enriched = dict(parsed)  # 保留所有原欄位給後續部署用
+    enriched.update({
+        "id":         f"k8s-{uuid.uuid4().hex[:8]}",
+        "prompt":     user_input,
+        "output":     output_block,
+        "is_k8s":     is_k8s,
+        "complexity": complexity,
+        "namespace":  namespace,
+        "language":   language,
+    })
+    return enriched
+
+# ── Kubernetes ──────────────────────────────────────────────
 K8S_ENABLED = False
 try:
     from kubernetes import client as k8s_client, config as k8s_config
     import yaml as yaml_lib
     k8s_config.load_kube_config()
     K8S_ENABLED = True
-    print("[K8s] Connected")
+    print("[K8s] 已連線")
 except Exception as e:
-    print(f"[K8s] Not connected: {e}")
+    print(f"[K8s] 未連線（模擬模式）：{e}")
 
-NS = "default"
+NS  = "default"
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
 
-# ── User store ───────────────────────────────────────────────
-import json as _jmod
-_USERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json")
-def _load_users():
+# ── Simple in-memory user store (replace with DB for production) ──
+USERS = {}  # username -> {password_hash, created_at}
+
+def hash_password(pw):
+    return hashlib.sha256(pw.encode()).hexdigest()
+
+# ── Model status ────────────────────────────────────────────
+def _model_status():
     try:
-        if os.path.exists(_USERS_FILE):
-            return _jmod.load(open(_USERS_FILE))
-    except: pass
-    return {}
-def _save_users(u):
-    try: _jmod.dump(u, open(_USERS_FILE, "w"))
-    except: pass
-USERS = _load_users()
-def hash_pw(pw): return hashlib.sha256(pw.encode()).hexdigest()
+        with urllib.request.urlopen(f"{MODEL_SERVER_URL}/health", timeout=2) as resp:
+            data = json.loads(resp.read())
+            return data.get("model_loaded", False), False
+    except Exception:
+        return False, False
 
-# ── Pending deploy confirmations ─────────────────────────────
-PENDING = {}  # "username:chat_id" -> parsed dict
-
-# ── K8s helpers ──────────────────────────────────────────────
+# ── K8s helpers ─────────────────────────────────────────────
 def k8s_deploy(app_name, image, replicas, port=80, memory=None):
     if not K8S_ENABLED:
-        return False, "K8s not connected (simulation)"
+        return False, "K8s 未連線（模擬模式）"
     try:
         api  = k8s_client.AppsV1Api()
         core = k8s_client.CoreV1Api()
@@ -57,18 +221,18 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None):
         if memory:
             resources = k8s_client.V1ResourceRequirements(
                 requests={"memory": memory, "cpu": "100m"},
-                limits={"memory": memory, "cpu": "500m"},
+                limits  ={"memory": memory, "cpu": "500m"},
             )
         container = k8s_client.V1Container(
             name=app_name, image=image,
-            ports=[k8s_client.V1ContainerPort(container_port=int(port))],
+            ports=[k8s_client.V1ContainerPort(container_port=port)],
             resources=resources,
         )
         deploy = k8s_client.V1Deployment(
             api_version="apps/v1", kind="Deployment",
             metadata=k8s_client.V1ObjectMeta(name=app_name),
             spec=k8s_client.V1DeploymentSpec(
-                replicas=int(replicas),
+                replicas=replicas,
                 selector=k8s_client.V1LabelSelector(match_labels={"app": app_name}),
                 template=k8s_client.V1PodTemplateSpec(
                     metadata=k8s_client.V1ObjectMeta(labels={"app": app_name}),
@@ -78,868 +242,936 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None):
         )
         svc = k8s_client.V1Service(
             api_version="v1", kind="Service",
-            metadata=k8s_client.V1ObjectMeta(name=app_name + "-svc"),
+            metadata=k8s_client.V1ObjectMeta(name=f"{app_name}-svc"),
             spec=k8s_client.V1ServiceSpec(
                 selector={"app": app_name},
-                ports=[k8s_client.V1ServicePort(port=int(port), target_port=int(port))],
+                ports=[k8s_client.V1ServicePort(port=port, target_port=port)],
                 type="LoadBalancer",
             ),
         )
-        try: api.create_namespaced_deployment(NS, deploy)
-        except:
-            import random
-            app_name2 = app_name + "-" + str(random.randint(100, 999))
-            deploy.metadata.name = app_name2
-            deploy.spec.selector.match_labels["app"] = app_name2
-            deploy.spec.template.metadata.labels["app"] = app_name2
-            deploy.spec.template.spec.containers[0].name = app_name2
-            svc.metadata.name = app_name2 + "-svc"
-            svc.spec.selector["app"] = app_name2
+        try:
+            api.replace_namespaced_deployment(app_name, NS, deploy)
+        except Exception:
             api.create_namespaced_deployment(NS, deploy)
-            app_name = app_name2
-        try: core.create_namespaced_service(NS, svc)
-        except: pass
+        try:
+            core.replace_namespaced_service(f"{app_name}-svc", NS, svc)
+        except Exception:
+            core.create_namespaced_service(NS, svc)
         os.makedirs(YAML_DIR, exist_ok=True)
-        with open(os.path.join(YAML_DIR, app_name + ".yaml"), "w") as f:
+        path = os.path.join(YAML_DIR, f"{app_name}.yaml")
+        with open(path, "w", encoding="utf-8") as f:
             f.write(yaml_lib.dump(deploy.to_dict()))
-        return True, app_name
+            f.write("---\n")
+            f.write(yaml_lib.dump(svc.to_dict()))
+        return True, f"已部署 {app_name}"
     except Exception as e:
         return False, str(e)
 
-def _age(ct):
-    if not ct: return ""
-    diff = (datetime.now().replace(tzinfo=None) - ct.replace(tzinfo=None)).total_seconds()
-    if diff < 3600: return str(int(diff // 60)) + "m ago"
-    if diff < 86400: return str(int(diff // 3600)) + "h ago"
-    return str(int(diff // 86400)) + "d ago"
-
-def k8s_get_pods():
-    if not K8S_ENABLED: return []
+def k8s_get_pods(app_name=None):
+    if not K8S_ENABLED:
+        return []
     try:
         core = k8s_client.CoreV1Api()
+        selector = f"app={app_name}" if app_name else None
+        pods = core.list_namespaced_pod(NS, label_selector=selector)
         result = []
-        for p in core.list_namespaced_pod(NS).items:
-            restarts = sum(cs.restart_count for cs in (p.status.container_statuses or [])) if p.status and p.status.container_statuses else 0
+        for p in pods.items:
             containers = []
             if p.spec and p.spec.containers:
                 for c in p.spec.containers:
                     containers.append({
-                        "name": c.name, "image": c.image,
+                        "name": c.name,
+                        "image": c.image,
                         "ports": [cp.container_port for cp in (c.ports or [])],
                         "resources": {
                             "requests": dict(c.resources.requests) if c.resources and c.resources.requests else {},
                             "limits": dict(c.resources.limits) if c.resources and c.resources.limits else {},
                         }
                     })
-            conds = [{"type": co.type, "status": co.status} for co in (p.status.conditions or [])] if p.status else []
+            cond = []
+            if p.status and p.status.conditions:
+                for co in p.status.conditions:
+                    cond.append({"type": co.type, "status": co.status})
             result.append({
-                "name": p.metadata.name,
-                "app": p.metadata.labels.get("app", "") if p.metadata.labels else "",
-                "phase": p.status.phase or "Unknown",
-                "ip": p.status.pod_ip or "",
-                "node": p.spec.node_name or "",
-                "age": _age(p.metadata.creation_timestamp),
-                "restarts": restarts,
+                "name"      : p.metadata.name,
+                "app"       : p.metadata.labels.get("app", "") if p.metadata.labels else "",
+                "phase"     : p.status.phase or "Unknown",
+                "ip"        : p.status.pod_ip or "",
+                "node"      : p.spec.node_name or "",
+                "age"       : str(p.metadata.creation_timestamp)[:16] if p.metadata.creation_timestamp else "",
                 "containers": containers,
-                "conditions": conds,
+                "conditions": cond,
+                "restarts"  : sum(cs.restart_count for cs in (p.status.container_statuses or [])) if p.status and p.status.container_statuses else 0,
             })
         return result
-    except: return []
+    except Exception:
+        return []
 
 def k8s_get_deployments():
-    if not K8S_ENABLED: return []
+    if not K8S_ENABLED:
+        return []
     try:
         api = k8s_client.AppsV1Api()
-        result = []
-        for d in api.list_namespaced_deployment(NS).items:
-            result.append({
-                "name": d.metadata.name,
+        deps = api.list_namespaced_deployment(NS)
+        return [
+            {
+                "name"    : d.metadata.name,
                 "replicas": d.spec.replicas or 0,
-                "ready": d.status.ready_replicas or 0,
-                "image": d.spec.template.spec.containers[0].image if d.spec.template.spec.containers else "",
-                "age": _age(d.metadata.creation_timestamp),
-            })
-        return result
-    except: return []
+                "ready"   : d.status.ready_replicas or 0,
+                "image"   : d.spec.template.spec.containers[0].image if d.spec.template.spec.containers else "",
+                "age"     : str(d.metadata.creation_timestamp)[:16] if d.metadata.creation_timestamp else "",
+            }
+            for d in deps.items
+        ]
+    except Exception:
+        return []
 
-def k8s_delete_deployment(name):
-    if not K8S_ENABLED: return False, "K8s not connected"
+def k8s_delete_deployment(app_name):
+    if not K8S_ENABLED:
+        return False, "K8s 未連線"
     try:
-        k8s_client.AppsV1Api().delete_namespaced_deployment(name, NS)
-        try: k8s_client.CoreV1Api().delete_namespaced_service(name + "-svc", NS)
-        except: pass
-        return True, "Deleted " + name
+        api  = k8s_client.AppsV1Api()
+        core = k8s_client.CoreV1Api()
+        api.delete_namespaced_deployment(app_name, NS)
+        try:
+            core.delete_namespaced_service(f"{app_name}-svc", NS)
+        except Exception:
+            pass
+        return True, f"已刪除 {app_name}"
     except Exception as e:
         return False, str(e)
 
-def _model_status():
-    try:
-        with urllib.request.urlopen(MODEL_SERVER_URL + "/health", timeout=2) as resp:
-            return json.loads(resp.read()).get("model_loaded", False), False
-    except: return False, True
-
-def llama_chat(question):
-    """Call LLaMA /chat endpoint for general Q&A"""
-    try:
-        data = json.dumps({"question": question, "max_new_tokens": 400}).encode()
-        req = urllib.request.Request(
-            MODEL_SERVER_URL + "/chat", data=data,
-            headers={"Content-Type": "application/json"}, method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=25) as resp:
-            ans = json.loads(resp.read()).get("answer", "").strip()
-        for stop in ["### User", "### System", "### Assistant", "User:", "Assistant:"]:
-            if stop in ans:
-                ans = ans[:ans.index(stop)].strip()
-        return ans if len(ans) > 10 else None
-    except: return None
-
-# ── Main chat agent ──────────────────────────────────────────
-def process_message(username, chat_id, message):
-    msg_lower = message.lower().strip()
-    pending_key = username + ":" + chat_id
-
-    # ── 處理確認部署 ──
-    if pending_key in PENDING:
-        parsed = PENDING[pending_key]
-        confirm_words = ["yes", "ok", "sure", "go", "confirm", "deploy", "yep", "好", "確認", "部署", "執行"]
-        cancel_words  = ["no", "cancel", "stop", "不", "取消", "算了", "cancel"]
-        if any(w in msg_lower for w in cancel_words):
-            del PENDING[pending_key]
-            return "Deployment cancelled.", "cancelled"
-        if any(w in msg_lower for w in confirm_words):
-            del PENDING[pending_key]
-            suffix = str(int(time.time()))[-4:]
-            app_name = parsed["app_name"] + "-" + suffix
-            if K8S_ENABLED:
-                ok, result = k8s_deploy(app_name, parsed["image"], parsed["pods"],
-                                        parsed.get("port", 80), parsed.get("memory"))
-                threading.Thread(target=save_gold_sample, args=(message, parsed), daemon=True).start()
-                if ok:
-                    actual_name = result
-                    return ("Deployment started!\n\n"
-                            "Name: " + actual_name + "\n"
-                            "Image: " + str(parsed["image"]) + "\n"
-                            "Pods: " + str(parsed["pods"]) + "\n"
-                            + ("Port: " + str(parsed["port"]) + "\n" if parsed.get("port") else "")
-                            + "\nCheck the Pods tab in a few seconds."), "deployed"
-                else:
-                    return "Deployment failed: " + result, "error"
-            else:
-                return "Simulation mode — K8s not connected.", "simulated"
-        return ("Still waiting for confirmation:\n\n"
-                "App: " + str(parsed.get("app_name", "")) + "\n"
-                "Image: " + str(parsed.get("image", "")) + "\n"
-                "Pods: " + str(parsed.get("pods", "")) + "\n\n"
-                "Reply **yes** to deploy or **no** to cancel."), "waiting"
-
-    deploy_kw = ["deploy","start","launch","run","create","spin","build","add","新增","部署","建立","起","跑","幫我"]
-    delete_kw = ["delete","remove","kill","destroy","刪除","移除","刪掉"]
-    list_kw   = ["list","show","get pods","get deploy","check pods","查","顯示","看","列出","有哪些","現在有","how many pods","how many deploy"]
-    scale_kw  = ["scale","resize","replicas","adjust","調整","擴展","縮小","改成"]
-
-    is_delete = any(k in msg_lower for k in delete_kw)
-    is_list   = any(k in msg_lower for k in list_kw) and not any(k in msg_lower for k in deploy_kw + delete_kw)
-    is_scale  = any(k in msg_lower for k in scale_kw) and not is_delete
-    is_deploy = any(k in msg_lower for k in deploy_kw) and not is_delete
-
-    # ── 部署 ──
-    if is_deploy:
-        parsed = ask_llama(message)
-        if "error" in parsed or not parsed.get("image") or not parsed.get("pods"):
-            return ("I couldn't parse that deployment. Please be more specific, for example:\n\n"
-                    "deploy 3 nginx:latest pods for web-frontend\n"
-                    "start 2 redis:7-alpine pods, port 6379"), "parse_failed"
-        PENDING[pending_key] = parsed
-        lines = ["Here's what I parsed:\n"]
-        lines.append("App: **" + str(parsed.get("app_name", "")) + "**")
-        lines.append("Image: **" + str(parsed.get("image", "")) + "**")
-        lines.append("Pods: **" + str(parsed.get("pods", "")) + "**")
-        if parsed.get("port"): lines.append("Port: **" + str(parsed["port"]) + "**")
-        if parsed.get("memory"): lines.append("Memory: **" + str(parsed["memory"]) + "**")
-        lines.append("\nDoes this look right?")
-        return "\n".join(lines), "confirm_pending"
-
-    # ── 刪除 ──
-    elif is_delete:
-        deps = k8s_get_deployments()
-        dep_names = [d["name"] for d in deps]
-        target = None
-        for name in dep_names:
-            if name.lower() in msg_lower:
-                target = name
-                break
-        if not target:
-            words = [w.strip(".,!?-") for w in message.split()]
-            for name in dep_names:
-                for part in name.replace("-", " ").split():
-                    if len(part) > 3 and part.lower() in [w.lower() for w in words]:
-                        target = name
-                        break
-        if target:
-            ok, msg_r = k8s_delete_deployment(target)
-            return ("Deleted **" + target + "** successfully!" if ok else "Failed: " + msg_r), "deleted"
-        elif dep_names:
-            return ("Which deployment to delete?\n\n" + "\n".join("- " + n for n in dep_names)), "list_for_delete"
-        else:
-            return "No deployments to delete.", "no_deps"
-
-    # ── 列出狀態 ──
-    elif is_list:
-        pods = k8s_get_pods()
-        deps = k8s_get_deployments()
-        if "pod" in msg_lower:
-            if not pods: return "No pods running.", "listed"
-            lines = ["**" + str(len(pods)) + " pods** running:\n"]
-            for p in pods:
-                icon = "🟢" if p["phase"] == "Running" else "🟡" if p["phase"] == "Pending" else "🔴"
-                lines.append(icon + " " + p["name"] + " — " + p["phase"] + " — " + p["ip"])
-            return "\n".join(lines), "listed"
-        else:
-            if not deps: return "No deployments found.", "listed"
-            lines = ["**" + str(len(deps)) + " deployments**:\n"]
-            for d in deps:
-                lines.append("📦 " + d["name"] + " — " + d["image"] + " — " + str(d["ready"]) + "/" + str(d["replicas"]) + " ready")
-            return "\n".join(lines), "listed"
-
-    # ── Scale ──
-    elif is_scale:
-        import re as _re
-        nums = _re.findall(r"\d+", message)
-        deps = k8s_get_deployments()
-        dep_names = [d["name"] for d in deps]
-        target = None
-        for name in dep_names:
-            if name.lower() in msg_lower:
-                target = name
-                break
-        if target and nums:
-            try:
-                k8s_client.AppsV1Api().patch_namespaced_deployment(
-                    target, NS, {"spec": {"replicas": int(nums[-1])}})
-                return "Scaled **" + target + "** to **" + nums[-1] + "** replicas!", "scaled"
-            except Exception as e:
-                return "Scale failed: " + str(e), "error"
-        elif not target:
-            return "Which deployment? Available: " + (", ".join(dep_names) if dep_names else "none"), "need_target"
-        else:
-            return "How many replicas? e.g. scale web-frontend to 5", "need_count"
-
-    # ── 一般問題：直接用 LLaMA ──
-    else:
-        ans = llama_chat(message)
-        if ans:
-            return ans, "llm_answered"
-        # LLaMA 失敗才用簡單回覆
-        pods = k8s_get_pods()
-        deps = k8s_get_deployments()
-        return ("I'm your K8s assistant! System: **" + str(len(pods)) + " pods**, **" + str(len(deps)) + " deployments**.\n\n"
-                "I can help you:\n"
-                "- deploy 3 nginx:latest pods for web-frontend\n"
-                "- delete <deployment-name>\n"
-                "- list pods / show deployments\n"
-                "- scale <name> to 5\n"
-                "- Ask any Kubernetes question!"), "answered"
-
-
-# ── HTML ─────────────────────────────────────────────────────
+# ── HTML ────────────────────────────────────────────────────
 HTML = r"""<!DOCTYPE html>
-<html lang="en">
+<html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ZeroTouch K8s</title>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg:#F9FAFB;--surf:#FFFFFF;--b1:#E5E7EB;--b2:#D1D5DB;
-  --t1:#111827;--t2:#6B7280;--t3:#9CA3AF;
-  --gr:#16A34A;--grl:#DCFCE7;--grm:#BBF7D0;
-  --rd:#DC2626;--rdl:#FEE2E2;
-  --bl:#2563EB;--bll:#DBEAFE;
-  --yw:#D97706;--ywl:#FEF3C7;
-  --sw:220px;--r:10px;--rsm:6px;
+  --bg:#FAFAFA;--surface:#FFFFFF;--border:#E5E7EB;--border2:#D1D5DB;
+  --text:#111827;--text2:#6B7280;--text3:#9CA3AF;
+  --green:#16A34A;--green-light:#DCFCE7;--green-mid:#BBF7D0;
+  --red:#DC2626;--red-light:#FEE2E2;
+  --blue:#2563EB;--blue-light:#DBEAFE;
+  --yellow:#D97706;--yellow-light:#FEF3C7;
+  --radius:10px;--radius-sm:6px;--shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+  --shadow-md:0 4px 6px rgba(0,0,0,.07),0 2px 4px rgba(0,0,0,.04);
 }
-body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);height:100vh;overflow:hidden}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 
-/* Auth */
-.auth{min-height:100vh;display:flex;align-items:center;justify-content:center}
-.acard{background:var(--surf);border:1px solid var(--b1);border-radius:16px;padding:40px;width:420px;box-shadow:0 4px 24px rgba(0,0,0,.08)}
-.alogo{display:flex;align-items:center;gap:10px;margin-bottom:28px}
-.aicon{width:34px;height:34px;background:var(--gr);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-weight:700}
-.atitle{font-size:22px;font-weight:600;margin-bottom:6px}
-.asub{font-size:14px;color:var(--t2);margin-bottom:24px}
-.fg{margin-bottom:16px}
-.fg label{display:block;font-size:13px;font-weight:500;margin-bottom:6px}
-.fg input{width:100%;padding:10px 14px;border:1.5px solid var(--b2);border-radius:var(--rsm);font-size:14px;font-family:inherit;outline:none;transition:border .15s}
-.fg input:focus{border-color:var(--gr);box-shadow:0 0 0 3px rgba(22,163,74,.1)}
-.btnp{width:100%;padding:11px;background:var(--gr);color:#fff;border:none;border-radius:var(--rsm);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit}
-.btnp:hover{background:#15803D}
-.alink{text-align:center;margin-top:20px;font-size:13px;color:var(--t2)}
-.alink a{color:var(--gr);text-decoration:none;font-weight:500}
-.aerr{background:var(--rdl);color:var(--rd);padding:10px 14px;border-radius:var(--rsm);font-size:13px;margin-bottom:16px}
+/* ── Auth Pages ── */
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px;width:100%;max-width:420px;box-shadow:var(--shadow-md)}
+.auth-logo{display:flex;align-items:center;gap:10px;margin-bottom:28px}
+.auth-logo svg{width:32px;height:32px}
+.auth-logo span{font-size:18px;font-weight:600;color:var(--text)}
+.auth-title{font-size:22px;font-weight:600;margin-bottom:6px}
+.auth-sub{font-size:14px;color:var(--text2);margin-bottom:28px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;font-weight:500;margin-bottom:6px;color:var(--text)}
+.form-group input{width:100%;padding:10px 14px;border:1px solid var(--border2);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;outline:none;transition:border .15s}
+.form-group input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.1)}
+.btn-primary{width:100%;padding:11px;background:var(--green);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:background .15s}
+.btn-primary:hover{background:#15803D}
+.auth-link{text-align:center;margin-top:20px;font-size:13px;color:var(--text2)}
+.auth-link a{color:var(--green);text-decoration:none;font-weight:500}
+.auth-error{background:var(--red-light);color:var(--red);padding:10px 14px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:16px}
 
-/* Layout */
-.layout{display:flex;height:100vh}
+/* ── Layout ── */
+.layout{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:240px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-logo{padding:20px 18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.sidebar-logo svg{width:28px;height:28px}
+.sidebar-logo span{font-size:15px;font-weight:600}
+.sidebar-nav{padding:12px 10px;flex:1;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:13.5px;font-weight:500;color:var(--text2);transition:all .15s;border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:var(--bg);color:var(--text)}
+.nav-item.active{background:var(--green-light);color:var(--green)}
+.nav-item svg{width:16px;height:16px;flex-shrink:0}
+.nav-section{font-size:11px;font-weight:600;color:var(--text3);padding:12px 10px 4px;text-transform:uppercase;letter-spacing:.6px}
+.sidebar-footer{padding:14px 18px;border-top:1px solid var(--border)}
+.user-info{display:flex;align-items:center;gap:10px}
+.user-avatar{width:32px;height:32px;background:var(--green);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600;flex-shrink:0}
+.user-name{font-size:13px;font-weight:500;flex:1}
+.logout-btn{font-size:12px;color:var(--text3);cursor:pointer;border:none;background:none;font-family:inherit;padding:2px 6px;border-radius:4px}
+.logout-btn:hover{color:var(--red);background:var(--red-light)}
 
-/* Sidebar */
-.sb{width:var(--sw);background:var(--surf);border-right:1px solid var(--b1);display:flex;flex-direction:column;flex-shrink:0}
-.sbhead{padding:14px 14px 10px;border-bottom:1px solid var(--b1)}
-.sbbrand{display:flex;align-items:center;gap:9px;margin-bottom:12px}
-.sbicon{width:28px;height:28px;background:var(--gr);border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700;flex-shrink:0}
-.sbtext{font-size:14px;font-weight:600}
-.newbtn{width:100%;padding:8px;background:var(--gr);color:#fff;border:none;border-radius:var(--rsm);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:6px;justify-content:center}
-.newbtn:hover{background:#15803D}
-.sbnav{padding:8px 8px 0;flex:1;overflow-y:auto}
-.nsec{font-size:11px;color:var(--t3);font-weight:600;letter-spacing:.5px;text-transform:uppercase;padding:8px 6px 4px}
-.ni{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:var(--rsm);cursor:pointer;font-size:13px;color:var(--t2);transition:all .12s;border:none;background:none;width:100%;text-align:left}
-.ni:hover{background:var(--bg);color:var(--t1)}
-.ni.active{background:var(--grl);color:var(--gr)}
-.ni svg{width:14px;height:14px;flex-shrink:0}
-.nitext{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
-.nidel{opacity:0;padding:2px 5px;border-radius:4px;font-size:11px;color:var(--t3);cursor:pointer;border:none;background:none;flex-shrink:0;line-height:1}
-.ni:hover .nidel{opacity:1}
-.nidel:hover{color:var(--rd);background:var(--rdl)}
-.sbdiv{height:1px;background:var(--b1);margin:6px 8px}
-.sbfoot{padding:12px 14px;border-top:1px solid var(--b1)}
-.urow{display:flex;align-items:center;gap:9px}
-.uav{width:30px;height:30px;background:var(--gr);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:600;flex-shrink:0}
-.uname{font-size:13px;font-weight:500;flex:1}
-.obtn{font-size:12px;color:var(--t3);cursor:pointer;border:none;background:none;font-family:inherit;padding:3px 8px;border-radius:4px}
-.obtn:hover{color:var(--rd);background:var(--rdl)}
+/* ── Main ── */
+.main{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+.page{display:none;padding:28px 32px;flex:1}
+.page.active{display:block}
+.page-title{font-size:20px;font-weight:600;margin-bottom:4px}
+.page-sub{font-size:13px;color:var(--text2);margin-bottom:24px}
 
-/* Status bar */
-.stbar{padding:8px 24px;background:var(--surf);border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:16px;flex-shrink:0}
-.spill{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--t2)}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--t3)}
-.dot.on{background:var(--gr)}
-.dot.off{background:var(--rd)}
-.dot.pu{background:var(--yw);animation:pulse 1.5s infinite}
+/* ── Status bar ── */
+.status-bar{padding:10px 32px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:20px}
+.status-pill{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--text3)}
+.dot.green{background:var(--green)}
+.dot.red{background:var(--red)}
+.dot.yellow{background:var(--yellow);animation:pulse 1.5s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.clk{margin-left:auto;font-size:12px;color:var(--t3);font-family:'Geist Mono',monospace}
 
-/* Main */
-.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
-.chatarea{flex:1;display:flex;overflow:hidden}
+/* ── Cards ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
+.card-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px;text-transform:uppercase;letter-spacing:.4px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.stat-num{font-size:28px;font-weight:600;line-height:1.1}
+.stat-label{font-size:12px;color:var(--text2);margin-top:4px}
 
-/* Chat messages */
-.msglist{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:14px}
-.msg{display:flex;gap:10px}
-.msg.user{flex-direction:row-reverse;align-self:flex-end;max-width:75%}
-.msg.ai{align-self:flex-start;max-width:80%}
-.mav{width:30px;height:30px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
-.msg.ai .mav{background:var(--grl);color:var(--gr)}
-.msg.user .mav{background:var(--gr);color:#fff}
-.mcont{max-width:100%}
-.mbub{padding:11px 15px;border-radius:14px;font-size:14px;line-height:1.65}
-.msg.ai .mbub{background:var(--surf);border:1px solid var(--b1);border-radius:4px 14px 14px 14px}
-.msg.user .mbub{background:var(--gr);color:#fff;border-radius:14px 4px 14px 14px}
-.mtime{font-size:11px;color:var(--t3);margin-top:3px;padding:0 3px}
-.msg.user .mtime{text-align:right}
-.mbub b,.mbub strong{font-weight:600}
-.mbub code{font-family:'Geist Mono',monospace;font-size:12px;background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px}
-.msg.user .mbub code{background:rgba(255,255,255,.2)}
+/* ── Deploy form ── */
+.deploy-input-wrap{display:flex;gap:10px;margin-bottom:20px}
+.deploy-input{flex:1;padding:12px 16px;border:1.5px solid var(--border2);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;outline:none;transition:border .15s;background:var(--surface)}
+.deploy-input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.1)}
+.deploy-btn{padding:12px 22px;background:var(--green);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s}
+.deploy-btn:hover{background:#15803D}
+.deploy-btn:disabled{background:var(--text3);cursor:not-allowed}
+.quick-tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+.tag{padding:5px 12px;border:1px solid var(--border2);border-radius:20px;font-size:12px;cursor:pointer;font-family:'DM Mono',monospace;color:var(--text2);transition:all .15s;background:var(--surface)}
+.tag:hover{border-color:var(--green);color:var(--green);background:var(--green-light)}
 
-/* Confirm form */
-.cform{margin-top:10px;border:1px solid var(--b1);border-radius:8px;padding:14px;background:var(--bg)}
-.cform-title{font-size:11px;font-weight:600;color:var(--t2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.4px}
-.cform-fields{display:grid;gap:8px;margin-bottom:12px}
-.cfield{display:flex;align-items:center;gap:8px}
-.cfield label{font-size:12px;color:var(--t2);width:62px;flex-shrink:0}
-.cfield input{flex:1;padding:6px 10px;border:1px solid var(--b2);border-radius:6px;font-size:13px;font-family:inherit;outline:none}
-.cfield input:focus{border-color:var(--gr)}
-.cbtns{display:flex;gap:8px;flex-wrap:wrap}
-.cdeploy{padding:7px 16px;background:var(--gr);color:#fff;border:none;border-radius:var(--rsm);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit}
-.cdeploy:hover{background:#15803D}
-.ccancel{padding:7px 16px;background:var(--surf);color:var(--t2);border:1px solid var(--b2);border-radius:var(--rsm);font-size:13px;cursor:pointer;font-family:inherit}
-.ccancel:hover{background:var(--bg)}
+/* ── Deploy result ── */
+.result-box{padding:16px;border-radius:var(--radius-sm);font-size:13px;font-family:'DM Mono',monospace;margin-bottom:16px;display:none;white-space:pre-wrap;line-height:1.6}
+.result-box.success{background:var(--green-light);color:#166534;border:1px solid var(--green-mid)}
+.result-box.error{background:var(--red-light);color:#991B1B;border:1px solid #FECACA}
 
-/* Typing */
-.typing{display:flex;gap:4px;padding:11px 15px;background:var(--surf);border:1px solid var(--b1);border-radius:4px 14px 14px 14px;width:fit-content}
-.typing span{width:6px;height:6px;background:var(--t3);border-radius:50%;animation:bounce .9s infinite}
+/* ── Deploy result v2 (dataset enrichment) ── */
+.enrich-card{margin-bottom:16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow:hidden;display:none}
+.enrich-card.show{display:block}
+.enrich-card.rejected{border-color:#FECACA}
+.enrich-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.enrich-head .status-tag{font-size:12px;font-weight:600;padding:3px 10px;border-radius:12px}
+.status-tag.ok{background:var(--green-light);color:#166534}
+.status-tag.reject{background:var(--red-light);color:#991B1B}
+.enrich-id{font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);margin-left:auto}
+.enrich-headline{font-size:13px;color:var(--text2)}
+.enrich-body{padding:14px 18px}
+.enrich-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.enrich-field{padding:10px 12px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border)}
+.enrich-field .lbl{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:600}
+.enrich-field .val{font-size:13px;font-weight:600;color:var(--text);font-family:'DM Mono',monospace}
+.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;font-family:inherit}
+.pill.simple,.pill.true{background:#DCFCE7;color:#166534}
+.pill.medium{background:#FEF3C7;color:#92400E}
+.pill.complex,.pill.false{background:#FEE2E2;color:#991B1B}
+.pill.en{background:#DBEAFE;color:#1E40AF}
+.pill.zhtw{background:#FCE7F3;color:#9D174D}
+.enrich-output-title{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:600}
+.enrich-output{background:#0F172A;color:#E2E8F0;padding:14px 16px;border-radius:var(--radius-sm);font-family:'DM Mono',monospace;font-size:12.5px;line-height:1.6;white-space:pre;overflow-x:auto;margin:0}
+.enrich-output .k{color:#7DD3FC}
+.enrich-output .s{color:#86EFAC}
+.enrich-output .n{color:#FCD34D}
+.enrich-output .b{color:#F472B6}
+.enrich-reject-msg{padding:10px 12px;background:var(--red-light);color:#991B1B;border-radius:var(--radius-sm);font-size:13px;margin-bottom:12px}
+
+/* ── Table ── */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:10px 14px;font-size:11.5px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.4px}
+td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg)}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:11.5px;font-weight:500}
+.badge.running{background:var(--green-light);color:var(--green)}
+.badge.pending{background:var(--yellow-light);color:var(--yellow)}
+.badge.failed{background:var(--red-light);color:var(--red)}
+.badge.unknown{background:var(--bg);color:var(--text2);border:1px solid var(--border)}
+.mono{font-family:'DM Mono',monospace;font-size:12px}
+.btn-sm{padding:5px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:var(--surface);font-family:inherit;transition:all .15s}
+.btn-sm:hover{border-color:var(--blue);color:var(--blue)}
+.btn-danger{border-color:#FECACA;color:var(--red)}
+.btn-danger:hover{background:var(--red-light);border-color:var(--red)}
+.action-btns{display:flex;gap:6px}
+
+/* ── Pod detail modal ── */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:1000;display:none;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:var(--surface);border-radius:14px;width:90%;max-width:600px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 40px rgba(0,0,0,.15)}
+.modal-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface)}
+.modal-title{font-size:15px;font-weight:600}
+.modal-close{width:30px;height:30px;border-radius:50%;border:none;background:var(--bg);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--text2)}
+.modal-body{padding:20px 24px}
+.detail-section{margin-bottom:20px}
+.detail-section-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:10px}
+.detail-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.detail-row:last-child{border-bottom:none}
+.detail-key{color:var(--text2)}
+.detail-val{font-family:'DM Mono',monospace;font-size:12px;text-align:right;max-width:300px;word-break:break-all}
+.cond-badge{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
+.cond-true{background:var(--green-light);color:var(--green)}
+.cond-false{background:var(--red-light);color:var(--red)}
+
+/* ── Chat ── */
+.chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 110px)}
+.chat-messages{flex:1;overflow-y:auto;padding:0 0 16px}
+.msg{display:flex;gap:10px;margin-bottom:16px}
+.msg.user{flex-direction:row-reverse}
+.msg-bubble{max-width:70%;padding:12px 16px;border-radius:12px;font-size:13.5px;line-height:1.6}
+.msg.ai .msg-bubble{background:var(--surface);border:1px solid var(--border)}
+.msg.user .msg-bubble{background:var(--green);color:#fff}
+.msg-avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
+.msg.ai .msg-avatar{background:var(--green-light);color:var(--green)}
+.msg.user .msg-avatar{background:var(--green);color:#fff}
+.chat-input-wrap{display:flex;gap:10px;padding-top:16px;border-top:1px solid var(--border)}
+.chat-input{flex:1;padding:11px 14px;border:1.5px solid var(--border2);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;outline:none;resize:none;transition:border .15s}
+.chat-input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.1)}
+.chat-send{padding:11px 20px;background:var(--green);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:background .15s}
+.chat-send:hover{background:#15803D}
+.typing{display:flex;gap:4px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;width:fit-content}
+.typing span{width:6px;height:6px;background:var(--text3);border-radius:50%;animation:bounce .9s infinite}
 .typing span:nth-child(2){animation-delay:.15s}
 .typing span:nth-child(3){animation-delay:.3s}
 @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
 
-/* Welcome */
-.welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;text-align:center}
-.wicon{width:52px;height:52px;background:var(--gr);border-radius:14px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;font-weight:700;margin:0 auto 14px}
-.wtitle{font-size:20px;font-weight:600;margin-bottom:8px}
-.wsub{font-size:14px;color:var(--t2);margin-bottom:28px;max-width:400px;line-height:1.6}
-.wgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:460px}
-.wcard{padding:13px 15px;background:var(--surf);border:1px solid var(--b1);border-radius:var(--r);cursor:pointer;text-align:left;transition:all .12s;border:none;font-family:inherit;width:100%}
-.wcard:hover{border-color:var(--gr)!important;background:var(--grl)}
-.wcard-t{font-size:13px;font-weight:500;margin-bottom:3px;text-align:left}
-.wcard-s{font-size:12px;color:var(--t2);text-align:left}
+/* ── Loading ── */
+.loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:14px;color:var(--text2)}
 
-/* Input */
-.inputarea{padding:14px 24px 18px;border-top:1px solid var(--b1);background:var(--surf);flex-shrink:0}
-.inputwrap{display:flex;gap:10px;align-items:flex-end;background:var(--bg);border:1.5px solid var(--b2);border-radius:12px;padding:10px 14px;transition:border .15s}
-.inputwrap:focus-within{border-color:var(--gr);box-shadow:0 0 0 3px rgba(22,163,74,.1)}
-.chatinput{flex:1;border:none;background:none;resize:none;font-size:14px;font-family:inherit;outline:none;max-height:140px;line-height:1.5;color:var(--t1)}
-.chatinput::placeholder{color:var(--t3)}
-.sendbtn{padding:8px 16px;background:var(--gr);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;flex-shrink:0}
-.sendbtn:hover{background:#15803D}
-.hint{font-size:11px;color:var(--t3);margin-top:5px;text-align:center}
-
-/* Pods panel */
-.ppanel{display:none;width:340px;border-left:1px solid var(--b1);background:var(--surf);flex-direction:column;flex-shrink:0}
-.ppanel.open{display:flex}
-.phead{padding:14px 16px;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between}
-.ptitle{font-size:14px;font-weight:600}
-.pclose{width:26px;height:26px;border-radius:6px;border:none;background:var(--bg);cursor:pointer;color:var(--t2);font-size:13px}
-.ptabs{display:flex;border-bottom:1px solid var(--b1);padding:0 16px}
-.ptab{padding:9px 12px;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:var(--t2)}
-.ptab.active{color:var(--gr);border-bottom-color:var(--gr)}
-.pcont{flex:1;overflow-y:auto;padding:10px}
-.podcard{padding:10px 12px;border:1px solid var(--b1);border-radius:var(--rsm);margin-bottom:7px;cursor:pointer;transition:all .12s}
-.podcard:hover{border-color:var(--gr);background:var(--grl)}
-.podname{font-size:12px;font-family:'Geist Mono',monospace;font-weight:500;margin-bottom:4px}
-.podmeta{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
-.podbadge{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
-.podbadge.Running{background:var(--grl);color:var(--gr)}
-.podbadge.Pending{background:var(--ywl);color:var(--yw)}
-.podbadge.Failed,.podbadge.Error{background:var(--rdl);color:var(--rd)}
-.podip{font-size:11px;color:var(--t3);font-family:'Geist Mono',monospace}
-.depcard{padding:10px 12px;border:1px solid var(--b1);border-radius:var(--rsm);margin-bottom:7px}
-.depname{font-size:13px;font-weight:500;margin-bottom:3px}
-.depmeta{font-size:12px;color:var(--t2)}
-.depdel{margin-top:7px;padding:4px 10px;font-size:11px;border:1px solid #FECACA;color:var(--rd);background:none;border-radius:4px;cursor:pointer;font-family:inherit}
-.depdel:hover{background:var(--rdl)}
-.empty{text-align:center;padding:28px;color:var(--t3);font-size:13px}
-
-/* Modal */
-.mbg{position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:1000;display:none;align-items:center;justify-content:center}
-.mbg.open{display:flex}
-.modal{background:var(--surf);border-radius:14px;width:540px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 40px rgba(0,0,0,.15)}
-.mhead{padding:16px 20px 12px;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surf)}
-.mtitle{font-size:14px;font-weight:600}
-.mclose{width:26px;height:26px;border-radius:6px;border:none;background:var(--bg);cursor:pointer;font-size:13px;color:var(--t2)}
-.mbody{padding:16px 20px}
-.dsec{margin-bottom:16px}
-.dsectitle{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);margin-bottom:8px}
-.drow{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--b1);font-size:13px}
-.drow:last-child{border-bottom:none}
-.dkey{color:var(--t2)}
-.dval{font-family:'Geist Mono',monospace;font-size:12px;max-width:260px;word-break:break-all;text-align:right}
-.chip{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500;margin:2px}
-.ct{background:var(--grl);color:var(--gr)}
-.cf{background:var(--rdl);color:var(--rd)}
+/* ── Empty state ── */
+.empty{text-align:center;padding:48px 20px;color:var(--text2)}
+.empty svg{width:40px;height:40px;margin:0 auto 12px;opacity:.3}
+.empty p{font-size:14px}
 </style>
 </head>
 <body>
 
-{% if not logged_in and page != 'register' %}
-<div class="auth">
-  <div class="acard">
-    <div class="alogo"><div class="aicon">K</div><span style="font-size:15px;font-weight:600">ZeroTouch K8s</span></div>
-    <div class="atitle">Welcome back</div>
-    <div class="asub">Sign in to your account</div>
-    {% if error %}<div class="aerr">{{ error }}</div>{% endif %}
+{% if not logged_in %}
+<!-- ── Login Page ── -->
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <svg viewBox="0 0 28 28" fill="none">
+        <rect width="28" height="28" rx="7" fill="#16A34A"/>
+        <path d="M8 14h12M14 8v12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span>ZeroTouch K8s</span>
+    </div>
+    <div class="auth-title">Welcome back</div>
+    <div class="auth-sub">Sign in to your account to continue</div>
+    {% if error %}<div class="auth-error">{{ error }}</div>{% endif %}
     <form method="POST" action="/auth/login">
-      <div class="fg"><label>Username</label><input type="text" name="username" placeholder="Enter your username" required autofocus></div>
-      <div class="fg"><label>Password</label><input type="password" name="password" placeholder="Enter your password" required></div>
-      <button class="btnp" type="submit">Sign In</button>
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" name="username" placeholder="Enter your username" required autofocus>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="Enter your password" required>
+      </div>
+      <button class="btn-primary" type="submit">Sign In</button>
     </form>
-    <div class="alink">Don't have an account? <a href="/auth/register">Register</a></div>
+    <div class="auth-link">Don't have an account? <a href="/auth/register">Register</a></div>
   </div>
 </div>
 
-{% elif not logged_in and page == 'register' %}
-<div class="auth">
-  <div class="acard">
-    <div class="alogo"><div class="aicon">K</div><span style="font-size:15px;font-weight:600">ZeroTouch K8s</span></div>
-    <div class="atitle">Create account</div>
-    <div class="asub">Get started with ZeroTouch K8s</div>
-    {% if error %}<div class="aerr">{{ error }}</div>{% endif %}
+{% elif page == 'register' %}
+<!-- ── Register Page ── -->
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <svg viewBox="0 0 28 28" fill="none">
+        <rect width="28" height="28" rx="7" fill="#16A34A"/>
+        <path d="M8 14h12M14 8v12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span>ZeroTouch K8s</span>
+    </div>
+    <div class="auth-title">Create account</div>
+    <div class="auth-sub">Get started with ZeroTouch K8s</div>
+    {% if error %}<div class="auth-error">{{ error }}</div>{% endif %}
     <form method="POST" action="/auth/register">
-      <div class="fg"><label>Username</label><input type="text" name="username" placeholder="Choose a username" required autofocus></div>
-      <div class="fg"><label>Password</label><input type="password" name="password" placeholder="At least 6 characters" required></div>
-      <div class="fg"><label>Confirm</label><input type="password" name="confirm" placeholder="Confirm password" required></div>
-      <button class="btnp" type="submit">Create Account</button>
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" name="username" placeholder="Choose a username" required autofocus>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="Create a password" required>
+      </div>
+      <div class="form-group">
+        <label>Confirm Password</label>
+        <input type="password" name="confirm" placeholder="Confirm your password" required>
+      </div>
+      <button class="btn-primary" type="submit">Create Account</button>
     </form>
-    <div class="alink">Already have an account? <a href="/">Sign In</a></div>
+    <div class="auth-link">Already have an account? <a href="/">Sign In</a></div>
   </div>
 </div>
 
 {% else %}
+<!-- ── Main App ── -->
 <div class="layout">
-  <aside class="sb">
-    <div class="sbhead">
-      <div class="sbbrand">
-        <div class="sbicon">K</div>
-        <span class="sbtext">ZeroTouch K8s</span>
-      </div>
-      <button class="newbtn" onclick="newChat()">
-        <svg width="13" height="13" viewBox="0 0 13 13"><path d="M6.5 1v11M1 6.5h11" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>
-        New Chat
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <svg viewBox="0 0 28 28" fill="none">
+        <rect width="28" height="28" rx="7" fill="#16A34A"/>
+        <path d="M8 14h12M14 8v12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span>ZeroTouch K8s</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Main</div>
+      <button class="nav-item active" onclick="showPage('deploy')">
+        <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" fill="currentColor"/><rect x="9" y="2" width="5" height="5" rx="1" fill="currentColor" opacity=".5"/><rect x="2" y="9" width="5" height="5" rx="1" fill="currentColor" opacity=".5"/><rect x="9" y="9" width="5" height="5" rx="1" fill="currentColor"/></svg>
+        Dashboard
       </button>
-    </div>
-    <div class="sbnav">
-      <div class="nsec">Chats</div>
-      <div id="chat-list"></div>
-      <div class="sbdiv"></div>
-      <div class="nsec">System</div>
-      <div class="ni" onclick="togglePanel('pods')">
+      <button class="nav-item" onclick="showPage('pods')">
         <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
-        <span class="nitext">Pods</span>
-      </div>
-      <div class="ni" onclick="togglePanel('deployments')">
+        Pods
+      </button>
+      <button class="nav-item" onclick="showPage('deployments')">
         <svg viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        <span class="nitext">Deployments</span>
-      </div>
-    </div>
-    <div class="sbfoot">
-      <div class="urow">
-        <div class="uav">{{ username[0].upper() }}</div>
-        <div class="uname">{{ username }}</div>
+        Deployments
+      </button>
+      <div class="nav-section">Tools</div>
+      <button class="nav-item" onclick="showPage('chat')">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M2 3a1 1 0 011-1h10a1 1 0 011 1v7a1 1 0 01-1 1H9l-3 2v-2H3a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.5"/></svg>
+        AI Chat
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar">{{ username[0].upper() }}</div>
+        <div class="user-name">{{ username }}</div>
         <form method="POST" action="/auth/logout" style="margin:0">
-          <button class="obtn" type="submit">Out</button>
+          <button class="logout-btn" type="submit">Out</button>
         </form>
       </div>
     </div>
   </aside>
 
+  <!-- Main Content -->
   <div class="main">
-    <div class="stbar">
-      <div class="spill"><div class="dot" id="mdot"></div><span id="mst">Checking...</span></div>
-      <div class="spill"><div class="dot {% if k8s %}on{% else %}off{% endif %}"></div><span>K8s {% if k8s %}Connected{% else %}Simulation{% endif %}</span></div>
-      <div class="clk" id="clk"></div>
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <div class="status-pill">
+        <div class="dot" id="model-dot"></div>
+        <span id="model-status">Model loading...</span>
+      </div>
+      <div class="status-pill">
+        <div class="dot {% if k8s %}green{% else %}red{% endif %}"></div>
+        <span>K8s {% if k8s %}Connected{% else %}Simulation{% endif %}</span>
+      </div>
+      <div class="status-pill" style="margin-left:auto;font-size:12px;color:var(--text3)" id="clock"></div>
     </div>
-    <div class="chatarea">
-      <div style="flex:1;display:flex;flex-direction:column;overflow:hidden" id="chat-area"></div>
-      <div class="ppanel" id="ppanel">
-        <div class="phead">
-          <div class="ptitle" id="ptitle">Pods</div>
-          <button class="pclose" onclick="togglePanel(null)">✕</button>
+
+    <!-- Dashboard Page -->
+    <div class="page active" id="page-deploy">
+      <div class="page-title">Deploy</div>
+      <div class="page-sub">Deploy services using natural language</div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Natural Language Deploy</div>
+        <div class="deploy-input-wrap">
+          <input class="deploy-input" id="deploy-input" placeholder='e.g. "deploy 3 nginx:latest pods for web-frontend, port 80"' onkeydown="if(event.key==='Enter')doDeploy()">
+          <button class="deploy-btn" id="deploy-btn" onclick="doDeploy()">Deploy →</button>
         </div>
-        <div class="ptabs">
-          <div class="ptab active" id="tab-pods" onclick="switchTab('pods')">Pods</div>
-          <div class="ptab" id="tab-deps" onclick="switchTab('deployments')">Deployments</div>
+        <div class="quick-tags">
+          <span class="tag" onclick="setInput(this)">nginx ×1</span>
+          <span class="tag" onclick="setInput(this)">redis ×2</span>
+          <span class="tag" onclick="setInput(this)">postgres db</span>
+          <span class="tag" onclick="setInput(this)">node api ×4</span>
+          <span class="tag" onclick="setInput(this)">golang svc ×3</span>
+          <span class="tag" onclick="setInput(this)">python ×5</span>
         </div>
-        <div class="pcont" id="pcont">Loading...</div>
+
+        <!-- ── Dataset enrichment card (新增欄位顯示) ── -->
+        <div class="enrich-card" id="enrich-card">
+          <div class="enrich-head">
+            <span class="status-tag" id="enrich-status">—</span>
+            <span class="enrich-headline" id="enrich-headline">Parsed</span>
+            <span class="enrich-id" id="enrich-id"></span>
+          </div>
+          <div class="enrich-body">
+            <div class="enrich-reject-msg" id="enrich-reject-msg" style="display:none"></div>
+            <div class="enrich-grid">
+              <div class="enrich-field">
+                <div class="lbl">is_k8s</div>
+                <div class="val" id="enrich-isk8s">—</div>
+              </div>
+              <div class="enrich-field">
+                <div class="lbl">complexity</div>
+                <div class="val" id="enrich-complexity">—</div>
+              </div>
+              <div class="enrich-field">
+                <div class="lbl">language</div>
+                <div class="val" id="enrich-language">—</div>
+              </div>
+              <div class="enrich-field">
+                <div class="lbl">namespace</div>
+                <div class="val" id="enrich-namespace">—</div>
+              </div>
+            </div>
+            <div class="enrich-output-title">output (dataset ground truth)</div>
+            <pre class="enrich-output" id="enrich-output">{}</pre>
+          </div>
+        </div>
+
+        <div class="result-box" id="result-box"></div>
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title">Pods</div>
+          <div class="stat-num" id="stat-pods">—</div>
+          <div class="stat-label">Total running</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Deployments</div>
+          <div class="stat-num" id="stat-deps">—</div>
+          <div class="stat-label">Active deployments</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Model</div>
+          <div class="stat-num" style="font-size:18px" id="stat-model">—</div>
+          <div class="stat-label">LLaMA-3.1 + LoRA</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pods Page -->
+    <div class="page" id="page-pods">
+      <div class="page-title">Pods</div>
+      <div class="page-sub">All running pods in the cluster</div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>App</th>
+                <th>Status</th>
+                <th>IP</th>
+                <th>Node</th>
+                <th>Restarts</th>
+                <th>Age</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="pods-tbody">
+              <tr><td colspan="8" class="empty"><p>Loading...</p></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Deployments Page -->
+    <div class="page" id="page-deployments">
+      <div class="page-title">Deployments</div>
+      <div class="page-sub">Manage your Kubernetes deployments</div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Image</th>
+                <th>Replicas</th>
+                <th>Ready</th>
+                <th>Age</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="deps-tbody">
+              <tr><td colspan="6" class="empty"><p>Loading...</p></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat Page -->
+    <div class="page" id="page-chat">
+      <div class="page-title">AI Chat</div>
+      <div class="page-sub">Ask anything about Kubernetes or deployments</div>
+      <div class="card" style="height:calc(100vh - 190px);display:flex;flex-direction:column">
+        <div class="chat-messages" id="chat-messages">
+          <div class="msg ai">
+            <div class="msg-avatar">K</div>
+            <div class="msg-bubble">Hi! I'm your K8s assistant. Ask me anything about Kubernetes, deployments, or how to use this system.</div>
+          </div>
+        </div>
+        <div class="chat-input-wrap">
+          <textarea class="chat-input" id="chat-input" placeholder="Ask anything..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
+          <button class="chat-send" onclick="sendChat()">Send</button>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
-<div class="mbg" id="pod-modal">
+<!-- Pod Detail Modal -->
+<div class="modal-bg" id="pod-modal">
   <div class="modal">
-    <div class="mhead">
-      <div class="mtitle" id="mtitle">Pod Details</div>
-      <button class="mclose" onclick="closeModal()">✕</button>
+    <div class="modal-header">
+      <div class="modal-title" id="modal-pod-name">Pod Details</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
-    <div class="mbody" id="mbody"></div>
+    <div class="modal-body" id="modal-pod-body"></div>
   </div>
 </div>
+
+{% endif %}
 
 <script>
-const USERNAME = "{{ username }}";
-let currentChatId = null;
-let panelMode = null;
-let chats = JSON.parse(localStorage.getItem('k8s_chats_' + USERNAME) || '{}');
+// ── Auth guard ──
+const loggedIn = {{ 'true' if logged_in else 'false' }};
 
-// Clock
-setInterval(()=>{ const el=document.getElementById('clk'); if(el) el.textContent=new Date().toLocaleTimeString('en-GB'); },1000);
+// ── Clock ──
+function updateClock(){
+  const el = document.getElementById('clock');
+  if(el) el.textContent = new Date().toLocaleTimeString('en-GB');
+}
+setInterval(updateClock, 1000);
+updateClock();
 
-// Model status
+// ── Page nav ──
+function showPage(name){
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if(name === 'pods') loadPods();
+  if(name === 'deployments') loadDeployments();
+}
+
+// ── Status polling ──
 async function pollStatus(){
-  try{
-    const r=await fetch('/api/status'); const d=await r.json();
-    const dot=document.getElementById('mdot'); const st=document.getElementById('mst');
-    if(d.model_ready){dot.className='dot on';st.textContent='Model Ready';}
-    else{dot.className='dot pu';st.textContent='Model Loading...';}
-  }catch(e){}
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    const dot = document.getElementById('model-dot');
+    const txt = document.getElementById('stat-model');
+    const ms  = document.getElementById('model-status');
+    if(d.model_ready){
+      dot.className = 'dot green';
+      if(ms) ms.textContent = 'Model Ready';
+      if(txt) txt.textContent = 'Ready';
+    } else {
+      dot.className = 'dot yellow';
+      if(ms) ms.textContent = 'Model Loading...';
+      if(txt) txt.textContent = 'Loading';
+    }
+  } catch(e){}
 }
-pollStatus(); setInterval(pollStatus,5000);
+if(loggedIn){ pollStatus(); setInterval(pollStatus, 4000); }
 
-function saveChats(){ localStorage.setItem('k8s_chats_'+USERNAME, JSON.stringify(chats)); }
+// ── Stats ──
+async function loadStats(){
+  try {
+    const [pr, dr] = await Promise.all([fetch('/api/pods'), fetch('/api/deployments')]);
+    const pd = await pr.json(); const dd = await dr.json();
+    const sp = document.getElementById('stat-pods');
+    const sd = document.getElementById('stat-deps');
+    if(sp) sp.textContent = pd.pods.length;
+    if(sd) sd.textContent = dd.deployments.length;
+  } catch(e){}
+}
+if(loggedIn){ loadStats(); setInterval(loadStats, 8000); }
 
-function renderChatList(){
-  const el=document.getElementById('chat-list');
-  const sorted=Object.entries(chats).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
-  if(!sorted.length){
-    el.innerHTML='<div style="font-size:12px;color:var(--t3);padding:6px 8px">No chats yet</div>';
-    return;
+// ── Quick tags ──
+const TAG_MAP = {
+  'nginx ×1': 'deploy 1 nginx:latest pod for web-frontend, port 80',
+  'redis ×2': 'start 2 redis:7-alpine pods for cache-server, port 6379',
+  'postgres db': 'launch 3 postgres:15 pods named db-primary, port 5432',
+  'node api ×4': 'spin up 4 node:20-alpine pods for api-gateway, port 3000',
+  'golang svc ×3': 'create 3 golang:1.21-alpine pods for scheduler',
+  'python ×5': 'run 5 python:3.11-slim pods for data-processor',
+};
+function setInput(el){
+  const inp = document.getElementById('deploy-input');
+  if(inp) inp.value = TAG_MAP[el.textContent.trim()] || el.textContent;
+}
+
+// ── Deploy ──
+function _escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function _prettyJson(obj){
+  // 帶語法高亮的 JSON pretty printer
+  const json = JSON.stringify(obj, null, 2);
+  return _escapeHtml(json)
+    .replace(/(&quot;[^&]*?&quot;)(\s*:)/g, '<span class="k">$1</span>$2')
+    .replace(/:\s*(&quot;[^&]*?&quot;)/g, ': <span class="s">$1</span>')
+    .replace(/:\s*(-?\d+(?:\.\d+)?)/g, ': <span class="n">$1</span>')
+    .replace(/:\s*(true|false|null)\b/g, ': <span class="b">$1</span>');
+}
+function renderEnrichCard(p, info){
+  // info = { ok: bool, headline: str, rejectMsg: str|null }
+  const card = document.getElementById('enrich-card');
+  card.classList.add('show');
+  card.classList.toggle('rejected', !info.ok);
+
+  const statusTag = document.getElementById('enrich-status');
+  statusTag.textContent = info.ok ? '✓ Accepted' : '✗ Rejected';
+  statusTag.className = 'status-tag ' + (info.ok ? 'ok' : 'reject');
+
+  document.getElementById('enrich-headline').textContent = info.headline;
+  document.getElementById('enrich-id').textContent = p.id ? '#' + p.id : '';
+
+  const rejBox = document.getElementById('enrich-reject-msg');
+  if(info.rejectMsg){
+    rejBox.style.display = 'block';
+    rejBox.textContent = info.rejectMsg;
+  } else {
+    rejBox.style.display = 'none';
   }
-  el.innerHTML=sorted.map(([id,chat])=>`
-    <div class="ni ${id===currentChatId?'active':''}" onclick="loadChat('${id}')">
-      <svg viewBox="0 0 16 16" fill="none"><path d="M2 3a1 1 0 011-1h10a1 1 0 011 1v7a1 1 0 01-1 1H9l-3 2v-2H3a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.5"/></svg>
-      <span class="nitext">${chat.title||'New Chat'}</span>
-      <span class="nidel" onclick="event.stopPropagation();deleteChat('${id}')">✕</span>
-    </div>`).join('');
+
+  // 4 個 pill 欄位
+  const isk8s = String(p.is_k8s);
+  document.getElementById('enrich-isk8s').innerHTML =
+    `<span class="pill ${isk8s}">${isk8s}</span>`;
+  document.getElementById('enrich-complexity').innerHTML =
+    `<span class="pill ${p.complexity}">${p.complexity}</span>`;
+  const langCls = (p.language === 'zh-tw') ? 'zhtw' : 'en';
+  document.getElementById('enrich-language').innerHTML =
+    `<span class="pill ${langCls}">${p.language}</span>`;
+  document.getElementById('enrich-namespace').textContent = p.namespace || 'default';
+
+  // 結構化 output JSON (dataset ground truth)
+  document.getElementById('enrich-output').innerHTML = _prettyJson(p.output || {});
 }
 
-function newChat(){
-  const id='c'+Date.now();
-  chats[id]={title:'New Chat',messages:[],ts:Date.now()};
-  saveChats(); loadChat(id);
-}
-
-function loadChat(id){
-  currentChatId=id; renderChatList(); renderChatArea();
-}
-
-function deleteChat(id){
-  if(!confirm('Delete this chat?')) return;
-  delete chats[id]; saveChats();
-  if(currentChatId===id){ currentChatId=null; showWelcome(); }
-  renderChatList();
-}
-
-function showWelcome(){
-  document.getElementById('chat-area').innerHTML=`
-    <div class="welcome">
-      <div class="wicon">K</div>
-      <div class="wtitle">ZeroTouch K8s Assistant</div>
-      <div class="wsub">Deploy and manage Kubernetes services using natural language. Ask me anything about K8s or start with a quick action.</div>
-      <div class="wgrid">
-        <button class="wcard" style="border:1px solid var(--b1)" onclick="quickStart('deploy 3 nginx:latest pods for web-frontend')">
-          <div class="wcard-t">Deploy a service</div>
-          <div class="wcard-s">deploy 3 nginx:latest pods...</div>
-        </button>
-        <button class="wcard" style="border:1px solid var(--b1)" onclick="quickStart('list pods')">
-          <div class="wcard-t">Check status</div>
-          <div class="wcard-s">list pods / show deployments</div>
-        </button>
-        <button class="wcard" style="border:1px solid var(--b1)" onclick="quickStart('What is a Pod?')">
-          <div class="wcard-t">Learn K8s</div>
-          <div class="wcard-s">What is a Pod, Deployment...</div>
-        </button>
-        <button class="wcard" style="border:1px solid var(--b1)" onclick="quickStart('delete ')">
-          <div class="wcard-t">Delete deployment</div>
-          <div class="wcard-s">delete &lt;deployment-name&gt;</div>
-        </button>
-      </div>
-    </div>
-    ${inputHTML()}`;
-}
-
-function inputHTML(){
-  return `<div class="inputarea">
-    <div class="inputwrap">
-      <textarea class="chatinput" id="chat-input" placeholder="Message ZeroTouch K8s..." rows="1"
-        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}"
-        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,140)+'px'"></textarea>
-      <button class="sendbtn" onclick="sendMsg()">Send</button>
-    </div>
-    <div class="hint">Enter to send · Shift+Enter for new line</div>
-  </div>`;
-}
-
-function quickStart(text){
-  if(!currentChatId) newChat();
-  const inp=document.getElementById('chat-input');
-  if(inp){ inp.value=text; inp.focus(); }
-}
-
-function renderChatArea(){
-  if(!currentChatId){ showWelcome(); return; }
-  const chat=chats[currentChatId];
-  const msgs=chat.messages||[];
-  if(msgs.length===0){ showWelcome(); return; }
-  document.getElementById('chat-area').innerHTML=`
-    <div class="msglist" id="msglist">${msgs.map(renderMsg).join('')}</div>
-    ${inputHTML()}`;
-  scrollBottom();
-}
-
-function renderMsg(m){
-  const cls=m.role==='user'?'user':'ai';
-  const av=m.role==='user'?USERNAME[0].toUpperCase():'K';
-  const txt=fmtText(m.content);
-  let extra='';
-  if(m.action==='confirm_pending'){
-    // Extract fields from message
-    const appM=m.content.match(/App:\s*\*\*([^*]+)\*\*/);
-    const imgM=m.content.match(/Image:\s*\*\*([^*]+)\*\*/);
-    const podM=m.content.match(/Pods:\s*\*\*(\d+)\*\*/);
-    const portM=m.content.match(/Port:\s*\*\*(\d+)\*\*/);
-    const app=appM?appM[1]:'';
-    const img=imgM?imgM[1]:'nginx:latest';
-    const pods=podM?podM[1]:'1';
-    const port=portM?portM[1]:'80';
-    extra=`<div class="cform">
-      <div class="cform-title">Confirm or Edit</div>
-      <div class="cform-fields">
-        <div class="cfield"><label>App</label><input id="cf-app" value="${app}" placeholder="app-name"></div>
-        <div class="cfield"><label>Image</label><input id="cf-img" value="${img}" placeholder="nginx:latest" style="font-family:'Geist Mono',monospace"></div>
-        <div class="cfield"><label>Pods</label><input id="cf-pods" type="number" value="${pods}" min="1" max="20" style="width:80px"></div>
-        <div class="cfield"><label>Port</label><input id="cf-port" type="number" value="${port}" style="width:100px"></div>
-      </div>
-      <div class="cbtns">
-        <button class="cdeploy" onclick="deployFromForm()">Deploy</button>
-        <button class="ccancel" onclick="sendQuick('no')">Cancel</button>
-      </div>
-    </div>`;
-  }
-  return `<div class="msg ${cls}">
-    <div class="mav">${av}</div>
-    <div class="mcont"><div class="mbub">${txt}${extra}</div><div class="mtime">${m.time||''}</div></div>
-  </div>`;
-}
-
-function fmtText(t){
-  return t.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-           .replace(/`(.+?)`/g,'<code>$1</code>')
-           .replace(/\n/g,'<br>');
-}
-
-function scrollBottom(){ const el=document.getElementById('msglist'); if(el) el.scrollTop=el.scrollHeight; }
-
-function deployFromForm(){
-  const app=document.getElementById('cf-app')?.value.trim();
-  const img=document.getElementById('cf-img')?.value.trim();
-  const pods=document.getElementById('cf-pods')?.value.trim();
-  const port=document.getElementById('cf-port')?.value.trim();
-  if(!app||!img||!pods){ alert('Please fill in all fields'); return; }
-  const msg='deploy-form:app='+app+' image='+img+' pods='+pods+' port='+(port||'80');
-  sendMsgText(msg);
-}
-
-function sendQuick(text){ sendMsgText(text); }
-
-async function sendMsg(){
-  const inp=document.getElementById('chat-input');
-  if(!inp) return;
-  const text=inp.value.trim();
+async function doDeploy(){
+  const inp = document.getElementById('deploy-input');
+  const btn = document.getElementById('deploy-btn');
+  const box = document.getElementById('result-box');
+  const card = document.getElementById('enrich-card');
+  const text = inp.value.trim();
   if(!text) return;
-  inp.value=''; inp.style.height='auto';
-  sendMsgText(text);
+  btn.disabled = true;
+  btn.textContent = 'Deploying...';
+  box.style.display = 'none';
+  card.classList.remove('show');
+  try {
+    const r = await fetch('/api/deploy', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({input: text})
+    });
+    const d = await r.json();
+    if(d.error){
+      box.style.display = 'block';
+      box.className = 'result-box error';
+      box.textContent = '✗ Error: ' + d.error;
+    } else if(d.rejected){
+      // Guardian 拒絕:只顯示 enrichment 卡片,不送 K8s
+      renderEnrichCard(d.parsed, {
+        ok: false,
+        headline: 'Guardian blocked this request',
+        rejectMsg: d.reason || 'Not a K8s request'
+      });
+    } else {
+      // 正常部署:顯示 enrichment 卡片 + 簡短成功訊息
+      renderEnrichCard(d.parsed, {
+        ok: true,
+        headline: d.k8s ? 'Real K8s deployment dispatched' : 'Simulation mode',
+        rejectMsg: null
+      });
+      const p = d.parsed;
+      box.style.display = 'block';
+      box.className = 'result-box success';
+      box.textContent = `✓ App: ${p.app_name}  ·  Image: ${p.image}  ·  Pods: ${p.pods}${p.port ? '  ·  Port: ' + p.port : ''}${p.memory ? '  ·  Memory: ' + p.memory : ''}`;
+      loadStats();
+    }
+  } catch(e){
+    box.style.display = 'block';
+    box.className = 'result-box error';
+    box.textContent = '✗ Network error';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Deploy →';
 }
 
-async function sendMsgText(text){
-  if(!currentChatId) newChat();
-  const chat=chats[currentChatId];
-  const time=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-  const displayText=text.startsWith('deploy-form:')?'[Deploying with edited parameters...]':text;
-  chat.messages.push({role:'user',content:displayText,time});
-  if(chat.title==='New Chat') chat.title=text.slice(0,30);
-  chat.ts=Date.now();
-  saveChats(); renderChatArea();
-
-  const msglist=document.getElementById('msglist');
-  const typing=document.createElement('div');
-  typing.className='msg ai'; typing.id='typing';
-  typing.innerHTML='<div class="mav">K</div><div class="mcont"><div class="typing"><span></span><span></span><span></span></div></div>';
-  if(msglist){ msglist.appendChild(typing); scrollBottom(); }
-
-  try{
-    const r=await fetch('/api/chat',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message:text,chat_id:currentChatId})
-    });
-    const d=await r.json();
-    document.getElementById('typing')?.remove();
-    const reply=d.reply||'No response';
-    const action=d.action||'';
-    chat.messages.push({role:'ai',content:reply,time:new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),action});
-    saveChats(); renderChatArea();
-  }catch(e){
-    document.getElementById('typing')?.remove();
-    chat.messages.push({role:'ai',content:'Connection error. Please try again.',time:''});
-    saveChats(); renderChatArea();
+// ── Pods ──
+async function loadPods(){
+  const tbody = document.getElementById('pods-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text3)">Loading...</td></tr>';
+  try {
+    const r = await fetch('/api/pods');
+    const d = await r.json();
+    if(!d.pods.length){
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text3)">No pods found</td></tr>';
+      return;
+    }
+    tbody.innerHTML = d.pods.map(p => `
+      <tr>
+        <td class="mono">${p.name}</td>
+        <td>${p.app || '—'}</td>
+        <td><span class="badge ${p.phase.toLowerCase()}">${p.phase}</span></td>
+        <td class="mono">${p.ip || '—'}</td>
+        <td class="mono">${p.node || '—'}</td>
+        <td>${p.restarts}</td>
+        <td class="mono">${p.age}</td>
+        <td>
+          <div class="action-btns">
+            <button class="btn-sm" onclick='showPodDetail(${JSON.stringify(JSON.stringify(p))})'>Details</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  } catch(e){
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--red)">Failed to load pods</td></tr>';
   }
 }
 
-// Panel
-function togglePanel(mode){
-  const p=document.getElementById('ppanel');
-  if(panelMode===mode||!mode){ p.classList.remove('open'); panelMode=null; return; }
-  panelMode=mode; p.classList.add('open'); switchTab(mode);
-}
-function switchTab(tab){
-  panelMode=tab;
-  document.getElementById('tab-pods').classList.toggle('active',tab==='pods');
-  document.getElementById('tab-deps').classList.toggle('active',tab==='deployments');
-  document.getElementById('ptitle').textContent=tab==='pods'?'Pods':'Deployments';
-  tab==='pods'?loadPods():loadDeps();
-}
-async function loadPods(){
-  const el=document.getElementById('pcont');
-  el.innerHTML='<div class="empty">Loading...</div>';
-  try{
-    const r=await fetch('/api/pods'); const d=await r.json();
-    if(!d.pods.length){ el.innerHTML='<div class="empty">No pods found</div>'; return; }
-    el.innerHTML=d.pods.map(p=>`
-      <div class="podcard" onclick='showPodDetail(${JSON.stringify(JSON.stringify(p))})'>
-        <div class="podname">${p.name}</div>
-        <div class="podmeta">
-          <span class="podbadge ${p.phase}">${p.phase}</span>
-          <span class="podip">${p.ip}</span>
-          <span class="podip">${p.age}</span>
-        </div>
-      </div>`).join('');
-  }catch(e){ el.innerHTML='<div class="empty">Error loading</div>'; }
-}
-async function loadDeps(){
-  const el=document.getElementById('pcont');
-  el.innerHTML='<div class="empty">Loading...</div>';
-  try{
-    const r=await fetch('/api/deployments'); const d=await r.json();
-    if(!d.deployments.length){ el.innerHTML='<div class="empty">No deployments</div>'; return; }
-    el.innerHTML=d.deployments.map(dep=>`
-      <div class="depcard">
-        <div class="depname">${dep.name}</div>
-        <div class="depmeta">${dep.image} · ${dep.ready}/${dep.replicas} ready · ${dep.age}</div>
-        <button class="depdel" onclick="deleteDep('${dep.name}')">Delete</button>
-      </div>`).join('');
-  }catch(e){ el.innerHTML='<div class="empty">Error loading</div>'; }
-}
-async function deleteDep(name){
-  if(!confirm('Delete '+name+'?')) return;
-  const r=await fetch('/api/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
-  const d=await r.json();
-  if(d.success) loadDeps(); else alert('Error: '+d.error);
-}
+// ── Pod Detail Modal ──
 function showPodDetail(jsonStr){
-  const p=JSON.parse(jsonStr);
-  document.getElementById('mtitle').textContent=p.name;
-  const sc=p.phase==='Running'?'var(--gr)':p.phase==='Pending'?'var(--yw)':'var(--rd)';
-  let cHtml='';
-  (p.containers||[]).forEach(c=>{
-    const req=Object.entries(c.resources.requests||{}).map(([k,v])=>k+': '+v).join(', ')||'—';
-    const lim=Object.entries(c.resources.limits||{}).map(([k,v])=>k+': '+v).join(', ')||'—';
-    cHtml+=`<div style="background:var(--bg);border-radius:8px;padding:10px 12px;margin-bottom:8px">
-      <div style="font-weight:600;font-size:13px;margin-bottom:6px">${c.name}</div>
-      <div class="drow"><span class="dkey">Image</span><span class="dval">${c.image}</span></div>
-      <div class="drow"><span class="dkey">Ports</span><span class="dval">${c.ports.join(', ')||'—'}</span></div>
-      <div class="drow"><span class="dkey">Requests</span><span class="dval">${req}</span></div>
-      <div class="drow"><span class="dkey">Limits</span><span class="dval">${lim}</span></div>
-    </div>`;
-  });
-  const condHtml=(p.conditions||[]).map(c=>`<span class="chip ${c.status==='True'?'ct':'cf'}">${c.type}: ${c.status}</span>`).join('')||'—';
-  document.getElementById('mbody').innerHTML=`
-    <div class="dsec">
-      <div class="dsectitle">General</div>
-      <div class="drow"><span class="dkey">Name</span><span class="dval">${p.name}</span></div>
-      <div class="drow"><span class="dkey">App</span><span class="dval">${p.app||'—'}</span></div>
-      <div class="drow"><span class="dkey">Status</span><span class="dval" style="color:${sc};font-weight:600">${p.phase}</span></div>
-      <div class="drow"><span class="dkey">IP</span><span class="dval">${p.ip||'—'}</span></div>
-      <div class="drow"><span class="dkey">Node</span><span class="dval">${p.node||'—'}</span></div>
-      <div class="drow"><span class="dkey">Restarts</span><span class="dval">${p.restarts}</span></div>
-      <div class="drow"><span class="dkey">Age</span><span class="dval">${p.age}</span></div>
+  const p = JSON.parse(jsonStr);
+  document.getElementById('modal-pod-name').textContent = p.name;
+  const body = document.getElementById('modal-pod-body');
+
+  const statusColor = p.phase === 'Running' ? 'var(--green)' : p.phase === 'Pending' ? 'var(--yellow)' : 'var(--red)';
+
+  let containersHtml = '';
+  if(p.containers && p.containers.length){
+    p.containers.forEach(c => {
+      const ports = c.ports.length ? c.ports.join(', ') : '—';
+      const req = Object.entries(c.resources.requests || {}).map(([k,v]) => `${k}: ${v}`).join(', ') || '—';
+      const lim = Object.entries(c.resources.limits || {}).map(([k,v]) => `${k}: ${v}`).join(', ') || '—';
+      containersHtml += `
+        <div style="background:var(--bg);border-radius:8px;padding:12px 14px;margin-bottom:10px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:8px">${c.name}</div>
+          <div class="detail-row"><span class="detail-key">Image</span><span class="detail-val">${c.image}</span></div>
+          <div class="detail-row"><span class="detail-key">Ports</span><span class="detail-val">${ports}</span></div>
+          <div class="detail-row"><span class="detail-key">Requests</span><span class="detail-val">${req}</span></div>
+          <div class="detail-row"><span class="detail-key">Limits</span><span class="detail-val">${lim}</span></div>
+        </div>`;
+    });
+  } else {
+    containersHtml = '<p style="color:var(--text3);font-size:13px">No container info</p>';
+  }
+
+  let condHtml = '';
+  if(p.conditions && p.conditions.length){
+    condHtml = p.conditions.map(c =>
+      `<span class="cond-badge ${c.status==='True'?'cond-true':'cond-false'}" style="margin:2px">${c.type}: ${c.status}</span>`
+    ).join('');
+  } else {
+    condHtml = '<span style="color:var(--text3);font-size:13px">—</span>';
+  }
+
+  body.innerHTML = `
+    <div class="detail-section">
+      <div class="detail-section-title">General</div>
+      <div class="detail-row"><span class="detail-key">Name</span><span class="detail-val">${p.name}</span></div>
+      <div class="detail-row"><span class="detail-key">App</span><span class="detail-val">${p.app || '—'}</span></div>
+      <div class="detail-row"><span class="detail-key">Status</span><span class="detail-val" style="color:${statusColor};font-weight:600">${p.phase}</span></div>
+      <div class="detail-row"><span class="detail-key">Pod IP</span><span class="detail-val">${p.ip || '—'}</span></div>
+      <div class="detail-row"><span class="detail-key">Node</span><span class="detail-val">${p.node || '—'}</span></div>
+      <div class="detail-row"><span class="detail-key">Restarts</span><span class="detail-val">${p.restarts}</span></div>
+      <div class="detail-row"><span class="detail-key">Created</span><span class="detail-val">${p.age}</span></div>
     </div>
-    <div class="dsec"><div class="dsectitle">Containers</div>${cHtml||'<p style="color:var(--t3);font-size:13px">No info</p>'}</div>
-    <div class="dsec"><div class="dsectitle">Conditions</div><div style="display:flex;flex-wrap:wrap">${condHtml}</div></div>`;
+    <div class="detail-section">
+      <div class="detail-section-title">Containers</div>
+      ${containersHtml}
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Conditions</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${condHtml}</div>
+    </div>
+  `;
   document.getElementById('pod-modal').classList.add('open');
 }
 function closeModal(){ document.getElementById('pod-modal').classList.remove('open'); }
-document.getElementById('pod-modal')?.addEventListener('click',e=>{ if(e.target.id==='pod-modal') closeModal(); });
+document.getElementById('pod-modal')?.addEventListener('click', function(e){ if(e.target===this) closeModal(); });
 
-// Init
-renderChatList();
-const sorted=Object.entries(chats).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
-if(sorted.length){ loadChat(sorted[0][0]); } else { showWelcome(); }
+// ── Deployments ──
+async function loadDeployments(){
+  const tbody = document.getElementById('deps-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text3)">Loading...</td></tr>';
+  try {
+    const r = await fetch('/api/deployments');
+    const d = await r.json();
+    if(!d.deployments.length){
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text3)">No deployments found</td></tr>';
+      return;
+    }
+    tbody.innerHTML = d.deployments.map(dep => `
+      <tr>
+        <td style="font-weight:500">${dep.name}</td>
+        <td class="mono">${dep.image}</td>
+        <td>${dep.replicas}</td>
+        <td>
+          <span class="badge ${dep.ready >= dep.replicas ? 'running' : 'pending'}">
+            ${dep.ready}/${dep.replicas}
+          </span>
+        </td>
+        <td class="mono">${dep.age}</td>
+        <td>
+          <div class="action-btns">
+            <button class="btn-sm btn-danger" onclick="deleteDeployment('${dep.name}')">Delete</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  } catch(e){
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--red)">Failed to load</td></tr>';
+  }
+}
+
+async function deleteDeployment(name){
+  if(!confirm(`Delete deployment "${name}"?`)) return;
+  try {
+    const r = await fetch('/api/delete', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name})
+    });
+    const d = await r.json();
+    if(d.success) loadDeployments();
+    else alert('Error: ' + d.error);
+  } catch(e){ alert('Network error'); }
+}
+
+// ── Chat ──
+let chatHistory = [];
+async function sendChat(){
+  const inp = document.getElementById('chat-input');
+  const msgs = document.getElementById('chat-messages');
+  const text = inp.value.trim();
+  if(!text) return;
+  inp.value = '';
+
+  msgs.innerHTML += `<div class="msg user"><div class="msg-avatar">U</div><div class="msg-bubble">${text}</div></div>`;
+  const typing = document.createElement('div');
+  typing.className = 'msg ai';
+  typing.innerHTML = '<div class="msg-avatar">K</div><div class="typing"><span></span><span></span><span></span></div>';
+  msgs.appendChild(typing);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  chatHistory.push({role:'user', content: text});
+  try {
+    const r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({message: text, history: chatHistory})
+    });
+    const d = await r.json();
+    typing.remove();
+    const reply = d.reply || d.error || 'No response';
+    chatHistory.push({role:'assistant', content: reply});
+    msgs.innerHTML += `<div class="msg ai"><div class="msg-avatar">K</div><div class="msg-bubble">${reply.replace(/\n/g,'<br>')}</div></div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+  } catch(e){
+    typing.remove();
+    msgs.innerHTML += `<div class="msg ai"><div class="msg-avatar">K</div><div class="msg-bubble" style="color:var(--red)">Connection error</div></div>`;
+  }
+}
 </script>
-{% endif %}
 </body>
 </html>
 """
 
-# ── Routes ───────────────────────────────────────────────────
+# ── Routes ──────────────────────────────────────────────────
 @app.route("/")
 def index():
     if "username" not in session:
@@ -961,8 +1193,7 @@ def register():
         return render_template_string(HTML, logged_in=False, page='register', error="Username already taken", k8s=K8S_ENABLED, username='')
     if len(password) < 6:
         return render_template_string(HTML, logged_in=False, page='register', error="Password must be at least 6 characters", k8s=K8S_ENABLED, username='')
-    USERS[username] = {"password_hash": hash_pw(password), "created_at": datetime.now().isoformat()}
-    _save_users(USERS)
+    USERS[username] = {"password_hash": hash_password(password), "created_at": datetime.now().isoformat()}
     session["username"] = username
     return redirect("/")
 
@@ -970,7 +1201,7 @@ def register():
 def login():
     username = request.form.get("username","").strip()
     password = request.form.get("password","")
-    if username in USERS and USERS[username]["password_hash"] == hash_pw(password):
+    if username in USERS and USERS[username]["password_hash"] == hash_password(password):
         session["username"] = username
         return redirect("/")
     return render_template_string(HTML, logged_in=False, page='login', error="Invalid username or password", k8s=K8S_ENABLED, username='')
@@ -982,8 +1213,8 @@ def logout():
 
 @app.route("/api/status")
 def api_status():
-    ready, _ = _model_status()
-    return jsonify({"model_ready": ready, "k8s": K8S_ENABLED})
+    ready, loading = _model_status()
+    return jsonify({"model_ready": ready, "model_loading": loading, "k8s": K8S_ENABLED, "claude_api": claude_available()})
 
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
@@ -991,63 +1222,73 @@ def api_chat():
         return jsonify({"error": "Not authenticated"}), 401
     data    = request.get_json() or {}
     message = data.get("message","").strip()
-    chat_id = data.get("chat_id","default")
+    history = data.get("history",[])
     if not message:
         return jsonify({"error": "Empty message"}), 400
+    if len(history) > 40:
+        history = history[-40:]
+    reply = claude_chat(message, history)
+    return jsonify({"reply": reply})
 
-    # Handle deploy-form submission
-    if message.startswith("deploy-form:"):
-        import re as _re
-        app_m  = _re.search(r"app=(\S+)", message)
-        img_m  = _re.search(r"image=(\S+)", message)
-        pods_m = _re.search(r"pods=(\d+)", message)
-        port_m = _re.search(r"port=(\d+)", message)
-        if app_m and img_m and pods_m:
-            parsed = {
-                "app_name": app_m.group(1),
-                "image":    img_m.group(1),
-                "pods":     int(pods_m.group(1)),
-                "port":     int(port_m.group(1)) if port_m else 80,
-            }
-            suffix = str(int(time.time()))[-4:]
-            app_name = parsed["app_name"] + "-" + suffix
-            if K8S_ENABLED:
-                ok, result = k8s_deploy(app_name, parsed["image"], parsed["pods"], parsed["port"])
-                threading.Thread(target=save_gold_sample, args=(message, parsed), daemon=True).start()
-                if ok:
-                    reply = ("Deployment started!\n\nName: " + result + "\nImage: " + parsed["image"] +
-                             "\nPods: " + str(parsed["pods"]) + "\n\nCheck the Pods tab!")
-                    return jsonify({"reply": reply, "action": "deployed"})
-                else:
-                    return jsonify({"reply": "Deployment failed: " + result, "action": "error"})
-            else:
-                return jsonify({"reply": "Simulation mode — K8s not connected.", "action": "simulated"})
+@app.route("/api/deploy", methods=["POST"])
+def api_deploy():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    data       = request.get_json()
+    user_input = (data or {}).get("input","").strip()
+    if not user_input or len(user_input) < 3:
+        return jsonify({"error": "Input too short"}), 400
+    parsed = ask_llama(user_input)
+    if "error" in parsed:
+        return jsonify({"error": parsed["error"]}), 422
 
-    reply, action = process_message(session["username"], chat_id, message)
-    return jsonify({"reply": reply, "action": action})
+    # ── 套用資料集欄位 enrichment ──────────────────────────────
+    enriched = enrich_parsed_result(user_input, parsed)
+
+    # Guardian 雛形:若判斷不是 K8s 請求,拒絕部署但仍回傳分類結果讓使用者看到
+    if not enriched["is_k8s"]:
+        return jsonify({
+            "parsed":   enriched,
+            "k8s":      False,
+            "rejected": True,
+            "reason":   "Guardian: 此請求不像 K8s 任務 (is_k8s=false)"
+        }), 200
+
+    threading.Thread(target=save_gold_sample, args=(user_input, parsed), daemon=True).start()
+    if K8S_ENABLED:
+        threading.Thread(
+            target=k8s_deploy,
+            args=(parsed["app_name"], parsed["image"], parsed["pods"], parsed.get("port", 80), parsed.get("memory")),
+            daemon=True
+        ).start()
+    return jsonify({"parsed": enriched, "k8s": K8S_ENABLED})
 
 @app.route("/api/pods")
 def api_pods():
-    if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
     return jsonify({"pods": k8s_get_pods()})
 
 @app.route("/api/deployments")
 def api_deployments():
-    if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
     return jsonify({"deployments": k8s_get_deployments()})
 
 @app.route("/api/delete", methods=["POST"])
 def api_delete():
-    if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
     name = (request.get_json() or {}).get("name","").strip()
-    if not name: return jsonify({"error": "Name required"}), 400
+    if not name:
+        return jsonify({"error": "Name required"}), 400
     ok, msg = k8s_delete_deployment(name)
-    return jsonify({"success": ok, "error": None if ok else msg})
+    return jsonify({"success": ok, "message": msg, "error": None if ok else msg})
 
 if __name__ == "__main__":
-    print("=" * 50)
-    print("  ZeroTouch K8s  v4")
-    print(f"  K8s: {'Connected' if K8S_ENABLED else 'Simulation'}")
-    print("  http://localhost:5000")
-    print("=" * 50)
+    print("=" * 60)
+    print("  ZeroTouch K8s Web Demo v2")
+    print("=" * 60)
+    print(f"  K8s   : {'Connected' if K8S_ENABLED else 'Simulation'}")
+    print(f"  Open  : http://localhost:5000")
     app.run(host="0.0.0.0", port=5000, debug=False)
