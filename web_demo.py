@@ -193,10 +193,15 @@ except Exception as e:
 
 NS  = "default"
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(32)
+app.secret_key = "zerotouch_k8s_2025_fixed_key"
 
 # ── Simple in-memory user store (replace with DB for production) ──
-USERS = {}  # username -> {password_hash, created_at}
+USERS = {}
+try:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json"), encoding="utf-8") as _uf:
+        USERS = json.load(_uf)
+except Exception:
+    USERS = {}
 
 def hash_password(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
@@ -616,7 +621,14 @@ tr:hover td{background:var(--bg)}
       </svg>
       <span>ZeroTouch K8s</span>
     </div>
-    <nav class="sidebar-nav">
+    <nav class="sidebar-nav" style="display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:10px 10px 6px">
+        <button onclick="newChat()" style="width:100%;padding:9px 12px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+          <span style="font-size:18px;line-height:1">+</span> New Chat
+        </button>
+      </div>
+      <div class="nav-section">Chats</div>
+      <div id="chat-room-list" style="flex:1;overflow-y:auto;padding:0 6px;min-height:60px;max-height:200px"></div>
       <div class="nav-section">Main</div>
       <button class="nav-item active" onclick="showPage('deploy')">
         <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" fill="currentColor"/><rect x="9" y="2" width="5" height="5" rx="1" fill="currentColor" opacity=".5"/><rect x="2" y="9" width="5" height="5" rx="1" fill="currentColor" opacity=".5"/><rect x="9" y="9" width="5" height="5" rx="1" fill="currentColor"/></svg>
@@ -631,9 +643,21 @@ tr:hover td{background:var(--bg)}
         Deployments
       </button>
       <div class="nav-section">Tools</div>
-      <button class="nav-item" onclick="showPage('chat')">
-        <svg viewBox="0 0 16 16" fill="none"><path d="M2 3a1 1 0 011-1h10a1 1 0 011 1v7a1 1 0 01-1 1H9l-3 2v-2H3a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.5"/></svg>
-        AI Chat
+      <button class="nav-item" onclick="showPage('gitops')">
+        <svg viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 6v1a3 3 0 003 3h1M11 6v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        GitOps Log
+      </button>
+      <button class="nav-item" onclick="showPage('healer')">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Healer
+      </button>
+      <button class="nav-item" onclick="showPage('metrics')">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M2 12L5 8l3 2 3-4 3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Metrics
+      </button>
+      <button class="nav-item" onclick="showPage('dataset')">
+        <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="2" rx="1" fill="currentColor"/><rect x="1" y="7" width="14" height="2" rx="1" fill="currentColor" opacity=".6"/><rect x="1" y="11" width="9" height="2" rx="1" fill="currentColor" opacity=".3"/></svg>
+        Dataset
       </button>
     </nav>
     <div class="sidebar-footer">
@@ -789,22 +813,100 @@ tr:hover td{background:var(--bg)}
     </div>
 
     <!-- Chat Page -->
-    <div class="page" id="page-chat">
-      <div class="page-title">AI Chat</div>
-      <div class="page-sub">Ask anything about Kubernetes or deployments</div>
-      <div class="card" style="height:calc(100vh - 190px);display:flex;flex-direction:column">
-        <div class="chat-messages" id="chat-messages">
-          <div class="msg ai">
-            <div class="msg-avatar">K</div>
-            <div class="msg-bubble">Hi! I'm your K8s assistant. Ask me anything about Kubernetes, deployments, or how to use this system.</div>
+    <div class="page" id="page-chat" style="padding:0;overflow:hidden">
+      <div style="display:flex;flex-direction:column;height:calc(100vh - 56px);background:var(--bg)">
+        <div class="chat-messages" id="chat-messages" style="flex:1;overflow-y:auto;padding:20px 28px"></div>
+          <div style="border-top:1px solid var(--border);padding:12px 20px;background:var(--surface)">
+            <div style="display:flex;gap:8px;align-items:flex-end">
+              <textarea class="chat-input" id="chat-input" placeholder="Message ZeroTouch K8s..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
+              <button class="chat-send" onclick="sendChat()">Send</button>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-top:5px">Enter to send &middot; Shift+Enter for new line</div>
           </div>
-        </div>
-        <div class="chat-input-wrap">
-          <textarea class="chat-input" id="chat-input" placeholder="Ask anything..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
-          <button class="chat-send" onclick="sendChat()">Send</button>
         </div>
       </div>
     </div>
+        <div class="page" id="page-dataset">
+      <div class="page-title">Dataset Manager</div>
+      <div class="page-sub">Enrich &amp; inspect the K8s training dataset</div>
+      <div class="grid-3" style="margin-bottom:16px">
+        <div class="card"><div class="card-title">Total Records</div><div class="stat-num" id="ds-total">--</div><div class="stat-label">across all files</div></div>
+        <div class="card"><div class="card-title">Output Filled</div><div class="stat-num" id="ds-output-pct">--</div><div class="stat-label">ground truth coverage</div></div>
+        <div class="card"><div class="card-title">K8s / Non-K8s</div><div class="stat-num" id="ds-k8s-ratio">--</div><div class="stat-label">is_k8s ratio</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="card"><div class="card-title">Files</div><div id="ds-files" style="margin-top:8px;font-size:13px;color:var(--text2)">Loading...</div></div>
+        <div class="card"><div class="card-title">Top Categories</div><div id="ds-categories" style="margin-top:8px;font-size:13px;color:var(--text2)">Loading...</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Run Enrichment</div>
+        <div style="display:flex;gap:10px;margin:12px 0 8px;flex-wrap:wrap">
+          <button class="btn-primary" onclick="runEnrich('--skip-output')">Quick Fill (rules only)</button>
+          <button class="btn-primary" onclick="runEnrich('')">Full Enrich (LLaMA output)</button>
+          <button class="btn-primary" onclick="runEnrich('--dry-run')" style="background:var(--surface);color:var(--text);border:1px solid var(--border)">Dry Run</button>
+          <button class="btn-primary" onclick="loadDatasetStats()" style="background:var(--surface);color:var(--text);border:1px solid var(--border)">Refresh Stats</button>
+        </div>
+        <div id="ds-run-status" style="font-size:12px;color:var(--text3);margin-bottom:6px"></div>
+        <pre id="ds-log" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:12px;max-height:320px;overflow-y:auto;white-space:pre-wrap;color:var(--text2)">Log will appear here...</pre>
+      </div>
+    </div>
+
+
+    <div class="page" id="page-gitops">
+      <div class="page-title">GitOps Log</div>
+      <div class="page-sub">Deployment history and rollback</div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <span style="font-size:13px;color:var(--text2)">All git commits for deployments</span>
+          <button class="btn-primary" onclick="loadGitops()">Refresh</button>
+        </div>
+        <div id="gitops-list"><div style="color:var(--text3);font-size:13px">Loading...</div></div>
+      </div>
+    </div>
+
+    <div class="page" id="page-healer">
+      <div class="page-title">Healer</div>
+      <div class="page-sub">Pod auto self-healing</div>
+      <div class="grid-3" style="margin-bottom:16px">
+        <div class="card"><div class="card-title">Issues Found</div><div class="stat-num" id="healer-count">--</div><div class="stat-label">Abnormal pods</div></div>
+        <div class="card"><div class="card-title">Last Scan</div><div class="stat-num" style="font-size:14px" id="healer-time">--</div><div class="stat-label">Scan time</div></div>
+        <div class="card"><div class="card-title">Status</div><div class="stat-num" id="healer-fixed">OK</div><div class="stat-label">Healer state</div></div>
+      </div>
+      <div class="card">
+        <div style="display:flex;gap:10px;margin-bottom:12px">
+          <button class="btn-primary" onclick="loadHealer()">Scan Now</button>
+          <button class="btn-primary" onclick="healerAutoFix()" style="background:#DC2626">Auto Fix All</button>
+        </div>
+        <div id="healer-list"><div style="color:var(--text3);font-size:13px">Loading...</div></div>
+      </div>
+    </div>
+
+    <div class="page" id="page-metrics">
+      <div class="page-title">Metrics</div>
+      <div class="page-sub">Prometheus observability</div>
+      <div class="grid-3" style="margin-bottom:16px">
+        <div class="card"><div class="card-title">Prometheus</div><div class="stat-num" id="prom-status">--</div><div class="stat-label">Connection</div></div>
+        <div class="card"><div class="card-title">Running Pods</div><div class="stat-num" id="prom-pods">--</div><div class="stat-label">default namespace</div></div>
+        <div class="card"><div class="card-title">Endpoint</div><div class="stat-num" style="font-size:13px" id="prom-url">--</div><div class="stat-label">Prometheus URL</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="card">
+          <div class="card-title">Live Metrics</div>
+          <div id="metrics-rows" style="margin-top:8px;font-size:13px;color:var(--text2)">Loading...</div>
+        </div>
+        <div class="card">
+          <div class="card-title">PromQL Quick Reference</div>
+          <div style="margin-top:8px">
+            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:12px;color:var(--text2)">All pods</span><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:4px">count(kube_pod_info)</code></div>
+            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:12px;color:var(--text2)">Running pods</span><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:4px">kube_pod_status_phase</code></div>
+            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:12px;color:var(--text2)">Deployments</span><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:4px">kube_deployment_spec_replicas</code></div>
+            <div style="display:flex;justify-content:space-between;padding:6px 0"><span style="font-size:12px;color:var(--text2)">Prometheus up</span><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:4px">up</code></div>
+            <div style="margin-top:10px;font-size:11px;color:var(--text3)">Full UI: <a href="http://192.168.50.219:30922" target="_blank" style="color:var(--green)">Prometheus (port 30922)</a></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -838,9 +940,14 @@ function showPage(name){
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  event.currentTarget.classList.add('active');
+  if(event && event.currentTarget) event.currentTarget.classList.add('active');
+}
   if(name === 'pods') loadPods();
   if(name === 'deployments') loadDeployments();
+  if(name === 'dataset') loadDatasetStats();
+  if(name === 'gitops') loadGitops();
+  if(name === 'healer') loadHealer();
+  if(name === 'metrics') loadMetrics();
 }
 
 // ── Status polling ──
@@ -1134,38 +1241,410 @@ async function deleteDeployment(name){
 
 // ── Chat ──
 let chatHistory = [];
+
+
+async function loadGitops(){
+  document.getElementById('gitops-list').innerHTML='<div style="color:var(--text3);font-size:13px">Loading...</div>';
+  try{
+    const r=await fetch('/api/gitops'); const d=await r.json();
+    const commits=d.commits||[];
+    if(!commits.length){document.getElementById('gitops-list').innerHTML='<div style="color:var(--text3);font-size:13px">No commits yet.</div>';return;}
+    document.getElementById('gitops-list').innerHTML=commits.map(cm=>`
+      <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <span style="font-family:monospace;font-size:11px;background:var(--bg);padding:2px 6px;border-radius:4px;color:var(--green)">${cm.hash}</span>
+            <span style="font-size:13px;margin-left:8px;font-weight:500">${cm.app||'--'}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:11px;color:var(--text3)">${cm.time||''}</span>
+            <button onclick="doRollback('${cm.app||''}')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface);cursor:pointer">Rollback</button>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-top:4px">${cm.message||''}</div>
+      </div>`).join('');
+  }catch(e){document.getElementById('gitops-list').innerHTML='<div style="color:var(--text3)">Error: '+e+'</div>';}
+}
+
+async function doRollback(app){
+  if(!app){alert('No app name');return;}
+  if(!confirm('Rollback '+app+'?'))return;
+  const r=await fetch('/api/rollback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_name:app})});
+  const d=await r.json();
+  alert(d.message||d.error||'Done');
+  loadGitops();
+}
+
+async function loadHealer(){
+  document.getElementById('healer-list').innerHTML='<div style="color:var(--text3);font-size:13px">Scanning...</div>';
+  document.getElementById('healer-time').textContent=new Date().toLocaleTimeString();
+  try{
+    const r=await fetch('/api/healer/scan'); const d=await r.json();
+    const issues=d.issues||[];
+    document.getElementById('healer-count').textContent=issues.length;
+    if(!issues.length){document.getElementById('healer-list').innerHTML='<div style="color:var(--green);font-size:13px">All pods healthy</div>';return;}
+    document.getElementById('healer-list').innerHTML=issues.map(i=>`
+      <div style="border:1px solid #FCA5A5;border-radius:8px;padding:12px;margin-bottom:8px;background:#FFF5F5">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><span style="font-weight:600;font-size:13px">${i.pod}</span>
+          <span style="margin-left:8px;font-size:11px;background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:10px">${i.status}</span></div>
+          <button onclick="fixPod('${i.pod}')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:none;background:#DC2626;color:#fff;cursor:pointer">Fix</button>
+        </div>
+        <div style="font-size:12px;color:#6B7280;margin-top:4px">${i.action||''}</div>
+      </div>`).join('');
+  }catch(e){document.getElementById('healer-list').innerHTML='<div style="color:var(--text3)">Error: '+e+'</div>';}
+}
+
+async function fixPod(pod){
+  const r=await fetch('/api/healer/fix',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pod_name:pod})});
+  const d=await r.json();
+  alert(d.message||d.error||'Done');
+  loadHealer();
+}
+
+async function healerAutoFix(){
+  if(!confirm('Auto fix all issues?'))return;
+  const r=await fetch('/api/healer/auto_fix',{method:'POST'});
+  const d=await r.json();
+  alert('Fixed: '+d.fixed+', Failed: '+d.failed);
+  loadHealer();
+}
+
+async function loadMetrics(){
+  document.getElementById('prom-status').textContent='...';
+  try{
+    const r=await fetch('/api/metrics'); const d=await r.json();
+    if(!d.connected){
+      document.getElementById('prom-status').textContent='Offline';
+      document.getElementById('prom-pods').textContent='--';
+      document.getElementById('prom-url').textContent='Not connected';
+      document.getElementById('metrics-rows').innerHTML='<div style="color:var(--text3)">Run: kubectl port-forward -n monitoring svc/prometheus 9090:9090</div>';
+      return;
+    }
+    const m=d.metrics||{};
+    document.getElementById('prom-status').textContent='Online';
+    document.getElementById('prom-pods').textContent=m.running_pods!=null?m.running_pods:'N/A';
+    document.getElementById('prom-url').textContent=d.url||'localhost:9090';
+    document.getElementById('metrics-rows').innerHTML=[
+      ['Prometheus','UP'],
+      ['Pod Count',m.pod_count!=null?m.pod_count:'N/A'],
+      ['Running Pods',m.running_pods!=null?m.running_pods:'N/A'],
+      ['Kube Pods',m.kube_pods!=null?m.kube_pods:'N/A'],
+    ].map(([k,v])=>'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2);font-size:12px">'+k+'</span><span style="font-size:12px;font-weight:500">'+v+'</span></div>').join('');
+  }catch(e){document.getElementById('prom-status').textContent='ERR';}
+}
+
+async function loadDatasetStats(){
+  document.getElementById('ds-total').textContent = '...';
+  try {
+    const r = await fetch('/api/dataset/stats');
+    const d = await r.json();
+    document.getElementById('ds-total').textContent = d.total_records.toLocaleString();
+    document.getElementById('ds-output-pct').textContent = d.output_pct + '%';
+    document.getElementById('ds-k8s-ratio').textContent = d.k8s_count + ' / ' + d.non_k8s_count;
+    let fhtml = '';
+    for(const [name, cnt] of Object.entries(d.files)){
+      fhtml += '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)"><span>'+name+'</span><span style="color:var(--green);font-weight:600">'+cnt.toLocaleString()+'</span></div>';
+    }
+    document.getElementById('ds-files').innerHTML = fhtml || 'No files found';
+    let chtml = '';
+    for(const [cat, cnt] of d.top_categories){
+      chtml += '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)"><span style="font-size:11px">'+cat+'</span><span style="color:var(--text);font-weight:600">'+cnt+'</span></div>';
+    }
+    document.getElementById('ds-categories').innerHTML = chtml || 'No data';
+  } catch(e){ document.getElementById('ds-total').textContent = 'ERR'; }
+}
+
+async function runEnrich(flags){
+  const log = document.getElementById('ds-log');
+  const status = document.getElementById('ds-run-status');
+  log.textContent = 'Starting...\n';
+  status.textContent = 'Running...';
+  try {
+    const r = await fetch('/api/dataset/run', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({flags: flags})
+    });
+    const d = await r.json();
+    log.textContent = d.log || d.error || 'Done';
+    status.textContent = d.success ? 'Completed' : 'Error';
+    if(d.success) loadDatasetStats();
+  } catch(e){ log.textContent = 'Connection error: ' + e; status.textContent = 'Failed'; }
+}
+
+
+// ── Multi-chat rooms ────────────────────────────────────────
+let chats = [];
+let currentChatId = null;
+
+function initChats(){
+  try { chats = JSON.parse(localStorage.getItem('k8s_chats')||'[]'); } catch(e){ chats=[]; }
+  currentChatId = localStorage.getItem('k8s_current_chat') || null;
+  if(!chats.length){ newChat(); return; }
+  if(!currentChatId || !chats.find(ch=>ch.id===currentChatId)){
+    currentChatId = chats[chats.length-1].id;
+  }
+  renderChatList();
+  renderMessages();
+}
+
+function saveChats(){
+  localStorage.setItem('k8s_chats', JSON.stringify(chats));
+  localStorage.setItem('k8s_current_chat', currentChatId||'');
+}
+
+function newChat(){
+  const id = 'chat_' + Date.now();
+  chats.push({id, title:'New Chat', messages:[]});
+  currentChatId = id;
+  saveChats();
+  renderChatList();
+  renderMessages();
+  document.getElementById('chat-input').focus();
+}
+
+function deleteChat(id, e){
+  e.stopPropagation();
+  chats = chats.filter(ch=>ch.id!==id);
+  if(currentChatId===id) currentChatId = chats.length ? chats[chats.length-1].id : null;
+  if(!chats.length){ newChat(); return; }
+  saveChats();
+  renderChatList();
+  renderMessages();
+}
+
+function switchChat(id){
+  currentChatId = id;
+  saveChats();
+  renderChatList();
+  renderMessages();
+}
+
+function currentChat(){
+  return chats.find(ch=>ch.id===currentChatId);
+}
+
+function renderChatList(){
+  const el = document.getElementById('chat-room-list');
+  if(!el) return;
+  el.innerHTML = chats.slice().reverse().map(ch=>`
+    <div onclick="switchChat('${ch.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;cursor:pointer;margin-bottom:2px;font-size:12px;color:#e5e7eb;background:${ch.id===currentChatId?'rgba(22,163,74,.25)':'transparent'};transition:background .15s" onmouseover="this.querySelector('.del').style.opacity='1'" onmouseout="this.querySelector('.del').style.opacity='0'">
+      <span style="display:flex;align-items:center;gap:6px;overflow:hidden;flex:1"><svg viewBox="0 0 16 16" fill="none" width="12" height="12" style="flex-shrink:0"><path d="M2 3a1 1 0 011-1h10a1 1 0 011 1v7a1 1 0 01-1 1H9l-3 2v-2H3a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.5"/></svg><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ch.title}</span></span>
+      <span class="del" onclick="deleteChat('${ch.id}',event)" style="opacity:0;color:#9ca3af;font-size:14px;padding-left:6px;flex-shrink:0;transition:opacity .15s">&#x2715;</span>
+    </div>`).join('');
+}
+
+function renderMessages(){
+  const msgs = document.getElementById('chat-messages');
+  if(!msgs) return;
+  const ch = currentChat();
+  if(!ch || !ch.messages.length){
+    msgs.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:40px 20px">
+      <div style="width:56px;height:56px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff;margin-bottom:16px">K</div>
+      <div style="font-size:22px;font-weight:700;color:var(--text);margin-bottom:8px">ZeroTouch K8s Assistant</div>
+      <div style="font-size:14px;color:var(--text2);text-align:center;max-width:480px;margin-bottom:32px">Deploy and manage Kubernetes services using natural language. Ask me anything about K8s or start with a quick action.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:520px">
+        <div onclick="document.getElementById('chat-input').value='deploy 3 nginx:latest pods for web-frontend';sendChat()" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:4px">Deploy a service</div>
+          <div style="font-size:12px;color:var(--text3)">deploy 3 nginx:latest pods...</div>
+        </div>
+        <div onclick="document.getElementById('chat-input').value='list pods';sendChat()" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:4px">Check status</div>
+          <div style="font-size:12px;color:var(--text3)">list pods / show deployments</div>
+        </div>
+        <div onclick="document.getElementById('chat-input').value='What is a Pod?';sendChat()" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:4px">Learn K8s</div>
+          <div style="font-size:12px;color:var(--text3)">What is a Pod, Deployment...</div>
+        </div>
+        <div onclick="document.getElementById('chat-input').value='delete ';document.getElementById('chat-input').focus()" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:4px">Delete deployment</div>
+          <div style="font-size:12px;color:var(--text3)">delete &lt;deployment-name&gt;</div>
+        </div>
+      </div>
+    </div>`;
+    return;
+  }
+  msgs.innerHTML = ch.messages.map(m=>renderMsgHTML(m.role, m.content)).join('');
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function renderMsgHTML(role, content){
+  if(role==='user'){
+    return `<div class="msg user" style="margin-bottom:16px"><div class="msg-avatar">U</div><div class="msg-bubble">${escHtml(content)}</div></div>`;
+  }
+  return `<div class="msg ai" style="margin-bottom:16px"><div class="msg-avatar">K</div><div class="msg-bubble" style="white-space:pre-wrap">${content}</div></div>`;
+}
+
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function appendMsg(role, content){
+  const ch = currentChat();
+  if(!ch) return;
+  ch.messages.push({role, content});
+  if(ch.messages.length===1 && role==='user'){
+    ch.title = content.slice(0,30) + (content.length>30?'...':'');
+  }
+  saveChats();
+  renderChatList();
+  const msgs = document.getElementById('chat-messages');
+  msgs.innerHTML += renderMsgHTML(role, content);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function appendTyping(){
+  const msgs = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'msg ai'; div.id = 'typing-indicator'; div.style.marginBottom='16px';
+  div.innerHTML = '<div class="msg-avatar">K</div><div class="msg-bubble"><span style="opacity:.5">Thinking...</span></div>';
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function removeTyping(){ const el=document.getElementById('typing-indicator'); if(el) el.remove(); }
+
 async function sendChat(){
   const inp = document.getElementById('chat-input');
-  const msgs = document.getElementById('chat-messages');
   const text = inp.value.trim();
   if(!text) return;
   inp.value = '';
+  inp.style.height = '';
+  if(!currentChatId) newChat();
+  appendMsg('user', text);
+  appendTyping();
 
-  msgs.innerHTML += `<div class="msg user"><div class="msg-avatar">U</div><div class="msg-bubble">${text}</div></div>`;
-  const typing = document.createElement('div');
-  typing.className = 'msg ai';
-  typing.innerHTML = '<div class="msg-avatar">K</div><div class="typing"><span></span><span></span><span></span></div>';
-  msgs.appendChild(typing);
-  msgs.scrollTop = msgs.scrollHeight;
+  let replied = false;
 
-  chatHistory.push({role:'user', content: text});
-  try {
-    const r = await fetch('/api/chat', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({message: text, history: chatHistory})
+  if(/^(list|show|\u67e5\u770b|\u986f\u793a)\s*(all\s*)?(pods?|pod|\u5bb9\u5668)/i.test(text)){
+    replied = true;
+    try{
+      const r = await fetch('/api/pods'); const d = await r.json();
+      const pods = d.pods||[];
+      let reply = pods.length ? pods.map(p=>`- ${p.name} [${p.status}] - ${p.image}`).join('\n') : 'No pods running.';
+      removeTyping(); appendMsg('assistant', 'Running Pods:\n'+reply);
+    }catch(e){ removeTyping(); appendMsg('assistant','Error: '+e); }
+  }
+  else if(/^(list|show|\u67e5\u770b|\u986f\u793a)\s*(all\s*)?(deploy|deployment|\u90e8\u7f72)/i.test(text)){
+    replied = true;
+    try{
+      const r = await fetch('/api/deployments'); const d = await r.json();
+      const deps = d.deployments||[];
+      let reply = deps.length ? deps.map(d=>`- ${d.name} - ${d.ready}/${d.replicas} ready`).join('\n') : 'No deployments.';
+      removeTyping(); appendMsg('assistant', 'Deployments:\n'+reply);
+    }catch(e){ removeTyping(); appendMsg('assistant','Error: '+e); }
+  }
+  else if(/^(delete|remove|\u522a\u9664|del)\s+(\S+)/i.test(text)){
+    replied = true;
+    const name = text.match(/^(?:delete|remove|\u522a\u9664|del)\s+(\S+)/i)[1];
+    try{
+      const r = await fetch('/api/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+      const d = await r.json();
+      removeTyping(); appendMsg('assistant', d.success ? 'Deleted: '+name : 'Error: '+(d.error||d.message));
+    }catch(e){ removeTyping(); appendMsg('assistant','Error: '+e); }
+  }
+  else if(/scale\s+(\S+)\s+to\s+(\d+)/i.test(text)){
+    replied = true;
+    const m = text.match(/scale\s+(\S+)\s+to\s+(\d+)/i);
+    const app = m[1], n = parseInt(m[2]);
+    try{
+      const r = await fetch('/api/scale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:app,replicas:n})});
+      const d = await r.json();
+      removeTyping(); appendMsg('assistant', d.success ? 'Scaled '+app+' to '+n+' replicas' : 'Error: '+(d.error||d.message));
+    }catch(e){ removeTyping(); appendMsg('assistant','Error: '+e); }
+  }
+  else if(/update\s+(\S+)\s+to\s+(\S+)/i.test(text)){
+    replied = true;
+    const m = text.match(/update\s+(\S+)\s+to\s+(\S+)/i);
+    const app = m[1], image = m[2];
+    try{
+      const r = await fetch('/api/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:app,image})});
+      const d = await r.json();
+      removeTyping(); appendMsg('assistant', d.success ? 'Updated '+app+' to '+image : 'Error: '+(d.error||d.message));
+    }catch(e){ removeTyping(); appendMsg('assistant','Error: '+e); }
+  }
+  else if(/rollback\s+(\S+)/i.test(text)){
+    replied = true;
+    const app = text.match(/rollback\s+(\S+)/i)[1];
+    try{
+      const r = await fetch('/api/rollback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_name:app})});
+      const d = await r.json();
+      removeTyping(); appendMsg('assistant', d.success!==false ? (d.message||'Rolled back '+app) : 'Error: '+(d.error||d.message));
+    }catch(e){ removeTyping(); appendMsg('assistant','Error: '+e); }
+  }
+  else if(/^(deploy|start|launch|run|\u5e6b\u6211|\u8acb|\u90e8\u7f72|\u8d77\s)/i.test(text) || /\d+\s*(pods?|replicas?|\u500b)/i.test(text)){
+    replied = true;
+    removeTyping();
+    const pipeId = 'pipe_'+Date.now();
+    const steps = ['LLaMA Inference','Multi-Agent Review','Guardian Validation','Creating K8s Resources','Deployment Complete'];
+    let pipeHTML = `<div id="${pipeId}" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px">`;
+    steps.forEach((s,i)=>{
+      pipeHTML += `<div id="${pipeId}_${i}" style="display:flex;align-items:center;gap:10px;padding:5px 0;color:var(--text3);font-size:13px"><div style="width:18px;height:18px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;text-align:center;font-size:10px;line-height:16px"></div>${s}</div>`;
     });
-    const d = await r.json();
-    typing.remove();
-    const reply = d.reply || d.error || 'No response';
-    chatHistory.push({role:'assistant', content: reply});
-    msgs.innerHTML += `<div class="msg ai"><div class="msg-avatar">K</div><div class="msg-bubble">${reply.replace(/\n/g,'<br>')}</div></div>`;
-    msgs.scrollTop = msgs.scrollHeight;
-  } catch(e){
-    typing.remove();
-    msgs.innerHTML += `<div class="msg ai"><div class="msg-avatar">K</div><div class="msg-bubble" style="color:var(--red)">Connection error</div></div>`;
+    pipeHTML += `<div id="${pipeId}_result" style="margin-top:8px;font-size:13px"></div></div>`;
+
+    const ch2 = currentChat();
+    if(ch2){ ch2.messages.push({role:'assistant', content: pipeHTML}); saveChats(); }
+    const msgs2 = document.getElementById('chat-messages');
+    const tempDiv = document.createElement('div');
+    tempDiv.className = 'msg ai'; tempDiv.style.marginBottom='16px';
+    tempDiv.innerHTML = `<div class="msg-avatar">K</div><div class="msg-bubble" style="padding:8px;background:transparent;border:none;max-width:100%">${pipeHTML}</div>`;
+    msgs2.appendChild(tempDiv);
+    msgs2.scrollTop = msgs2.scrollHeight;
+
+    function setStep(i, done){
+      const el = document.getElementById(`${pipeId}_${i}`);
+      if(!el) return;
+      el.style.color = done ? 'var(--green)' : 'var(--text)';
+      const dot = el.querySelector('div');
+      dot.style.background = done ? 'var(--green)' : 'var(--green-light)';
+      dot.style.borderColor = 'var(--green)';
+      dot.innerHTML = done ? '&#x2713;' : '';
+    }
+
+    setStep(0, false);
+    try{
+      const r = await fetch('/api/deploy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:text})});
+      setStep(0,true); setStep(1,false);
+      await new Promise(res=>setTimeout(res,300));
+      setStep(1,true); setStep(2,false);
+      await new Promise(res=>setTimeout(res,200));
+      setStep(2,true); setStep(3,false);
+      const d = await r.json();
+      await new Promise(res=>setTimeout(res,300));
+      setStep(3,true); setStep(4,false);
+      await new Promise(res=>setTimeout(res,200));
+      setStep(4,true);
+      const res2 = document.getElementById(`${pipeId}_result`);
+      if(res2){
+        if(d.rejected){ res2.innerHTML=`<div style="color:#ef4444">Blocked: ${d.reason||''}</div>`; }
+        else if(d.parsed){
+          const p=d.parsed;
+          res2.innerHTML<`<div style="color:var(--green)">Deployed: <b>${p.app_name}</b> x${p.pods} (${p.image})${p.port?', port '+p.port:''}</div>`;
+        }
+        if(d.error){ res2.innerHTML<`<div style="color:#ef4444">${d.error}</div>`; }
+      }
+    }catch(e){
+      const res2=document.getElementById(`${pipeId}_result`);
+      if(res2) res2.innerHTML=`<div style="color:#ef4444">Error: ${e}</div>`;
+    }
+  }
+
+  if(!replied){
+    try{
+      const hist = (currentChat()?.messages||[]).slice(-10).map(m=>({role:m.role==='assistant'?'assistant':'user',content:m.content}));
+      const r = await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text, history:hist})});
+      const d = await r.json();
+      removeTyping();
+      appendMsg('assistant', d.reply||d.error||'No response');
+    }catch(e){ removeTyping(); appendMsg('assistant','Connection error: '+e); }
   }
 }
+
+
+window.addEventListener('DOMContentLoaded', function(){
+  if(document.getElementById('page-chat') && document.getElementById('page-chat').classList.contains('active')){
+    initChats();
+  }
+});
 </script>
 </body>
 </html>
@@ -1194,6 +1673,8 @@ def register():
     if len(password) < 6:
         return render_template_string(HTML, logged_in=False, page='register', error="Password must be at least 6 characters", k8s=K8S_ENABLED, username='')
     USERS[username] = {"password_hash": hash_password(password), "created_at": datetime.now().isoformat()}
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json"), "w", encoding="utf-8") as _uf:
+        json.dump(USERS, _uf)
     session["username"] = username
     return redirect("/")
 
@@ -1284,6 +1765,206 @@ def api_delete():
         return jsonify({"error": "Name required"}), 400
     ok, msg = k8s_delete_deployment(name)
     return jsonify({"success": ok, "message": msg, "error": None if ok else msg})
+
+@app.route("/api/dataset/stats")
+def api_dataset_stats():
+    import glob
+    dataset_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset")
+    files_info = {}
+    total = 0
+    output_filled = 0
+    k8s_count = 0
+    non_k8s_count = 0
+    categories = {}
+    scan_paths = (
+        glob.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), "*.jsonl")) +
+        glob.glob(os.path.join(dataset_dir, "*.jsonl"))
+    )
+    for path in scan_paths:
+        name = os.path.basename(path)
+        cnt = 0
+        try:
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except Exception:
+                        continue
+                    cnt += 1
+                    total += 1
+                    if rec.get("output") is not None:
+                        output_filled += 1
+                    if "is_k8s" in rec:
+                        if rec["is_k8s"]:
+                            k8s_count += 1
+                        else:
+                            non_k8s_count += 1
+                    cat = rec.get("category", "")
+                    if cat:
+                        categories[cat] = categories.get(cat, 0) + 1
+        except Exception:
+            pass
+        if cnt:
+            files_info[name] = cnt
+    output_pct = round(output_filled / total * 100, 1) if total else 0
+    top_cats = sorted(categories.items(), key=lambda x: -x[1])[:10]
+    return jsonify({"total_records": total, "output_filled": output_filled,
+        "output_pct": output_pct, "k8s_count": k8s_count, "non_k8s_count": non_k8s_count,
+        "files": files_info, "top_categories": top_cats})
+
+
+@app.route("/api/dataset/run", methods=["POST"])
+def api_dataset_run():
+    import subprocess
+    data = request.get_json() or {}
+    flags = data.get("flags", "--skip-output")
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "enrich_dataset.py")
+    if not os.path.exists(script):
+        return jsonify({"success": False, "error": "enrich_dataset.py not found", "log": ""})
+    cmd = ["python3", script] + (flags.split() if flags else [])
+    try:
+        result = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=600)
+        log = result.stdout + ("\nSTDERR:\n" + result.stderr if result.stderr else "")
+        return jsonify({"success": result.returncode == 0, "log": log})
+    except subprocess.TimeoutExpired:
+        return jsonify({"success": False, "log": "Timeout after 600s", "error": "timeout"})
+    except Exception as e:
+        return jsonify({"success": False, "log": str(e), "error": str(e)})
+
+@app.route("/api/gitops")
+def api_gitops():
+    if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["git", "log", "--pretty=format:%H|%s|%ai", "--", "manifests/"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            capture_output=True, text=True, timeout=10
+        )
+        commits = []
+        for line in result.stdout.strip().split("\n"):
+            if not line: continue
+            parts = line.split("|", 2)
+            if len(parts) < 2: continue
+            h = parts[0][:7]
+            msg = parts[1] if len(parts) > 1 else ""
+            time = parts[2][:16] if len(parts) > 2 else ""
+            app_name = ""
+            if "deploy" in msg.lower():
+                words = msg.split()
+                for i, w in enumerate(words):
+                    if w.lower() in ("deploy", "gitops:") and i+1 < len(words):
+                        app_name = words[i+1]
+                        break
+            commits.append({"hash": h, "message": msg, "time": time, "app": app_name})
+        return jsonify({"commits": commits[:20]})
+    except Exception as e:
+        return jsonify({"commits": [], "error": str(e)})
+
+
+@app.route("/api/healer/scan")
+def api_healer_scan():
+    if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
+    try:
+        from healer.pod_watcher import scan_once
+        issues = scan_once()
+        return jsonify({"issues": issues or []})
+    except Exception as e:
+        try:
+            from kubernetes import client as k8s_client, config as k8s_config
+            k8s_config.load_kube_config()
+            v1 = k8s_client.CoreV1Api()
+            pods = v1.list_namespaced_pod(namespace="default")
+            issues = []
+            bad = {"CrashLoopBackOff", "OOMKilled", "ImagePullBackOff", "ErrImagePull", "Error"}
+            for pod in pods.items:
+                if pod.status and pod.status.container_statuses:
+                    for cs in pod.status.container_statuses:
+                        reason = ""
+                        if cs.state and cs.state.waiting:
+                            reason = cs.state.waiting.reason or ""
+                        elif cs.state and cs.state.terminated:
+                            reason = cs.state.terminated.reason or ""
+                        if reason in bad:
+                            issues.append({"pod": pod.metadata.name, "status": reason, "action": "Needs fix"})
+            return jsonify({"issues": issues})
+        except Exception as e2:
+            return jsonify({"issues": [], "error": str(e2)})
+
+
+@app.route("/api/healer/fix", methods=["POST"])
+def api_healer_fix():
+    if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
+    data = request.get_json() or {}
+    pod_name = data.get("pod_name", "")
+    if not pod_name:
+        return jsonify({"success": False, "error": "No pod name"})
+    try:
+        from kubernetes import client as k8s_client, config as k8s_config
+        k8s_config.load_kube_config()
+        v1 = k8s_client.CoreV1Api()
+        v1.delete_namespaced_pod(name=pod_name, namespace="default")
+        return jsonify({"success": True, "message": f"Pod {pod_name} deleted, ReplicaSet will recreate"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
+@app.route("/api/healer/auto_fix", methods=["POST"])
+def api_healer_auto_fix():
+    if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
+    try:
+        from kubernetes import client as k8s_client, config as k8s_config
+        k8s_config.load_kube_config()
+        v1 = k8s_client.CoreV1Api()
+        pods = v1.list_namespaced_pod(namespace="default")
+        fixed = 0
+        failed = 0
+        bad = {"CrashLoopBackOff", "OOMKilled", "ImagePullBackOff", "ErrImagePull", "Error"}
+        for pod in pods.items:
+            if pod.status and pod.status.container_statuses:
+                for cs in pod.status.container_statuses:
+                    reason = ""
+                    if cs.state and cs.state.waiting:
+                        reason = cs.state.waiting.reason or ""
+                    if reason in bad:
+                        try:
+                            v1.delete_namespaced_pod(name=pod.metadata.name, namespace="default")
+                            fixed += 1
+                        except:
+                            failed += 1
+        return jsonify({"fixed": fixed, "failed": failed})
+    except Exception as e:
+        return jsonify({"fixed": 0, "failed": 0, "error": str(e)})
+
+
+@app.route("/api/metrics")
+def api_metrics():
+    if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
+    prom_url = "http://localhost:9090"
+    try:
+        import urllib.request as ur
+        def prom_query(q):
+            url = f"{prom_url}/api/v1/query?query={urllib.parse.quote(q)}"
+            with ur.urlopen(url, timeout=3) as r:
+                d = json.loads(r.read())
+            if d.get("status") == "success" and d["data"]["result"]:
+                return float(d["data"]["result"][0]["value"][1])
+            return None
+        import urllib.parse
+        metrics = {}
+        metrics["prometheus_up"] = True
+        try: metrics["pod_count"] = prom_query('count(kube_pod_info{namespace="default"})')
+        except: metrics["pod_count"] = None
+        try: metrics["running_pods"] = prom_query('count(kube_pod_status_phase{phase="Running",namespace="default"})')
+        except: metrics["running_pods"] = None
+        try: metrics["kube_pods"] = prom_query("count(kube_pod_info)")
+        except: metrics["kube_pods"] = None
+        return jsonify({"connected": True, "url": prom_url, "metrics": metrics})
+    except Exception as e:
+        return jsonify({"connected": False, "error": str(e)})
 
 if __name__ == "__main__":
     print("=" * 60)
