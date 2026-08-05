@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations:
-    gitops.k8s-platform/generated-at: '2026-05-19T19:06:15.030001'
+    gitops.k8s-platform/generated-at: '2026-08-05T08:46:10.032525'
     gitops.k8s-platform/source: llm-generated
   labels:
     app: web-frontend
