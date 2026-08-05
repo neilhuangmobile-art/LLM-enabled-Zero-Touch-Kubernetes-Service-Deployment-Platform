@@ -3,14 +3,14 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations:
-    gitops.k8s-platform/generated-at: '2026-05-19T18:49:01.443624'
+    gitops.k8s-platform/generated-at: '2026-08-05T10:02:21.960894'
     gitops.k8s-platform/source: llm-generated
   labels:
     app: auto-app
   name: auto-app
   namespace: default
 spec:
-  replicas: 5
+  replicas: 3
   selector:
     matchLabels:
       app: auto-app
