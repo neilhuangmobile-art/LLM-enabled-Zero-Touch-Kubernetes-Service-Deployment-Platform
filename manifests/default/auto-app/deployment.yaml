@@ -3,14 +3,14 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations:
-    gitops.k8s-platform/generated-at: '2026-08-05T10:39:15.940065'
+    gitops.k8s-platform/generated-at: '2026-08-12T09:44:56.566205'
     gitops.k8s-platform/source: llm-generated
   labels:
     app: auto-app
   name: auto-app
   namespace: default
 spec:
-  replicas: 3
+  replicas: 6
   selector:
     matchLabels:
       app: auto-app
@@ -28,7 +28,7 @@ spec:
         resources:
           limits:
             cpu: 100m
-            memory: 128Mi
+            memory: 4Gi
           requests:
             cpu: 100m
-            memory: 128Mi
+            memory: 4Gi
