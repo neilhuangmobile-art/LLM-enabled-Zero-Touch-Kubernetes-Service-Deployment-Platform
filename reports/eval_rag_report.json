@@ -1,0 +1,459 @@
+{
+  "generated_at": 1784462885.6916149,
+  "top_k": 3,
+  "num_queries": 24,
+  "results": {
+    "chroma": {
+      "method": "chroma (sentence-transformers)",
+      "recall_at_k": 1.0,
+      "mrr": 0.875,
+      "avg_latency_ms": 5.3,
+      "num_queries": 24,
+      "per_query": [
+        {
+          "query": "我的 pod 一直重啟，狀態顯示 CrashLoopBackOff，該怎麼辦？",
+          "expected": [
+            "common_errors.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "common_errors.md",
+          "top_score": 0.6984
+        },
+        {
+          "query": "Pod 被 OOMKilled，exit code 137，是什麼原因造成的？",
+          "expected": [
+            "common_errors.md"
+          ],
+          "hit_rank": 2,
+          "top_result": "zerotouch_user_guide.md",
+          "top_score": 0.5072
+        },
+        {
+          "query": "deployment 一直卡在 ImagePullBackOff，可能是什麼問題？",
+          "expected": [
+            "common_errors.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "common_errors.md",
+          "top_score": 0.5745
+        },
+        {
+          "query": "Why is my pod stuck in Pending and never getting scheduled onto a node?",
+          "expected": [
+            "common_errors.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "common_errors.md",
+          "top_score": 0.5646
+        },
+        {
+          "query": "容器狀態顯示 CreateContainerConfigError 代表什麼？",
+          "expected": [
+            "common_errors.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "common_errors.md",
+          "top_score": 0.6109
+        },
+        {
+          "query": "Pod 一直卡在 Terminating 刪不掉要怎麼處理？",
+          "expected": [
+            "common_errors.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "common_errors.md",
+          "top_score": 0.7136
+        },
+        {
+          "query": "How should I decide how many replicas a Deployment should run?",
+          "expected": [
+            "deployment_patterns.md"
+          ],
+          "hit_rank": 2,
+          "top_result": "zerotouch_user_guide.md",
+          "top_score": 0.5684
+        },
+        {
+          "query": "readiness probe 跟 liveness probe 差在哪裡？",
+          "expected": [
+            "deployment_patterns.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "deployment_patterns.md",
+          "top_score": 0.6479
+        },
+        {
+          "query": "怎麼設定 HPA 讓副本數依 CPU 使用率自動調整？",
+          "expected": [
+            "deployment_patterns.md"
+          ],
+          "hit_rank": 3,
+          "top_result": "prompt_qa_seed:k8s-00008",
+          "top_score": 0.7288
+        },
+        {
+          "query": "ConfigMap 跟 Secret 要怎麼掛載成容器的環境變數？",
+          "expected": [
+            "deployment_patterns.md"
+          ],
+          "hit_rank": 3,
+          "top_result": "prompt_qa_seed:k8s-00009",
+          "top_score": 0.6635
+        },
+        {
+          "query": "image tag 應該固定版本還是可以用 latest？",
+          "expected": [
+            "deployment_patterns.md",
+            "security_best_practices.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "deployment_patterns.md",
+          "top_score": 0.5773
+        },
+        {
+          "query": "requests 跟 limits 這兩個資源設定有什麼差別？",
+          "expected": [
+            "resource_management.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "resource_management.md",
+          "top_score": 0.6597
+        },
+        {
+          "query": "跑一個 Java Spring Boot 服務，resource requests/limits 大概怎麼抓比較合理？",
+          "expected": [
+            "resource_management.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "resource_management.md",
+          "top_score": 0.6878
+        },
+        {
+          "query": "CPU 資源寫 500m 是什麼意思？",
+          "expected": [
+            "resource_management.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "resource_management.md",
+          "top_score": 0.6921
+        },
+        {
+          "query": "怎麼用 ResourceQuota 限制整個 namespace 能用的資源總量？",
+          "expected": [
+            "resource_management.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "resource_management.md",
+          "top_score": 0.6
+        },
+        {
+          "query": "Kubernetes 的 QoS 等級 Guaranteed / Burstable / BestEffort 是怎麼判斷的？",
+          "expected": [
+            "resource_management.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "resource_management.md",
+          "top_score": 0.5883
+        },
+        {
+          "query": "How do I stop containers from running as privileged or using hostNetwork?",
+          "expected": [
+            "security_best_practices.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "security_best_practices.md",
+          "top_score": 0.6097
+        },
+        {
+          "query": "怎麼設定 RBAC 讓 ServiceAccount 只有最小必要權限？",
+          "expected": [
+            "security_best_practices.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "security_best_practices.md",
+          "top_score": 0.5546
+        },
+        {
+          "query": "NetworkPolicy 要怎麼設成預設拒絕所有流量再開放特定連線？",
+          "expected": [
+            "security_best_practices.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "security_best_practices.md",
+          "top_score": 0.6287
+        },
+        {
+          "query": "Secret 用 base64 儲存是不是就等於加密了？",
+          "expected": [
+            "security_best_practices.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "security_best_practices.md",
+          "top_score": 0.7068
+        },
+        {
+          "query": "怎麼用 Trivy 掃描容器映像有沒有安全漏洞？",
+          "expected": [
+            "security_best_practices.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "security_best_practices.md",
+          "top_score": 0.6411
+        },
+        {
+          "query": "這個平台的 Healer 功能實際上是做什麼用的？",
+          "expected": [
+            "zerotouch_user_guide.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "zerotouch_user_guide.md",
+          "top_score": 0.5053
+        },
+        {
+          "query": "要怎麼在這個系統上看部署歷史並且 rollback？",
+          "expected": [
+            "zerotouch_user_guide.md"
+          ],
+          "hit_rank": 3,
+          "top_result": "resource_management.md",
+          "top_score": 0.3918
+        },
+        {
+          "query": "Dataset Manager 頁面是用來做什麼的？",
+          "expected": [
+            "zerotouch_user_guide.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "zerotouch_user_guide.md",
+          "top_score": 0.6234
+        }
+      ]
+    },
+    "tfidf": {
+      "method": "tfidf (legacy)",
+      "recall_at_k": 0.917,
+      "mrr": 0.799,
+      "avg_latency_ms": 8.7,
+      "num_queries": 24,
+      "per_query": [
+        {
+          "query": "我的 pod 一直重啟，狀態顯示 CrashLoopBackOff，該怎麼辦？",
+          "expected": [
+            "common_errors.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "common_errors.md",
+          "top_score": 0.3698
+        },
+        {
+          "query": "Pod 被 OOMKilled，exit code 137，是什麼原因造成的？",
+          "expected": [
+            "common_errors.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "common_errors.md",
+          "top_score": 0.2525
+        },
+        {
+          "query": "deployment 一直卡在 ImagePullBackOff，可能是什麼問題？",
+          "expected": [
+            "common_errors.md"
+          ],
+          "hit_rank": null,
+          "top_result": "deployment_patterns.md",
+          "top_score": 0.301
+        },
+        {
+          "query": "Why is my pod stuck in Pending and never getting scheduled onto a node?",
+          "expected": [
+            "common_errors.md"
+          ],
+          "hit_rank": 3,
+          "top_result": "prompt_qa_seed:k8s-00007",
+          "top_score": 0.2237
+        },
+        {
+          "query": "容器狀態顯示 CreateContainerConfigError 代表什麼？",
+          "expected": [
+            "common_errors.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "common_errors.md",
+          "top_score": 0.2069
+        },
+        {
+          "query": "Pod 一直卡在 Terminating 刪不掉要怎麼處理？",
+          "expected": [
+            "common_errors.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "common_errors.md",
+          "top_score": 0.6293
+        },
+        {
+          "query": "How should I decide how many replicas a Deployment should run?",
+          "expected": [
+            "deployment_patterns.md"
+          ],
+          "hit_rank": null,
+          "top_result": "prompt_qa_seed:k8s-00003",
+          "top_score": 0.2217
+        },
+        {
+          "query": "readiness probe 跟 liveness probe 差在哪裡？",
+          "expected": [
+            "deployment_patterns.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "deployment_patterns.md",
+          "top_score": 0.4481
+        },
+        {
+          "query": "怎麼設定 HPA 讓副本數依 CPU 使用率自動調整？",
+          "expected": [
+            "deployment_patterns.md"
+          ],
+          "hit_rank": 3,
+          "top_result": "prompt_qa_seed:k8s-00008",
+          "top_score": 0.5632
+        },
+        {
+          "query": "ConfigMap 跟 Secret 要怎麼掛載成容器的環境變數？",
+          "expected": [
+            "deployment_patterns.md"
+          ],
+          "hit_rank": 2,
+          "top_result": "common_errors.md",
+          "top_score": 0.4794
+        },
+        {
+          "query": "image tag 應該固定版本還是可以用 latest？",
+          "expected": [
+            "deployment_patterns.md",
+            "security_best_practices.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "security_best_practices.md",
+          "top_score": 0.584
+        },
+        {
+          "query": "requests 跟 limits 這兩個資源設定有什麼差別？",
+          "expected": [
+            "resource_management.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "resource_management.md",
+          "top_score": 0.622
+        },
+        {
+          "query": "跑一個 Java Spring Boot 服務，resource requests/limits 大概怎麼抓比較合理？",
+          "expected": [
+            "resource_management.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "resource_management.md",
+          "top_score": 0.5147
+        },
+        {
+          "query": "CPU 資源寫 500m 是什麼意思？",
+          "expected": [
+            "resource_management.md"
+          ],
+          "hit_rank": 2,
+          "top_result": "common_errors.md",
+          "top_score": 0.59
+        },
+        {
+          "query": "怎麼用 ResourceQuota 限制整個 namespace 能用的資源總量？",
+          "expected": [
+            "resource_management.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "resource_management.md",
+          "top_score": 0.4391
+        },
+        {
+          "query": "Kubernetes 的 QoS 等級 Guaranteed / Burstable / BestEffort 是怎麼判斷的？",
+          "expected": [
+            "resource_management.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "resource_management.md",
+          "top_score": 0.5262
+        },
+        {
+          "query": "How do I stop containers from running as privileged or using hostNetwork?",
+          "expected": [
+            "security_best_practices.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "security_best_practices.md",
+          "top_score": 0.2803
+        },
+        {
+          "query": "怎麼設定 RBAC 讓 ServiceAccount 只有最小必要權限？",
+          "expected": [
+            "security_best_practices.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "security_best_practices.md",
+          "top_score": 0.4791
+        },
+        {
+          "query": "NetworkPolicy 要怎麼設成預設拒絕所有流量再開放特定連線？",
+          "expected": [
+            "security_best_practices.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "security_best_practices.md",
+          "top_score": 0.6545
+        },
+        {
+          "query": "Secret 用 base64 儲存是不是就等於加密了？",
+          "expected": [
+            "security_best_practices.md"
+          ],
+          "hit_rank": 2,
+          "top_result": "prompt_qa_seed:k8s-00006",
+          "top_score": 0.3999
+        },
+        {
+          "query": "怎麼用 Trivy 掃描容器映像有沒有安全漏洞？",
+          "expected": [
+            "security_best_practices.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "security_best_practices.md",
+          "top_score": 0.7524
+        },
+        {
+          "query": "這個平台的 Healer 功能實際上是做什麼用的？",
+          "expected": [
+            "zerotouch_user_guide.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "zerotouch_user_guide.md",
+          "top_score": 0.4656
+        },
+        {
+          "query": "要怎麼在這個系統上看部署歷史並且 rollback？",
+          "expected": [
+            "zerotouch_user_guide.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "zerotouch_user_guide.md",
+          "top_score": 0.4948
+        },
+        {
+          "query": "Dataset Manager 頁面是用來做什麼的？",
+          "expected": [
+            "zerotouch_user_guide.md"
+          ],
+          "hit_rank": 1,
+          "top_result": "zerotouch_user_guide.md",
+          "top_score": 0.312
+        }
+      ]
+    }
+  }
+}

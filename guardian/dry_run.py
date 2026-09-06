@@ -200,6 +200,7 @@ def _build_k8s_manifests(llm_result: dict) -> list:
     pods     = int(llm_result["pods"])
     port     = llm_result.get("port")
     memory   = llm_result.get("memory")
+    cpu      = llm_result.get("cpu")
 
     # ── Deployment ──────────────────────────────────────────────
     container = {
@@ -208,11 +209,16 @@ def _build_k8s_manifests(llm_result: dict) -> list:
     }
     if port:
         container["ports"] = [{"containerPort": int(port)}]
-    if memory:
-        container["resources"] = {
-            "limits"  : {"memory": memory},
-            "requests": {"memory": memory},
-        }
+    if memory or cpu:
+        limits = {}
+        requests = {}
+        if memory:
+            limits["memory"] = memory
+            requests["memory"] = memory
+        if cpu:
+            limits["cpu"] = cpu
+            requests["cpu"] = cpu
+        container["resources"] = {"limits": limits, "requests": requests}
 
     deployment = {
         "apiVersion": "apps/v1",

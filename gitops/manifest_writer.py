@@ -120,7 +120,7 @@ def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
     """從 LLM 結果生成 Deployment YAML 字串。"""
     app_name  = _sanitize_name(llm_result.get("app_name", "app"))
     image     = llm_result.get("image",    "nginx:latest")
-    replicas  = int(llm_result.get("replicas", 1))
+    replicas  = int(llm_result.get("replicas", llm_result.get("pods", 1)))
     port      = int(llm_result.get("port", 80))
     cpu_req   = llm_result.get("cpu",    "100m")
     mem_req   = llm_result.get("memory", "128Mi")

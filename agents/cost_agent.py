@@ -256,6 +256,39 @@ def _estimate_monthly_cost(manifest: Dict) -> Dict:
 
 
 # ════════════════════════════════════════════════════════════════
+# Node 數量估算（決定性計算，非 LLM 判斷）
+# ════════════════════════════════════════════════════════════════
+
+def estimate_node_count(cpu_str: Optional[str], memory_str: Optional[str],
+                         replicas: int, node_capacity: Optional[Dict[str, str]] = None) -> Dict:
+    """
+    依據每個 pod 的 CPU/記憶體需求與 replica 數，估算至少需要幾個 node 才能容納。
+    做法是簡化的 bin-packing 下界：分別以 CPU、記憶體兩個維度計算需要的 node 數，取較大值。
+    """
+    if node_capacity is None:
+        from core.config import NODE_CAPACITY as node_capacity
+
+    node_cpu_mc = _parse_cpu_millicores(node_capacity.get("cpu")) or 1
+    node_mem_b = _parse_memory_bytes(node_capacity.get("memory")) or 1
+
+    pod_cpu_mc = _parse_cpu_millicores(cpu_str) or 0
+    pod_mem_b = _parse_memory_bytes(memory_str) or 0
+    replicas = max(int(replicas or 1), 1)
+
+    total_cpu_mc = pod_cpu_mc * replicas
+    total_mem_b = pod_mem_b * replicas
+
+    cpu_nodes = -(-total_cpu_mc // node_cpu_mc) if total_cpu_mc else 0
+    mem_nodes = -(-total_mem_b // node_mem_b) if total_mem_b else 0
+
+    return {
+        "node_count": max(cpu_nodes, mem_nodes, 1),
+        "cpu_bound": cpu_nodes,
+        "memory_bound": mem_nodes,
+    }
+
+
+# ════════════════════════════════════════════════════════════════
 # 主要掃描函數
 # ════════════════════════════════════════════════════════════════
 

@@ -10,7 +10,7 @@ metadata:
   generation: null
   labels: null
   managed_fields: null
-  name: auto-app
+  name: zt-delete
   namespace: null
   owner_references: null
   resource_version: null
@@ -20,12 +20,12 @@ spec:
   min_ready_seconds: null
   paused: null
   progress_deadline_seconds: null
-  replicas: 6
+  replicas: 1
   revision_history_limit: null
   selector:
     match_expressions: null
     match_labels:
-      app: auto-app
+      app: zt-delete
   strategy: null
   template:
     metadata:
@@ -37,7 +37,7 @@ spec:
       generate_name: null
       generation: null
       labels:
-        app: auto-app
+        app: zt-delete
       managed_fields: null
       name: null
       namespace: null
@@ -58,7 +58,7 @@ spec:
         image_pull_policy: null
         lifecycle: null
         liveness_probe: null
-        name: auto-app
+        name: zt-delete
         ports:
         - container_port: 80
           host_ip: null
@@ -67,14 +67,7 @@ spec:
           protocol: null
         readiness_probe: null
         resize_policy: null
-        resources:
-          claims: null
-          limits:
-            cpu: 100m
-            memory: 4Gi
-          requests:
-            cpu: 100m
-            memory: 4Gi
+        resources: null
         restart_policy: null
         restart_policy_rules: null
         security_context: null
@@ -139,7 +132,7 @@ metadata:
   generation: null
   labels: null
   managed_fields: null
-  name: auto-app-svc
+  name: zt-delete-svc
   namespace: null
   owner_references: null
   resource_version: null
@@ -168,7 +161,7 @@ spec:
     target_port: 80
   publish_not_ready_addresses: null
   selector:
-    app: auto-app
+    app: zt-delete
   session_affinity: null
   session_affinity_config: null
   traffic_distribution: null

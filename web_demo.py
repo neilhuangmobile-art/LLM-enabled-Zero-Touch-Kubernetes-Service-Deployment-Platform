@@ -8,12 +8,14 @@ from core.config import ensure_utf8_output
 ensure_utf8_output()
 
 import threading, json, urllib.request, hashlib, secrets, re, uuid
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
 
-from core.config import YAML_DIR, MODEL_SERVER_URL
-from llama_client import ask_llama, save_gold_sample
+from core.config import ROOT, YAML_DIR, MODEL_SERVER_URL
+from llama_client import ask_llama, save_gold_sample, chat_llama
 from core.claude_client import claude_chat, is_available as claude_available
+from rag import kb_manager
+from rag.kb_manager import KBError
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -193,7 +195,7 @@ except Exception as e:
 
 NS  = "default"
 app = Flask(__name__)
-app.secret_key = "zerotouch_k8s_2025_fixed_key"
+app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 
 # ── Simple in-memory user store (replace with DB for production) ──
 USERS = {}
@@ -204,7 +206,21 @@ except Exception:
     USERS = {}
 
 def hash_password(pw):
-    return hashlib.sha256(pw.encode()).hexdigest()
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 120000).hex()
+    return f"pbkdf2_sha256${salt}${digest}"
+
+def verify_password(pw, stored):
+    if not stored:
+        return False
+    if stored.startswith("pbkdf2_sha256$"):
+        try:
+            _, salt, expected = stored.split("$", 2)
+            digest = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 120000).hex()
+            return secrets.compare_digest(digest, expected)
+        except ValueError:
+            return False
+    return secrets.compare_digest(hashlib.sha256(pw.encode()).hexdigest(), stored)
 
 # ── Model status ────────────────────────────────────────────
 def _model_status():
@@ -216,17 +232,41 @@ def _model_status():
         return False, False
 
 # ── K8s helpers ─────────────────────────────────────────────
-def k8s_deploy(app_name, image, replicas, port=80, memory=None):
+_TW_TZ = timezone(timedelta(hours=8))
+
+
+def _fmt_k8s_time(ts):
+    """Format Kubernetes UTC timestamps in Taiwan local time."""
+    if not ts:
+        return ""
+    try:
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return ts.astimezone(_TW_TZ).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return str(ts)[:16]
+
+
+def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None):
     if not K8S_ENABLED:
         return False, "K8s 未連線（模擬模式）"
     try:
-        api  = k8s_client.AppsV1Api()
-        core = k8s_client.CoreV1Api()
+        # k8s python client 預設會重試連線失敗（configuration.retries 預設 None，
+        # fallback 到 urllib3 預設的 3 次重試），實測封包被丟棄、不主動拒絕連線的情況下，
+        # 就算每次呼叫都帶 _request_timeout，重試 3 次疊加起來還是要等 80 秒才失敗。
+        # 這裡建一份獨立的 Configuration，把 retries 設成 0，只影響這個函式用的 client，
+        # 不動全域設定（其他路徑如 k8s_get_pods／healer 維持原本行為）。
+        _cfg = k8s_client.Configuration.get_default_copy()
+        _cfg.retries = 0
+        _api_client = k8s_client.ApiClient(configuration=_cfg)
+        api  = k8s_client.AppsV1Api(_api_client)
+        core = k8s_client.CoreV1Api(_api_client)
         resources = None
-        if memory:
+        if memory or cpu:
+            cpu_req = cpu or "100m"
             resources = k8s_client.V1ResourceRequirements(
-                requests={"memory": memory, "cpu": "100m"},
-                limits  ={"memory": memory, "cpu": "500m"},
+                requests={"memory": memory, "cpu": cpu_req} if memory else {"cpu": cpu_req},
+                limits  ={"memory": memory, "cpu": cpu_req} if memory else {"cpu": cpu_req},
             )
         container = k8s_client.V1Container(
             name=app_name, image=image,
@@ -255,13 +295,13 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None):
             ),
         )
         try:
-            api.replace_namespaced_deployment(app_name, NS, deploy)
+            api.replace_namespaced_deployment(app_name, NS, deploy, _request_timeout=(5, 10))
         except Exception:
-            api.create_namespaced_deployment(NS, deploy)
+            api.create_namespaced_deployment(NS, deploy, _request_timeout=(5, 10))
         try:
-            core.replace_namespaced_service(f"{app_name}-svc", NS, svc)
+            core.replace_namespaced_service(f"{app_name}-svc", NS, svc, _request_timeout=(5, 10))
         except Exception:
-            core.create_namespaced_service(NS, svc)
+            core.create_namespaced_service(NS, svc, _request_timeout=(5, 10))
         os.makedirs(YAML_DIR, exist_ok=True)
         path = os.path.join(YAML_DIR, f"{app_name}.yaml")
         with open(path, "w", encoding="utf-8") as f:
@@ -303,7 +343,7 @@ def k8s_get_pods(app_name=None):
                 "phase"     : p.status.phase or "Unknown",
                 "ip"        : p.status.pod_ip or "",
                 "node"      : p.spec.node_name or "",
-                "age"       : str(p.metadata.creation_timestamp)[:16] if p.metadata.creation_timestamp else "",
+                "age"       : _fmt_k8s_time(p.metadata.creation_timestamp),
                 "containers": containers,
                 "conditions": cond,
                 "restarts"  : sum(cs.restart_count for cs in (p.status.container_statuses or [])) if p.status and p.status.container_statuses else 0,
@@ -317,17 +357,37 @@ def k8s_get_deployments():
         return []
     try:
         api = k8s_client.AppsV1Api()
+        core = k8s_client.CoreV1Api()
         deps = api.list_namespaced_deployment(NS)
-        return [
-            {
+        result = []
+        for d in deps.items:
+            updated_ts = d.metadata.creation_timestamp
+            if d.status and d.status.conditions:
+                for cond in d.status.conditions:
+                    for attr in ("last_update_time", "last_transition_time"):
+                        ts = getattr(cond, attr, None)
+                        if ts and (updated_ts is None or ts > updated_ts):
+                            updated_ts = ts
+            try:
+                labels = d.spec.selector.match_labels or {}
+                selector = ",".join(f"{k}={v}" for k, v in labels.items()) or None
+                if selector:
+                    pods = core.list_namespaced_pod(NS, label_selector=selector)
+                    for pod in pods.items:
+                        ts = pod.metadata.creation_timestamp
+                        if ts and (updated_ts is None or ts > updated_ts):
+                            updated_ts = ts
+            except Exception:
+                pass
+            result.append({
                 "name"    : d.metadata.name,
                 "replicas": d.spec.replicas or 0,
                 "ready"   : d.status.ready_replicas or 0,
                 "image"   : d.spec.template.spec.containers[0].image if d.spec.template.spec.containers else "",
-                "age"     : str(d.metadata.creation_timestamp)[:16] if d.metadata.creation_timestamp else "",
-            }
-            for d in deps.items
-        ]
+                "age"     : _fmt_k8s_time(d.metadata.creation_timestamp),
+                "updated" : _fmt_k8s_time(updated_ts),
+            })
+        return result
     except Exception:
         return []
 
@@ -346,13 +406,104 @@ def k8s_delete_deployment(app_name):
     except Exception as e:
         return False, str(e)
 
+
+def _build_agent_manifest(parsed):
+    app_name = parsed.get("app_name", "auto-app")
+    image = parsed.get("image", "nginx:latest")
+    pods = int(parsed.get("pods", parsed.get("replicas", 1)))
+    port = int(parsed.get("port", 80))
+    memory = parsed.get("memory")
+    cpu = parsed.get("cpu")
+    container = {
+        "name": app_name,
+        "image": image,
+        "ports": [{"containerPort": port}],
+    }
+    if memory or cpu:
+        cpu_req = cpu or "100m"
+        container["resources"] = {
+            "requests": {"memory": memory, "cpu": cpu_req} if memory else {"cpu": cpu_req},
+            "limits": {"memory": memory, "cpu": cpu_req} if memory else {"cpu": cpu_req},
+        }
+    return {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "metadata": {"name": app_name, "namespace": NS},
+        "spec": {
+            "replicas": pods,
+            "selector": {"matchLabels": {"app": app_name}},
+            "template": {
+                "metadata": {"labels": {"app": app_name}},
+                "spec": {"containers": [container]},
+            },
+        },
+    }
+
+
+def _review_deployment(parsed):
+    review = {
+        "decision": "approve",
+        "reason": "checks passed",
+        "blockers": [],
+        "warnings": [],
+        "agents": None,
+        "guardian": None,
+        "dry_run": None,
+    }
+    manifest = _build_agent_manifest(parsed)
+
+    try:
+        from guardian.yaml_validator import validate_yaml
+        guardian = validate_yaml(manifest)
+        review["guardian"] = guardian
+        if not guardian.get("ok"):
+            review["decision"] = "block"
+            review["reason"] = "Guardian validation failed"
+            review["blockers"].extend(guardian.get("errors", []))
+        review["warnings"].extend(guardian.get("warnings", []))
+    except Exception as e:
+        review["warnings"].append(f"Guardian validation unavailable: {e}")
+
+    try:
+        from agents.orchestrator import orchestrate
+        agents_result = orchestrate(manifest, save_report=False)
+        review["agents"] = agents_result
+        if agents_result.get("decision") == "block":
+            review["decision"] = "block"
+            review["reason"] = agents_result.get("reason", "Agent review blocked deployment")
+            review["blockers"].extend(agents_result.get("blockers", []))
+        else:
+            review["warnings"].extend(agents_result.get("warnings", []))
+    except Exception as e:
+        review["warnings"].append(f"Agent review unavailable: {e}")
+
+    try:
+        from guardian.dry_run import validate_from_llm_result
+        dry = validate_from_llm_result(parsed, mode="client")
+        review["dry_run"] = dry
+        if dry.get("ok") is False:
+            review["decision"] = "block"
+            review["reason"] = "kubectl dry-run failed"
+            review["blockers"].extend(dry.get("errors", []))
+        elif dry.get("ok") is None:
+            review["warnings"].extend(dry.get("warnings", []) or dry.get("errors", []))
+        else:
+            review["warnings"].extend(dry.get("warnings", []))
+    except Exception as e:
+        review["warnings"].append(f"dry-run unavailable: {e}")
+
+    if review["decision"] != "block" and review["warnings"]:
+        review["decision"] = "warn"
+        review["reason"] = f"{len(review['warnings'])} warning(s), deployment allowed"
+    return review
+
 # ── HTML ────────────────────────────────────────────────────
 HTML = r"""<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ZeroTouch K8s</title>
+<title>Zero-Touch Kubernetes Service Deployment Platform</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -390,8 +541,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .layout{display:flex;height:100vh;overflow:hidden}
 .sidebar{width:240px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
 .sidebar-logo{padding:20px 18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
-.sidebar-logo svg{width:28px;height:28px}
-.sidebar-logo span{font-size:15px;font-weight:600}
+.sidebar-logo svg{width:28px;height:28px;flex-shrink:0}
+.sidebar-logo span{font-size:13px;line-height:1.3;font-weight:600}
 .sidebar-nav{padding:12px 10px;flex:1;overflow-y:auto}
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:13.5px;font-weight:500;color:var(--text2);transition:all .15s;border:none;background:none;width:100%;text-align:left}
 .nav-item:hover{background:var(--bg);color:var(--text)}
@@ -511,6 +662,23 @@ tr:hover td{background:var(--bg)}
 .cond-true{background:var(--green-light);color:var(--green)}
 .cond-false{background:var(--red-light);color:var(--red)}
 
+/* ── Deploy confirmation card ── */
+.deploy-confirm{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:var(--shadow);min-width:min(560px,100%)}
+.deploy-confirm-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.deploy-confirm-title{font-size:14px;font-weight:750;color:var(--text)}
+.deploy-confirm-sub{font-size:12px;color:var(--text2);margin-top:2px}
+.deploy-confirm-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.deploy-confirm-field label{display:block;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
+.deploy-confirm-field input{width:100%;border:1px solid var(--border2);border-radius:9px;padding:9px 10px;font-family:'DM Mono',monospace;font-size:12.5px;background:#fff;outline:none}
+.deploy-confirm-field input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(16,163,127,.12)}
+.deploy-confirm-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
+.deploy-confirm-note{font-size:12px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 10px;line-height:1.45}
+.deploy-confirm-error{display:none;font-size:12px;color:var(--red);background:var(--red-light);border:1px solid #fecaca;border-radius:9px;padding:8px 10px;margin-top:10px}
+.deploy-confirm-btn{border:1px solid var(--border2);background:#fff;color:var(--text);border-radius:9px;padding:9px 12px;font-weight:700;cursor:pointer;font-family:inherit}
+.deploy-confirm-btn.primary{background:var(--green);border-color:var(--green);color:#fff}
+.deploy-confirm-btn:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:760px){.deploy-confirm-grid{grid-template-columns:1fr}.deploy-confirm{min-width:0}}
+
 /* ── Chat ── */
 .chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 110px)}
 .chat-messages{flex:1;overflow-y:auto;padding:0 0 16px}
@@ -533,6 +701,21 @@ tr:hover td{background:var(--bg)}
 .typing span:nth-child(3){animation-delay:.3s}
 @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
 
+/* ── Deploy decision court ── */
+.court-panel{margin-top:16px}
+.court-agents{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
+.court-agent-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;min-height:120px}
+.court-agent-card .court-agent-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.court-agent-card .court-agent-score{font-size:13px;font-weight:700;color:var(--text)}
+.court-agent-card .court-agent-summary{font-size:12.5px;color:var(--text2);line-height:1.5;margin-top:8px}
+.court-agent-card .court-agent-issues{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.court-agent-card.thinking .court-agent-summary::after{content:'評估中';color:var(--text3)}
+.court-agent-card.thinking .typing{margin-top:4px}
+.court-verdict{display:none}
+.result-box.warn{background:var(--yellow-light);color:#92400E;border:1px solid var(--yellow)}
+.court-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
+@media(max-width:760px){.court-agents{grid-template-columns:1fr}}
+
 /* ── Loading ── */
 .loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px}
 .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin 1s linear infinite}
@@ -543,11 +726,79 @@ tr:hover td{background:var(--bg)}
 .empty{text-align:center;padding:48px 20px;color:var(--text2)}
 .empty svg{width:40px;height:40px;margin:0 auto 12px;opacity:.3}
 .empty p{font-size:14px}
+
+
+/* ── Product Shell Refresh ─────────────────────────────────── */
+:root{
+  --bg:#f7f7f5;--surface:#ffffff;--surface2:#f4f4f2;--border:#e4e4df;--border2:#d5d5ce;
+  --text:#171717;--text2:#5f6368;--text3:#9aa0a6;--green:#10a37f;--green-light:#e8f7f2;--green-mid:#b8eadb;
+  --radius:12px;--radius-sm:10px;--shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.04);
+  --shadow-md:0 12px 32px rgba(0,0,0,.10);
+}
+body{background:var(--bg);font-family:'DM Sans',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;letter-spacing:0}
+.layout{height:100vh;background:var(--bg)}
+.sidebar{width:300px;background:#171717;color:#f5f5f0;border-right:0;box-shadow:inset -1px 0 rgba(255,255,255,.06)}
+.sidebar-logo{min-height:64px;padding:16px 18px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sidebar-logo span{font-size:13px;line-height:1.3;color:#fff;font-weight:700}
+.sidebar-logo svg rect{fill:var(--green)}
+.sidebar-nav{padding:12px 12px 16px!important;gap:2px}
+.sidebar-nav button[onclick="newChat()"],.new-chat-btn{height:44px;background:#fff!important;color:#111!important;border:1px solid rgba(255,255,255,.16)!important;border-radius:12px!important;font-weight:700!important;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.nav-section{color:#8f8f8a;padding:18px 10px 8px;font-size:11px;letter-spacing:.08em}
+.nav-item{color:#d8d8d2;border-radius:10px;padding:10px 12px;font-size:14px;background:transparent}
+.nav-item:hover{background:#242424;color:#fff}
+.nav-item.active{background:#2f2f2f;color:#fff}
+.nav-item svg{opacity:.85}
+#chat-room-list{max-height:none!important;padding:0!important;min-height:150px!important}
+.chat-room-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-radius:10px;cursor:pointer;margin-bottom:2px;font-size:13px;color:#d8d8d2;background:transparent;transition:background .15s,color .15s}
+.chat-room-item:hover,.chat-room-item.active{background:#2f2f2f;color:#fff}
+.chat-room-title{display:flex;align-items:center;gap:8px;overflow:hidden;flex:1;min-width:0}
+.chat-room-title span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-room-delete{opacity:0;color:#a6a6a0;font-size:14px;padding-left:6px;flex-shrink:0;transition:opacity .15s}
+.chat-room-item:hover .chat-room-delete{opacity:1}
+.sidebar-footer{border-top:1px solid rgba(255,255,255,.08);padding:16px 18px}
+.user-avatar{background:var(--green);color:white}
+.user-name{color:#fff}.logout-btn{color:#aaa}.logout-btn:hover{background:#2f2f2f;color:#fff}
+.main{background:var(--bg);min-width:0;overflow:hidden}
+.status-bar{height:48px;padding:0 28px;background:rgba(247,247,245,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);flex-shrink:0}
+.page{padding:32px 40px;overflow-y:auto;height:calc(100vh - 48px)}
+.page.active{display:block}.page-title{font-size:26px;font-weight:750;letter-spacing:0;margin-bottom:6px}.page-sub{font-size:15px;margin-bottom:28px;color:var(--text2)}
+.card{border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:24px;background:#fff}.card-title{font-size:12px;letter-spacing:.08em;color:#747775}
+.grid-3{grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.grid-2{gap:18px}.stat-num{font-size:34px;font-weight:750;color:#111}
+.deploy-input-wrap{background:#fff;border:1px solid var(--border);border-radius:16px;padding:8px;gap:8px;box-shadow:0 8px 24px rgba(0,0,0,.04)}
+.deploy-input{border:0;font-size:16px;padding:12px 14px}.deploy-input:focus{box-shadow:none}.deploy-btn,.btn-primary{background:var(--green);border-radius:12px;font-weight:700}.deploy-btn{padding:12px 24px}.tag{border-radius:999px;padding:7px 13px;background:#fafafa}
+#page-chat{height:calc(100vh - 48px);padding:0!important;overflow:hidden;background:#fff}.chat-shell{height:100%;display:flex;flex-direction:column;background:#fff}.chat-topbar{height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;border-bottom:1px solid var(--border);flex-shrink:0}.chat-title{font-size:15px;font-weight:750;color:#222}.chat-subtitle{font-size:12px;color:var(--text3)}
+.chat-messages{flex:1;overflow-y:auto;padding:28px max(32px,calc((100vw - 1040px)/2)) 22px!important;background:#fff}.chat-empty{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:48px 24px}.chat-empty-logo{width:54px;height:54px;border-radius:16px;background:#171717;color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;margin-bottom:20px}.chat-empty h1{font-size:32px;font-weight:760;margin-bottom:10px}.chat-empty p{font-size:15px;color:var(--text2);max-width:560px;line-height:1.6;margin-bottom:28px}.prompt-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:720px}.prompt-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;text-align:left;cursor:pointer;transition:all .15s}.prompt-card:hover{border-color:#c9c9c2;box-shadow:0 8px 24px rgba(0,0,0,.06);transform:translateY(-1px)}.prompt-card strong{font-size:14px;color:#222}.prompt-card span{display:block;font-size:12px;color:var(--text3);margin-top:5px}
+.msg{max-width:900px;margin:0 auto 22px!important;display:flex;gap:14px}.msg.user{flex-direction:row-reverse}.msg-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:750;font-size:13px;flex-shrink:0;background:#171717;color:#fff}.msg.user .msg-avatar{background:var(--green)}.msg-bubble{max-width:76%;border-radius:18px;padding:13px 16px;font-size:14.5px;line-height:1.62;box-shadow:none}.msg.user .msg-bubble{background:var(--green);color:#fff}.msg.ai .msg-bubble{background:#f4f4f2;border:1px solid var(--border);color:#222}
+.chat-composer{padding:14px max(24px,calc((100vw - 960px)/2)) 20px;background:#fff;border-top:1px solid var(--border);flex-shrink:0}.composer-box{display:flex;align-items:flex-end;gap:10px;border:1px solid var(--border2);border-radius:18px;background:#fff;padding:10px 10px 10px 16px;box-shadow:0 8px 24px rgba(0,0,0,.06)}.chat-input{min-height:42px;max-height:180px;resize:none;border:0;outline:none;flex:1;font:inherit;font-size:15px;line-height:1.5;padding:9px 4px;background:transparent}.chat-send{width:42px;height:42px;border-radius:12px;border:0;background:var(--green);color:#fff;font-size:0;cursor:pointer;flex-shrink:0}.chat-send:before{content:'↑';font-size:22px;line-height:1}.composer-hint{text-align:center;font-size:11px;color:var(--text3);margin-top:8px}
+.table-wrap{border:1px solid var(--border);border-radius:14px;overflow:hidden}table{background:#fff}th{background:#fafaf8}td,th{padding:13px 16px}.enrich-card{border-radius:14px}.enrich-output{border-radius:12px}
+@media (max-width:900px){.sidebar{width:260px}.page{padding:24px}.grid-3,.prompt-grid{grid-template-columns:1fr}.msg-bubble{max-width:86%}}
+
+
+
+/* ── Polish Fixes ─────────────────────────────────────────── */
+html,body{height:100%;overflow:hidden}
+.sidebar{height:100vh;overflow:hidden}
+.sidebar-nav{overflow-y:auto!important;overflow-x:hidden!important;min-height:0;scrollbar-width:thin;scrollbar-color:#4b4b4b transparent;padding-bottom:22px!important}
+.sidebar-nav::-webkit-scrollbar{width:8px}.sidebar-nav::-webkit-scrollbar-track{background:transparent}.sidebar-nav::-webkit-scrollbar-thumb{background:#4b4b4b;border-radius:999px;border:2px solid #171717}
+#chat-room-list{flex:0 0 auto!important;max-height:210px!important;overflow-y:auto!important;overflow-x:hidden!important;scrollbar-width:thin;scrollbar-color:#4b4b4b transparent}
+#chat-room-list::-webkit-scrollbar{width:8px}#chat-room-list::-webkit-scrollbar-track{background:transparent}#chat-room-list::-webkit-scrollbar-thumb{background:#4b4b4b;border-radius:999px;border:2px solid #171717}
+.main{height:100vh;overflow:hidden}.page{height:calc(100vh - 48px);overflow-y:auto}.page#page-chat{overflow:hidden!important}
+.chat-shell{min-height:0}.chat-messages{min-height:0;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#c8c8c1 transparent}.chat-messages::-webkit-scrollbar{width:10px}.chat-messages::-webkit-scrollbar-track{background:transparent}.chat-messages::-webkit-scrollbar-thumb{background:#c8c8c1;border-radius:999px;border:3px solid #fff}
+.chat-empty{min-height:100%;justify-content:center}.chat-send{display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important}.chat-send:before{display:block;line-height:1;transform:translateY(-1px)}
+.chat-composer{position:relative;z-index:2}.composer-box:focus-within{border-color:var(--green);box-shadow:0 0 0 4px rgba(16,163,127,.12),0 8px 24px rgba(0,0,0,.06)}
+
+/* ── Compact deploy confirmation ─────────────────────────── */
+.msg.ai .msg-bubble:has(.deploy-confirm){background:transparent!important;border:0!important;padding:0!important;box-shadow:none!important;max-width:min(560px,92%)!important;width:min(560px,92%)!important}
+.deploy-confirm{width:100%!important;min-width:0!important;border-radius:12px!important;padding:14px!important;box-shadow:0 6px 18px rgba(0,0,0,.06)!important;background:#fff!important}
+.deploy-confirm-head{margin-bottom:10px!important;align-items:flex-start!important}.deploy-confirm-title{font-size:14px!important}.deploy-confirm-sub{font-size:12px!important;margin-top:1px!important}.deploy-confirm .badge{font-size:11px!important;padding:3px 8px!important;white-space:nowrap}
+.deploy-confirm-grid{grid-template-columns:1.1fr 1.1fr .55fr .55fr!important;gap:8px!important;margin:10px 0!important}.deploy-confirm-field label{font-size:10px!important;margin-bottom:4px!important}.deploy-confirm-field input{height:34px!important;padding:7px 9px!important;font-size:12px!important;border-radius:8px!important}.deploy-confirm-field.memory{grid-column:1 / -1}.deploy-confirm-note{font-size:11.5px!important;padding:8px 9px!important;border-radius:8px!important}.deploy-confirm-actions{margin-top:10px!important}.deploy-confirm-btn{padding:7px 10px!important;border-radius:8px!important;font-size:12px!important}.deploy-confirm-error{font-size:11.5px!important;padding:7px 9px!important;margin-top:8px!important}
+@media(max-width:760px){.deploy-confirm-grid{grid-template-columns:1fr 1fr!important}.deploy-confirm-field.memory{grid-column:1 / -1}.msg.ai .msg-bubble:has(.deploy-confirm){max-width:96%!important;width:96%!important}}
+
 </style>
 </head>
 <body>
 
-{% if not logged_in %}
+{% if not logged_in and page != 'register' %}
 <!-- ── Login Page ── -->
 <div class="auth-wrap">
   <div class="auth-card">
@@ -619,45 +870,53 @@ tr:hover td{background:var(--bg)}
         <rect width="28" height="28" rx="7" fill="#16A34A"/>
         <path d="M8 14h12M14 8v12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
       </svg>
-      <span>ZeroTouch K8s</span>
+      <span>Zero-Touch Kubernetes Service Deployment Platform</span>
     </div>
-    <nav class="sidebar-nav" style="display:flex;flex-direction:column;overflow:hidden">
+    <nav class="sidebar-nav" style="display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden">
       <div style="padding:10px 10px 6px">
-        <button onclick="newChat()" style="width:100%;padding:9px 12px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+        <button class="new-chat-btn" onclick="newChat()" style="width:100%;padding:9px 12px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
           <span style="font-size:18px;line-height:1">+</span> New Chat
         </button>
       </div>
       <div class="nav-section">Chats</div>
       <div id="chat-room-list" style="flex:1;overflow-y:auto;padding:0 6px;min-height:60px;max-height:200px"></div>
       <div class="nav-section">Main</div>
-      <button class="nav-item active" onclick="showPage('deploy')">
-        <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" fill="currentColor"/><rect x="9" y="2" width="5" height="5" rx="1" fill="currentColor" opacity=".5"/><rect x="2" y="9" width="5" height="5" rx="1" fill="currentColor" opacity=".5"/><rect x="9" y="9" width="5" height="5" rx="1" fill="currentColor"/></svg>
-        Dashboard
+      <button class="nav-item active" data-page="chat" onclick="showPage('chat')">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M2.5 3.5a2 2 0 012-2h7a2 2 0 012 2v5a2 2 0 01-2 2H8l-3.5 3v-3a2 2 0 01-2-2v-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        Chat
       </button>
-      <button class="nav-item" onclick="showPage('pods')">
+      <button class="nav-item" data-page="deploy" onclick="showPage('deploy')">
+        <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" fill="currentColor"/><rect x="9" y="2" width="5" height="5" rx="1" fill="currentColor" opacity=".5"/><rect x="2" y="9" width="5" height="5" rx="1" fill="currentColor" opacity=".5"/><rect x="9" y="9" width="5" height="5" rx="1" fill="currentColor"/></svg>
+        Deploy Console
+      </button>
+      <button class="nav-item" data-page="pods" onclick="showPage('pods')">
         <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
         Pods
       </button>
-      <button class="nav-item" onclick="showPage('deployments')">
+      <button class="nav-item" data-page="deployments" onclick="showPage('deployments')">
         <svg viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         Deployments
       </button>
       <div class="nav-section">Tools</div>
-      <button class="nav-item" onclick="showPage('gitops')">
+      <button class="nav-item" data-page="gitops" onclick="showPage('gitops')">
         <svg viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 6v1a3 3 0 003 3h1M11 6v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         GitOps Log
       </button>
-      <button class="nav-item" onclick="showPage('healer')">
+      <button class="nav-item" data-page="healer" onclick="showPage('healer')">
         <svg viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         Healer
       </button>
-      <button class="nav-item" onclick="showPage('metrics')">
+      <button class="nav-item" data-page="metrics" onclick="showPage('metrics')">
         <svg viewBox="0 0 16 16" fill="none"><path d="M2 12L5 8l3 2 3-4 3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Metrics
       </button>
-      <button class="nav-item" onclick="showPage('dataset')">
+      <button class="nav-item" data-page="dataset" onclick="showPage('dataset')">
         <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="2" rx="1" fill="currentColor"/><rect x="1" y="7" width="14" height="2" rx="1" fill="currentColor" opacity=".6"/><rect x="1" y="11" width="9" height="2" rx="1" fill="currentColor" opacity=".3"/></svg>
         Dataset
+      </button>
+      <button class="nav-item" data-page="kb" onclick="showPage('kb')">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M3 3h10v3H3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M3 6v7a1 1 0 001 1h8a1 1 0 001-1V6" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M6.5 9.5h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Knowledge Base
       </button>
     </nav>
     <div class="sidebar-footer">
@@ -687,7 +946,7 @@ tr:hover td{background:var(--bg)}
     </div>
 
     <!-- Dashboard Page -->
-    <div class="page active" id="page-deploy">
+    <div class="page" id="page-deploy">
       <div class="page-title">Deploy</div>
       <div class="page-sub">Deploy services using natural language</div>
 
@@ -704,6 +963,29 @@ tr:hover td{background:var(--bg)}
           <span class="tag" onclick="setInput(this)">node api ×4</span>
           <span class="tag" onclick="setInput(this)">golang svc ×3</span>
           <span class="tag" onclick="setInput(this)">python ×5</span>
+        </div>
+
+        <!-- ── Deploy decision court (三代理評審動畫) ── -->
+        <div class="court-panel" id="court-panel" style="display:none">
+          <div class="court-agents">
+            <div class="court-agent-card pending" id="court-security">
+              <div class="court-agent-title"><span>Security</span><span class="court-agent-score" id="court-security-score"></span></div>
+              <div class="court-agent-issues" id="court-security-issues"></div>
+              <div class="court-agent-summary" id="court-security-summary"></div>
+            </div>
+            <div class="court-agent-card pending" id="court-cost">
+              <div class="court-agent-title"><span>Cost</span><span class="court-agent-score" id="court-cost-score"></span></div>
+              <div class="court-agent-issues" id="court-cost-issues"></div>
+              <div class="court-agent-summary" id="court-cost-summary"></div>
+            </div>
+            <div class="court-agent-card pending" id="court-perf">
+              <div class="court-agent-title"><span>Performance</span><span class="court-agent-score" id="court-perf-score"></span></div>
+              <div class="court-agent-issues" id="court-perf-issues"></div>
+              <div class="court-agent-summary" id="court-perf-summary"></div>
+            </div>
+          </div>
+          <div class="result-box court-verdict" id="court-verdict"></div>
+          <div class="court-actions" id="court-actions"></div>
         </div>
 
         <!-- ── Dataset enrichment card (新增欄位顯示) ── -->
@@ -775,7 +1057,8 @@ tr:hover td{background:var(--bg)}
                 <th>IP</th>
                 <th>Node</th>
                 <th>Restarts</th>
-                <th>Age</th>
+                <th>Created</th>
+                <th>Updated</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -800,12 +1083,13 @@ tr:hover td{background:var(--bg)}
                 <th>Image</th>
                 <th>Replicas</th>
                 <th>Ready</th>
-                <th>Age</th>
+                <th>Created</th>
+                <th>Updated</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody id="deps-tbody">
-              <tr><td colspan="6" class="empty"><p>Loading...</p></td></tr>
+              <tr><td colspan="7" class="empty"><p>Loading...</p></td></tr>
             </tbody>
           </table>
         </div>
@@ -813,20 +1097,27 @@ tr:hover td{background:var(--bg)}
     </div>
 
     <!-- Chat Page -->
-    <div class="page" id="page-chat" style="padding:0;overflow:hidden">
-      <div style="display:flex;flex-direction:column;height:calc(100vh - 56px);background:var(--bg)">
-        <div class="chat-messages" id="chat-messages" style="flex:1;overflow-y:auto;padding:20px 28px"></div>
-          <div style="border-top:1px solid var(--border);padding:12px 20px;background:var(--surface)">
-            <div style="display:flex;gap:8px;align-items:flex-end">
-              <textarea class="chat-input" id="chat-input" placeholder="Message ZeroTouch K8s..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
-              <button class="chat-send" onclick="sendChat()">Send</button>
-            </div>
-            <div style="font-size:11px;color:var(--text3);margin-top:5px">Enter to send &middot; Shift+Enter for new line</div>
+    <div class="page active" id="page-chat" style="padding:0;overflow:hidden">
+      <div class="chat-shell">
+        <div class="chat-topbar">
+          <div>
+            <div class="chat-title">ZeroTouch K8s Assistant</div>
+            <div class="chat-subtitle">Chat, deploy, inspect, and recover Kubernetes services</div>
           </div>
+          <div class="status-pill"><div class="dot green"></div><span>Workspace ready</span></div>
+        </div>
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-composer">
+          <div class="composer-box">
+            <textarea class="chat-input" id="chat-input" placeholder="Message ZeroTouch K8s..." rows="1" oninput="autoGrowChatInput(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
+            <button class="chat-send" onclick="sendChat()" aria-label="Send message">Send</button>
+          </div>
+          <div class="composer-hint">Ask about Kubernetes, deploy services, list pods, scale workloads, or troubleshoot failures.</div>
         </div>
       </div>
     </div>
-        <div class="page" id="page-dataset">
+
+    <div class="page" id="page-dataset">
       <div class="page-title">Dataset Manager</div>
       <div class="page-sub">Enrich &amp; inspect the K8s training dataset</div>
       <div class="grid-3" style="margin-bottom:16px">
@@ -851,6 +1142,54 @@ tr:hover td{background:var(--bg)}
       </div>
     </div>
 
+    <div class="page" id="page-kb">
+      <div class="page-title">Knowledge Base (RAG)</div>
+      <div class="page-sub">Manage the documents that power retrieval-augmented answers &amp; measure retrieval quality</div>
+
+      <div class="grid-3" style="margin-bottom:16px">
+        <div class="card"><div class="card-title">Retrieval Method</div><div class="stat-num" id="kb-method" style="font-size:20px">--</div><div class="stat-label" id="kb-method-sub">embedding model</div></div>
+        <div class="card"><div class="card-title">Indexed Chunks</div><div class="stat-num" id="kb-chunks">--</div><div class="stat-label">across all documents</div></div>
+        <div class="card"><div class="card-title">Last Built</div><div class="stat-num" style="font-size:14px" id="kb-built-at">--</div><div class="stat-label" id="kb-built-sub">build time</div></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-bottom:16px;align-items:start">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div class="card-title" style="margin:0">Documents</div>
+            <button class="btn-primary" onclick="rebuildKB()" id="kb-rebuild-btn">Rebuild Index</button>
+          </div>
+          <div id="kb-doc-list" style="font-size:13px;color:var(--text2)">Loading...</div>
+          <div id="kb-rebuild-status" style="font-size:12px;color:var(--text3);margin-top:8px"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Add Document</div>
+          <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+            <input id="kb-new-filename" class="deploy-input" placeholder="filename.md (only .md / .txt)">
+            <textarea id="kb-new-content" placeholder="Markdown or plain text content..." style="width:100%;min-height:120px;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);resize:vertical;box-sizing:border-box"></textarea>
+            <button class="btn-primary" onclick="addKBDoc()">Upload &amp; Rebuild</button>
+            <div id="kb-add-status" style="font-size:12px;color:var(--text3)"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="card">
+          <div class="card-title">Test a Query</div>
+          <div style="margin-top:10px;display:flex;gap:8px">
+            <input id="kb-query-input" class="deploy-input" placeholder="e.g. CrashLoopBackOff 怎麼解決" onkeydown="if(event.key==='Enter')runKBQuery()">
+            <button class="btn-primary" onclick="runKBQuery()">Search</button>
+          </div>
+          <div id="kb-query-results" style="margin-top:12px;font-size:13px;color:var(--text2)"></div>
+        </div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div class="card-title" style="margin:0">Retrieval Quality Evaluation</div>
+            <button class="btn-primary" onclick="runKBEval()" id="kb-eval-btn">Run Evaluation</button>
+          </div>
+          <div id="kb-eval-results" style="margin-top:12px;font-size:13px;color:var(--text2)">Run an evaluation to compare ChromaDB vs the legacy TF-IDF method on a curated test set.</div>
+        </div>
+      </div>
+    </div>
 
     <div class="page" id="page-gitops">
       <div class="page-title">GitOps Log</div>
@@ -935,19 +1274,28 @@ function updateClock(){
 setInterval(updateClock, 1000);
 updateClock();
 
+function autoGrowChatInput(el){
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 180) + 'px';
+}
+
 // ── Page nav ──
 function showPage(name){
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('page-' + name).classList.add('active');
-  if(event && event.currentTarget) event.currentTarget.classList.add('active');
-}
+  const page = document.getElementById('page-' + name);
+  if(page) page.classList.add('active');
+  const nav = document.querySelector(`.nav-item[data-page="${name}"]`);
+  if(nav) nav.classList.add('active');
+
+  if(name === 'chat') { initChats(); setTimeout(()=>document.getElementById('chat-input')?.focus(), 0); }
   if(name === 'pods') loadPods();
   if(name === 'deployments') loadDeployments();
   if(name === 'dataset') loadDatasetStats();
   if(name === 'gitops') loadGitops();
   if(name === 'healer') loadHealer();
   if(name === 'metrics') loadMetrics();
+  if(name === 'kb') loadKB();
 }
 
 // ── Status polling ──
@@ -1045,28 +1393,39 @@ function renderEnrichCard(p, info){
   document.getElementById('enrich-output').innerHTML = _prettyJson(p.output || {});
 }
 
+let courtRequestId = 0;
+
 async function doDeploy(){
   const inp = document.getElementById('deploy-input');
   const btn = document.getElementById('deploy-btn');
   const box = document.getElementById('result-box');
   const card = document.getElementById('enrich-card');
+  const panel = document.getElementById('court-panel');
   const text = inp.value.trim();
   if(!text) return;
+  const myId = ++courtRequestId;
   btn.disabled = true;
-  btn.textContent = 'Deploying...';
+  inp.disabled = true;
+  btn.textContent = 'Reviewing...';
   box.style.display = 'none';
   card.classList.remove('show');
+  panel.style.display = 'none';
   try {
-    const r = await fetch('/api/deploy', {
+    const r = await fetch('/api/deploy/parse', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({input: text})
     });
+    if(myId !== courtRequestId) return;
     const d = await r.json();
-    if(d.error){
+    if(myId !== courtRequestId) return;
+    if(!r.ok || d.error){
       box.style.display = 'block';
       box.className = 'result-box error';
-      box.textContent = '✗ Error: ' + d.error;
+      box.textContent = '✗ Error: ' + (d.error || 'request failed');
+      btn.disabled = false;
+      inp.disabled = false;
+      btn.textContent = 'Deploy →';
     } else if(d.rejected){
       // Guardian 拒絕:只顯示 enrichment 卡片,不送 K8s
       renderEnrichCard(d.parsed, {
@@ -1074,26 +1433,197 @@ async function doDeploy(){
         headline: 'Guardian blocked this request',
         rejectMsg: d.reason || 'Not a K8s request'
       });
+      btn.disabled = false;
+      inp.disabled = false;
+      btn.textContent = 'Deploy →';
     } else {
-      // 正常部署:顯示 enrichment 卡片 + 簡短成功訊息
       renderEnrichCard(d.parsed, {
         ok: true,
-        headline: d.k8s ? 'Real K8s deployment dispatched' : 'Simulation mode',
+        headline: 'Reviewed by agents — confirm to deploy',
         rejectMsg: null
       });
-      const p = d.parsed;
-      box.style.display = 'block';
-      box.className = 'result-box success';
-      box.textContent = `✓ App: ${p.app_name}  ·  Image: ${p.image}  ·  Pods: ${p.pods}${p.port ? '  ·  Port: ' + p.port : ''}${p.memory ? '  ·  Memory: ' + p.memory : ''}`;
-      loadStats();
+      renderDecisionCourt(myId, text, d.raw || d.parsed, d.review);
     }
   } catch(e){
+    if(myId !== courtRequestId) return;
     box.style.display = 'block';
     box.className = 'result-box error';
     box.textContent = '✗ Network error';
+    btn.disabled = false;
+    inp.disabled = false;
+    btn.textContent = 'Deploy →';
   }
-  btn.disabled = false;
-  btn.textContent = 'Deploy →';
+}
+
+function _courtSeverityCls(sev){
+  return ['critical','high'].includes(sev) ? 'complex' : sev === 'medium' ? 'medium' : 'simple';
+}
+
+function _renderCourtIssues(elId, issues){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  if(!issues || !issues.length){ el.innerHTML = ''; return; }
+  el.innerHTML = issues.map(i =>
+    `<span class="pill ${_courtSeverityCls(i.severity)}">${escHtml(i.severity || 'info')}: ${escHtml(i.message || '')}</span>`
+  ).join('');
+}
+
+function renderDecisionCourt(myId, originalText, parsed, review){
+  const btn = document.getElementById('deploy-btn');
+  const inp = document.getElementById('deploy-input');
+  const panel = document.getElementById('court-panel');
+  const verdict = document.getElementById('court-verdict');
+  const actions = document.getElementById('court-actions');
+  panel.style.display = 'block';
+  verdict.style.display = 'none';
+  actions.innerHTML = '';
+
+  const agents = review && review.agents;
+  const security = agents && agents.security;
+  const cost = agents && agents.cost;
+  const perf = agents && agents.perf;
+
+  const finish = () => {
+    if(myId !== courtRequestId) return;
+    btn.disabled = false;
+    inp.disabled = false;
+    btn.textContent = 'Deploy →';
+  };
+
+  if(!review || !security || !cost || !perf){
+    // 代理資料不完整,優雅降級:不演動畫,直接顯示最終判決
+    ['security','cost','perf'].forEach(a => {
+      const card = document.getElementById('court-' + a);
+      if(card) card.className = 'court-agent-card done';
+    });
+    showCourtVerdict(myId, originalText, parsed, review);
+    finish();
+    return;
+  }
+
+  const cards = [
+    {key: 'security', data: security, render: renderSecurityCard},
+    {key: 'cost', data: cost, render: renderCostCard},
+    {key: 'perf', data: perf, render: renderPerfCard},
+  ];
+  cards.forEach(c => {
+    const card = document.getElementById('court-' + c.key);
+    if(card) card.className = 'court-agent-card thinking';
+    document.getElementById(`court-${c.key}-issues`).innerHTML = '';
+    document.getElementById(`court-${c.key}-score`).textContent = '';
+    document.getElementById(`court-${c.key}-summary`).innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
+  });
+
+  cards.forEach((c, idx) => {
+    setTimeout(() => {
+      if(myId !== courtRequestId) return;
+      const card = document.getElementById('court-' + c.key);
+      if(card) card.className = 'court-agent-card done';
+      c.render(c.data);
+    }, idx * 500);
+  });
+
+  setTimeout(() => {
+    if(myId !== courtRequestId) return;
+    showCourtVerdict(myId, originalText, parsed, review);
+    finish();
+  }, cards.length * 500);
+}
+
+function renderSecurityCard(security){
+  document.getElementById('court-security-score').textContent =
+    typeof security.score === 'number' ? `${security.score}/100` : '';
+  _renderCourtIssues('court-security-issues', security.issues);
+  document.getElementById('court-security-summary').textContent = security.summary || '';
+}
+
+function renderCostCard(cost){
+  const est = cost.cost_estimate && cost.cost_estimate.estimated_usd;
+  document.getElementById('court-cost-score').textContent =
+    (est !== undefined && est !== null) ? `$${est}/mo` : '不明';
+  _renderCourtIssues('court-cost-issues', cost.issues);
+  document.getElementById('court-cost-summary').textContent = cost.summary || '';
+}
+
+function renderPerfCard(perf){
+  document.getElementById('court-perf-score').textContent = perf.hpa_yaml ? 'HPA suggested' : '';
+  _renderCourtIssues('court-perf-issues', perf.issues);
+  document.getElementById('court-perf-summary').textContent = perf.summary || '';
+}
+
+function showCourtVerdict(myId, originalText, parsed, review){
+  const verdict = document.getElementById('court-verdict');
+  const actions = document.getElementById('court-actions');
+  const decision = (review && review.decision) || 'block';
+  verdict.style.display = 'block';
+  if(decision === 'approve'){
+    verdict.className = 'result-box court-verdict success';
+    verdict.textContent = '✓ ' + (review.reason || 'All agent checks passed');
+    actions.innerHTML = `<button class="deploy-confirm-btn primary" id="court-deploy-btn">Deploy</button>`;
+    document.getElementById('court-deploy-btn').onclick = () => courtProceedDeploy(myId, originalText, parsed);
+  } else if(decision === 'warn'){
+    verdict.className = 'result-box court-verdict warn';
+    verdict.textContent = '⚠ ' + (review.reason || 'Warnings found') +
+      (review.warnings && review.warnings.length ? '\n' + review.warnings.map(w => '· ' + w).join('\n') : '');
+    actions.innerHTML = `<button class="deploy-confirm-btn" id="court-cancel-btn">Cancel</button>
+      <button class="deploy-confirm-btn primary" id="court-deploy-btn">Deploy anyway</button>`;
+    document.getElementById('court-deploy-btn').onclick = () => courtProceedDeploy(myId, originalText, parsed);
+    document.getElementById('court-cancel-btn').onclick = () => closeCourtPanel(myId);
+  } else {
+    verdict.className = 'result-box court-verdict error';
+    verdict.textContent = '✗ ' + (review.reason || 'Blocked') +
+      (review.blockers && review.blockers.length ? '\n' + review.blockers.map(b => '· ' + b).join('\n') : '');
+    actions.innerHTML = `<button class="deploy-confirm-btn" id="court-close-btn">Close</button>`;
+    document.getElementById('court-close-btn').onclick = () => closeCourtPanel(myId);
+  }
+}
+
+function closeCourtPanel(myId){
+  if(myId !== courtRequestId) return;
+  document.getElementById('court-panel').style.display = 'none';
+}
+
+async function courtProceedDeploy(myId, originalText, parsed){
+  if(myId !== courtRequestId) return;
+  const actions = document.getElementById('court-actions');
+  const verdict = document.getElementById('court-verdict');
+  actions.querySelectorAll('button').forEach(b => b.disabled = true);
+  try {
+    const r = await fetch('/api/deploy', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({input: originalText, parsed})
+    });
+    if(myId !== courtRequestId) return;
+    const d = await r.json();
+    if(myId !== courtRequestId) return;
+    if(d.error || d.rejected){
+      verdict.className = 'result-box court-verdict error';
+      verdict.textContent = '✗ ' + (d.error || d.reason || 'Deployment blocked.');
+      actions.querySelectorAll('button').forEach(b => b.disabled = false);
+      return;
+    }
+    const p = d.parsed || parsed;
+    if(d.k8s_deploy && d.k8s_deploy.ok === false){
+      verdict.className = 'result-box court-verdict warn';
+      verdict.textContent = `⚠ GitOps 已提交，但 K8s 實際部署失敗：${d.k8s_deploy.message}`;
+      actions.innerHTML = `<button class="deploy-confirm-btn" id="court-close-btn">Close</button>`;
+      document.getElementById('court-close-btn').onclick = () => closeCourtPanel(myId);
+      return;
+    }
+    verdict.className = 'result-box court-verdict success';
+    verdict.textContent = `✓ App: ${p.app_name}  ·  Image: ${p.image}  ·  Pods: ${p.pods}${p.port ? '  ·  Port: ' + p.port : ''}`;
+    actions.innerHTML = `<button class="deploy-confirm-btn" id="court-close-btn">Close</button>`;
+    document.getElementById('court-close-btn').onclick = () => closeCourtPanel(myId);
+    loadStats();
+    if(document.getElementById('page-pods')?.classList.contains('active')) loadPods();
+    if(document.getElementById('page-deployments')?.classList.contains('active')) loadDeployments();
+  } catch(e){
+    if(myId !== courtRequestId) return;
+    verdict.className = 'result-box court-verdict error';
+    verdict.textContent = '✗ Network error: ' + e;
+    actions.querySelectorAll('button').forEach(b => b.disabled = false);
+  }
 }
 
 // ── Pods ──
@@ -1194,12 +1724,12 @@ document.getElementById('pod-modal')?.addEventListener('click', function(e){ if(
 async function loadDeployments(){
   const tbody = document.getElementById('deps-tbody');
   if(!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text3)">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">Loading...</td></tr>';
   try {
     const r = await fetch('/api/deployments');
     const d = await r.json();
     if(!d.deployments.length){
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text3)">No deployments found</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">No deployments found</td></tr>';
       return;
     }
     tbody.innerHTML = d.deployments.map(dep => `
@@ -1213,6 +1743,7 @@ async function loadDeployments(){
           </span>
         </td>
         <td class="mono">${dep.age}</td>
+        <td class="mono">${dep.updated || dep.age}</td>
         <td>
           <div class="action-btns">
             <button class="btn-sm btn-danger" onclick="deleteDeployment('${dep.name}')">Delete</button>
@@ -1221,7 +1752,7 @@ async function loadDeployments(){
       </tr>
     `).join('');
   } catch(e){
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--red)">Failed to load</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--red)">Failed to load</td></tr>';
   }
 }
 
@@ -1355,6 +1886,140 @@ async function loadDatasetStats(){
   } catch(e){ document.getElementById('ds-total').textContent = 'ERR'; }
 }
 
+// ── Knowledge Base (RAG) ──
+function kbConfColor(conf){
+  return conf === 'high' ? 'var(--green)' : (conf === 'medium' ? '#D97706' : 'var(--text3)');
+}
+function kbConfBadge(conf, score){
+  return '<span style="font-size:11px;font-weight:600;color:'+kbConfColor(conf)+'">'+conf.toUpperCase()+' · '+(score*100).toFixed(0)+'%</span>';
+}
+
+async function loadKB(){
+  document.getElementById('kb-doc-list').textContent = 'Loading...';
+  try{
+    const r = await fetch('/api/rag/status'); const d = await r.json();
+    document.getElementById('kb-method').textContent = (d.active_method||'--').toUpperCase();
+    document.getElementById('kb-method-sub').textContent = (d.chroma && d.chroma.embedding_model) ? d.chroma.embedding_model + ' (' + d.chroma.device + ')' : 'legacy TF-IDF';
+    document.getElementById('kb-chunks').textContent = d.chunk_count!=null ? d.chunk_count : '--';
+    document.getElementById('kb-built-at').textContent = d.built_at ? new Date(d.built_at*1000).toLocaleString() : 'never built';
+    document.getElementById('kb-built-sub').textContent = d.elapsed_sec!=null ? ('built in ' + d.elapsed_sec + 's') : 'build time';
+    renderKBDocs(d.documents || []);
+  }catch(e){
+    document.getElementById('kb-doc-list').textContent = 'Failed to load: ' + e;
+  }
+}
+
+function renderKBDocs(docs){
+  const el = document.getElementById('kb-doc-list');
+  if(!docs.length){ el.innerHTML = 'No documents yet — add one on the right.'; return; }
+  el.innerHTML = docs.map(doc => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-weight:600">${escHtml(doc.filename)}</div>
+        <div style="font-size:11px;color:var(--text3)">${(doc.size_bytes/1024).toFixed(1)}KB · ${doc.chunk_count} chunks · ${new Date(doc.modified_at*1000).toLocaleDateString()}</div>
+      </div>
+      <button onclick="deleteKBDoc('${escHtml(doc.filename)}')" style="background:none;border:1px solid var(--border);color:var(--red);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">Delete</button>
+    </div>`).join('');
+}
+
+async function rebuildKB(){
+  const btn = document.getElementById('kb-rebuild-btn');
+  const status = document.getElementById('kb-rebuild-status');
+  btn.disabled = true;
+  status.textContent = 'Rebuilding index (embedding + writing to ChromaDB)...';
+  try{
+    const r = await fetch('/api/rag/rebuild', {method:'POST'});
+    const d = await r.json();
+    if(d.error){ status.textContent = 'Error: ' + d.error; }
+    else { status.textContent = `Rebuilt: ${d.chunk_count} chunks from ${d.doc_count} documents in ${d.elapsed_sec}s (${d.active_method}).`; }
+    await loadKB();
+  }catch(e){
+    status.textContent = 'Network error: ' + e;
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+async function addKBDoc(){
+  const filename = document.getElementById('kb-new-filename').value.trim();
+  const content = document.getElementById('kb-new-content').value;
+  const status = document.getElementById('kb-add-status');
+  if(!filename || !content.trim()){ status.textContent = 'Filename and content are both required.'; return; }
+  status.textContent = 'Uploading...';
+  try{
+    const r = await fetch('/api/rag/docs', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({filename, content})});
+    const d = await r.json();
+    if(d.error){ status.textContent = 'Error: ' + d.error; return; }
+    document.getElementById('kb-new-filename').value = '';
+    document.getElementById('kb-new-content').value = '';
+    status.textContent = 'Uploaded. Rebuilding index...';
+    await rebuildKB();
+    status.textContent = 'Document added and index rebuilt.';
+  }catch(e){
+    status.textContent = 'Network error: ' + e;
+  }
+}
+
+async function deleteKBDoc(filename){
+  if(!confirm('Delete "' + filename + '" and rebuild the index?')) return;
+  const status = document.getElementById('kb-rebuild-status');
+  try{
+    const r = await fetch('/api/rag/docs/' + encodeURIComponent(filename), {method:'DELETE'});
+    const d = await r.json();
+    if(d.error){ status.textContent = 'Error: ' + d.error; return; }
+    status.textContent = 'Deleted. Rebuilding index...';
+    await rebuildKB();
+  }catch(e){
+    status.textContent = 'Network error: ' + e;
+  }
+}
+
+async function runKBQuery(){
+  const query = document.getElementById('kb-query-input').value.trim();
+  const el = document.getElementById('kb-query-results');
+  if(!query){ return; }
+  el.textContent = 'Searching...';
+  try{
+    const r = await fetch('/api/rag/query', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query, top_k:5})});
+    const d = await r.json();
+    if(d.error){ el.textContent = 'Error: ' + d.error; return; }
+    if(!d.results.length){ el.innerHTML = '<span style="color:var(--text3)">No matching documents found.</span>'; return; }
+    el.innerHTML = `<div style="font-size:11px;color:var(--text3);margin-bottom:8px">method: ${d.method}</div>` + d.results.map(r => `
+      <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between"><strong>${escHtml(r.source)}</strong>${kbConfBadge(r.confidence, r.score)}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:4px;white-space:pre-wrap">${escHtml(r.text.slice(0,220))}${r.text.length>220?'...':''}</div>
+      </div>`).join('');
+  }catch(e){
+    el.textContent = 'Network error: ' + e;
+  }
+}
+
+async function runKBEval(){
+  const btn = document.getElementById('kb-eval-btn');
+  const el = document.getElementById('kb-eval-results');
+  btn.disabled = true;
+  el.textContent = 'Running evaluation on curated test set...';
+  try{
+    const r = await fetch('/api/rag/eval', {method:'POST'});
+    const d = await r.json();
+    if(d.error){ el.textContent = 'Error: ' + d.error; return; }
+    const rows = ['chroma','tfidf'].map(key => {
+      const m = d.results[key];
+      if(!m) return '';
+      if(m.error) return `<div style="padding:6px 0;color:var(--text3)">${key}: ${escHtml(m.error)}</div>`;
+      return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="font-weight:600">${escHtml(m.method)}</span>
+        <span style="font-size:12px;color:var(--text2)">Recall@${d.top_k}: ${(m.recall_at_k*100).toFixed(0)}% · MRR: ${m.mrr.toFixed(2)} · ${m.avg_latency_ms.toFixed(0)}ms</span>
+      </div>`;
+    }).join('');
+    el.innerHTML = `<div style="font-size:11px;color:var(--text3);margin-bottom:6px">${d.num_queries} test queries</div>` + rows;
+  }catch(e){
+    el.textContent = 'Network error: ' + e;
+  }finally{
+    btn.disabled = false;
+  }
+}
+
 async function runEnrich(flags){
   const log = document.getElementById('ds-log');
   const status = document.getElementById('ds-run-status');
@@ -1380,7 +2045,12 @@ let currentChatId = null;
 function initChats(){
   try { chats = JSON.parse(localStorage.getItem('k8s_chats')||'[]'); } catch(e){ chats=[]; }
   currentChatId = localStorage.getItem('k8s_current_chat') || null;
-  if(!chats.length){ newChat(); return; }
+  if(!chats.length){
+    const id = 'chat_' + Date.now();
+    chats.push({id, title:'New Chat', messages:[]});
+    currentChatId = id;
+    saveChats();
+  }
   if(!currentChatId || !chats.find(ch=>ch.id===currentChatId)){
     currentChatId = chats[chats.length-1].id;
   }
@@ -1394,13 +2064,17 @@ function saveChats(){
 }
 
 function newChat(){
+  if(!chats.length){
+    try { chats = JSON.parse(localStorage.getItem('k8s_chats')||'[]'); } catch(e){ chats=[]; }
+  }
   const id = 'chat_' + Date.now();
   chats.push({id, title:'New Chat', messages:[]});
   currentChatId = id;
   saveChats();
+  showPage('chat');
   renderChatList();
   renderMessages();
-  document.getElementById('chat-input').focus();
+  setTimeout(()=>document.getElementById('chat-input')?.focus(), 0);
 }
 
 function deleteChat(id, e){
@@ -1416,6 +2090,7 @@ function deleteChat(id, e){
 function switchChat(id){
   currentChatId = id;
   saveChats();
+  showPage('chat');
   renderChatList();
   renderMessages();
 }
@@ -1428,9 +2103,9 @@ function renderChatList(){
   const el = document.getElementById('chat-room-list');
   if(!el) return;
   el.innerHTML = chats.slice().reverse().map(ch=>`
-    <div onclick="switchChat('${ch.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;cursor:pointer;margin-bottom:2px;font-size:12px;color:#e5e7eb;background:${ch.id===currentChatId?'rgba(22,163,74,.25)':'transparent'};transition:background .15s" onmouseover="this.querySelector('.del').style.opacity='1'" onmouseout="this.querySelector('.del').style.opacity='0'">
-      <span style="display:flex;align-items:center;gap:6px;overflow:hidden;flex:1"><svg viewBox="0 0 16 16" fill="none" width="12" height="12" style="flex-shrink:0"><path d="M2 3a1 1 0 011-1h10a1 1 0 011 1v7a1 1 0 01-1 1H9l-3 2v-2H3a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.5"/></svg><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ch.title}</span></span>
-      <span class="del" onclick="deleteChat('${ch.id}',event)" style="opacity:0;color:#9ca3af;font-size:14px;padding-left:6px;flex-shrink:0;transition:opacity .15s">&#x2715;</span>
+    <div class="chat-room-item ${ch.id===currentChatId?'active':''}" onclick="switchChat('${ch.id}')">
+      <span class="chat-room-title"><svg viewBox="0 0 16 16" fill="none" width="13" height="13" style="flex-shrink:0"><path d="M2 3a1 1 0 011-1h10a1 1 0 011 1v7a1 1 0 01-1 1H9l-3 2v-2H3a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.5"/></svg><span>${escHtml(ch.title)}</span></span>
+      <span class="chat-room-delete" onclick="deleteChat('${ch.id}',event)">&#x2715;</span>
     </div>`).join('');
 }
 
@@ -1439,55 +2114,66 @@ function renderMessages(){
   if(!msgs) return;
   const ch = currentChat();
   if(!ch || !ch.messages.length){
-    msgs.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:40px 20px">
-      <div style="width:56px;height:56px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff;margin-bottom:16px">K</div>
-      <div style="font-size:22px;font-weight:700;color:var(--text);margin-bottom:8px">ZeroTouch K8s Assistant</div>
-      <div style="font-size:14px;color:var(--text2);text-align:center;max-width:480px;margin-bottom:32px">Deploy and manage Kubernetes services using natural language. Ask me anything about K8s or start with a quick action.</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:520px">
-        <div onclick="document.getElementById('chat-input').value='deploy 3 nginx:latest pods for web-frontend';sendChat()" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
-          <div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:4px">Deploy a service</div>
-          <div style="font-size:12px;color:var(--text3)">deploy 3 nginx:latest pods...</div>
+    msgs.innerHTML = `<div class="chat-empty">
+      <div class="chat-empty-logo">K</div>
+      <h1>How can I help with your cluster?</h1>
+      <p>Use natural language to deploy services, inspect workloads, troubleshoot failures, or ask Kubernetes questions.</p>
+      <div class="prompt-grid">
+        <div class="prompt-card" onclick="document.getElementById('chat-input').value='deploy 3 nginx:latest pods for web-frontend';sendChat()">
+          <strong>Deploy a service</strong><span>deploy 3 nginx:latest pods for web-frontend</span>
         </div>
-        <div onclick="document.getElementById('chat-input').value='list pods';sendChat()" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
-          <div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:4px">Check status</div>
-          <div style="font-size:12px;color:var(--text3)">list pods / show deployments</div>
+        <div class="prompt-card" onclick="document.getElementById('chat-input').value='list pods';sendChat()">
+          <strong>Check cluster status</strong><span>list pods and show deployments</span>
         </div>
-        <div onclick="document.getElementById('chat-input').value='What is a Pod?';sendChat()" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
-          <div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:4px">Learn K8s</div>
-          <div style="font-size:12px;color:var(--text3)">What is a Pod, Deployment...</div>
+        <div class="prompt-card" onclick="document.getElementById('chat-input').value='Explain Kubernetes Deployment vs Service';sendChat()">
+          <strong>Learn Kubernetes</strong><span>Explain Deployment vs Service</span>
         </div>
-        <div onclick="document.getElementById('chat-input').value='delete ';document.getElementById('chat-input').focus()" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
-          <div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:4px">Delete deployment</div>
-          <div style="font-size:12px;color:var(--text3)">delete &lt;deployment-name&gt;</div>
+        <div class="prompt-card" onclick="document.getElementById('chat-input').value='How do I debug CrashLoopBackOff?';sendChat()">
+          <strong>Troubleshoot</strong><span>How do I debug CrashLoopBackOff?</span>
         </div>
       </div>
     </div>`;
     return;
   }
-  msgs.innerHTML = ch.messages.map(m=>renderMsgHTML(m.role, m.content)).join('');
+  msgs.innerHTML = ch.messages.map(m=>renderMsgHTML(m.role, m.content, m.sources)).join('');
   msgs.scrollTop = msgs.scrollHeight;
 }
 
-function renderMsgHTML(role, content){
+function renderSourcesHTML(sources){
+  if(!sources || !sources.length) return '';
+  const items = sources.map(s => `
+    <div style="padding:6px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px">
+        <strong>${escHtml(s.source||'')}</strong>${kbConfBadge(s.confidence||'low', s.score||0)}
+      </div>
+      <div style="font-size:11.5px;color:var(--text3);margin-top:3px;white-space:pre-wrap">${escHtml(s.text||'')}</div>
+    </div>`).join('');
+  return `<details style="margin-top:10px;font-size:12px;border-top:1px solid var(--border);padding-top:8px">
+    <summary style="cursor:pointer;color:var(--text3)">📎 ${sources.length} 個引用來源（RAG 知識庫）</summary>
+    <div style="margin-top:6px">${items}</div>
+  </details>`;
+}
+
+function renderMsgHTML(role, content, sources){
   if(role==='user'){
     return `<div class="msg user" style="margin-bottom:16px"><div class="msg-avatar">U</div><div class="msg-bubble">${escHtml(content)}</div></div>`;
   }
-  return `<div class="msg ai" style="margin-bottom:16px"><div class="msg-avatar">K</div><div class="msg-bubble" style="white-space:pre-wrap">${content}</div></div>`;
+  return `<div class="msg ai" style="margin-bottom:16px"><div class="msg-avatar">K</div><div class="msg-bubble" style="white-space:pre-wrap">${content}${renderSourcesHTML(sources)}</div></div>`;
 }
 
 function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function appendMsg(role, content){
+function appendMsg(role, content, sources){
   const ch = currentChat();
   if(!ch) return;
-  ch.messages.push({role, content});
+  ch.messages.push({role, content, sources});
   if(ch.messages.length===1 && role==='user'){
     ch.title = content.slice(0,30) + (content.length>30?'...':'');
   }
   saveChats();
   renderChatList();
   const msgs = document.getElementById('chat-messages');
-  msgs.innerHTML += renderMsgHTML(role, content);
+  msgs.innerHTML += renderMsgHTML(role, content, sources);
   msgs.scrollTop = msgs.scrollHeight;
 }
 
@@ -1498,6 +2184,119 @@ function appendTyping(){
   div.innerHTML = '<div class="msg-avatar">K</div><div class="msg-bubble"><span style="opacity:.5">Thinking...</span></div>';
   msgs.appendChild(div);
   msgs.scrollTop = msgs.scrollHeight;
+}
+
+function deployConfirmHTML(id, parsed, originalText){
+  const output = parsed.output || parsed;
+  const app = escHtml(String(output.app_name || parsed.app_name || 'auto-app'));
+  const image = escHtml(String(output.image || parsed.image || 'nginx:latest'));
+  const pods = escHtml(String(output.pods || parsed.pods || 1));
+  const port = escHtml(String(output.port || parsed.port || 80));
+  const memory = escHtml(String(output.memory || parsed.memory || ''));
+  return `<div class="deploy-confirm" id="${id}" data-original="${escHtml(originalText)}">
+    <div class="deploy-confirm-head">
+      <div>
+        <div class="deploy-confirm-title">Confirm deployment details</div>
+        <div class="deploy-confirm-sub">Edit anything that looks wrong, then deploy.</div>
+      </div>
+      <span class="badge pending">Needs confirmation</span>
+    </div>
+    <div class="deploy-confirm-grid">
+      <div class="deploy-confirm-field"><label>App name</label><input data-field="app_name" value="${app}" placeholder="my-app"></div>
+      <div class="deploy-confirm-field"><label>Image</label><input data-field="image" value="${image}" placeholder="nginx:latest"></div>
+      <div class="deploy-confirm-field"><label>Pods</label><input data-field="pods" type="number" min="1" max="100" value="${pods}"></div>
+      <div class="deploy-confirm-field"><label>Port</label><input data-field="port" type="number" min="1" max="65535" value="${port}"></div>
+      <div class="deploy-confirm-field memory"><label>Memory limit</label><input data-field="memory" value="${memory}" placeholder="optional, e.g. 128Mi"></div>
+    </div>
+    <div class="deploy-confirm-note">This will create or update a Kubernetes Deployment and Service after confirmation. If the app name already exists, Kubernetes updates that existing Deployment.</div>
+    <div class="deploy-confirm-error" data-role="error"></div>
+    <div class="deploy-confirm-actions">
+      <button class="deploy-confirm-btn" onclick="cancelDeployConfirm('${id}')">Cancel</button>
+      <button class="deploy-confirm-btn primary" onclick="confirmDeploy('${id}')">Confirm & Deploy</button>
+    </div>
+  </div>`;
+}
+
+function readDeployConfirm(id){
+  const root = document.getElementById(id);
+  if(!root) return null;
+  const get = f => root.querySelector(`[data-field="${f}"]`)?.value.trim() || '';
+  const parsed = {
+    app_name: get('app_name'),
+    image: get('image'),
+    pods: parseInt(get('pods'), 10),
+    port: parseInt(get('port'), 10)
+  };
+  const memory = get('memory');
+  if(memory) parsed.memory = memory;
+  return {root, parsed, input: root.dataset.original || ''};
+}
+
+function setDeployConfirmError(root, msg){
+  const el = root.querySelector('[data-role="error"]');
+  if(!el) return;
+  el.style.display = msg ? 'block' : 'none';
+  el.textContent = msg || '';
+}
+
+function cancelDeployConfirm(id){
+  const root = document.getElementById(id);
+  if(root){
+    root.querySelectorAll('input,button').forEach(el=>el.disabled=true);
+    const badge = root.querySelector('.badge');
+    if(badge){ badge.textContent='Cancelled'; badge.className='badge failed'; }
+  }
+}
+
+async function confirmDeploy(id){
+  const data = readDeployConfirm(id);
+  if(!data) return;
+  const {root, parsed, input} = data;
+  setDeployConfirmError(root, '');
+  if(!parsed.app_name || !parsed.image){ setDeployConfirmError(root, 'App name and image are required.'); return; }
+  if(!Number.isInteger(parsed.pods) || parsed.pods < 1 || parsed.pods > 100){ setDeployConfirmError(root, 'Pods must be between 1 and 100.'); return; }
+  if(!Number.isInteger(parsed.port) || parsed.port < 1 || parsed.port > 65535){ setDeployConfirmError(root, 'Port must be between 1 and 65535.'); return; }
+  if(parsed.memory && !/^\d+(Mi|Gi|Ki|M|G)$/.test(parsed.memory)){ setDeployConfirmError(root, 'Memory must look like 128Mi or 1Gi.'); return; }
+
+  root.querySelectorAll('input,button').forEach(el=>el.disabled=true);
+  const badge = root.querySelector('.badge');
+  if(badge){ badge.textContent='Deploying'; badge.className='badge pending'; }
+  try{
+    const r = await fetch('/api/deploy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input, parsed})});
+    const d = await r.json();
+    if(d.error || d.rejected){
+      setDeployConfirmError(root, d.error || d.reason || 'Deployment blocked.');
+      root.querySelectorAll('input,button').forEach(el=>el.disabled=false);
+      if(badge){ badge.textContent='Needs changes'; badge.className='badge failed'; }
+      return;
+    }
+    if(d.k8s_deploy && d.k8s_deploy.ok === false){
+      setDeployConfirmError(root, `GitOps 已提交，但 K8s 實際部署失敗：${d.k8s_deploy.message}`);
+      root.querySelectorAll('input,button').forEach(el=>el.disabled=false);
+      if(badge){ badge.textContent='K8s failed'; badge.className='badge failed'; }
+      return;
+    }
+    const p = d.parsed || parsed;
+    const appName = p.app_name || parsed.app_name;
+    const pods = p.pods || parsed.pods;
+    const image = p.image || parsed.image;
+    const port = p.port || parsed.port;
+    const successText = `部署成功：${appName} 已送出，Pods: ${pods}，Image: ${image}${port ? '，Port: ' + port : ''}。你可以到 Pods / Deployments 頁查看狀態。`;
+    const ch = currentChat();
+    if(ch){
+      ch.messages = ch.messages.filter(m => !(m.role === 'assistant' && String(m.content || '').includes(`id="${id}"`)));
+      saveChats();
+    }
+    root.closest('.msg')?.remove();
+    appendMsg('assistant', successText);
+    loadStats();
+    if(document.getElementById('page-pods')?.classList.contains('active')) loadPods();
+    if(document.getElementById('page-deployments')?.classList.contains('active')) loadDeployments();
+  }catch(e){
+    setDeployConfirmError(root, 'Network error: ' + e);
+    root.querySelectorAll('input,button').forEach(el=>el.disabled=false);
+    if(badge){ badge.textContent='Failed'; badge.className='badge failed'; }
+  }
 }
 
 function removeTyping(){ const el=document.getElementById('typing-indicator'); if(el) el.remove(); }
@@ -1519,7 +2318,7 @@ async function sendChat(){
     try{
       const r = await fetch('/api/pods'); const d = await r.json();
       const pods = d.pods||[];
-      let reply = pods.length ? pods.map(p=>`- ${p.name} [${p.status}] - ${p.image}`).join('\n') : 'No pods running.';
+      let reply = pods.length ? pods.map(p=>`- ${p.name} [${p.phase}] - ${(p.containers&&p.containers[0]&&p.containers[0].image)||''}`).join('\n') : 'No pods running.';
       removeTyping(); appendMsg('assistant', 'Running Pods:\n'+reply);
     }catch(e){ removeTyping(); appendMsg('assistant','Error: '+e); }
   }
@@ -1570,61 +2369,21 @@ async function sendChat(){
       removeTyping(); appendMsg('assistant', d.success!==false ? (d.message||'Rolled back '+app) : 'Error: '+(d.error||d.message));
     }catch(e){ removeTyping(); appendMsg('assistant','Error: '+e); }
   }
-  else if(/^(deploy|start|launch|run|\u5e6b\u6211|\u8acb|\u90e8\u7f72|\u8d77\s)/i.test(text) || /\d+\s*(pods?|replicas?|\u500b)/i.test(text)){
+  else if(/^(deploy|start|launch|run|spin\s+up|\u90e8\u7f72|\u4f48\u7f72|\u90e8\u5c6c|\u8d77\s)/i.test(text) || ((/\u5e6b\u6211|\u8acb/i.test(text)) && /(deploy|\u90e8\u7f72|\u4f48\u7f72|\u90e8\u5c6c|pods?|pod|\u8d77)/i.test(text) && (/\d+\s*(pods?|replicas?|\u500b|\u526f\u672c)/i.test(text) || /(nginx|redis|postgres|node|python|golang|image|\u6620\u50cf|\u93e1\u50cf)/i.test(text)))){
     replied = true;
-    removeTyping();
-    const pipeId = 'pipe_'+Date.now();
-    const steps = ['LLaMA Inference','Multi-Agent Review','Guardian Validation','Creating K8s Resources','Deployment Complete'];
-    let pipeHTML = `<div id="${pipeId}" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px">`;
-    steps.forEach((s,i)=>{
-      pipeHTML += `<div id="${pipeId}_${i}" style="display:flex;align-items:center;gap:10px;padding:5px 0;color:var(--text3);font-size:13px"><div style="width:18px;height:18px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;text-align:center;font-size:10px;line-height:16px"></div>${s}</div>`;
-    });
-    pipeHTML += `<div id="${pipeId}_result" style="margin-top:8px;font-size:13px"></div></div>`;
-
-    const ch2 = currentChat();
-    if(ch2){ ch2.messages.push({role:'assistant', content: pipeHTML}); saveChats(); }
-    const msgs2 = document.getElementById('chat-messages');
-    const tempDiv = document.createElement('div');
-    tempDiv.className = 'msg ai'; tempDiv.style.marginBottom='16px';
-    tempDiv.innerHTML = `<div class="msg-avatar">K</div><div class="msg-bubble" style="padding:8px;background:transparent;border:none;max-width:100%">${pipeHTML}</div>`;
-    msgs2.appendChild(tempDiv);
-    msgs2.scrollTop = msgs2.scrollHeight;
-
-    function setStep(i, done){
-      const el = document.getElementById(`${pipeId}_${i}`);
-      if(!el) return;
-      el.style.color = done ? 'var(--green)' : 'var(--text)';
-      const dot = el.querySelector('div');
-      dot.style.background = done ? 'var(--green)' : 'var(--green-light)';
-      dot.style.borderColor = 'var(--green)';
-      dot.innerHTML = done ? '&#x2713;' : '';
-    }
-
-    setStep(0, false);
     try{
-      const r = await fetch('/api/deploy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:text})});
-      setStep(0,true); setStep(1,false);
-      await new Promise(res=>setTimeout(res,300));
-      setStep(1,true); setStep(2,false);
-      await new Promise(res=>setTimeout(res,200));
-      setStep(2,true); setStep(3,false);
+      const r = await fetch('/api/deploy/parse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:text})});
       const d = await r.json();
-      await new Promise(res=>setTimeout(res,300));
-      setStep(3,true); setStep(4,false);
-      await new Promise(res=>setTimeout(res,200));
-      setStep(4,true);
-      const res2 = document.getElementById(`${pipeId}_result`);
-      if(res2){
-        if(d.rejected){ res2.innerHTML=`<div style="color:#ef4444">Blocked: ${d.reason||''}</div>`; }
-        else if(d.parsed){
-          const p=d.parsed;
-          res2.innerHTML<`<div style="color:var(--green)">Deployed: <b>${p.app_name}</b> x${p.pods} (${p.image})${p.port?', port '+p.port:''}</div>`;
-        }
-        if(d.error){ res2.innerHTML<`<div style="color:#ef4444">${d.error}</div>`; }
+      removeTyping();
+      if(d.error || d.rejected){
+        appendMsg('assistant', d.error || d.reason || 'Deployment request was blocked.');
+      } else {
+        const confirmId = 'deploy_confirm_' + Date.now();
+        appendMsg('assistant', deployConfirmHTML(confirmId, d.parsed || {}, text));
       }
     }catch(e){
-      const res2=document.getElementById(`${pipeId}_result`);
-      if(res2) res2.innerHTML=`<div style="color:#ef4444">Error: ${e}</div>`;
+      removeTyping();
+      appendMsg('assistant','Connection error while parsing deployment: '+e);
     }
   }
 
@@ -1634,15 +2393,16 @@ async function sendChat(){
       const r = await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text, history:hist})});
       const d = await r.json();
       removeTyping();
-      appendMsg('assistant', d.reply||d.error||'No response');
+      appendMsg('assistant', d.reply||d.error||'No response', d.sources);
     }catch(e){ removeTyping(); appendMsg('assistant','Connection error: '+e); }
   }
 }
 
 
 window.addEventListener('DOMContentLoaded', function(){
-  if(document.getElementById('page-chat') && document.getElementById('page-chat').classList.contains('active')){
+  if(loggedIn){
     initChats();
+    showPage('chat');
   }
 });
 </script>
@@ -1682,7 +2442,13 @@ def register():
 def login():
     username = request.form.get("username","").strip()
     password = request.form.get("password","")
-    if username in USERS and USERS[username]["password_hash"] == hash_password(password):
+    stored_user = USERS.get(username)
+    stored_hash = stored_user.get("password_hash", "") if isinstance(stored_user, dict) else stored_user
+    if verify_password(password, stored_hash):
+        if not isinstance(stored_user, dict):
+            USERS[username] = {"password_hash": hash_password(password), "created_at": datetime.now().isoformat()}
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json"), "w", encoding="utf-8") as _uf:
+                json.dump(USERS, _uf)
         session["username"] = username
         return redirect("/")
     return render_template_string(HTML, logged_in=False, page='login', error="Invalid username or password", k8s=K8S_ENABLED, username='')
@@ -1691,6 +2457,137 @@ def login():
 def logout():
     session.clear()
     return redirect("/")
+
+
+def _rag_fallback_context(message: str, history: list = None) -> tuple:
+    """回傳 (顯示用文字, 引用來源 list)，供本地模型未啟動時的快速回覆使用。"""
+    try:
+        from rag.retriever import retrieve_with_history
+        docs = retrieve_with_history(message, history=history, top_k=2, min_score=0.02)
+    except Exception:
+        docs = []
+    if not docs:
+        return "", []
+    parts = []
+    for doc in docs:
+        text = doc.get("text", "").strip()
+        if text:
+            parts.append(f"來源 {doc.get('source','RAG')}：\n{text[:900]}")
+    return "\n\n".join(parts), docs
+
+
+def _looks_like_system_help(message: str) -> bool:
+    low = (message or '').lower()
+    product_terms = (
+        'zerotouch', 'this system', 'this app', 'use this', 'how to use', 'how to deploy',
+        'healer', 'gitops', 'dataset', 'metrics', 'deploy console',
+        '這套', '系統', '怎麼用', '如何使用', '教學', '功能', '使用方式',
+        '怎麼部署', '如何部署', '怎麼部屬', '如何部屬', '怎麼佈署', '如何佈署'
+    )
+    return any(t in low for t in product_terms)
+
+
+def _system_help_reply(message: str) -> str:
+    low = (message or '').lower()
+
+    if 'healer' in low or '自動修復' in low or '修復' in low:
+        return (
+            "Healer 是用來掃描並修復異常 Pod 的工具。\n\n"
+            "使用方式：\n"
+            "1. 左側點 `Healer`。\n"
+            "2. 按 `Scan Now` 掃描異常 Pod。\n"
+            "3. 如果看到 CrashLoopBackOff、OOMKilled、ImagePullBackOff、ErrImagePull 或 Error，先看原因。\n"
+            "4. 只想修單一 Pod 就按該 Pod 的修復；想全部處理就按 `Auto Fix All`。\n"
+            "5. 回到 `Pods` 或 `Deployments` 確認新的 Pod 是否變成 Running。\n\n"
+            "注意：Healer 的主要動作是刪掉壞掉的 Pod，讓 Deployment/ReplicaSet 重建。"
+            "如果 image tag、Secret、環境變數或程式本身錯了，Pod 可能還會再壞，需要修根因。"
+        )
+
+    if 'gitops' in low or 'rollback' in low or '回滾' in low or '版本' in low:
+        return (
+            "GitOps Log 用來看部署歷史與協助 rollback。\n\n"
+            "使用方式：\n"
+            "1. 左側點 `GitOps Log`。\n"
+            "2. 按 `Refresh` 讀取最近部署紀錄。\n"
+            "3. 找到你要確認的 app 或 commit。\n"
+            "4. 若要回滾，可以在 Chat 輸入 `rollback <app-name>`。\n\n"
+            "小技巧：先輸入 `show deployments` 找到正確 app name，再 rollback。"
+        )
+
+    if 'dataset' in low or '資料集' in low or 'training' in low or '訓練' in low:
+        return (
+            "Dataset Manager 是用來檢查與補齊 Kubernetes 訓練資料。\n\n"
+            "使用方式：\n"
+            "1. 左側點 `Dataset`。\n"
+            "2. 看 Total Records、Output Filled、K8s / Non-K8s 比例。\n"
+            "3. `Quick Fill (rules only)` 會快速用規則補欄位。\n"
+            "4. `Full Enrich (LLaMA output)` 會用模型補答案，速度較慢。\n"
+            "5. `Dry Run` 可以先預覽，不直接寫入。"
+        )
+
+    if 'metrics' in low or 'prometheus' in low or '監控' in low or '指標' in low:
+        return (
+            "Metrics 頁面用來看 Prometheus 與叢集基本指標。\n\n"
+            "使用方式：\n"
+            "1. 左側點 `Metrics`。\n"
+            "2. 查看 Prometheus 是否 Online。\n"
+            "3. 看 Running Pods 與 endpoint。\n"
+            "4. 右側有 PromQL quick reference，可以用來查 Pod 數、Running 狀態與 Deployment replicas。\n\n"
+            "如果 Prometheus offline，先確認 Prometheus service 或 port-forward。"
+        )
+
+    if 'deploy' in low or '部署' in low or 'pod' in low or 'pods' in low:
+        return (
+            "你可以用 Chat 或 Deploy Console 部署 Pod。建議格式：\n\n"
+            "`deploy <數量> <image> pods for <app-name>, port <port>`\n\n"
+            "範例：\n"
+            "- `deploy 3 nginx:latest pods for web-frontend, port 80`\n"
+            "- `spin up 4 node:20-alpine pods for api-gateway, port 3000`\n"
+            "- `幫我部署 5 個 redis pods 給 cache-service port 6379`\n\n"
+            "送出後系統會解析 replicas/image/app/port，跑 Guardian、Agent review、dry-run，K8s 連線正常時才建立 Deployment。"
+        )
+
+    return (
+        "這套 ZeroTouch K8s 主要有幾個區塊：\n\n"
+        "- `Chat`：問問題、列 Pods、部署服務、scale/update/rollback。\n"
+        "- `Deploy Console`：用自然語言建立 Deployment/Service。\n"
+        "- `Pods`：查看 Pod 狀態、IP、node、restart。\n"
+        "- `Deployments`：查看 app image、replicas、ready 數與刪除部署。\n"
+        "- `Healer`：掃描 CrashLoopBackOff/OOMKilled/ImagePullBackOff 等異常 Pod，並刪除重建。\n"
+        "- `GitOps Log`：看部署歷史與 rollback 線索。\n"
+        "- `Metrics`：看 Prometheus 與叢集基本指標。\n"
+        "- `Dataset`：檢查與補齊訓練資料。\n\n"
+        "如果你要部署，直接輸入例如：`deploy 3 nginx:latest pods for web-frontend, port 80`。"
+    )
+
+
+def _fallback_chat_reply(message: str, history: list = None) -> tuple:
+    """回傳 (reply, sources)。只有走到 RAG 知識庫的分支才會有非空的 sources。"""
+    text = message.strip()
+    low = text.lower()
+    greetings = ("hi", "hello", "hey", "嗨", "你好", "哈囉", "早安", "午安", "晚安")
+    if any(g in low for g in greetings):
+        return "嗨，我是 ZeroTouch K8s Assistant。你可以跟我閒聊，也可以問 Kubernetes、查 Pods/Deployments、排查錯誤，或用自然語言部署服務。", []
+    if "pod" in low or "pods" in low or "容器" in low:
+        pods = k8s_get_pods()
+        if pods:
+            lines = [f"- {p['name']} [{p['phase']}] app={p.get('app') or '-'} restarts={p.get('restarts', 0)}" for p in pods[:12]]
+            return "目前 Pods：\n" + "\n".join(lines), []
+    if "deployment" in low or "deployments" in low or "部署" in low:
+        deps = k8s_get_deployments()
+        if deps:
+            lines = [f"- {d['name']} ready={d['ready']}/{d['replicas']} image={d['image']}" for d in deps[:12]]
+            return "目前 Deployments：\n" + "\n".join(lines), []
+    if "crashloop" in low or "crashloopbackoff" in low:
+        return "CrashLoopBackOff 常見排查順序：\n1. `kubectl logs <pod> --previous` 看崩潰前日誌\n2. `kubectl describe pod <pod>` 看 Events、Exit Code、OOMKilled\n3. 檢查 image、command、env、Secret/ConfigMap、port、volume mount\n4. 檢查 liveness/readiness probe 是否太早或路徑錯\n5. 若是 OOMKilled，調高 memory limit 或降低啟動負載。", []
+    if "service" in low and "deployment" in low:
+        return "Deployment 負責維持 Pod 副本數、滾動更新與自動重建；Service 提供固定 DNS/IP，透過 selector 把流量導到符合 label 的 Pods。簡單說：Deployment 管應用怎麼跑，Service 管別人怎麼連到它。", []
+
+    rag_text, rag_docs = _rag_fallback_context(message, history)
+    if rag_text:
+        return "我先用本地 RAG 知識庫回答：\n\n" + rag_text, rag_docs
+
+    return "我可以回答一般問題與 Kubernetes 問題；目前本地模型 server 沒有啟動，所以先用快速規則/RAG 回覆。若要完整自然語言能力，請另外開一個終端執行 `python3 core/model_server.py`，再開網站。", []
 
 @app.route("/api/status")
 def api_status():
@@ -1708,41 +2605,240 @@ def api_chat():
         return jsonify({"error": "Empty message"}), 400
     if len(history) > 40:
         history = history[-40:]
-    reply = claude_chat(message, history)
-    return jsonify({"reply": reply})
+    if _looks_like_system_help(message):
+        return jsonify({"reply": _system_help_reply(message), "source": "system_help"})
+    reply, sources = chat_llama(message, history)
+    if reply.startswith("[Local Model unavailable]"):
+        reply, sources = _fallback_chat_reply(message, history)
+    resp = {"reply": reply}
+    if sources:
+        from rag.retriever import confidence_label
+        resp["sources"] = [
+            {"source": s.get("source"), "score": s.get("score"),
+             "confidence": confidence_label(s.get("score", 0)),
+             "text": s.get("text", "")[:300]}
+            for s in sources
+        ]
+    return jsonify(resp)
+
+
+@app.route("/api/rag/status")
+def api_rag_status():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    return jsonify(kb_manager.get_status())
+
+
+@app.route("/api/rag/docs", methods=["GET", "POST"])
+def api_rag_docs():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    if request.method == "GET":
+        return jsonify({"documents": kb_manager.list_documents()})
+
+    data = request.get_json(silent=True) or {}
+    filename = str(data.get("filename", "")).strip()
+    content  = data.get("content", "")
+    try:
+        result = kb_manager.add_document(filename, content)
+        return jsonify({"success": True, **result})
+    except KBError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/rag/docs/<path:filename>", methods=["DELETE"])
+def api_rag_delete_doc(filename):
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    try:
+        result = kb_manager.delete_document(filename)
+        return jsonify({"success": True, **result})
+    except KBError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/rag/rebuild", methods=["POST"])
+def api_rag_rebuild():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    try:
+        meta = kb_manager.rebuild_index()
+        return jsonify({"success": True, **meta})
+    except KBError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"重建索引失敗：{e}"}), 500
+
+
+@app.route("/api/rag/query", methods=["POST"])
+def api_rag_query():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    data = request.get_json(silent=True) or {}
+    query_text = str(data.get("query", "")).strip()
+    top_k = int(data.get("top_k", 5) or 5)
+    if not query_text:
+        return jsonify({"error": "查詢字串不能是空的"}), 400
+    from rag.retriever import retrieve, active_method, confidence_label
+    results = retrieve(query_text, top_k=top_k, min_score=0.0)
+    return jsonify({
+        "method": active_method(),
+        "results": [
+            {"source": r["source"], "score": r["score"],
+             "confidence": confidence_label(r["score"]), "text": r["text"]}
+            for r in results
+        ],
+    })
+
+
+@app.route("/api/rag/eval", methods=["POST"])
+def api_rag_eval():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    try:
+        from rag.eval_retrieval import run as run_eval
+        report = run_eval(top_k=3)
+        return jsonify(report)
+    except Exception as e:
+        return jsonify({"error": f"評估失敗：{e}"}), 500
+
+def _sanitize_deploy_payload(raw: dict) -> dict:
+    parsed = dict(raw or {})
+    clean = {
+        "app_name": str(parsed.get("app_name", "")).strip(),
+        "image": str(parsed.get("image", "")).strip(),
+    }
+    try:
+        clean["pods"] = int(parsed.get("pods", parsed.get("replicas", 1)))
+    except (TypeError, ValueError):
+        clean["pods"] = 0
+    try:
+        clean["port"] = int(parsed.get("port", 80))
+    except (TypeError, ValueError):
+        clean["port"] = 80
+    memory = str(parsed.get("memory", "")).strip()
+    if memory:
+        clean["memory"] = memory
+    cpu = str(parsed.get("cpu", "")).strip()
+    if cpu:
+        clean["cpu"] = cpu
+    if parsed.get("node_count") is not None:
+        try:
+            node_count = int(parsed["node_count"])
+            if node_count >= 1:
+                clean["node_count"] = node_count
+        except (TypeError, ValueError):
+            pass
+    if parsed.get("_parser"):
+        clean["_parser"] = parsed.get("_parser")
+    return clean
+
+
+def _prepare_deploy(user_input: str, parsed_override: dict = None):
+    parsed = _sanitize_deploy_payload(parsed_override) if parsed_override else ask_llama(user_input)
+    if "error" in parsed:
+        return None, None, None, ({"error": parsed["error"]}, 422)
+
+    enriched = enrich_parsed_result(user_input, parsed)
+    if not enriched["is_k8s"]:
+        return parsed, enriched, None, ({
+            "parsed": enriched,
+            "k8s": False,
+            "rejected": True,
+            "reason": "Guardian: 此請求不像 K8s 任務 (is_k8s=false)",
+        }, 200)
+
+    missing = [k for k in ("app_name", "image", "pods") if not parsed.get(k)]
+    if missing:
+        return parsed, enriched, None, ({"error": f"Missing required field(s): {', '.join(missing)}", "parsed": enriched}, 422)
+    try:
+        parsed["pods"] = int(parsed["pods"])
+        parsed["port"] = int(parsed.get("port", 80))
+    except (TypeError, ValueError):
+        return parsed, enriched, None, ({"error": "Invalid pods or port", "parsed": enriched}, 422)
+    if not 1 <= parsed["pods"] <= 100:
+        return parsed, enriched, None, ({"error": "pods must be between 1 and 100", "parsed": enriched}, 422)
+    if not 1 <= parsed["port"] <= 65535:
+        return parsed, enriched, None, ({"error": "port must be between 1 and 65535", "parsed": enriched}, 422)
+    if parsed.get("memory") and not re.match(r"^\d+(Mi|Gi|Ki|M|G)$", str(parsed["memory"])):
+        return parsed, enriched, None, ({"error": "memory must look like 128Mi or 1Gi", "parsed": enriched}, 422)
+
+    review = _review_deployment(parsed)
+    try:
+        if parsed.get("node_count") is not None:
+            # 模型自己判斷出來的 node_count（訓練資料裡有明講 node 容量時才會出現）
+            review["node_estimate"] = {"node_count": parsed["node_count"], "source": "llm"}
+        else:
+            from agents.cost_agent import estimate_node_count
+            result = estimate_node_count(parsed.get("cpu"), parsed.get("memory"), parsed.get("pods", 1))
+            result["source"] = "calculated"
+            review["node_estimate"] = result
+    except Exception as e:
+        review["node_estimate"] = None
+        review.setdefault("warnings", []).append(f"node_estimate failed: {e}")
+    if review["decision"] == "block":
+        return parsed, enriched, review, ({
+            "parsed": enriched,
+            "k8s": False,
+            "rejected": True,
+            "reason": review["reason"],
+            "review": review,
+        }, 200)
+    return parsed, enriched, review, None
+
+
+@app.route("/api/deploy/parse", methods=["POST"])
+def api_deploy_parse():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    data = request.get_json() or {}
+    user_input = data.get("input", "").strip()
+    if not user_input or len(user_input) < 3:
+        return jsonify({"error": "Input too short"}), 400
+    parsed, enriched, review, error = _prepare_deploy(user_input)
+    if error:
+        payload, status = error
+        return jsonify(payload), status
+    return jsonify({"parsed": enriched, "raw": parsed, "review": review, "k8s": K8S_ENABLED})
+
 
 @app.route("/api/deploy", methods=["POST"])
 def api_deploy():
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    data       = request.get_json()
-    user_input = (data or {}).get("input","").strip()
+    data = request.get_json() or {}
+    user_input = data.get("input", "").strip()
+    parsed_override = data.get("parsed")
+    if not user_input and parsed_override:
+        user_input = f"deploy {parsed_override.get('pods', 1)} {parsed_override.get('image', 'nginx:latest')} pods for {parsed_override.get('app_name', 'auto-app')}, port {parsed_override.get('port', 80)}"
     if not user_input or len(user_input) < 3:
         return jsonify({"error": "Input too short"}), 400
-    parsed = ask_llama(user_input)
-    if "error" in parsed:
-        return jsonify({"error": parsed["error"]}), 422
 
-    # ── 套用資料集欄位 enrichment ──────────────────────────────
-    enriched = enrich_parsed_result(user_input, parsed)
+    parsed, enriched, review, error = _prepare_deploy(user_input, parsed_override)
+    if error:
+        payload, status = error
+        return jsonify(payload), status
 
-    # Guardian 雛形:若判斷不是 K8s 請求,拒絕部署但仍回傳分類結果讓使用者看到
-    if not enriched["is_k8s"]:
-        return jsonify({
-            "parsed":   enriched,
-            "k8s":      False,
-            "rejected": True,
-            "reason":   "Guardian: 此請求不像 K8s 任務 (is_k8s=false)"
-        }), 200
+    gitops_result = None
+    try:
+        from gitops.manifest_writer import write_manifest
+        gitops_result = write_manifest(parsed, repo_path=ROOT, namespace=NS, dry_run=False, commit=True)
+    except Exception as e:
+        gitops_result = {"ok": False, "message": str(e), "files": [], "commit_sha": None}
+        review.setdefault("warnings", []).append(f"GitOps manifest write failed: {e}")
 
     threading.Thread(target=save_gold_sample, args=(user_input, parsed), daemon=True).start()
+
+    # 同步呼叫（不是背景執行緒）：讓回應反映 K8s 是不是真的部署成功，而不是「沒報錯就當作成功」。
+    # k8s_deploy() 內部四個 API 呼叫都已加上 _request_timeout=(5,10) 且 retries=0，不會無限期卡住這個 request。
+    k8s_deploy_result = None
     if K8S_ENABLED:
-        threading.Thread(
-            target=k8s_deploy,
-            args=(parsed["app_name"], parsed["image"], parsed["pods"], parsed.get("port", 80), parsed.get("memory")),
-            daemon=True
-        ).start()
-    return jsonify({"parsed": enriched, "k8s": K8S_ENABLED})
+        ok, message = k8s_deploy(parsed["app_name"], parsed["image"], parsed["pods"], parsed.get("port", 80), parsed.get("memory"), parsed.get("cpu"))
+        k8s_deploy_result = {"ok": ok, "message": message}
+        if not ok:
+            review.setdefault("warnings", []).append(f"K8s 部署失敗：{message}")
+
+    return jsonify({"parsed": enriched, "k8s": K8S_ENABLED, "review": review, "gitops": gitops_result, "k8s_deploy": k8s_deploy_result})
 
 @app.route("/api/pods")
 def api_pods():
@@ -1765,6 +2861,113 @@ def api_delete():
         return jsonify({"error": "Name required"}), 400
     ok, msg = k8s_delete_deployment(name)
     return jsonify({"success": ok, "message": msg, "error": None if ok else msg})
+
+
+
+@app.route("/api/scale", methods=["POST"])
+def api_scale():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    if not K8S_ENABLED:
+        return jsonify({"success": False, "error": "K8s 未連線"}), 503
+    data = request.get_json() or {}
+    name = data.get("name", "").strip()
+    try:
+        replicas = int(data.get("replicas", 1))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "replicas must be an integer"}), 400
+    if not name:
+        return jsonify({"success": False, "error": "Name required"}), 400
+    if not 1 <= replicas <= 100:
+        return jsonify({"success": False, "error": "replicas must be between 1 and 100"}), 400
+    try:
+        api = k8s_client.AppsV1Api()
+        body = {"spec": {"replicas": replicas}}
+        api.patch_namespaced_deployment_scale(name=name, namespace=NS, body=body)
+        return jsonify({"success": True, "message": f"已調整 {name} replicas={replicas}"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/update", methods=["POST"])
+def api_update():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    if not K8S_ENABLED:
+        return jsonify({"success": False, "error": "K8s 未連線"}), 503
+    data = request.get_json() or {}
+    name = data.get("name", "").strip()
+    image = data.get("image", "").strip()
+    if not name or not image:
+        return jsonify({"success": False, "error": "name and image are required"}), 400
+    try:
+        api = k8s_client.AppsV1Api()
+        dep = api.read_namespaced_deployment(name, NS)
+        if not dep.spec.template.spec.containers:
+            return jsonify({"success": False, "error": "deployment has no containers"}), 400
+        old_image = dep.spec.template.spec.containers[0].image
+        annotations = dep.spec.template.metadata.annotations or {}
+        annotations["zerotouch.k8s/previous-image"] = old_image
+        annotations["zerotouch.k8s/updated-at"] = datetime.utcnow().isoformat()
+        dep.spec.template.metadata.annotations = annotations
+        dep.spec.template.spec.containers[0].image = image
+        api.patch_namespaced_deployment(name, NS, dep)
+        return jsonify({"success": True, "message": f"已更新 {name} image={image}", "previous_image": old_image})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/rollback", methods=["POST"])
+def api_rollback():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    data = request.get_json() or {}
+    app_name = (data.get("app_name") or data.get("name") or "").strip()
+    if not app_name:
+        return jsonify({"success": False, "error": "app_name required"}), 400
+    try:
+        from gitops.rollback import rollback
+        result = rollback(app_name, namespace=NS, repo_path=ROOT, strategy="auto", dry_run=False)
+        if result.get("ok"):
+            return jsonify({
+                "success": True,
+                "message": result.get("message", ""),
+                "details": result.get("details", {}),
+                "strategy": result.get("strategy"),
+                "error": None,
+            })
+    except Exception as e:
+        result = {"message": str(e), "details": {}}
+
+    # Fallback without kubectl: revert to the previous image annotation stored by /api/update.
+    try:
+        if not K8S_ENABLED:
+            return jsonify({"success": False, "error": "K8s 未連線"}), 503
+        api = k8s_client.AppsV1Api()
+        dep = api.read_namespaced_deployment(app_name, NS)
+        annotations = dep.spec.template.metadata.annotations or {}
+        previous = annotations.get("zerotouch.k8s/previous-image")
+        if not previous:
+            return jsonify({
+                "success": False,
+                "error": result.get("message", "rollback failed; no previous image annotation"),
+                "details": result.get("details", {}),
+            }), 500
+        current = dep.spec.template.spec.containers[0].image
+        annotations["zerotouch.k8s/previous-image"] = current
+        annotations["zerotouch.k8s/rolled-back-at"] = datetime.utcnow().isoformat()
+        dep.spec.template.metadata.annotations = annotations
+        dep.spec.template.spec.containers[0].image = previous
+        api.patch_namespaced_deployment(app_name, NS, dep)
+        return jsonify({
+            "success": True,
+            "message": f"已回滾 {app_name} image {current} → {previous}",
+            "strategy": "python-client-image",
+            "details": {"previous_image": previous, "current_image": current},
+            "error": None,
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e), "details": result.get("details", {})}), 500
 
 @app.route("/api/dataset/stats")
 def api_dataset_stats():
@@ -1840,7 +3043,7 @@ def api_gitops():
     import subprocess
     try:
         result = subprocess.run(
-            ["git", "log", "--pretty=format:%H|%s|%ai", "--", "manifests/"],
+            ["git", "log", "--pretty=format:%H|%s|%ai", "--", "manifests/", "yamls/deployments/"],
             cwd=os.path.dirname(os.path.abspath(__file__)),
             capture_output=True, text=True, timeout=10
         )
@@ -1853,10 +3056,13 @@ def api_gitops():
             msg = parts[1] if len(parts) > 1 else ""
             time = parts[2][:16] if len(parts) > 2 else ""
             app_name = ""
-            if "deploy" in msg.lower():
+            m = re.search(r"gitops:\s*(?:deploy|revert)\s+([^\s]+)", msg, re.IGNORECASE)
+            if m:
+                app_name = m.group(1)
+            elif "deploy" in msg.lower():
                 words = msg.split()
                 for i, w in enumerate(words):
-                    if w.lower() in ("deploy", "gitops:") and i+1 < len(words):
+                    if w.lower() == "deploy" and i+1 < len(words):
                         app_name = words[i+1]
                         break
             commits.append({"hash": h, "message": msg, "time": time, "app": app_name})
@@ -1962,6 +3168,15 @@ def api_metrics():
         except: metrics["running_pods"] = None
         try: metrics["kube_pods"] = prom_query("count(kube_pod_info)")
         except: metrics["kube_pods"] = None
+        if K8S_ENABLED and (metrics["pod_count"] is None or metrics["running_pods"] is None):
+            pods = k8s_get_pods()
+            if metrics["pod_count"] is None:
+                metrics["pod_count"] = len(pods)
+            if metrics["running_pods"] is None:
+                metrics["running_pods"] = len([p for p in pods if p.get("phase") == "Running"])
+            if metrics["kube_pods"] is None:
+                metrics["kube_pods"] = len(pods)
+            metrics["source"] = "prometheus+k8s-fallback"
         return jsonify({"connected": True, "url": prom_url, "metrics": metrics})
     except Exception as e:
         return jsonify({"connected": False, "error": str(e)})
@@ -1971,5 +3186,5 @@ if __name__ == "__main__":
     print("  ZeroTouch K8s Web Demo v2")
     print("=" * 60)
     print(f"  K8s   : {'Connected' if K8S_ENABLED else 'Simulation'}")
-    print(f"  Open  : http://localhost:5000")
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    print(f"  Open  : http://localhost:5050")
+    app.run(host="0.0.0.0", port=5050, debug=False)

@@ -1,6 +1,12 @@
 """
 rag/build_index.py
-建立 K8s 知識庫的向量索引，供 RAG 查詢使用。
+建立 K8s 知識庫索引，供 RAG 查詢使用。
+
+雙軌索引策略：
+    1. ChromaDB + sentence-transformers（主要）：真正的向量資料庫，
+       持久化在磁碟上，支援語意相似度搜尋。
+    2. TF-IDF JSON（後備）：不需要額外模型或 GPU，任何環境都能跑，
+       在 chromadb / sentence-transformers 不可用時自動接手。
 
 研究報告依據：
     「檢索增強生成 (RAG)：將 LLM 與最新的 Kubernetes 文檔、內部運行手冊
@@ -8,7 +14,7 @@ rag/build_index.py
      或欄位」
 
 使用方式：
-    python rag/build_index.py              # 建立索引
+    python rag/build_index.py              # 建立索引（已存在則略過）
     python rag/build_index.py --rebuild    # 強制重建
 """
 import sys
@@ -26,9 +32,11 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 # ── 路徑設定 ────────────────────────────────────────────────────
-RAG_DIR    = os.path.dirname(os.path.abspath(__file__))
-DOCS_DIR   = os.path.join(RAG_DIR, "k8s_docs")
-INDEX_PATH = os.path.join(RAG_DIR, "index.json")
+RAG_DIR      = os.path.dirname(os.path.abspath(__file__))
+DOCS_DIR     = os.path.join(RAG_DIR, "k8s_docs")
+INDEX_PATH   = os.path.join(RAG_DIR, "index.json")      # TF-IDF 後備索引
+META_PATH    = os.path.join(RAG_DIR, "index_meta.json")  # 建索引狀態摘要
+SEED_QA_PATH = os.path.join(RAG_DIR, "prompt_qa_seed.jsonl")
 
 # ── 分塊參數 ─────────────────────────────────────────────────────
 CHUNK_SIZE    = 400   # 每個 chunk 的最大字元數
@@ -41,7 +49,7 @@ CHUNK_OVERLAP = 80    # 相鄰 chunk 的重疊字元數
 
 def load_docs(docs_dir: str = DOCS_DIR) -> List[Dict]:
     """
-    從 docs_dir 載入所有 .md / .txt / .yaml 文件。
+    從 docs_dir 載入所有 .md / .txt / .yaml 文件，並附加 prompt_qa_seed.jsonl。
     回傳：[{"source": str, "content": str}, ...]
     """
     docs = []
@@ -58,6 +66,22 @@ def load_docs(docs_dir: str = DOCS_DIR) -> List[Dict]:
                 print(f"[RAG] 載入：{f.name}（{len(text)} chars）")
             except Exception as e:
                 print(f"[RAG] 跳過 {f.name}：{e}")
+
+    seed_path = Path(SEED_QA_PATH)
+    if seed_path.exists():
+        try:
+            seed_count = 0
+            for line in seed_path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                item = json.loads(line)
+                content = item.get("rag_text") or f"Question:\n{item.get('question','')}\n\nAnswer:\n{json.dumps(item.get('answer',{}), ensure_ascii=False)}"
+                source = f"prompt_qa_seed:{item.get('id', seed_count + 1)}"
+                docs.append({"source": source, "content": content})
+                seed_count += 1
+            print(f"[RAG] 載入 seed QA：{seed_count} 筆")
+        except Exception as e:
+            print(f"[RAG] 跳過 seed QA：{e}")
 
     print(f"[RAG] 共載入 {len(docs)} 份文件")
     return docs
@@ -115,53 +139,21 @@ def _make_id(source: str, text: str) -> str:
 
 
 # ════════════════════════════════════════════════════════════════
-# 向量嵌入（Embedding）
+# TF-IDF 後備嵌入（無需 GPU / 額外模型下載）
 # ════════════════════════════════════════════════════════════════
-
-_embed_model = None   # lazy-loaded sentence-transformer
-_tfidf_data  = None   # TF-IDF fallback
-
-
-def _try_load_sentence_transformer():
-    """嘗試載入 sentence-transformers，失敗時回傳 None。"""
-    global _embed_model
-    if _embed_model is not None:
-        return _embed_model
-    try:
-        from sentence_transformers import SentenceTransformer
-        model_name = "all-MiniLM-L6-v2"  # 小型高效模型（22MB）
-        print(f"[RAG] 載入 SentenceTransformer：{model_name}")
-        _embed_model = SentenceTransformer(model_name)
-        return _embed_model
-    except ImportError:
-        return None
-
-
-def embed_texts_semantic(texts: List[str]) -> List[List[float]]:
-    """使用 sentence-transformers 計算語意向量。"""
-    model = _try_load_sentence_transformer()
-    if model is None:
-        raise RuntimeError("sentence-transformers 未安裝")
-    vecs = model.encode(texts, show_progress_bar=True, batch_size=32)
-    return vecs.tolist()
-
 
 def embed_texts_tfidf(texts: List[str], vocab: Optional[List[str]] = None
                        ) -> tuple:
-    """
-    TF-IDF 後備嵌入（不需要 GPU 或額外模型下載）。
-    回傳：(vectors_list, vocab_list)
-    """
+    """回傳 (vectors_list, vocab_list)。"""
     from math import log
-    import re
 
     def tokenize(t: str) -> List[str]:
-        return re.findall(r'[a-zA-Z\u4e00-\u9fff]+', t.lower())
+        return re.findall(r'[a-zA-Z一-鿿]+', t.lower())
+
+    tokenized = [tokenize(t) for t in texts]
 
     if vocab is None:
-        # 建立詞彙表
         doc_freq: Dict[str, int] = {}
-        tokenized = [tokenize(t) for t in texts]
         for tokens in tokenized:
             for w in set(tokens):
                 doc_freq[w] = doc_freq.get(w, 0) + 1
@@ -169,19 +161,16 @@ def embed_texts_tfidf(texts: List[str], vocab: Optional[List[str]] = None
         # 只排除出現在 > 90% chunks 的高頻停用詞（無資訊量）
         sorted_vocab = sorted(doc_freq.items(), key=lambda x: -x[1])
         vocab = [w for w, _ in sorted_vocab[:2000] if 1 <= doc_freq[w] <= len(texts) * 0.9]
-    else:
-        tokenized = [tokenize(t) for t in texts]
 
     w2i = {w: i for i, w in enumerate(vocab)}
     n   = len(texts)
-    vectors = []
 
-    # 計算文件頻率（用於 IDF）
     doc_freq2: Dict[str, int] = {}
     for tokens in tokenized:
         for w in set(tokens):
             doc_freq2[w] = doc_freq2.get(w, 0) + 1
 
+    vectors = []
     for tokens in tokenized:
         tf: Dict[str, float] = {}
         for w in tokens:
@@ -191,7 +180,6 @@ def embed_texts_tfidf(texts: List[str], vocab: Optional[List[str]] = None
             if w in w2i:
                 idf = log((n + 1) / (doc_freq2.get(w, 0) + 1)) + 1
                 vec[w2i[w]] = (cnt / len(tokens)) * idf
-        # L2 正規化
         norm = sum(x * x for x in vec) ** 0.5 or 1.0
         vec  = [x / norm for x in vec]
         vectors.append(vec)
@@ -199,78 +187,86 @@ def embed_texts_tfidf(texts: List[str], vocab: Optional[List[str]] = None
     return vectors, vocab
 
 
+def build_tfidf_index(all_chunks: List[Dict], output_path: str = INDEX_PATH) -> Dict:
+    """建立 TF-IDF JSON 後備索引（永遠會執行，成本很低）。"""
+    texts = [c["text"] for c in all_chunks]
+    vectors, vocab = embed_texts_tfidf(texts)
+    index = {
+        "method":   "tfidf",
+        "chunks":   all_chunks,
+        "vectors":  vectors,
+        "vocab":    vocab,
+        "built_at": time.time(),
+    }
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(index, f, ensure_ascii=False, indent=2)
+    return index
+
+
 # ════════════════════════════════════════════════════════════════
 # 主要建索引函數
 # ════════════════════════════════════════════════════════════════
 
-def build_index(docs_dir: str = DOCS_DIR,
-                output_path: str = INDEX_PATH,
-                use_semantic: bool = True) -> Dict:
+def build_index(docs_dir: str = DOCS_DIR, output_path: str = INDEX_PATH) -> Dict:
     """
-    建立完整的 RAG 索引並存至 JSON。
+    建立完整的 RAG 索引：
+      1. 一律建立 TF-IDF JSON 後備索引（快速、零額外相依）
+      2. 若 chromadb + sentence-transformers 可用，額外建立向量資料庫
+         （查詢時優先使用，效果比 TF-IDF 好很多）
 
-    回傳 index dict：
-    {
-      "method":   "semantic" | "tfidf",
-      "chunks":   [{"source", "text", "chunk_id"}, ...],
-      "vectors":  [[float, ...], ...],
-      "vocab":    [...] (僅 tfidf 方法),
-      "built_at": unix timestamp,
-      "doc_count": int,
-    }
+    回傳建索引狀態摘要（同時寫入 rag/index_meta.json）。
     """
     t0 = time.time()
 
-    # 1. 載入文件
     docs = load_docs(docs_dir)
     if not docs:
         print("[RAG] 沒有找到任何文件，索引未建立。")
         return {}
 
-    # 2. 分塊
     all_chunks: List[Dict] = []
     for doc in docs:
         all_chunks.extend(chunk_document(doc))
     print(f"[RAG] 共產生 {len(all_chunks)} 個 chunks")
 
-    texts = [c["text"] for c in all_chunks]
+    # 1. TF-IDF 後備索引（一定會建立）
+    build_tfidf_index(all_chunks, output_path)
+    print(f"[RAG] TF-IDF 後備索引已建立：{output_path}")
 
-    # 3. 嵌入
-    method = "tfidf"
-    vocab  = None
+    # 2. ChromaDB 向量資料庫（可用時建立）
+    chroma_ok = False
+    chroma_error = None
+    try:
+        from rag import vector_store
+        if vector_store.is_available():
+            n = vector_store.rebuild(all_chunks)
+            chroma_ok = n > 0
+            print(f"[RAG] ChromaDB 向量索引已建立：{n} chunks，device={vector_store.get_device()}")
+        else:
+            print("[RAG] chromadb / sentence-transformers 未安裝，跳過向量索引（僅用 TF-IDF）")
+    except Exception as e:
+        chroma_error = str(e)
+        print(f"[RAG] ChromaDB 索引建立失敗（{e}），僅使用 TF-IDF 後備索引")
 
-    if use_semantic:
-        try:
-            vectors = embed_texts_semantic(texts)
-            method  = "semantic"
-            print(f"[RAG] 使用 sentence-transformers 完成嵌入（{len(vectors[0])}維）")
-        except Exception as e:
-            print(f"[RAG] 語意嵌入失敗（{e}），改用 TF-IDF...")
-            vectors, vocab = embed_texts_tfidf(texts)
-            print(f"[RAG] TF-IDF 嵌入完成（詞彙量 {len(vocab)}）")
-    else:
-        vectors, vocab = embed_texts_tfidf(texts)
-        print(f"[RAG] TF-IDF 嵌入完成（詞彙量 {len(vocab)}）")
-
-    # 4. 組裝索引
-    index = {
-        "method":    method,
-        "chunks":    all_chunks,
-        "vectors":   vectors,
-        "built_at":  time.time(),
-        "doc_count": len(docs),
-    }
-    if vocab is not None:
-        index["vocab"] = vocab
-
-    # 5. 儲存
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(index, f, ensure_ascii=False, indent=2)
+    per_source: Dict[str, int] = {}
+    for c in all_chunks:
+        per_source[c["source"]] = per_source.get(c["source"], 0) + 1
 
     elapsed = time.time() - t0
-    print(f"[RAG] 索引已儲存至：{output_path}")
-    print(f"[RAG] 建立耗時：{elapsed:.1f}s | 方法：{method} | Chunks：{len(all_chunks)}")
-    return index
+    meta = {
+        "built_at":     time.time(),
+        "elapsed_sec":  round(elapsed, 2),
+        "doc_count":    len(docs),
+        "chunk_count":  len(all_chunks),
+        "chroma_ready": chroma_ok,
+        "chroma_error": chroma_error,
+        "active_method": "chroma" if chroma_ok else "tfidf",
+        "per_source":   per_source,
+    }
+    with open(META_PATH, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+
+    print(f"[RAG] 建立耗時：{elapsed:.1f}s | 使用方法：{meta['active_method']} | Chunks：{len(all_chunks)}")
+    return meta
 
 
 # ════════════════════════════════════════════════════════════════
@@ -278,18 +274,13 @@ def build_index(docs_dir: str = DOCS_DIR,
 # ════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="建立 RAG 向量索引")
-    parser.add_argument("--rebuild",    action="store_true", help="強制重建（忽略現有索引）")
-    parser.add_argument("--no-semantic",action="store_true", help="停用語意嵌入，改用 TF-IDF")
-    parser.add_argument("--docs-dir",   default=DOCS_DIR,   help="文件目錄路徑")
-    parser.add_argument("--output",     default=INDEX_PATH, help="索引輸出路徑")
+    parser = argparse.ArgumentParser(description="建立 RAG 索引（ChromaDB + TF-IDF 後備）")
+    parser.add_argument("--rebuild",  action="store_true", help="強制重建（忽略現有索引）")
+    parser.add_argument("--docs-dir", default=DOCS_DIR,   help="文件目錄路徑")
+    parser.add_argument("--output",   default=INDEX_PATH, help="TF-IDF 索引輸出路徑")
     args = parser.parse_args()
 
-    if not args.rebuild and os.path.exists(args.output):
+    if not args.rebuild and os.path.exists(args.output) and os.path.exists(META_PATH):
         print(f"[RAG] 索引已存在（{args.output}），使用 --rebuild 強制重建")
     else:
-        build_index(
-            docs_dir     = args.docs_dir,
-            output_path  = args.output,
-            use_semantic = not args.no_semantic,
-        )
+        build_index(docs_dir=args.docs_dir, output_path=args.output)

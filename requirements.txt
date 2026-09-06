@@ -24,6 +24,9 @@ flask>=3.0.0
 # ── Claude API（快速推論 + AI 對話，取代本地 GPU）─────────────
 anthropic>=0.40.0
 
+# ── Gemini API（翻譯層：正規化使用者輸入後交回本地模型執行）───
+google-genai>=1.0.0
+
 # ── 工具 ──────────────────────────────────────────────────────
 json_repair>=0.20.0
 numpy>=1.24.0
@@ -33,6 +36,8 @@ numpy>=1.24.0
 scikit-learn>=1.3.0
 # sentence-transformers：語意向量（有 GPU 時效果更好，選用）
 sentence-transformers>=2.6.0
+# chromadb：持久化向量資料庫（chunk 儲存 + ANN 相似度搜尋），未安裝時自動退回 TF-IDF
+chromadb>=0.5.0
 
 # ── GitOps（選用，未安裝時自動跳過）──────────────────────────
 gitpython>=3.1.0

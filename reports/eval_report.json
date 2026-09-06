@@ -1,17 +1,21 @@
 {
-  "timestamp": "2026-05-11T22:24:59.549226",
-  "total": 60,
+  "timestamp": "2026-08-12T16:30:41.564730",
+  "total": 100,
   "accuracy": {
-    "pods": 98.3,
-    "image": 98.3,
-    "port": 90.0,
-    "memory": 90.0,
-    "all": 93.3
+    "pods": 100.0,
+    "image": 100.0,
+    "port": 100.0,
+    "memory": 100.0,
+    "cpu": 100.0,
+    "node_count": 60.0,
+    "schema_valid": 100.0,
+    "all": 92.0
   },
+  "pods_mae": 0.0,
   "per_number_accuracy": {
     "1": 100.0,
     "2": 100.0,
-    "3": 83.3,
+    "3": 100.0,
     "4": 100.0,
     "5": 100.0,
     "6": 100.0,
@@ -27,12 +31,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 1,
         "image": "nginx:latest",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -41,12 +50,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 2,
         "image": "redis:7-alpine",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -55,12 +69,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 3,
         "image": "postgres:15",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -69,12 +88,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 4,
         "image": "node:20-alpine",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -83,12 +107,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 5,
         "image": "python:3.11-slim",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -97,12 +126,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 6,
         "image": "golang:1.21-alpine",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -111,12 +145,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 7,
         "image": "mysql:8.0",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -125,12 +164,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 8,
         "image": "mongo:6",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -139,12 +183,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 9,
         "image": "openjdk:17-slim",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -153,12 +202,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 10,
         "image": "nginx:1.25-alpine",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -167,12 +221,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 1,
         "image": "nginx:latest",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -181,12 +240,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 2,
         "image": "redis:7-alpine",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -195,12 +259,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 3,
         "image": "postgres:15",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -209,12 +278,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 4,
         "image": "node:20-alpine",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -223,12 +297,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 5,
-        "image": "python:3.11-slit",
+        "image": "python:3.11-slim",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -237,12 +316,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 6,
         "image": "golang:1.21-alpine",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -251,12 +335,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 7,
         "image": "mysql:8.0",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -265,12 +354,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 8,
         "image": "mongo:6",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -279,12 +373,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 9,
         "image": "openjdk:17-slim",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -293,12 +392,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 10,
         "image": "nginx:1.25-alpine",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -307,12 +411,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 1,
         "image": "nginx:latest",
+        "node_count": null,
         "port": 80,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -321,12 +430,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 2,
         "image": "node:20-alpine",
+        "node_count": null,
         "port": 3000,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -335,12 +449,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 3,
         "image": "postgres:15",
+        "node_count": null,
         "port": 5432,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -349,12 +468,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 4,
         "image": "redis:7-alpine",
+        "node_count": null,
         "port": 6379,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -363,12 +487,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 5,
         "image": "mysql:8.0",
+        "node_count": null,
         "port": 3306,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -377,12 +506,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 6,
         "image": "python:3.11-slim",
+        "node_count": null,
         "port": 5000,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -391,26 +525,36 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 7,
         "image": "mongo:6",
+        "node_count": null,
         "port": 27017,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
       "input": "create 8 golang:1.21-alpine pods, container port 8080",
       "pods_ok": true,
       "image_ok": true,
-      "port_ok": false,
+      "port_ok": true,
       "mem_ok": true,
-      "all_ok": false,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
       "actual": {
         "pods": 8,
         "image": "golang:1.21-alpine",
-        "port": null,
-        "memory": null
+        "node_count": null,
+        "port": 8080,
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -419,12 +563,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 9,
         "image": "nginx:1.25-alpine",
+        "node_count": null,
         "port": 443,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -433,12 +582,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 10,
         "image": "openjdk:17-slim",
+        "node_count": null,
         "port": 8443,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -447,12 +601,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 1,
         "image": "nginx:latest",
+        "node_count": null,
         "port": 80,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -461,12 +620,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 2,
         "image": "node:20-alpine",
+        "node_count": null,
         "port": 3000,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -475,12 +639,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 3,
         "image": "postgres:15",
+        "node_count": null,
         "port": 5432,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -489,12 +658,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 4,
         "image": "redis:7-alpine",
+        "node_count": null,
         "port": 6379,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -503,26 +677,36 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 5,
         "image": "mysql:8.0",
+        "node_count": null,
         "port": 3306,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
       "input": "建立 6 個 python:3.11-slim pod，開放 port 5000",
       "pods_ok": true,
       "image_ok": true,
-      "port_ok": false,
+      "port_ok": true,
       "mem_ok": true,
-      "all_ok": false,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
       "actual": {
         "pods": 6,
         "image": "python:3.11-slim",
-        "port": null,
-        "memory": null
+        "node_count": null,
+        "port": 5000,
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -531,12 +715,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 7,
         "image": "mongo:6",
+        "node_count": null,
         "port": 27017,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -545,12 +734,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 8,
         "image": "golang:1.21-alpine",
+        "node_count": null,
         "port": 8080,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -559,12 +753,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 9,
         "image": "nginx:1.25-alpine",
+        "node_count": null,
         "port": 443,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -573,12 +772,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 10,
         "image": "openjdk:17-slim",
+        "node_count": null,
         "port": 8443,
-        "memory": null
+        "memory": null,
+        "cpu": null
       }
     },
     {
@@ -587,12 +791,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 1,
         "image": "nginx:latest",
+        "node_count": null,
         "port": null,
-        "memory": "256Mi"
+        "memory": "256Mi",
+        "cpu": null
       }
     },
     {
@@ -601,12 +810,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 2,
         "image": "python:3.11-slim",
+        "node_count": null,
         "port": null,
-        "memory": "512Mi"
+        "memory": "512Mi",
+        "cpu": null
       }
     },
     {
@@ -615,12 +829,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 3,
         "image": "elasticsearch:8.11.0",
+        "node_count": null,
         "port": null,
-        "memory": "2Gi"
+        "memory": "2Gi",
+        "cpu": null
       }
     },
     {
@@ -629,12 +848,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 4,
         "image": "redis:7-alpine",
+        "node_count": null,
         "port": null,
-        "memory": "128Mi"
+        "memory": "128Mi",
+        "cpu": null
       }
     },
     {
@@ -643,12 +867,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 5,
         "image": "postgres:15",
+        "node_count": null,
         "port": null,
-        "memory": "1Gi"
+        "memory": "1Gi",
+        "cpu": null
       }
     },
     {
@@ -657,12 +886,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 6,
         "image": "node:20-alpine",
+        "node_count": null,
         "port": null,
-        "memory": "512Mi"
+        "memory": "512Mi",
+        "cpu": null
       }
     },
     {
@@ -671,12 +905,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 7,
         "image": "golang:1.21-alpine",
+        "node_count": null,
         "port": null,
-        "memory": "256Mi"
+        "memory": "256Mi",
+        "cpu": null
       }
     },
     {
@@ -684,13 +923,18 @@
       "pods_ok": true,
       "image_ok": true,
       "port_ok": true,
-      "mem_ok": false,
-      "all_ok": false,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
       "actual": {
         "pods": 8,
         "image": "mysql:8.0",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": "1Gi",
+        "cpu": null
       }
     },
     {
@@ -699,12 +943,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 9,
         "image": "mongo:6",
+        "node_count": null,
         "port": null,
-        "memory": "512Mi"
+        "memory": "512Mi",
+        "cpu": null
       }
     },
     {
@@ -713,12 +962,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 10,
         "image": "openjdk:17-slim",
+        "node_count": null,
         "port": null,
-        "memory": "256Mi"
+        "memory": "256Mi",
+        "cpu": null
       }
     },
     {
@@ -727,12 +981,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 1,
         "image": "nginx:latest",
+        "node_count": null,
         "port": null,
-        "memory": "256Mi"
+        "memory": "256Mi",
+        "cpu": null
       }
     },
     {
@@ -741,26 +1000,36 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 2,
         "image": "python:3.11-slim",
+        "node_count": null,
         "port": null,
-        "memory": "512Mi"
+        "memory": "512Mi",
+        "cpu": null
       }
     },
     {
       "input": "建立 3 個 elasticsearch:8.11.0 pod，memory 2Gi",
-      "pods_ok": false,
-      "image_ok": false,
+      "pods_ok": true,
+      "image_ok": true,
       "port_ok": true,
-      "mem_ok": false,
-      "all_ok": false,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
       "actual": {
-        "pods": null,
-        "image": null,
+        "pods": 3,
+        "image": "elasticsearch:8.11.0",
+        "node_count": null,
         "port": null,
-        "memory": null
+        "memory": "2Gi",
+        "cpu": null
       }
     },
     {
@@ -769,12 +1038,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 4,
         "image": "redis:7-alpine",
+        "node_count": null,
         "port": null,
-        "memory": "128Mi"
+        "memory": "128Mi",
+        "cpu": null
       }
     },
     {
@@ -783,12 +1057,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 5,
         "image": "postgres:15",
+        "node_count": null,
         "port": null,
-        "memory": "1Gi"
+        "memory": "1Gi",
+        "cpu": null
       }
     },
     {
@@ -797,12 +1076,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 6,
         "image": "node:20-alpine",
+        "node_count": null,
         "port": null,
-        "memory": "512Mi"
+        "memory": "512Mi",
+        "cpu": null
       }
     },
     {
@@ -811,12 +1095,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 7,
         "image": "golang:1.21-alpine",
+        "node_count": null,
         "port": null,
-        "memory": "256Mi"
+        "memory": "256Mi",
+        "cpu": null
       }
     },
     {
@@ -825,12 +1114,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 8,
         "image": "mysql:8.0",
+        "node_count": null,
         "port": null,
-        "memory": "1Gi"
+        "memory": "1Gi",
+        "cpu": null
       }
     },
     {
@@ -839,12 +1133,17 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 9,
         "image": "mongo:6",
+        "node_count": null,
         "port": null,
-        "memory": "512Mi"
+        "memory": "512Mi",
+        "cpu": null
       }
     },
     {
@@ -853,12 +1152,777 @@
       "image_ok": true,
       "port_ok": true,
       "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
       "all_ok": true,
       "actual": {
         "pods": 10,
         "image": "openjdk:17-slim",
+        "node_count": null,
         "port": null,
-        "memory": "256Mi"
+        "memory": "256Mi",
+        "cpu": null
+      }
+    },
+    {
+      "input": "deploy 1 nginx:latest pod for web-frontend, 500m cpu",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 1,
+        "image": "nginx:latest",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "500m"
+      }
+    },
+    {
+      "input": "start 2 python:3.11-slim pods, 1 cpu core",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 2,
+        "image": "python:3.11-slim",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "1"
+      }
+    },
+    {
+      "input": "launch 3 elasticsearch:8.11.0 pods, 2 CPU cores",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 3,
+        "image": "elasticsearch:8.11.0",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "2"
+      }
+    },
+    {
+      "input": "run 4 redis:7-alpine pods, cpu limit 250m",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 4,
+        "image": "redis:7-alpine",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "250m"
+      }
+    },
+    {
+      "input": "deploy 5 postgres:15 pods, set cpu to 4 cores",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 5,
+        "image": "postgres:15",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "4"
+      }
+    },
+    {
+      "input": "start 6 node:20-alpine pods, cpu limit 1 core",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 6,
+        "image": "node:20-alpine",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "1"
+      }
+    },
+    {
+      "input": "create 7 golang:1.21-alpine pods, 750m cpu",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 7,
+        "image": "golang:1.21-alpine",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "750m"
+      }
+    },
+    {
+      "input": "spin up 8 mysql:8.0 pods, cpu 2 cores",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 8,
+        "image": "mysql:8.0",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "2"
+      }
+    },
+    {
+      "input": "launch 9 mongo:6 pods, 500m cpu",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 9,
+        "image": "mongo:6",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "500m"
+      }
+    },
+    {
+      "input": "deploy 10 openjdk:17-slim pods, cpu limit 3 cores",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 10,
+        "image": "openjdk:17-slim",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "3"
+      }
+    },
+    {
+      "input": "部署 1 個 web-frontend，image nginx:latest，CPU 500m",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 1,
+        "image": "nginx:latest",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "500m"
+      }
+    },
+    {
+      "input": "幫我跑 2 個 data-processor，python:3.11-slim，1 顆 CPU",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 2,
+        "image": "python:3.11-slim",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "1"
+      }
+    },
+    {
+      "input": "建立 3 個 elasticsearch:8.11.0 pod，2 CPU 核心",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 3,
+        "image": "elasticsearch:8.11.0",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "2"
+      }
+    },
+    {
+      "input": "起 4 個 redis:7-alpine 容器，CPU 限制 250m",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 4,
+        "image": "redis:7-alpine",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "250m"
+      }
+    },
+    {
+      "input": "部署 5 個 postgres:15 pod，CPU 設定 4 核心",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 5,
+        "image": "postgres:15",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "4"
+      }
+    },
+    {
+      "input": "幫我起 6 個 node:20-alpine，CPU limit 1 顆",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 6,
+        "image": "node:20-alpine",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "1"
+      }
+    },
+    {
+      "input": "建立 7 個 golang:1.21-alpine pod，750m CPU",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 7,
+        "image": "golang:1.21-alpine",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "750m"
+      }
+    },
+    {
+      "input": "起 8 個 mysql:8.0 的 db-replica，CPU 2 核心",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 8,
+        "image": "mysql:8.0",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "2"
+      }
+    },
+    {
+      "input": "部署 9 個 mongo:6 容器，CPU 500m",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 9,
+        "image": "mongo:6",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "500m"
+      }
+    },
+    {
+      "input": "建立 10 個 openjdk:17-slim pod，CPU 限制 3 核心",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 10,
+        "image": "openjdk:17-slim",
+        "node_count": null,
+        "port": null,
+        "memory": null,
+        "cpu": "3"
+      }
+    },
+    {
+      "input": "deploy 6 pods of web-frontend using nginx:latest, each pod needs 2 cpu and 4Gi memory, assuming each node has 2 cpu and 4Gi memory, how many nodes do I need?",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": false,
+      "schema_valid": true,
+      "all_ok": false,
+      "actual": {
+        "pods": 6,
+        "image": "nginx:latest",
+        "node_count": 7,
+        "port": null,
+        "memory": "4Gi",
+        "cpu": "2"
+      }
+    },
+    {
+      "input": "start api-gateway with 10 replicas (node:20-alpine), 500m cpu and 512Mi memory per pod, node capacity is 4 cpu / 8Gi memory",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 10,
+        "image": "node:20-alpine",
+        "node_count": 2,
+        "port": null,
+        "memory": "512Mi",
+        "cpu": "500m"
+      }
+    },
+    {
+      "input": "run elasticsearch:8.11.0 as search-engine, 9 pods, cpu=1, memory=2Gi, node capacity: 8 cpu, 16Gi memory",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 9,
+        "image": "elasticsearch:8.11.0",
+        "node_count": 2,
+        "port": null,
+        "memory": "2Gi",
+        "cpu": "1"
+      }
+    },
+    {
+      "input": "launch db-primary: 5 pods, postgres:15, 4 cpu and 1Gi memory each, our nodes have 16 cpu and 32Gi memory",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 5,
+        "image": "postgres:15",
+        "node_count": 2,
+        "port": null,
+        "memory": "1Gi",
+        "cpu": "4"
+      }
+    },
+    {
+      "input": "create cache-server deployment, image redis:7-alpine, 7 replicas, 750m cpu, 2Gi memory, each node offers 2 cpu / 4Gi memory",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": false,
+      "schema_valid": true,
+      "all_ok": false,
+      "actual": {
+        "pods": 7,
+        "image": "redis:7-alpine",
+        "node_count": 3,
+        "port": null,
+        "memory": "2Gi",
+        "cpu": "750m"
+      }
+    },
+    {
+      "input": "spin up 10 mysql:8.0 pods for db-replica, 250m cpu and 256Mi memory per pod, node size 4 cpu / 8Gi memory",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 10,
+        "image": "mysql:8.0",
+        "node_count": 1,
+        "port": null,
+        "memory": "256Mi",
+        "cpu": "250m"
+      }
+    },
+    {
+      "input": "deploy message-broker service, 8 pods, rabbitmq:3-management, cpu 2, memory 4Gi, cluster nodes have 8 cpu and 16Gi memory",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": false,
+      "schema_valid": true,
+      "all_ok": false,
+      "actual": {
+        "pods": 8,
+        "image": "rabbitmq:3-management",
+        "node_count": 3,
+        "port": null,
+        "memory": "4Gi",
+        "cpu": "2"
+      }
+    },
+    {
+      "input": "bring up log-collector with golang:1.21-alpine, 6 replicas, 1 cpu / 1Gi memory each, node capacity 16 cpu / 32Gi memory",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 6,
+        "image": "golang:1.21-alpine",
+        "node_count": 1,
+        "port": null,
+        "memory": "1Gi",
+        "cpu": "1"
+      }
+    },
+    {
+      "input": "setup 3 auth-service pods using python:3.11-slim, cpu 4, memory 2Gi, given nodes with 2 cpu and 4Gi memory",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": false,
+      "schema_valid": true,
+      "all_ok": false,
+      "actual": {
+        "pods": 3,
+        "image": "python:3.11-slim",
+        "node_count": 7,
+        "port": null,
+        "memory": "2Gi",
+        "cpu": "4"
+      }
+    },
+    {
+      "input": "start 9 replicas of mongo:6 for metrics-server, cpu=500m, memory=1Gi, node has 4 cpu and 8Gi memory",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 9,
+        "image": "mongo:6",
+        "node_count": 2,
+        "port": null,
+        "memory": "1Gi",
+        "cpu": "500m"
+      }
+    },
+    {
+      "input": "部署 6 個 web-frontend，image nginx:latest，每個 pod 需要 2 CPU 和 4Gi 記憶體，假設每個 node 有 2 CPU 和 4Gi 記憶體，需要幾個 node？",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": false,
+      "schema_valid": true,
+      "all_ok": false,
+      "actual": {
+        "pods": 6,
+        "image": "nginx:latest",
+        "node_count": 7,
+        "port": null,
+        "memory": "4Gi",
+        "cpu": "2"
+      }
+    },
+    {
+      "input": "幫我跑 api-gateway，10 個 pod，用 node:20-alpine，每個 pod 500m CPU、512Mi 記憶體，node 容量是 4 CPU / 8Gi 記憶體",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 10,
+        "image": "node:20-alpine",
+        "node_count": 2,
+        "port": null,
+        "memory": "512Mi",
+        "cpu": "500m"
+      }
+    },
+    {
+      "input": "建立 search-engine，elasticsearch:8.11.0，9 個副本，cpu=1，memory=2Gi，node 容量：8 CPU、16Gi 記憶體",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 9,
+        "image": "elasticsearch:8.11.0",
+        "node_count": 2,
+        "port": null,
+        "memory": "2Gi",
+        "cpu": "1"
+      }
+    },
+    {
+      "input": "起 5 個 postgres:15 的 db-primary，每個 4 CPU、1Gi 記憶體，我們的 node 有 16 CPU 和 32Gi 記憶體",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 5,
+        "image": "postgres:15",
+        "node_count": 2,
+        "port": null,
+        "memory": "1Gi",
+        "cpu": "4"
+      }
+    },
+    {
+      "input": "部署 cache-server：image=redis:7-alpine，replicas=7，750m CPU，2Gi 記憶體，每個 node 提供 2 CPU / 4Gi 記憶體",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": false,
+      "schema_valid": true,
+      "all_ok": false,
+      "actual": {
+        "pods": 7,
+        "image": "redis:7-alpine",
+        "node_count": 3,
+        "port": null,
+        "memory": "2Gi",
+        "cpu": "750m"
+      }
+    },
+    {
+      "input": "幫我起 10 個 db-replica，mysql:8.0，每個 pod 250m CPU 和 256Mi 記憶體，node 規格 4 CPU / 8Gi 記憶體",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 10,
+        "image": "mysql:8.0",
+        "node_count": 1,
+        "port": null,
+        "memory": "256Mi",
+        "cpu": "250m"
+      }
+    },
+    {
+      "input": "建立 8 個 message-broker pod，使用 rabbitmq:3-management，CPU 2，記憶體 4Gi，叢集 node 有 8 CPU 和 16Gi 記憶體",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": false,
+      "schema_valid": true,
+      "all_ok": false,
+      "actual": {
+        "pods": 8,
+        "image": "rabbitmq:3-management",
+        "node_count": 3,
+        "port": null,
+        "memory": "4Gi",
+        "cpu": "2"
+      }
+    },
+    {
+      "input": "起 log-collector，6 個 pod，golang:1.21-alpine，每個 1 CPU / 1Gi 記憶體，node 容量 16 CPU / 32Gi 記憶體",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 6,
+        "image": "golang:1.21-alpine",
+        "node_count": 1,
+        "port": null,
+        "memory": "1Gi",
+        "cpu": "1"
+      }
+    },
+    {
+      "input": "部署 python:3.11-slim 作為 auth-service，3 個，CPU 4，記憶體 2Gi，已知 node 有 2 CPU 和 4Gi 記憶體",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": false,
+      "schema_valid": true,
+      "all_ok": false,
+      "actual": {
+        "pods": 3,
+        "image": "python:3.11-slim",
+        "node_count": 7,
+        "port": null,
+        "memory": "2Gi",
+        "cpu": "4"
+      }
+    },
+    {
+      "input": "我要 9 個 metrics-server，image mongo:6，cpu=500m，memory=1Gi，node 有 4 CPU 和 8Gi 記憶體",
+      "pods_ok": true,
+      "image_ok": true,
+      "port_ok": true,
+      "mem_ok": true,
+      "cpu_ok": true,
+      "node_count_ok": true,
+      "schema_valid": true,
+      "all_ok": true,
+      "actual": {
+        "pods": 9,
+        "image": "mongo:6",
+        "node_count": 2,
+        "port": null,
+        "memory": "1Gi",
+        "cpu": "500m"
       }
     }
   ]

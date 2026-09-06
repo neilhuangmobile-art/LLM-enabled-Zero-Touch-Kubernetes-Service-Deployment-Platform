@@ -7,3 +7,11 @@ __pycache__/
 *.safetensors
 *.bin
 .env
+
+# RAG 索引：可用 python rag/build_index.py --rebuild 重新產生，不需要進版控
+rag/index.json
+rag/index_meta.json
+
+# 本機備份與路徑產生的雜項目錄，不進版控
+llama3_k8s_lora_results.backup_*/
+D__/

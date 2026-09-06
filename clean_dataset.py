@@ -6,10 +6,12 @@ clean_dataset.py
 import json
 import os
 import re
+import sys
 import shutil
 from datetime import datetime
 
-DATASET_PATH = r"D:\k8s_new\dataset\finetune_samples.jsonl"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from core.config import DATASET_PATH
 
 
 def _validate_sample(data: dict) -> tuple[bool, list[str]]:
@@ -65,6 +67,22 @@ def _validate_sample(data: dict) -> tuple[bool, list[str]]:
     if mem_val is not None:
         if not re.match(r"^\d+(Mi|Gi|Ki|M|G)$", str(mem_val)):
             reasons.append(f"memory 格式錯誤（{mem_val}）")
+
+    # cpu 驗證（選填）
+    cpu_val = output.get("cpu")
+    if cpu_val is not None:
+        if not re.match(r"^\d+(\.\d+)?m?$", str(cpu_val)):
+            reasons.append(f"cpu 格式錯誤（{cpu_val}）")
+
+    # node_count 驗證（選填，正整數）
+    node_val = output.get("node_count")
+    if node_val is not None:
+        try:
+            node_int = int(node_val)
+            if node_int < 1:
+                reasons.append(f"node_count 必須 >= 1（{node_int}）")
+        except (ValueError, TypeError):
+            reasons.append(f"node_count 非整數（{node_val}）")
 
     return len(reasons) == 0, reasons
 

@@ -8,14 +8,15 @@ LLaMA-3 K8s LoRA 模型準確率評估
 import re
 import json
 import os
+
+import sys as _sys
+_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from core.config import BASE_MODEL, ADAPTER_PATH, EVAL_REPORT as REPORT_PATH, SYSTEM_PROMPT  # 需先於 transformers import，才能讓 .env 的 HF_HOME 生效
+
 import torch
 from datetime import datetime
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from peft import PeftModel
-
-import sys as _sys
-_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from core.config import BASE_MODEL, ADAPTER_PATH, EVAL_REPORT as REPORT_PATH, SYSTEM_PROMPT
 
 # ==============================
 # 測試案例：pods 1~10 各類情境
@@ -94,6 +95,64 @@ TEST_CASES = [
     ("起 8 個 mysql:8.0 的 db-replica，ram 限制 1Gi",              8, "mysql",    None, "1"),
     ("部署 9 個 mongo:6 容器，記憶體 512Mi",                        9, "mongo",    None, "512"),
     ("建立 10 個 openjdk:17-slim pod，記憶體限制 256Mi",            10, "openjdk",  None, "256"),
+
+    # ── 含 CPU 英文（10筆）：格式 (輸入, pods, image, port, memory, cpu)
+    ("deploy 1 nginx:latest pod for web-frontend, 500m cpu",       1,  "nginx",    None, None, "500m"),
+    ("start 2 python:3.11-slim pods, 1 cpu core",                  2,  "python",   None, None, "1"),
+    ("launch 3 elasticsearch:8.11.0 pods, 2 CPU cores",            3,  "elasticsearch", None, None, "2"),
+    ("run 4 redis:7-alpine pods, cpu limit 250m",                  4,  "redis",    None, None, "250m"),
+    ("deploy 5 postgres:15 pods, set cpu to 4 cores",              5,  "postgres", None, None, "4"),
+    ("start 6 node:20-alpine pods, cpu limit 1 core",              6,  "node",     None, None, "1"),
+    ("create 7 golang:1.21-alpine pods, 750m cpu",                 7,  "golang",   None, None, "750m"),
+    ("spin up 8 mysql:8.0 pods, cpu 2 cores",                      8,  "mysql",    None, None, "2"),
+    ("launch 9 mongo:6 pods, 500m cpu",                            9,  "mongo",    None, None, "500m"),
+    ("deploy 10 openjdk:17-slim pods, cpu limit 3 cores",          10, "openjdk",  None, None, "3"),
+
+    # ── 含 CPU 中文（10筆）
+    ("部署 1 個 web-frontend，image nginx:latest，CPU 500m",        1, "nginx",    None, None, "500m"),
+    ("幫我跑 2 個 data-processor，python:3.11-slim，1 顆 CPU",      2, "python",   None, None, "1"),
+    ("建立 3 個 elasticsearch:8.11.0 pod，2 CPU 核心",              3, "elasticsearch", None, None, "2"),
+    ("起 4 個 redis:7-alpine 容器，CPU 限制 250m",                  4, "redis",    None, None, "250m"),
+    ("部署 5 個 postgres:15 pod，CPU 設定 4 核心",                  5, "postgres", None, None, "4"),
+    ("幫我起 6 個 node:20-alpine，CPU limit 1 顆",                  6, "node",     None, None, "1"),
+    ("建立 7 個 golang:1.21-alpine pod，750m CPU",                  7, "golang",   None, None, "750m"),
+    ("起 8 個 mysql:8.0 的 db-replica，CPU 2 核心",                8, "mysql",    None, None, "2"),
+    ("部署 9 個 mongo:6 容器，CPU 500m",                            9, "mongo",    None, None, "500m"),
+    ("建立 10 個 openjdk:17-slim pod，CPU 限制 3 核心",             10, "openjdk",  None, None, "3"),
+
+    # ── Node 數量：模型真正判斷的測試案例（10筆，格式多7個欄位 expected_node_count）
+    # prompt 裡明講 node 容量，答案用 agents.cost_agent.estimate_node_count() 算出（跟訓練資料同一套公式）
+    ("deploy 6 pods of web-frontend using nginx:latest, each pod needs 2 cpu and 4Gi memory, assuming each node has 2 cpu and 4Gi memory, how many nodes do I need?", 6, "nginx", None, None, "2", 6),
+    ("start api-gateway with 10 replicas (node:20-alpine), 500m cpu and 512Mi memory per pod, node capacity is 4 cpu / 8Gi memory", 10, "node", None, None, "500m", 2),
+    ("run elasticsearch:8.11.0 as search-engine, 9 pods, cpu=1, memory=2Gi, node capacity: 8 cpu, 16Gi memory", 9, "elasticsearch", None, None, "1", 2),
+    ("launch db-primary: 5 pods, postgres:15, 4 cpu and 1Gi memory each, our nodes have 16 cpu and 32Gi memory", 5, "postgres", None, None, "4", 2),
+    ("create cache-server deployment, image redis:7-alpine, 7 replicas, 750m cpu, 2Gi memory, each node offers 2 cpu / 4Gi memory", 7, "redis", None, None, "750m", 4),
+    ("spin up 10 mysql:8.0 pods for db-replica, 250m cpu and 256Mi memory per pod, node size 4 cpu / 8Gi memory", 10, "mysql", None, None, "250m", 1),
+    ("deploy message-broker service, 8 pods, rabbitmq:3-management, cpu 2, memory 4Gi, cluster nodes have 8 cpu and 16Gi memory", 8, "rabbitmq", None, None, "2", 2),
+    ("bring up log-collector with golang:1.21-alpine, 6 replicas, 1 cpu / 1Gi memory each, node capacity 16 cpu / 32Gi memory", 6, "golang", None, None, "1", 1),
+    ("setup 3 auth-service pods using python:3.11-slim, cpu 4, memory 2Gi, given nodes with 2 cpu and 4Gi memory", 3, "python", None, None, "4", 6),
+    ("start 9 replicas of mongo:6 for metrics-server, cpu=500m, memory=1Gi, node has 4 cpu and 8Gi memory", 9, "mongo", None, None, "500m", 2),
+
+    ("部署 6 個 web-frontend，image nginx:latest，每個 pod 需要 2 CPU 和 4Gi 記憶體，假設每個 node 有 2 CPU 和 4Gi 記憶體，需要幾個 node？", 6, "nginx", None, None, "2", 6),
+    ("幫我跑 api-gateway，10 個 pod，用 node:20-alpine，每個 pod 500m CPU、512Mi 記憶體，node 容量是 4 CPU / 8Gi 記憶體", 10, "node", None, None, "500m", 2),
+    ("建立 search-engine，elasticsearch:8.11.0，9 個副本，cpu=1，memory=2Gi，node 容量：8 CPU、16Gi 記憶體", 9, "elasticsearch", None, None, "1", 2),
+    ("起 5 個 postgres:15 的 db-primary，每個 4 CPU、1Gi 記憶體，我們的 node 有 16 CPU 和 32Gi 記憶體", 5, "postgres", None, None, "4", 2),
+    ("部署 cache-server：image=redis:7-alpine，replicas=7，750m CPU，2Gi 記憶體，每個 node 提供 2 CPU / 4Gi 記憶體", 7, "redis", None, None, "750m", 4),
+    ("幫我起 10 個 db-replica，mysql:8.0，每個 pod 250m CPU 和 256Mi 記憶體，node 規格 4 CPU / 8Gi 記憶體", 10, "mysql", None, None, "250m", 1),
+    ("建立 8 個 message-broker pod，使用 rabbitmq:3-management，CPU 2，記憶體 4Gi，叢集 node 有 8 CPU 和 16Gi 記憶體", 8, "rabbitmq", None, None, "2", 2),
+    ("起 log-collector，6 個 pod，golang:1.21-alpine，每個 1 CPU / 1Gi 記憶體，node 容量 16 CPU / 32Gi 記憶體", 6, "golang", None, None, "1", 1),
+    ("部署 python:3.11-slim 作為 auth-service，3 個，CPU 4，記憶體 2Gi，已知 node 有 2 CPU 和 4Gi 記憶體", 3, "python", None, None, "4", 6),
+    ("我要 9 個 metrics-server，image mongo:6，cpu=500m，memory=1Gi，node 有 4 CPU 和 8Gi 記憶體", 9, "mongo", None, None, "500m", 2),
+]
+
+# ── Node 數量換算驗證案例：不經過模型，直接測 agents/cost_agent.estimate_node_count ──
+# 格式：(cpu, memory, replicas, expected_node_count)，node 容量比照 core/config.NODE_CAPACITY 預設值 4 CPU / 8Gi
+NODE_COUNT_CASES = [
+    ("2",    "4Gi",   10, 5),   # 20 CPU / 40Gi -> ceil(20/4)=5, ceil(40/8)=5
+    ("500m", "512Mi", 4,  1),   # 2 CPU / 2Gi   -> ceil(2/4)=1,  ceil(2/8)=1
+    ("1",    "2Gi",   8,  2),   # 8 CPU / 16Gi  -> ceil(8/4)=2,  ceil(16/8)=2
+    ("4",    "1Gi",   3,  3),   # 12 CPU / 3Gi  -> cpu bound: ceil(12/4)=3, mem: ceil(3/8)=1 -> max=3
+    ("500m", "8Gi",   2,  2),   # 1 CPU / 16Gi  -> cpu:1, mem: ceil(16/8)=2 -> max=2
 ]
 
 
@@ -133,7 +192,7 @@ def get_output(model, tokenizer, prompt_text: str) -> str:
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
-            max_new_tokens=80,
+            max_new_tokens=200,
             do_sample=False,
             eos_token_id=tokenizer.eos_token_id,
             pad_token_id=tokenizer.eos_token_id,
@@ -147,31 +206,41 @@ def get_output(model, tokenizer, prompt_text: str) -> str:
     return raw.split("\n")[0].strip()
 
 
-def check(raw, exp_pods, exp_image, exp_port, exp_mem):
+def check(raw, exp_pods, exp_image, exp_port, exp_mem, exp_cpu=None, exp_node_count=None):
     pods_m  = re.search(r'"pods"\s*:\s*(\d+)',       raw)
     image_m = re.search(r'"image"\s*:\s*"([^"]+)"',  raw)
     port_m  = re.search(r'"port"\s*:\s*(\d+)',       raw)
     mem_m   = re.search(r'"memory"\s*:\s*"([^"]+)"', raw)
+    cpu_m   = re.search(r'"cpu"\s*:\s*"?(\d+(?:\.\d+)?m?)"?', raw)
+    node_m  = re.search(r'"node_count"\s*:\s*(\d+)', raw)
 
     actual_pods  = int(pods_m.group(1))  if pods_m  else None
     actual_image = image_m.group(1)      if image_m else None
     actual_port  = int(port_m.group(1))  if port_m  else None
     actual_mem   = mem_m.group(1)        if mem_m   else None
+    actual_cpu   = cpu_m.group(1)        if cpu_m   else None
+    actual_node_count = int(node_m.group(1)) if node_m else None
 
     pods_ok  = actual_pods == exp_pods
     image_ok = exp_image.lower() in (actual_image or "").lower()
     port_ok  = (exp_port is None) or (actual_port == exp_port)
     mem_ok   = (exp_mem  is None) or (exp_mem in (actual_mem or ""))
+    cpu_ok   = (exp_cpu  is None) or (exp_cpu in (actual_cpu or ""))
+    node_count_ok = (exp_node_count is None) or (actual_node_count == exp_node_count)
+    schema_valid = pods_m is not None and image_m is not None
 
     return {
         "pods_ok" : pods_ok,
         "image_ok": image_ok,
         "port_ok" : port_ok,
         "mem_ok"  : mem_ok,
-        "all_ok"  : pods_ok and image_ok and port_ok and mem_ok,
+        "cpu_ok"  : cpu_ok,
+        "node_count_ok": node_count_ok,
+        "schema_valid": schema_valid,
+        "all_ok"  : pods_ok and image_ok and port_ok and mem_ok and cpu_ok and node_count_ok,
         "actual"  : {
-            "pods": actual_pods, "image": actual_image,
-            "port": actual_port, "memory": actual_mem,
+            "pods": actual_pods, "image": actual_image, "node_count": actual_node_count,
+            "port": actual_port, "memory": actual_mem, "cpu": actual_cpu,
         },
     }
 
@@ -179,9 +248,12 @@ def check(raw, exp_pods, exp_image, exp_port, exp_mem):
 def evaluate():
     model, tokenizer = load_model()
     total      = len(TEST_CASES)
-    stats      = {"pods": 0, "image": 0, "port": 0, "memory": 0, "all": 0}
+    stats      = {"pods": 0, "image": 0, "port": 0, "memory": 0, "cpu": 0, "node_count": 0, "all": 0, "schema_valid": 0}
     port_total = sum(1 for t in TEST_CASES if t[3] is not None)
     mem_total  = sum(1 for t in TEST_CASES if t[4] is not None)
+    cpu_total  = sum(1 for t in TEST_CASES if len(t) > 5 and t[5] is not None)
+    node_total = sum(1 for t in TEST_CASES if len(t) > 6 and t[6] is not None)
+    pods_abs_err = []
     details    = []
 
     # 各數字的準確率統計
@@ -192,15 +264,26 @@ def evaluate():
     print(f"  測試案例：{total} 筆  |  開始：{datetime.now().strftime('%H:%M:%S')}")
     print("=" * 70)
 
-    for i, (inp, exp_pods, exp_image, exp_port, exp_mem) in enumerate(TEST_CASES):
+    for i, case in enumerate(TEST_CASES):
+        inp, exp_pods, exp_image, exp_port, exp_mem = case[:5]
+        exp_cpu = case[5] if len(case) > 5 else None
+        exp_node_count = case[6] if len(case) > 6 else None
+
         raw    = get_output(model, tokenizer, inp)
-        result = check(raw, exp_pods, exp_image, exp_port, exp_mem)
+        result = check(raw, exp_pods, exp_image, exp_port, exp_mem, exp_cpu, exp_node_count)
 
         if result["pods_ok"]:  stats["pods"]  += 1
         if result["image_ok"]: stats["image"] += 1
         if result["port_ok"]  and exp_port is not None: stats["port"]   += 1
         if result["mem_ok"]   and exp_mem  is not None: stats["memory"] += 1
+        if result["cpu_ok"]   and exp_cpu  is not None: stats["cpu"]    += 1
+        if result["node_count_ok"] and exp_node_count is not None: stats["node_count"] += 1
+        if result["schema_valid"]: stats["schema_valid"] += 1
         if result["all_ok"]:   stats["all"]   += 1
+
+        actual_pods = result["actual"]["pods"]
+        if actual_pods is not None:
+            pods_abs_err.append(abs(actual_pods - exp_pods))
 
         # 統計每個數字的準確率
         if exp_pods in per_num:
@@ -211,7 +294,7 @@ def evaluate():
         icon = "✅" if result["all_ok"] else ("🟡" if (result["pods_ok"] and result["image_ok"]) else "❌")
         print(f"[{i+1:03d}/{total}] {icon}  {inp[:55]}")
         if not result["all_ok"]:
-            print(f"         期望: pods={exp_pods} img={exp_image} port={exp_port} mem={exp_mem}")
+            print(f"         期望: pods={exp_pods} img={exp_image} port={exp_port} mem={exp_mem} cpu={exp_cpu} node_count={exp_node_count}")
             print(f"         實際: {result['actual']}")
 
         details.append({"input": inp, **result})
@@ -235,7 +318,16 @@ def evaluate():
         print(f"  port  準確率 : {bar(stats['port'],  port_total)}")
     if mem_total:
         print(f"  memory準確率 : {bar(stats['memory'],mem_total)}")
+    if cpu_total:
+        print(f"  cpu   準確率 : {bar(stats['cpu'],  cpu_total)}")
+    if node_total:
+        print(f"  node_count準確率 : {bar(stats['node_count'], node_total)}")
+    print(f"  schema有效率 : {bar(stats['schema_valid'], total)}")
     print(f"  全部命中     : {bar(stats['all'],   total)}")
+
+    pods_mae = sum(pods_abs_err) / len(pods_abs_err) if pods_abs_err else None
+    if pods_mae is not None:
+        print(f"  pods  MAE    : {pods_mae:.2f}")
 
     # 各數字準確率
     print(f"\n  各數字 pods 準確率：")
@@ -259,8 +351,12 @@ def evaluate():
             "image" : round(stats["image"] / total * 100, 1),
             "port"  : round(stats["port"]  / port_total * 100, 1) if port_total else None,
             "memory": round(stats["memory"]/ mem_total  * 100, 1) if mem_total  else None,
+            "cpu"   : round(stats["cpu"]   / cpu_total  * 100, 1) if cpu_total  else None,
+            "node_count": round(stats["node_count"] / node_total * 100, 1) if node_total else None,
+            "schema_valid": round(stats["schema_valid"] / total * 100, 1),
             "all"   : round(stats["all"]   / total * 100, 1),
         },
+        "pods_mae": round(pods_mae, 3) if pods_mae is not None else None,
         "per_number_accuracy": {
             str(n): round(s["correct"] / s["total"] * 100, 1) if s["total"] else 0
             for n, s in per_num.items()
@@ -272,5 +368,26 @@ def evaluate():
     print(f"\n📄 完整報告已儲存：{REPORT_PATH}")
 
 
+def test_node_count():
+    """獨立驗證 estimate_node_count 的換算邏輯是否正確（不涉及 LLM，純規則計算）。"""
+    import sys as _sys
+    _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from agents.cost_agent import estimate_node_count
+
+    print("\n" + "=" * 70)
+    print("  🧮 Node 數量換算驗證（規則計算，非模型準確度）")
+    print("=" * 70)
+    passed = 0
+    for cpu, memory, replicas, expected in NODE_COUNT_CASES:
+        result = estimate_node_count(cpu, memory, replicas)
+        ok = result["node_count"] == expected
+        passed += ok
+        icon = "✅" if ok else "❌"
+        print(f"  {icon} cpu={cpu} memory={memory} replicas={replicas} "
+              f"-> got={result['node_count']} expected={expected}")
+    print(f"\n  Node 換算通過率：{passed}/{len(NODE_COUNT_CASES)}")
+
+
 if __name__ == "__main__":
     evaluate()
+    test_node_count()

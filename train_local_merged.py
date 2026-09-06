@@ -5,49 +5,47 @@ Llama 3.1-8B LoRA Fine-tuning 腳本
 """
 import os
 import json
+
+import sys as _sys
+_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from core.config import BASE_MODEL, ADAPTER_PATH as OUTPUT_DIR, DATASET_PATH, SYSTEM_PROMPT  # 需先於 transformers import，才能讓 .env 的 HF_HOME 生效
+
 import torch
 from datasets import load_dataset
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
-    TrainingArguments,
     BitsAndBytesConfig,
 )
 from peft import LoraConfig
-from trl import SFTTrainer
-
-import sys as _sys
-_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from core.config import BASE_MODEL, ADAPTER_PATH as OUTPUT_DIR, DATASET_PATH, SYSTEM_PROMPT
+from trl import SFTTrainer, SFTConfig
 
 # tokenizer 需要在 formatting 時使用，先宣告為 None
 _tokenizer_ref = None
 
 
-def formatting_prompts_func(examples):
+def formatting_prompts_func(example):
+    """trl 新版 SFTTrainer 逐筆呼叫 formatting_func（單一 example dict 進，單一字串出），
+    不再是舊版的整批處理（examples 為 list-of-values 的 dict）。"""
     global _tokenizer_ref
-    output_texts = []
-    for i in range(len(examples["input"])):
-        user_input = examples["input"][i]
-        raw_output = examples["output"][i]
+    user_input = example["input"]
+    raw_output = example["output"]
 
-        if isinstance(raw_output, dict):
-            output_json = json.dumps(raw_output, ensure_ascii=False)
-        else:
-            output_json = str(raw_output)
+    if isinstance(raw_output, dict):
+        output_json = json.dumps(raw_output, ensure_ascii=False)
+    else:
+        output_json = str(raw_output)
 
-        # EOS token 讓模型學會輸出完 JSON 就停
-        # 這樣模型不會再產生 ### User... 垃圾字串
-        eos = _tokenizer_ref.eos_token if _tokenizer_ref else ""
+    # EOS token 讓模型學會輸出完 JSON 就停
+    # 這樣模型不會再產生 ### User... 垃圾字串
+    eos = _tokenizer_ref.eos_token if _tokenizer_ref else ""
 
-        text = (
-            f"### System\n{SYSTEM_PROMPT}\n\n"
-            f"### User\n{user_input}\n"
-            f"### Assistant\n"
-            f"{output_json}{eos}"
-        )
-        output_texts.append(text)
-    return output_texts
+    return (
+        f"### System\n{SYSTEM_PROMPT}\n\n"
+        f"### User\n{user_input}\n"
+        f"### Assistant\n"
+        f"{output_json}{eos}"
+    )
 
 
 def _quick_test(model, tokenizer):
@@ -143,7 +141,7 @@ def main():
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.float16,
+        bnb_4bit_compute_dtype=torch.bfloat16,
     )
     model = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL,
@@ -169,7 +167,7 @@ def main():
     grad_accum      = 4
     effective_batch = batch_size * grad_accum
     steps_per_epoch = max(1, num_samples // effective_batch)
-    total_epochs    = 2
+    total_epochs    = 4
     total_steps     = steps_per_epoch * total_epochs
 
     print(f"\n⚙️  訓練規劃：")
@@ -180,13 +178,13 @@ def main():
     print(f"   總 steps       : {total_steps}")
     print(f"   EOS token 已啟用：模型學會輸出後停止 ✅")
 
-    training_args = TrainingArguments(
+    training_args = SFTConfig(
         output_dir=OUTPUT_DIR,
         per_device_train_batch_size=batch_size,
         gradient_accumulation_steps=grad_accum,
         learning_rate=2e-4,
         max_steps=total_steps,
-        fp16=True,
+        bf16=True,
         logging_steps=max(1, steps_per_epoch // 2),
         save_strategy="no",
         report_to="none",
@@ -195,6 +193,7 @@ def main():
         warmup_steps=max(1, total_steps // 10),
         lr_scheduler_type="cosine",
         weight_decay=0.01,
+        max_length=384,
     )
 
     trainer = SFTTrainer(
@@ -202,7 +201,6 @@ def main():
         train_dataset=dataset,
         peft_config=lora_config,
         formatting_func=formatting_prompts_func,
-        max_seq_length=256,
         args=training_args,
     )
 

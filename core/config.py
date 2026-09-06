@@ -7,6 +7,31 @@ import os
 # ── 專案根目錄（無論從哪裡執行都能正確解析）──────────────────────
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+
+def _load_dotenv(path: str = os.path.join(ROOT, ".env")) -> None:
+    """Minimal .env loader to avoid requiring python-dotenv at runtime."""
+    if not os.path.exists(path):
+        return
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
+_load_dotenv()
+
+# Hugging Face uses HUGGINGFACE_HUB_TOKEN/HF_TOKEN depending on library version.
+HF_TOKEN = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN")
+if HF_TOKEN:
+    os.environ.setdefault("HF_TOKEN", HF_TOKEN)
+    os.environ.setdefault("HUGGINGFACE_HUB_TOKEN", HF_TOKEN)
+
 # ── 模型路徑 ────────────────────────────────────────────────────
 BASE_MODEL   = "meta-llama/Llama-3.1-8B-Instruct"
 ADAPTER_PATH = os.path.join(ROOT, "llama3_k8s_lora_results")
@@ -26,8 +51,8 @@ EVAL_HARD_REPORT     = os.path.join(REPORTS_DIR, "eval_hard_report.json")
 EVAL_SPEED_REPORT    = os.path.join(REPORTS_DIR, "eval_speed_report.json")
 
 # ── Model Server ─────────────────────────────────────────────────
-MODEL_SERVER_HOST = "127.0.0.1"
-MODEL_SERVER_PORT = 8765
+MODEL_SERVER_HOST = os.environ.get("MODEL_SERVER_HOST", "127.0.0.1")
+MODEL_SERVER_PORT = int(os.environ.get("MODEL_SERVER_PORT", "8765"))
 MODEL_SERVER_URL  = f"http://{MODEL_SERVER_HOST}:{MODEL_SERVER_PORT}"
 
 # ── 系統 Prompt（唯一定義來源）───────────────────────────────────
@@ -35,9 +60,17 @@ SYSTEM_PROMPT = (
     "You are an AI that converts Kubernetes deployment requests into JSON.\n"
     "ONLY output a valid JSON object. No explanation, no markdown, no extra text.\n"
     "Required fields: pods (integer), image (string), app_name (string)\n"
-    "Optional fields: port (integer), memory (string, e.g. 256Mi)\n"
-    'Example: {"pods": 3, "image": "nginx:latest", "app_name": "web-frontend", "port": 80}'
+    "Optional fields: port (integer), memory (string, e.g. 256Mi), cpu (string, e.g. 500m or 2)\n"
+    "If the request states per-node capacity (e.g. \"each node has 4 cpu and 8Gi memory\"), ALSO include: "
+    "total_cpu (string, cpu per pod * pods), total_memory (string, memory per pod * pods), "
+    "cpu_bound_nodes (integer, ceil(total_cpu / node cpu capacity)), "
+    "memory_bound_nodes (integer, ceil(total_memory / node memory capacity)), "
+    "node_count (integer, max(cpu_bound_nodes, memory_bound_nodes)) — compute these step by step in that order.\n"
+    'Example: {"pods": 3, "image": "nginx:latest", "app_name": "web-frontend", "port": 80, "cpu": "500m"}'
 )
+
+# ── Node 容量（用來估算部署需要幾個 node，非量測值，可依實際叢集調整）──
+NODE_CAPACITY = {"cpu": "4", "memory": "8Gi"}
 
 # ── 確保目錄存在（import 時自動建立）────────────────────────────
 for _d in [DATASET_DIR, YAML_DIR, REPORTS_DIR]:

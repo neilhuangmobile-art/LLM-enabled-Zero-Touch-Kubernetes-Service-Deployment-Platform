@@ -31,6 +31,15 @@ APP_NAMES = [
 
 PORTS    = [80, 443, 3000, 3001, 5000, 5432, 6379, 8080, 8443, 9090, 27017]
 MEMORIES = ["128Mi", "256Mi", "512Mi", "1Gi", "2Gi"]
+CPUS     = ["250m", "500m", "750m", "1", "2", "4"]
+
+# node 容量預設清單（cpu 核心數, 記憶體），訓練時隨機挑選，避免模型只記住單一容量組合
+NODE_CAPACITIES = [
+    {"cpu": "2",  "memory": "4Gi"},
+    {"cpu": "4",  "memory": "8Gi"},
+    {"cpu": "8",  "memory": "16Gi"},
+    {"cpu": "16", "memory": "32Gi"},
+]
 
 # 英文基本模板（20種）
 EN_TEMPLATES = [
@@ -136,8 +145,83 @@ MEM_ZH = [
     "我要 {n} 個 {app}，image {image}，記憶體 {mem}",
 ]
 
+# 含 cpu 英文模板（10種，比照 memory 區塊風格）
+CPU_EN = [
+    "deploy {n} pods of {app} using {image}, cpu limit {cpu}",
+    "start {app} with {n} replicas ({image}), set cpu to {cpu}",
+    "run {image} as {app}, {n} pods, cpu={cpu}",
+    "launch {app}: {n} pods, {image}, cpu limit {cpu}",
+    "create {app} deployment, image {image}, {n} replicas, {cpu} cpu",
+    "spin up {n} {image} pods for {app}, cpu {cpu}",
+    "deploy {app} service, {n} pods, {image}, cpu limit {cpu}",
+    "bring up {app} with {image}, {n} replicas, cpu {cpu}",
+    "setup {n} {app} pods using {image}, cpu {cpu}",
+    "start {n} replicas of {image} for {app}, cpu={cpu}",
+]
 
-def make(tmpl, n, app, image, port=None, mem=None):
+# 含 cpu 中文模板（10種）
+CPU_ZH = [
+    "部署 {n} 個 {app}，image {image}，CPU 限制 {cpu}",
+    "幫我跑 {app}，{n} 個 pod，用 {image}，CPU {cpu}",
+    "建立 {app}，{image}，{n} 個副本，CPU 限制 {cpu}",
+    "起 {n} 個 {image} 的 {app}，cpu limit {cpu}",
+    "部署 {app}：image={image}，replicas={n}，cpu={cpu}",
+    "幫我起 {n} 個 {app}，{image}，CPU {cpu}",
+    "建立 {n} 個 {app} pod，使用 {image}，CPU 限制 {cpu}",
+    "起 {app}，{n} 個 pod，{image}，cpu {cpu}",
+    "部署 {image} 作為 {app}，{n} 個，CPU {cpu}",
+    "我要 {n} 個 {app}，image {image}，CPU {cpu}",
+]
+
+# 含 node 容量說明的英文模板（10種）：讓模型學會根據給定容量換算 node_count
+NODE_EN = [
+    "deploy {n} pods of {app} using {image}, each pod needs {cpu} cpu and {mem} memory, assuming each node has {node_cpu} cpu and {node_mem} memory, how many nodes do I need?",
+    "start {app} with {n} replicas ({image}), {cpu} cpu and {mem} memory per pod, node capacity is {node_cpu} cpu / {node_mem} memory",
+    "run {image} as {app}, {n} pods, cpu={cpu}, memory={mem}, node capacity: {node_cpu} cpu, {node_mem} memory",
+    "launch {app}: {n} pods, {image}, {cpu} cpu and {mem} memory each, our nodes have {node_cpu} cpu and {node_mem} memory",
+    "create {app} deployment, image {image}, {n} replicas, {cpu} cpu, {mem} memory, each node offers {node_cpu} cpu / {node_mem} memory",
+    "spin up {n} {image} pods for {app}, {cpu} cpu and {mem} memory per pod, node size {node_cpu} cpu / {node_mem} memory",
+    "deploy {app} service, {n} pods, {image}, cpu {cpu}, memory {mem}, cluster nodes have {node_cpu} cpu and {node_mem} memory",
+    "bring up {app} with {image}, {n} replicas, {cpu} cpu / {mem} memory each, node capacity {node_cpu} cpu / {node_mem} memory",
+    "setup {n} {app} pods using {image}, cpu {cpu}, memory {mem}, given nodes with {node_cpu} cpu and {node_mem} memory",
+    "start {n} replicas of {image} for {app}, cpu={cpu}, memory={mem}, node has {node_cpu} cpu and {node_mem} memory",
+]
+
+# 含 node 容量說明的中文模板（10種）
+NODE_ZH = [
+    "部署 {n} 個 {app}，image {image}，每個 pod 需要 {cpu} CPU 和 {mem} 記憶體，假設每個 node 有 {node_cpu} CPU 和 {node_mem} 記憶體，需要幾個 node？",
+    "幫我跑 {app}，{n} 個 pod，用 {image}，每個 pod {cpu} CPU、{mem} 記憶體，node 容量是 {node_cpu} CPU / {node_mem} 記憶體",
+    "建立 {app}，{image}，{n} 個副本，cpu={cpu}，memory={mem}，node 容量：{node_cpu} CPU、{node_mem} 記憶體",
+    "起 {n} 個 {image} 的 {app}，每個 {cpu} CPU、{mem} 記憶體，我們的 node 有 {node_cpu} CPU 和 {node_mem} 記憶體",
+    "部署 {app}：image={image}，replicas={n}，{cpu} CPU，{mem} 記憶體，每個 node 提供 {node_cpu} CPU / {node_mem} 記憶體",
+    "幫我起 {n} 個 {app}，{image}，每個 pod {cpu} CPU 和 {mem} 記憶體，node 規格 {node_cpu} CPU / {node_mem} 記憶體",
+    "建立 {n} 個 {app} pod，使用 {image}，CPU {cpu}，記憶體 {mem}，叢集 node 有 {node_cpu} CPU 和 {node_mem} 記憶體",
+    "起 {app}，{n} 個 pod，{image}，每個 {cpu} CPU / {mem} 記憶體，node 容量 {node_cpu} CPU / {node_mem} 記憶體",
+    "部署 {image} 作為 {app}，{n} 個，CPU {cpu}，記憶體 {mem}，已知 node 有 {node_cpu} CPU 和 {node_mem} 記憶體",
+    "我要 {n} 個 {app}，image {image}，cpu={cpu}，memory={mem}，node 有 {node_cpu} CPU 和 {node_mem} 記憶體",
+]
+
+
+def pick_resources_for_target_node_count(target_node_count, replicas, node_capacity):
+    """
+    反推出一組 (cpu, memory) 讓 estimate_node_count(cpu, memory, replicas, node_capacity)
+    大機率落在 target_node_count，避免隨機取值時 node_count 嚴重偏向 1（training label 失衡）。
+    """
+    from agents.cost_agent import _parse_cpu_millicores, _parse_memory_bytes, _mc_to_str, _bytes_to_mi
+
+    node_cpu_mc = _parse_cpu_millicores(node_capacity["cpu"])
+    node_mem_b  = _parse_memory_bytes(node_capacity["memory"])
+
+    total_cpu_mc = node_cpu_mc * (target_node_count - 1) + random.randint(1, node_cpu_mc)
+    total_mem_b  = node_mem_b  * (target_node_count - 1) + random.randint(1, node_mem_b)
+
+    cpu_per_pod_mc = max(1, total_cpu_mc // replicas)
+    mem_per_pod_b  = max(1024 * 1024, total_mem_b // replicas)  # 至少 1Mi
+
+    return _mc_to_str(cpu_per_pod_mc), _bytes_to_mi(mem_per_pod_b)
+
+
+def make(tmpl, n, app, image, port=None, mem=None, cpu=None, node_capacity=None):
     fmt = {"n": n, "app": app, "image": image}
     out = {"pods": n, "image": image, "app_name": app}
     if port is not None:
@@ -146,6 +230,25 @@ def make(tmpl, n, app, image, port=None, mem=None):
     if mem is not None:
         fmt["mem"] = mem
         out["memory"] = mem
+    if cpu is not None:
+        fmt["cpu"] = cpu
+        out["cpu"] = cpu
+    if node_capacity is not None:
+        fmt["node_cpu"] = node_capacity["cpu"]
+        fmt["node_mem"] = node_capacity["memory"]
+        from agents.cost_agent import (
+            estimate_node_count, _parse_cpu_millicores, _parse_memory_bytes, _mc_to_str, _bytes_to_mi,
+        )
+        result = estimate_node_count(cpu, mem, n, node_capacity=node_capacity)
+        # Chain-of-Thought：把換算的中間步驟也寫進 output，讓模型模仿推理過程，
+        # 而不是直接硬記「輸入組合 -> node_count」這個黑箱答案（後者訓練出來準確率很低）。
+        total_cpu_mc  = _parse_cpu_millicores(cpu) * n
+        total_mem_b   = _parse_memory_bytes(mem) * n
+        out["total_cpu"]    = _mc_to_str(total_cpu_mc)
+        out["total_memory"] = _bytes_to_mi(total_mem_b)
+        out["cpu_bound_nodes"]    = result["cpu_bound"]
+        out["memory_bound_nodes"] = result["memory_bound"]
+        out["node_count"] = result["node_count"]
     return {"input": tmpl.format(**fmt), "output": out}
 
 
@@ -188,6 +291,38 @@ def generate():
             mem   = random.choice(MEMORIES)
             samples.append(make(tmpl, n, app, image, mem=mem))
 
+        for tmpl in CPU_EN:
+            app   = random.choice(APP_NAMES)
+            image = random.choice(IMAGES)
+            cpu   = random.choice(CPUS)
+            samples.append(make(tmpl, n, app, image, cpu=cpu))
+
+        for tmpl in CPU_ZH:
+            app   = random.choice(APP_NAMES)
+            image = random.choice(IMAGES)
+            cpu   = random.choice(CPUS)
+            samples.append(make(tmpl, n, app, image, cpu=cpu))
+
+        # node_count 是算術推理任務，額外重複取樣 NODE_REPEATS 次（每次重新隨機取值，不是逐字重複）
+        # 加大訓練樣本量，讓模型有更多機會學到「除法 + 無條件進位 + 取最大值」這個模式
+        NODE_REPEATS = 4
+        for _ in range(NODE_REPEATS):
+            for tmpl in NODE_EN:
+                app   = random.choice(APP_NAMES)
+                image = random.choice(IMAGES)
+                node_capacity = random.choice(NODE_CAPACITIES)
+                target_node_count = random.randint(1, 8)
+                cpu, mem = pick_resources_for_target_node_count(target_node_count, n, node_capacity)
+                samples.append(make(tmpl, n, app, image, mem=mem, cpu=cpu, node_capacity=node_capacity))
+
+            for tmpl in NODE_ZH:
+                app   = random.choice(APP_NAMES)
+                image = random.choice(IMAGES)
+                node_capacity = random.choice(NODE_CAPACITIES)
+                target_node_count = random.randint(1, 8)
+                cpu, mem = pick_resources_for_target_node_count(target_node_count, n, node_capacity)
+                samples.append(make(tmpl, n, app, image, mem=mem, cpu=cpu, node_capacity=node_capacity))
+
     random.shuffle(samples)
     return samples
 
@@ -209,6 +344,8 @@ def main():
     apps_used   = set(s["output"]["app_name"] for s in samples)
     with_port   = sum(1 for s in samples if "port"   in s["output"])
     with_mem    = sum(1 for s in samples if "memory" in s["output"])
+    with_cpu    = sum(1 for s in samples if "cpu" in s["output"])
+    with_node   = sum(1 for s in samples if "node_count" in s["output"])
 
     print(f"✅ 生成完成！共 {total} 筆訓練資料")
     print(f"📁 儲存路徑：{DATASET_PATH}")
@@ -218,6 +355,8 @@ def main():
     print(f"   不同 app    : {len(apps_used)} 種")
     print(f"   含 port     : {with_port} 筆")
     print(f"   含 memory   : {with_mem} 筆")
+    print(f"   含 cpu      : {with_cpu} 筆")
+    print(f"   含 node_count: {with_node} 筆")
     print(f"\n📋 前 3 筆預覽：")
     for s in samples[:3]:
         print(f"   input : {s['input']}")

@@ -30,35 +30,21 @@
 - [x] `observability/alert_rules.yaml` — 告警規則
 
 ### Phase 8：RAG + 多代理
-- [x] `rag/k8s_docs/` — K8s 知識文件庫（4 份文件）
-- [x] `rag/build_index.py` — 建立向量索引（語意 + TF-IDF 後備）
-- [x] `rag/retriever.py` — 查詢相關文件，augment_prompt() 介面
+- [x] `rag/k8s_docs/` — K8s 知識文件庫（5 份文件，含英文版 `zerotouch_user_guide.md`）+ `rag/prompt_qa_seed.jsonl` 人工精選 QA 種子資料
+- [x] `rag/build_index.py` — 建立向量索引（chromadb 語意搜尋 + TF-IDF 後備，已安裝 chromadb 並確認實際跑語意搜尋而非退化到 TF-IDF）
+- [x] `rag/retriever.py` — 查詢相關文件，augment_prompt() / augment_prompt_ex() 介面
+- [x] RAG 已接進主流程：`llama_client.py`（`_try_augment_with_rag` / `_try_augment_with_rag_ex`）於 chat 與 JSON 推論前注入知識庫內容
 - [x] `agents/security_agent.py` — 安全掃描代理（安全分數 0-100）
 - [x] `agents/cost_agent.py` — 成本分析代理（月費估算 + 資源建議）
 - [x] `agents/perf_agent.py` — 效能代理（HPA YAML 產生 + probe 建議）
 - [x] `agents/orchestrator.py` — 多代理協調器（approve/warn/block 決策）
+- [x] Orchestrator 已接進兩條真實部署路徑並會實際阻擋部署：`0_touch_generate_pods.py`（CLI，block 直接中止、warn 需手動確認）與 `web_demo.py` 的 `_review_deployment` → `_prepare_deploy`（Web，guardian → orchestrator → dry-run 三層任一 block 就擋下 `/api/deploy/parse`）。已於 2026-08-03 用合成 manifest（benign / privileged+hostNetwork / 超額 replicas）端對端驗證 block/warn/approve 邏輯正確。
 
 ---
 
 ## 建議後續工作
 
-### 整合 RAG 到主部署流程
-將 `rag/retriever.augment_prompt()` 整合進 `llama_client.ask_llama()`：
-```python
-# llama_client.py
-from rag.retriever import augment_prompt
-enhanced = augment_prompt(user_input)
-result = ask_llama(enhanced)
-```
-
-### 整合 Orchestrator 到部署流程
-在 `0_touch_generate_pods.py` 中，LLM 生成 YAML 後加入代理評估：
-```python
-from agents.orchestrator import orchestrate
-result = orchestrate(manifest, save_report=True)
-if result["decision"] == "block":
-    # 拒絕部署，提示用戶修復
-```
+> 2026-08-03 更新：以下兩項原本列為待辦，經追查程式碼確認其實已經完成並接上真實部署路徑，移到「已完成」；本文件先前沒跟上實際進度，已修正。
 
 ### 擴充 RAG 知識庫
 - 加入更多 K8s 官方文件（可爬取 kubernetes.io/docs）
@@ -72,6 +58,37 @@ if result["decision"] == "block":
 ### Agent Sandbox（進階）
 實現 Kubernetes SIG-Apps 的 Agent Sandbox CRD，
 利用 gVisor 隔離 LLM 生成的不受信任程式碼。
+
+### 技術債：`/chat` 角色邊界的 prompt injection 結構性風險
+
+2026-08-03 測試發現：`core/model_server.py` 的 `/chat` 端點用純文字 `### System/User/Assistant`
+標記當角色邊界，這幾個字對 tokenizer 而言跟一般文字沒兩樣，使用者只要在訊息內容裡打出一樣的
+字串（例如 `###Assistant`／`###User`），就能讓模型誤把它們當成新一輪對話開始，觸發
+completion-style prompt injection（模型自己接龍生成虛構對話、幻覈不存在的 image tag/版本號，
+甚至退化成模板化複讀）。
+
+現況（`STOP_MARKERS` + `stop_strings` 生成時攔截 + 事後字串切割 + system prompt 軟性提醒）只是
+**緩解已知寫法，不是根治**——換一種標記寫法（全形 `＃＃＃`、中文角色詞、`System:`/`Human:` 等
+其他分隔慣例、大小寫變化）大概率一樣能繞過。
+
+真正根治需要把角色邊界改成「分段各自 tokenize 再串接 input_ids」：控制/系統文字段落照常允許
+辨識特殊 token，使用者訊息內容那一段用 `add_special_tokens=False`（或等效設定）編碼，讓使用者
+輸入的任何文字都只能被切成一般子詞 token，不可能產生跟 Llama-3.1 保留特殊 token
+（`<|start_header_id|>` 等）一樣的 token id。這個改動只需要動 `/chat`，不影響 `/infer`
+（LoRA 微調用的就是現在這套純文字格式，不能隨便換），但需要額外時間驗證不會意外改變既有的
+語言判斷、RAG 引用等行為，這次先做緩解，之後有時間再排這項。
+
+### 技術債：`/api/deploy` 沒有 idempotency 保證，重試可能造成重複 GitOps commit
+
+已知限制：`gitops.manifest_writer.write_manifest()` 每次呼叫都會產生新的 commit，`/api/deploy`
+本身沒有任何機制防止同一個部署請求被重複送出兩次（例如網路逾時後使用者手動重試、或前端重複
+點擊）。過去這個問題觸發機率接近零，因為 K8s 部署失敗一直是無聲的（見下面「部署顯示成功但
+Pods/Deployments 沒有實際建立」的修復說明）——使用者根本沒機會看到失敗、也就不會想重試。
+
+**2026-08-07 這條技術債的優先度應該調高**：`/api/deploy` 已經改成同步呼叫 `k8s_deploy()`
+並把真實成敗回傳給前端（`web_demo.py:2802-2809`），使用者現在第一次能真的看到「K8s 部署失敗」
+的訊息，重試會變成自然而然的下一步動作——idempotency 缺口的觸發機率從「幾乎零」變成「使用者
+的第一直覺反應」。這次沒有一併修，之後排優先順序時要記得這個連動關係。
 
 ---
 
