@@ -666,6 +666,37 @@ def chat_llama(message: str, history: list = None) -> tuple:
     return "[Local Model unavailable] empty response", []
 
 
+def classify_intent(message: str) -> dict:
+    """把一句聊天訊息分類成 {action, args, confidence, source}。
+
+    給 web_demo 的 /api/intent 用：規則比對不到時才呼叫模型伺服器的 /classify
+    （部署 3B，嚴格 JSON）。伺服器未啟動 / 失敗一律回 qa，讓呼叫端 fallback 到純問答。
+    """
+    fallback = {"action": "qa", "args": {}, "confidence": 0.0, "source": "llm_unavailable"}
+    try:
+        if not _is_server_alive() and not _auto_start_server():
+            return fallback
+        import urllib.request
+        body = json.dumps({"message": message}).encode()
+        req = urllib.request.Request(
+            f"{MODEL_SERVER_URL}/classify",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read())
+            result = data.get("result") or {}
+            if result.get("action"):
+                result.setdefault("args", {})
+                result.setdefault("confidence", 0.0)
+                result["source"] = "llm"
+                return result
+    except Exception:
+        pass
+    return fallback
+
+
 def diagnose_with_llm(context: dict) -> Optional[dict]:
     """呼叫監控小模型（Model Server 的 /diagnose 端點，Qwen2.5-1.5B 跑 CPU）做根因分析。
 

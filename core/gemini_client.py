@@ -98,11 +98,16 @@ def _generate(system_instruction: str, contents: str, label: str) -> Optional[st
                 resp = client.models.generate_content(model=model, contents=contents, config=config)
                 return _extract_text(resp, label)
             except Exception as e:
-                if _is_quota_error(e) and _rotate_key():
+                if _is_quota_error(e) and len(keys) > 1:
                     print(f"[Gemini 翻譯層] {label} key 額度用盡，換下一把重試")
                     continue
                 print(f"[Gemini 翻譯層] {label}失敗：{e}")
                 return None
+            finally:
+                # 主動 round-robin：每次呼叫（成功與否）都前進到下一把 key，
+                # 讓流量平均分散到所有 key（免費層每把 5 次/分鐘），
+                # 而不是把第一把打爆才換。
+                _rotate_key()
         print(f"[Gemini 翻譯層] {label} 所有 key 額度都用盡，改用原始輸入")
         return None
 

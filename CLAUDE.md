@@ -124,7 +124,48 @@ python web_demo.py                # Web UI（localhost:5000）
 
 **還沒做決定/待接續**：
 - `_chat_needs_normalize()` 已不使用（保留定義未刪）；`_DEPLOY_INTENT_RE` 仍給 `_try_augment_with_rag_ex`（chat 路徑）用
-- 使用者要跟隊友借 Gemini key 填進 `GEMINI_API_KEYS`（目前只有 1 把）
 - RAG 部署索引是 TF-IDF（keyword-ish），要語意檢索得裝 chromadb+sentence-transformers
-- `eval_*.py` 還硬編碼 8B，待遷移
 - 舊技術債仍在：`/api/deploy` idempotency、`/chat` 洩漏 `[參考知識]`、`K8S_ENABLED` 啟動時才檢查
+
+## 進行中工作（2026-09-07：Chat 變成系統統一入口 + 多步確認部署）
+
+計畫檔：`C:\Users\neil-\.claude\plans\jolly-munching-whale.md`。使用者測試發現 Chat 分頁只會問答、
+部署要跳 Deploy Console，且本地 3B 對「給我基本例子」回了手動 kubectl 教學（違背零接觸定位）。
+目標：Chat 能執行系統上任何操作，部署走「確認規格 → 算資源+三方審查 → 再確認 → 部署 → 回報+指路」。
+
+**Gemini key 輪換改主動 round-robin**（`core/gemini_client.py`）：`.env` 已有 3 把 key。`_generate()`
+原本只在撞 429 才換，改成 `finally` 每次呼叫都 `_rotate_key()` 前進，負載平均分散（合計約 15 次/分鐘）。
+`_keys` 首次載入後快取，新增 key 要重啟 server。
+
+**已完成（Phase 1–4，全部驗證過）**：
+- **`core/model_server.py` 新增 `POST /classify`**：`INTENT_SYSTEM` + 13 組中英 few-shot + `_clean_intent()`
+  把訊息分類成固定 enum 的 `{action,args,confidence}`（照 `/diagnose` 的嚴格 JSON 範式；不用 `/infer`，
+  因為它的 `_validate` 硬性要 pods）。破壞性操作信心 <0.75 或缺 arg → 降級 `clarify`。共用 `_deploy_lock`。
+- **`llama_client.classify_intent(message)`**：POST `/classify`，server 掛掉回 `qa`。
+- **`web_demo.py`**：
+  - `_rule_intent()` + `_INTENT_RULES`（前端 `matchClientRule` 的 server 鏡像）、`POST /api/intent`
+    路由（規則優先 → `classify_intent` → `qa`）。
+  - `_resource_summary(parsed, review)`：把 `review.agents.agents.cost.cost_estimate` + `review.node_estimate`
+    深層巢狀攤平（總記憶體/CPU = 副本×每個 pod、節點數、$/月）。`/api/deploy/parse` 和 `/api/deploy`
+    回應都加這欄；`/api/deploy/parse` 也接受 `{parsed}` override（比照 `/api/deploy`，用 `_synth_input_from_spec`）。
+  - **前端對話狀態機**：`chatFlows`（記憶體物件，`seq` race guard）+ 卡片 HTML 內嵌 `data-flow-state`
+    JSON blob + `hydrateChatFlows()`（重整後非終態流程一律標 `expired`、按鈕 disable）。
+  - **卡片**：B1 規格確認卡（可編輯）→ B2 資源表+三方審查+判決 banner（approve/warn「仍要部署」/block 無路）
+    → B4 完成卡（連結跳 Pods/Deployments/GitOps）。破壞性操作走 B3 兩步確認卡（顯示 delta，取消/確認）。
+  - `sendChat()` 重寫成 `matchClientRule → /api/intent → switch(action)`；`runQA` = 舊 `/api/chat` 邏輯逐字。
+    移除舊的「打字即執行」delete/scale/update/rollback 分支。
+  - 順手修 Deploy Console 既有 bug：`renderDecisionCourt` 讀 `review.agents.security` 少一層
+    （正確 `review.agents.agents.security`），法庭翻牌動畫一直走 graceful-degrade、等於死碼；已修正。
+  - `k8sEnabled` JS 全域（`{{ k8s }}`）供 B3 判斷 scale/update 在 K8s 未連線時 disable。
+- **舊 `deployConfirmHTML`/`readDeployConfirm`/`confirmDeploy` 保留未刪**（一版緩衝，驗證後再移除）。
+
+**事故記錄（2026-09-07）**：清理 smoke test 時誤下 `git reset --hard HEAD~1`，把當時未 commit 的
+Phase 1–4 全部實作連同 gemini round-robin 一起清掉，且 HEAD 多退一格。已從對話記錄逐條重建所有改動、
+`git reset --soft 7afe318` 復原 HEAD、重跑全套測試確認與被清掉的版本一致。教訓：跑 `git reset --hard`
+前一定先確認工作區沒有未提交的實作。
+
+**待接續**：
+- Phase 5：中英文案潤飾、`showPage` loader 確認、E2E 手測（warn/block、破壞性取消再確認、重整失效卡、切換聊天室重繪）、
+  移除舊 deployConfirm 死碼、更新 `docs/architecture.md` 資料流圖
+- 使用者要在瀏覽器實測整條多步部署流程
+- `/api/deploy` 沒有 idempotency：多步流程讓「使用者第一次看到失敗會重試」變常態，重複 GitOps commit 風險上升（舊技術債，未修）

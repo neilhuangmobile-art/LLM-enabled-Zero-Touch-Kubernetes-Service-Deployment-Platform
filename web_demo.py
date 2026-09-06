@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
 
 from core.config import ROOT, YAML_DIR, MODEL_SERVER_URL
-from llama_client import ask_llama, save_gold_sample, chat_llama
+from llama_client import ask_llama, save_gold_sample, chat_llama, classify_intent
 from core.claude_client import claude_chat, is_available as claude_available
 from rag import kb_manager
 from rag.kb_manager import KBError
@@ -1265,6 +1265,7 @@ html,body{height:100%;overflow:hidden}
 <script>
 // ── Auth guard ──
 const loggedIn = {{ 'true' if logged_in else 'false' }};
+const k8sEnabled = {{ 'true' if k8s else 'false' }};
 
 // ── Clock ──
 function updateClock(){
@@ -1478,7 +1479,8 @@ function renderDecisionCourt(myId, originalText, parsed, review){
   verdict.style.display = 'none';
   actions.innerHTML = '';
 
-  const agents = review && review.agents;
+  // review.agents 是 orchestrate() 的完整結果，三個代理在 review.agents.agents 底下
+  const agents = review && review.agents && review.agents.agents;
   const security = agents && agents.security;
   const cost = agents && agents.cost;
   const perf = agents && agents.perf;
@@ -2042,6 +2044,61 @@ async function runEnrich(flags){
 let chats = [];
 let currentChatId = null;
 
+// ── Chat 多步動作流程狀態（部署 4 步 / 破壞性操作 2 步）──────────────
+// 只存在記憶體，不寫 localStorage；卡片 HTML 存進 message.content，
+// 每張卡另外內嵌一份 JSON 狀態 blob，重整後由 hydrateChatFlows() 判定是否失效。
+let chatFlows = {};
+let chatFlowSeq = 0;
+
+function newFlow(kind, originalText, spec){
+  const seq = ++chatFlowSeq;
+  const id = 'flow_' + seq + '_' + Date.now();
+  chatFlows[id] = {
+    id, seq, kind, step:'spec',
+    originalText: originalText || '',
+    spec: spec || {}, review:null, resource:null,
+    createdAt: Date.now(),
+  };
+  return chatFlows[id];
+}
+
+// async 續傳前先驗證：流程還在、且沒有被更新的同 id 流程蓋掉
+function flowAlive(flow){
+  return flow && chatFlows[flow.id] && chatFlows[flow.id].seq === flow.seq
+    && !['cancelled','expired'].includes(chatFlows[flow.id].step);
+}
+
+// 把 flow 目前狀態重繪進它對應的聊天訊息，並存檔
+function persistFlowCard(id){
+  const flow = chatFlows[id];
+  if(!flow) return;
+  const html = renderFlowCard(flow);
+  const ch = currentChat();
+  if(ch){
+    const msg = ch.messages.find(m => m.role==='assistant' && String(m.content||'').includes('data-flow-id="'+id+'"'));
+    if(msg){ msg.content = html; saveChats(); }
+  }
+  const dom = document.querySelector('[data-flow-id="'+id+'"]');
+  if(dom){ const wrap = document.createElement('div'); wrap.innerHTML = html; dom.replaceWith(wrap.firstElementChild); }
+}
+
+// 重整頁面後：非終態的流程一律標記失效（記憶體狀態已消失，按鈕會指向死 id）
+function hydrateChatFlows(){
+  const ch = currentChat();
+  if(!ch) return;
+  ch.messages.forEach(m => {
+    if(m.role!=='assistant') return;
+    const mm = String(m.content||'').match(/data-flow-state="([^"]*)"/);
+    if(!mm) return;
+    let st; try { st = JSON.parse(decodeURIComponent(mm[1])); } catch(e){ return; }
+    if(['done','error','cancelled'].includes(st.step)) return;   // 終態卡照存的樣子
+    st.step = 'expired';
+    chatFlows[st.id] = st;
+    m.content = renderFlowCard(st);
+  });
+  saveChats();
+}
+
 function initChats(){
   try { chats = JSON.parse(localStorage.getItem('k8s_chats')||'[]'); } catch(e){ chats=[]; }
   currentChatId = localStorage.getItem('k8s_current_chat') || null;
@@ -2054,6 +2111,7 @@ function initChats(){
   if(!currentChatId || !chats.find(ch=>ch.id===currentChatId)){
     currentChatId = chats[chats.length-1].id;
   }
+  hydrateChatFlows();
   renderChatList();
   renderMessages();
 }
@@ -2091,6 +2149,7 @@ function switchChat(id){
   currentChatId = id;
   saveChats();
   showPage('chat');
+  hydrateChatFlows();
   renderChatList();
   renderMessages();
 }
@@ -2301,6 +2360,468 @@ async function confirmDeploy(id){
 
 function removeTyping(){ const el=document.getElementById('typing-indicator'); if(el) el.remove(); }
 
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+//  Chat \u610f\u5716\u8fa8\u8b58\uff08\u898f\u5247\u5c64\uff0c\u524d\u7aef\uff1b\u6bd4\u5c0d\u4e0d\u5230\u624d\u6253 /api/intent\uff09
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+const DESTRUCTIVE_KINDS = ['scale','update_image','rollback','delete','healer_fix','healer_auto_fix'];
+const READ_ACTIONS = ['list_pods','list_deployments','gitops_log','cluster_metrics','healer_scan'];
+
+function matchClientRule(text){
+  const t = text.trim();
+  const rules = [
+    ['list_pods', /^(list|show|\u67e5\u770b|\u986f\u793a|\u5217\u51fa)\s*(all\s*|\u6240\u6709|\u5168\u90e8)?\s*(pods?|\u5bb9\u5668)/i, null],
+    ['list_deployments', /^(list|show|\u67e5\u770b|\u986f\u793a|\u5217\u51fa)\s*(all\s*|\u6240\u6709|\u5168\u90e8)?\s*(deploy(ment)?s?|\u90e8\u7f72)/i, null],
+    ['gitops_log', /^(gitops|deploy history|git ?log)|\u90e8\u7f72(\u7d00\u9304|\u6b77\u53f2|\u8a18\u9304)/i, null],
+    ['cluster_metrics', /^(metrics|cluster (status|health)|\u53e2\u96c6(\u72c0\u614b|\u5065\u5eb7)|\u6307\u6a19)/i, null],
+    ['healer_auto_fix', /^(auto ?fix|fix all|\u81ea\u52d5\u4fee\u5fa9|\u5168\u90e8\u4fee\u5fa9)/i, null],
+    ['healer_fix', /^(?:fix|\u4fee\u5fa9)\s+(\S+)/i, m=>({pod_name:m[1]})],
+    ['healer_scan', /^(healer|scan)\b|\u6383\u63cf.*(pod|\u58de|\u7570\u5e38)/i, null],
+    ['delete', /^(?:delete|remove|\u522a\u9664|del)\s+(\S+)/i, m=>({name:m[1]})],
+    ['scale', /scale\s+(\S+)\s+to\s+(\d+)/i, m=>({name:m[1],replicas:parseInt(m[2],10)})],
+    ['scale', /\u628a?\s*(\S+?)\s*(?:\u64f4|\u7e2e|\u8abf).*?(\d+)/i, m=>({name:m[1],replicas:parseInt(m[2],10)})],
+    ['update_image', /update\s+(\S+)\s+to\s+(\S+)/i, m=>({name:m[1],image:m[2]})],
+    ['update_image', /\u628a?\s*(\S+?)\s*\u7684?\s*(?:image|\u6620\u50cf|\u93e1\u50cf)\s*(?:\u63db\u6210|\u6539\u6210|\u6539\u70ba|to)?\s*(\S+)/i, m=>({name:m[1],image:m[2]})],
+    ['rollback', /rollback\s+(\S+)/i, m=>({name:m[1]})],
+    ['rollback', /(\S+)\s*(?:\u56de\u6efe|\u56de\u5fa9|\u9084\u539f)/i, m=>({name:m[1]})],
+  ];
+  for(const [action, rx, extract] of rules){
+    const m = t.match(rx);
+    if(!m) continue;
+    const args = extract ? extract(m) : {};
+    if(extract && Object.values(args).some(v=>v===undefined||v===''||(typeof v==='number'&&isNaN(v)))) continue;
+    return {action, args, source:'rule'};
+  }
+  // deploy\uff1a\u6cbf\u7528\u539f\u672c\u7684\u8907\u5408\u5224\u65b7
+  if(/^(deploy|start|launch|run|spin\s+up|\u90e8\u7f72|\u4f48\u7f72|\u90e8\u5c6c|\u8d77\s)/i.test(t) ||
+     ((/\u5e6b\u6211|\u8acb/i.test(t)) && /(deploy|\u90e8\u7f72|\u4f48\u7f72|\u90e8\u5c6c|pods?|pod|\u8d77)/i.test(t) &&
+      (/\d+\s*(pods?|replicas?|\u500b|\u526f\u672c)/i.test(t) || /(nginx|redis|postgres|node|python|golang|image|\u6620\u50cf|\u93e1\u50cf)/i.test(t)))){
+    return {action:'deploy', args:{}, source:'rule'};
+  }
+  return null;
+}
+
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+//  \u591a\u6b65\u6d41\u7a0b\u5361\u7247 renderer\uff08HTML \u5b57\u4e32\uff0c\u5b58\u9032 message.content\uff09
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+function flowStateAttrs(flow){
+  const st = {id:flow.id, seq:flow.seq, kind:flow.kind, step:flow.step,
+             originalText:flow.originalText, spec:flow.spec, review:flow.review, resource:flow.resource};
+  return `data-flow-id="${flow.id}" data-flow-seq="${flow.seq}" data-flow-step="${flow.step}" `+
+         `data-flow-state="${encodeURIComponent(JSON.stringify(st))}"`;
+}
+function flowShell(flow, inner){
+  return `<div class="deploy-confirm" ${flowStateAttrs(flow)}>${inner}</div>`;
+}
+function esc(v){ return escHtml(String(v==null?'':v)); }
+
+function renderFlowCard(flow){
+  if(flow.step==='expired'){
+    return flowShell(flow, `<div class="deploy-confirm-head"><div>
+      <div class="deploy-confirm-title">\u6b64\u8acb\u6c42\u5df2\u5931\u6548 / Request expired</div>
+      <div class="deploy-confirm-sub">\u9801\u9762\u91cd\u65b0\u6574\u7406\u5f8c\u6d41\u7a0b\u72c0\u614b\u5df2\u907a\u5931\uff0c\u5982\u4ecd\u9700\u8981\u8acb\u91cd\u65b0\u8f38\u5165\u3002<br>The flow state was lost on reload \u2014 please resend if you still need it.</div>
+      </div><span class="badge failed">Expired</span></div>`);
+  }
+  if(flow.kind==='deploy'){
+    if(flow.step==='spec') return renderSpecCard(flow);
+    if(flow.step==='review') return renderReviewCard(flow);
+    if(flow.step==='executing') return renderBusyCard(flow, '\u90e8\u7f72\u4e2d\u2026 / Deploying\u2026');
+    if(flow.step==='done') return renderDoneCard(flow);
+    if(flow.step==='error') return renderErrorCard(flow);
+  } else {
+    if(flow.step==='spec') return renderDestructiveCard(flow);
+    if(flow.step==='executing') return renderBusyCard(flow, '\u57f7\u884c\u4e2d\u2026 / Working\u2026');
+    if(flow.step==='done') return renderActionDoneCard(flow);
+    if(flow.step==='error') return renderErrorCard(flow);
+  }
+  return flowShell(flow, '<div class="deploy-confirm-sub">\u2026</div>');
+}
+
+function renderBusyCard(flow, label){
+  return flowShell(flow, `<div class="deploy-confirm-head"><div>
+    <div class="deploy-confirm-title">${esc(label)}</div>
+    <div class="deploy-confirm-sub">\u8acb\u7a0d\u5019 / please wait</div></div>
+    <span class="badge pending">Working</span></div>`);
+}
+
+// \u2500\u2500 B1 \u898f\u683c\u78ba\u8a8d\u5361\uff08\u90e8\u7f72\u7b2c 1 \u6b65\uff09\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function renderSpecCard(flow){
+  const s = flow.spec || {};
+  const out = s.output || s;
+  const g = (k)=> esc(out[k] != null ? out[k] : (s[k] != null ? s[k] : ''));
+  const disabled = '';
+  return flowShell(flow, `
+    <div class="deploy-confirm-head"><div>
+      <div class="deploy-confirm-title">\u9019\u662f\u4f60\u60f3\u8981\u7684\u90e8\u7f72\u55ce\uff1f / Is this what you want to deploy?</div>
+      <div class="deploy-confirm-sub">\u6709\u932f\u5c31\u76f4\u63a5\u6539\uff0c\u7136\u5f8c\u6309\u300c\u4e0b\u4e00\u6b65\u300d\u770b\u8cc7\u6e90\u7528\u91cf\u8207\u5be9\u67e5\u3002<br>Edit anything wrong, then continue to the resource &amp; review step.</div>
+    </div><span class="badge pending">Step 1 / 3</span></div>
+    <div class="deploy-confirm-grid">
+      <div class="deploy-confirm-field"><label>App name</label><input data-field="app_name" value="${g('app_name')}" placeholder="my-app" ${disabled}></div>
+      <div class="deploy-confirm-field"><label>Image</label><input data-field="image" value="${g('image')}" placeholder="nginx:latest" ${disabled}></div>
+      <div class="deploy-confirm-field"><label>Pods</label><input data-field="pods" type="number" min="1" max="100" value="${g('pods')||1}" ${disabled}></div>
+      <div class="deploy-confirm-field"><label>Port</label><input data-field="port" type="number" min="1" max="65535" value="${g('port')||80}" ${disabled}></div>
+      <div class="deploy-confirm-field"><label>Memory / pod</label><input data-field="memory" value="${g('memory')}" placeholder="\u9078\u586b e.g. 128Mi" ${disabled}></div>
+      <div class="deploy-confirm-field"><label>CPU / pod</label><input data-field="cpu" value="${g('cpu')}" placeholder="\u9078\u586b e.g. 100m" ${disabled}></div>
+    </div>
+    <div class="deploy-confirm-error" data-role="error"></div>
+    <div class="deploy-confirm-actions">
+      <button class="deploy-confirm-btn" onclick="cancelFlow('${flow.id}')">\u53d6\u6d88 / Cancel</button>
+      <button class="deploy-confirm-btn primary" onclick="flowToReview('${flow.id}')">\u4e0b\u4e00\u6b65\uff1a\u6aa2\u8996\u8cc7\u6e90 / Next</button>
+    </div>`);
+}
+function readSpecCard(id){
+  const root = document.querySelector(`[data-flow-id="${id}"]`);
+  if(!root) return null;
+  const get = f => (root.querySelector(`[data-field="${f}"]`)?.value||'').trim();
+  const spec = { app_name:get('app_name'), image:get('image'),
+                 pods:parseInt(get('pods'),10), port:parseInt(get('port'),10) };
+  const mem = get('memory'), cpu = get('cpu');
+  if(mem) spec.memory = mem;
+  if(cpu) spec.cpu = cpu;
+  return {root, spec};
+}
+
+// \u2500\u2500 B2 \u8cc7\u6e90 + \u4e09\u65b9\u5be9\u67e5\u5361\uff08\u90e8\u7f72\u7b2c 2 \u6b65\uff09\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function resourceRow(label, val){
+  return `<tr><td style="padding:4px 10px 4px 0;color:var(--text3)">${esc(label)}</td>
+          <td style="padding:4px 0;font-family:'DM Mono',monospace">${esc(val)}</td></tr>`;
+}
+function resourceTableHTML(rs){
+  if(!rs) return '';
+  const nb = rs.node_bound ? `\uff08\u53d7${rs.node_bound==='cpu'?'CPU':'\u8a18\u61b6\u9ad4'}\u9650\u5236 / ${rs.node_bound}-bound\uff09` : '';
+  const src = rs.node_source==='llm' ? '\u6a21\u578b\u5224\u65b7 / from model' : '\u975c\u614b\u5bb9\u91cf\u4f30\u7b97 / static-capacity estimate';
+  return `<table style="border-collapse:collapse;font-size:12px;margin:4px 0 10px">
+    ${resourceRow('\u526f\u672c\u6578 / Replicas', rs.replicas)}
+    ${resourceRow('\u6bcf\u500b Pod \u8a18\u61b6\u9ad4 / Mem per pod', rs.per_pod_mem)}
+    ${resourceRow('\u6bcf\u500b Pod CPU / CPU per pod', rs.per_pod_cpu)}
+    ${resourceRow('\u7e3d\u8a18\u61b6\u9ad4\uff08\u526f\u672c\u00d7\u6bcf\u500b\uff09/ Total mem', rs.total_mem_gib!=null ? rs.total_mem_gib+' GiB' : '\u2014')}
+    ${resourceRow('\u7e3d CPU / Total CPU', rs.total_cpu_cores!=null ? rs.total_cpu_cores+' cores' : '\u2014')}
+    ${resourceRow('\u9810\u4f30\u7bc0\u9ede\u6578 / Est. nodes', (rs.node_count!=null ? rs.node_count : '\u2014') + ' ' + nb)}
+    ${resourceRow('\u7bc0\u9ede\u6578\u4f86\u6e90 / Node est. source', src)}
+    ${resourceRow('\u9810\u4f30\u6bcf\u6708\u6210\u672c / Est. monthly', rs.monthly_usd!=null ? ('$'+rs.monthly_usd+' USD') : '\u2014')}
+  </table>`;
+}
+function agentMiniCard(title, badge, issues, summary){
+  const pills = (issues||[]).map(i=>{
+    const sev = (i.severity||'info');
+    const cls = ['critical','high'].includes(sev)?'complex':(sev==='medium'?'medium':'simple');
+    return `<span class="pill ${cls}">${esc(sev)}: ${esc(i.message||'')}</span>`;
+  }).join(' ');
+  return `<div style="border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin:4px 0">
+    <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700">
+      <span>${esc(title)}</span><span style="color:var(--text3)">${esc(badge||'')}</span></div>
+    <div style="margin:4px 0">${pills}</div>
+    <div style="font-size:11.5px;color:var(--text2)">${esc(summary||'')}</div></div>`;
+}
+function agentTrioHTML(review){
+  const a = review && review.agents && review.agents.agents;
+  if(!a) return '<div class="deploy-confirm-sub">\uff08\u5be9\u67e5\u8cc7\u6599\u4e0d\u5b8c\u6574 / review data incomplete\uff09</div>';
+  const s=a.security||{}, c=a.cost||{}, p=a.perf||{};
+  const cEst = c.cost_estimate && c.cost_estimate.estimated_usd;
+  return agentMiniCard('\u5b89\u5168 Security', (typeof s.score==='number'?s.score+'/100':''), s.issues, s.summary)
+       + agentMiniCard('\u6210\u672c Cost', (cEst!=null?('$'+cEst+'/mo'):''), c.issues, c.summary)
+       + agentMiniCard('\u6548\u80fd Performance', (p.hpa_yaml?'\u5efa\u8b70 HPA / HPA suggested':''), p.issues, p.summary);
+}
+function renderReviewCard(flow){
+  const rv = flow.review || {};
+  const decision = rv.decision || 'block';
+  let banner, actions;
+  if(decision==='approve'){
+    banner = `<div class="result-box court-verdict success">\u2713 \u901a\u904e / Approved \u2014 ${esc(rv.reason||'\u4e09\u65b9\u6aa2\u67e5\u5168\u90e8\u901a\u904e')}</div>`;
+    actions = `<button class="deploy-confirm-btn" onclick="cancelFlow('${flow.id}')">\u53d6\u6d88 / Cancel</button>
+      <button class="deploy-confirm-btn primary" onclick="flowExecuteDeploy('${flow.id}')">\u78ba\u8a8d\u90e8\u7f72 / Deploy</button>`;
+  } else if(decision==='warn'){
+    const ws = (rv.warnings||[]).map(w=>'\u00b7 '+esc(w)).join('<br>');
+    banner = `<div class="result-box court-verdict warn">\u26a0 \u8b66\u544a / Warning \u2014 ${esc(rv.reason||'')}<br>${ws}</div>`;
+    actions = `<button class="deploy-confirm-btn" onclick="cancelFlow('${flow.id}')">\u53d6\u6d88 / Cancel</button>
+      <button class="deploy-confirm-btn primary" onclick="flowExecuteDeploy('${flow.id}')">\u4ecd\u8981\u90e8\u7f72 / Deploy anyway</button>`;
+  } else {
+    const bs = (rv.blockers||[]).map(b=>'\u00b7 '+esc(b)).join('<br>');
+    banner = `<div class="result-box court-verdict error">\u2717 \u963b\u64cb / Blocked \u2014 ${esc(rv.reason||'')}<br>${bs}</div>`;
+    actions = `<button class="deploy-confirm-btn" onclick="cancelFlow('${flow.id}')">\u95dc\u9589 / Close</button>`;
+  }
+  return flowShell(flow, `
+    <div class="deploy-confirm-head"><div>
+      <div class="deploy-confirm-title">\u8cc7\u6e90\u7528\u91cf\u8207\u4e09\u65b9\u5be9\u67e5 / Resources &amp; review</div>
+      <div class="deploy-confirm-sub">${esc(flow.spec.app_name||'')} \u00b7 ${esc(flow.spec.image||'')}</div>
+    </div><span class="badge pending">Step 2 / 3</span></div>
+    ${resourceTableHTML(flow.resource)}
+    ${agentTrioHTML(flow.review)}
+    <div style="margin:10px 0">${banner}</div>
+    <div class="deploy-confirm-actions">${actions}</div>`);
+}
+
+// \u2500\u2500 B3 \u7834\u58de\u6027\u64cd\u4f5c\u78ba\u8a8d\u5361 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function destructiveSummary(flow){
+  const a = flow.spec || {};
+  if(flow.kind==='scale') return `${esc(a.name)}\uff1a${a.current!=null?a.current:'?'} \u2192 ${esc(a.replicas)} \u526f\u672c / replicas`;
+  if(flow.kind==='update_image') return `${esc(a.name)} image\uff1a${esc(a.current||'?')} \u2192 ${esc(a.image)}`;
+  if(flow.kind==='rollback') return `${esc(a.name)} \u2192 \u56de\u6efe\u5230\u4e0a\u4e00\u7248 / roll back to previous version`;
+  if(flow.kind==='delete') return `\u522a\u9664 Deployment\u300c${esc(a.name)}\u300d+ \u5176 Service\uff08\u4e0d\u53ef\u5fa9\u539f / cannot be undone\uff09`;
+  if(flow.kind==='healer_fix') return `\u522a\u9664 Pod\u300c${esc(a.pod_name)}\u300d\u8b93 ReplicaSet \u91cd\u5efa`;
+  if(flow.kind==='healer_auto_fix') return `\u522a\u9664\u6240\u6709\u7570\u5e38 Pod\uff08CrashLoopBackOff / OOMKilled / ImagePull\u2026 \uff09\u8b93\u5176\u91cd\u5efa`;
+  return '';
+}
+function renderDestructiveCard(flow){
+  const k8sOff = (flow.kind==='scale'||flow.kind==='update_image') && k8sEnabled===false;
+  return flowShell(flow, `
+    <div class="deploy-confirm-head"><div>
+      <div class="deploy-confirm-title">\u78ba\u8a8d\u64cd\u4f5c / Confirm action</div>
+      <div class="deploy-confirm-sub">${destructiveSummary(flow)}</div>
+    </div><span class="badge pending">Confirm</span></div>
+    <div class="deploy-confirm-error" data-role="error"></div>
+    ${k8sOff ? '<div class="deploy-confirm-note">K8s \u672a\u9023\u7dda\uff0c\u9019\u500b\u64cd\u4f5c\u7121\u6cd5\u57f7\u884c / K8s not connected \u2014 this action cannot run.</div>' : ''}
+    <div class="deploy-confirm-actions">
+      <button class="deploy-confirm-btn" onclick="cancelFlow('${flow.id}')">\u53d6\u6d88 / Cancel</button>
+      <button class="deploy-confirm-btn primary" onclick="flowExecuteAction('${flow.id}')" ${k8sOff?'disabled':''}>\u78ba\u8a8d / Confirm</button>
+    </div>`);
+}
+
+// \u2500\u2500 B4 \u5b8c\u6210 / \u932f\u8aa4\u5361 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+function navBtn(page, label){
+  return `<button class="deploy-confirm-btn" onclick="showPage('${page}')">${esc(label)}</button>`;
+}
+function renderDoneCard(flow){
+  const p = flow.spec || {};
+  return flowShell(flow, `
+    <div class="deploy-confirm-head"><div>
+      <div class="deploy-confirm-title">\u2713 \u90e8\u7f72\u5b8c\u6210 / Deployed</div>
+      <div class="deploy-confirm-sub">${esc(p.app_name)} \u00b7 Pods ${esc(p.pods)} \u00b7 ${esc(p.image)}${p.port?(' \u00b7 Port '+esc(p.port)):''}</div>
+    </div><span class="badge success">Done</span></div>
+    <div class="deploy-confirm-note">\u53ef\u5230\u4ee5\u4e0b\u5206\u9801\u67e5\u770b\u525b\u525b\u90e8\u7f72\u7684\u5167\u5bb9 / Check what was just deployed:</div>
+    <div class="deploy-confirm-actions" style="justify-content:flex-start">
+      ${navBtn('pods','\u524d\u5f80 Pods')} ${navBtn('deployments','\u524d\u5f80 Deployments')} ${navBtn('gitops','GitOps \u7d00\u9304')}
+    </div>`);
+}
+function renderActionDoneCard(flow){
+  return flowShell(flow, `
+    <div class="deploy-confirm-head"><div>
+      <div class="deploy-confirm-title">\u2713 \u5b8c\u6210 / Done</div>
+      <div class="deploy-confirm-sub">${esc(flow.resultMsg || destructiveSummary(flow))}</div>
+    </div><span class="badge success">Done</span></div>
+    <div class="deploy-confirm-actions" style="justify-content:flex-start">
+      ${navBtn('pods','\u524d\u5f80 Pods')} ${navBtn('deployments','\u524d\u5f80 Deployments')}
+    </div>`);
+}
+function renderErrorCard(flow){
+  const e = flow.errorMsg || '\u64cd\u4f5c\u5931\u6557 / action failed';
+  const list = (flow.blockers||[]).map(b=>'\u00b7 '+esc(b)).join('<br>');
+  return flowShell(flow, `
+    <div class="deploy-confirm-head"><div>
+      <div class="deploy-confirm-title">\u2717 \u672a\u5b8c\u6210 / Not completed</div>
+      <div class="deploy-confirm-sub">${esc(e)}<br>${list}</div>
+    </div><span class="badge failed">Failed</span></div>
+    <div class="deploy-confirm-actions">
+      <button class="deploy-confirm-btn" onclick="cancelFlow('${flow.id}')">\u95dc\u9589 / Close</button>
+      ${flow.retryStep ? `<button class="deploy-confirm-btn primary" onclick="retryFlow('${flow.id}')">\u91cd\u8a66 / Retry</button>` : ''}
+    </div>`);
+}
+
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+//  \u6d41\u7a0b\u9a45\u52d5
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+function cancelFlow(id){
+  const flow = chatFlows[id];
+  if(!flow) return;
+  flow.step = 'cancelled';
+  flow.errorMsg = '\u5df2\u53d6\u6d88 / Cancelled';
+  flow.retryStep = null;
+  const html = flowShell(flow, `<div class="deploy-confirm-head"><div>
+      <div class="deploy-confirm-title">\u5df2\u53d6\u6d88 / Cancelled</div></div>
+      <span class="badge failed">Cancelled</span></div>`);
+  const ch = currentChat();
+  if(ch){
+    const msg = ch.messages.find(m => m.role==='assistant' && String(m.content||'').includes('data-flow-id="'+id+'"'));
+    if(msg){ msg.content = html; saveChats(); }
+  }
+  const dom = document.querySelector('[data-flow-id="'+id+'"]');
+  if(dom){ const w=document.createElement('div'); w.innerHTML=html; dom.replaceWith(w.firstElementChild); }
+}
+function retryFlow(id){
+  const flow = chatFlows[id];
+  if(!flow || !flow.retryStep) return;
+  flow.step = flow.retryStep;
+  flow.errorMsg = null; flow.blockers = null;
+  persistFlowCard(id);
+}
+function setFlowError(root, msg){
+  const el = root && root.querySelector('[data-role="error"]');
+  if(el){ el.style.display = msg?'block':'none'; el.textContent = msg||''; }
+}
+
+async function flowToReview(id){
+  const flow = chatFlows[id];
+  if(!flowAlive(flow)) return;
+  const data = readSpecCard(id);
+  if(!data) return;
+  const {root, spec} = data;
+  setFlowError(root, '');
+  if(!spec.app_name || !spec.image){ setFlowError(root, 'App name \u548c image \u5fc5\u586b / required.'); return; }
+  if(!Number.isInteger(spec.pods) || spec.pods<1 || spec.pods>100){ setFlowError(root, 'Pods \u5fc5\u9808\u5728 1\u2013100 \u4e4b\u9593.'); return; }
+  if(!Number.isInteger(spec.port) || spec.port<1 || spec.port>65535){ setFlowError(root, 'Port \u5fc5\u9808\u5728 1\u201365535 \u4e4b\u9593.'); return; }
+  if(spec.memory && !/^\d+(Mi|Gi|Ki|M|G)$/.test(spec.memory)){ setFlowError(root, 'Memory \u683c\u5f0f\u9808\u5982 128Mi \u6216 1Gi.'); return; }
+  flow.spec = spec;
+  root.querySelectorAll('input,button').forEach(el=>el.disabled=true);
+  try{
+    const r = await fetch('/api/deploy/parse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({parsed:spec})});
+    const d = await r.json();
+    if(!flowAlive(flow)) return;
+    if(d.error || d.rejected){
+      flow.step='error';
+      flow.errorMsg = d.error || d.reason || '\u5be9\u67e5\u672a\u901a\u904e / review failed';
+      flow.blockers = (d.review && d.review.blockers) || [];
+      flow.retryStep = 'spec';
+    } else {
+      flow.review = d.review || {};
+      flow.resource = d.resource_summary || null;
+      flow.spec = Object.assign({}, spec, {app_name:(d.raw&&d.raw.app_name)||spec.app_name});
+      flow.step = 'review';
+    }
+  }catch(e){
+    if(!flowAlive(flow)) return;
+    flow.step='error'; flow.errorMsg='\u9023\u7dda\u932f\u8aa4 / network error: '+e; flow.retryStep='spec';
+  }
+  persistFlowCard(id);
+}
+
+async function flowExecuteDeploy(id){
+  const flow = chatFlows[id];
+  if(!flowAlive(flow)) return;
+  flow.step = 'executing';
+  persistFlowCard(id);
+  try{
+    const r = await fetch('/api/deploy',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({input:flow.originalText, parsed:flow.spec})});
+    const d = await r.json();
+    if(!flowAlive(flow)) return;
+    if(d.error || d.rejected){
+      flow.step='error'; flow.errorMsg = d.error || d.reason || '\u90e8\u7f72\u88ab\u963b\u64cb / blocked';
+      flow.blockers = (d.review && d.review.blockers) || []; flow.retryStep='review';
+    } else if(d.k8s_deploy && d.k8s_deploy.ok === false){
+      flow.step='error';
+      flow.errorMsg = 'GitOps \u5df2\u63d0\u4ea4\uff0c\u4f46 K8s \u5be6\u969b\u90e8\u7f72\u5931\u6557 / GitOps committed but K8s deploy failed\uff1a'+d.k8s_deploy.message;
+      flow.retryStep='review';
+    } else {
+      flow.step='done';
+      if(d.parsed) flow.spec = Object.assign({}, flow.spec, {
+        app_name:d.parsed.app_name, image:d.parsed.image, pods:d.parsed.pods, port:d.parsed.port});
+      loadStats && loadStats();
+    }
+  }catch(e){
+    if(!flowAlive(flow)) return;
+    flow.step='error'; flow.errorMsg='\u9023\u7dda\u932f\u8aa4 / network error: '+e; flow.retryStep='review';
+  }
+  persistFlowCard(id);
+}
+
+async function startDestructiveFlow(kind, args){
+  const flow = newFlow(kind, '', Object.assign({}, args));
+  if((kind==='scale'||kind==='update_image') && args.name){
+    try{
+      const r = await fetch('/api/deployments'); const d = await r.json();
+      const dep = (d.deployments||[]).find(x=>x.name===args.name);
+      if(dep){ flow.spec.current = (kind==='scale') ? dep.replicas : dep.image; }
+    }catch(e){}
+  }
+  appendMsg('assistant', renderFlowCard(flow));
+}
+
+async function flowExecuteAction(id){
+  const flow = chatFlows[id];
+  if(!flowAlive(flow)) return;
+  const a = flow.spec || {};
+  let url, body;
+  if(flow.kind==='scale'){ url='/api/scale'; body={name:a.name, replicas:a.replicas}; }
+  else if(flow.kind==='update_image'){ url='/api/update'; body={name:a.name, image:a.image}; }
+  else if(flow.kind==='rollback'){ url='/api/rollback'; body={app_name:a.name}; }
+  else if(flow.kind==='delete'){ url='/api/delete'; body={name:a.name}; }
+  else if(flow.kind==='healer_fix'){ url='/api/healer/fix'; body={pod_name:a.pod_name}; }
+  else if(flow.kind==='healer_auto_fix'){ url='/api/healer/auto_fix'; body={}; }
+  else return;
+  flow.step='executing'; persistFlowCard(id);
+  try{
+    const r = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const d = await r.json();
+    if(!flowAlive(flow)) return;
+    const ok = (d.success !== false) && !d.error;
+    if(ok){
+      flow.step='done';
+      flow.resultMsg = d.message || (flow.kind==='healer_auto_fix' ? `\u5df2\u8655\u7406 ${d.fixed||0} \u500b Pod` : destructiveSummary(flow));
+      loadStats && loadStats();
+    } else {
+      flow.step='error'; flow.errorMsg = d.error || d.message || '\u64cd\u4f5c\u5931\u6557 / failed'; flow.retryStep='spec';
+    }
+  }catch(e){
+    if(!flowAlive(flow)) return;
+    flow.step='error'; flow.errorMsg='\u9023\u7dda\u932f\u8aa4 / network error: '+e; flow.retryStep='spec';
+  }
+  persistFlowCard(id);
+}
+
+async function startDeployFlow(text){
+  try{
+    const r = await fetch('/api/deploy/parse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:text})});
+    const d = await r.json();
+    if(d.error || d.rejected){
+      appendMsg('assistant', '\u7121\u6cd5\u90e8\u7f72 / Cannot deploy\uff1a' + (d.error || d.reason || 'blocked'));
+      return;
+    }
+    const raw = d.raw || d.parsed || {};
+    const flow = newFlow('deploy', text, {
+      app_name: raw.app_name, image: raw.image, pods: raw.pods, port: raw.port,
+      memory: raw.memory, cpu: raw.cpu,
+    });
+    flow.review = d.review || null;
+    flow.resource = d.resource_summary || null;
+    appendMsg('assistant', renderFlowCard(flow));
+  }catch(e){
+    appendMsg('assistant', '\u89e3\u6790\u90e8\u7f72\u9700\u6c42\u6642\u9023\u7dda\u932f\u8aa4 / network error: ' + e);
+  }
+}
+
+async function runReadAction(action){
+  const map = {
+    list_pods:['/api/pods', d=>{
+      const ps=d.pods||[]; return ps.length ? '\u57f7\u884c\u4e2d\u7684 Pods / Running Pods:\n'+ps.map(p=>`- ${p.name} [${p.phase}] ${(p.containers&&p.containers[0]&&p.containers[0].image)||''}`).join('\n') : '\u76ee\u524d\u6c92\u6709 Pod / No pods.';
+    }],
+    list_deployments:['/api/deployments', d=>{
+      const ds=d.deployments||[]; return ds.length ? 'Deployments:\n'+ds.map(x=>`- ${x.name}  ${x.ready}/${x.replicas} ready  ${x.image||''}`).join('\n') : '\u76ee\u524d\u6c92\u6709 Deployment / None.';
+    }],
+    gitops_log:['/api/gitops', d=>{
+      const cs=d.commits||[]; return cs.length ? '\u90e8\u7f72\u7d00\u9304 / GitOps log:\n'+cs.map(c=>`- ${c.time}  ${c.app||''}  ${c.message}`).join('\n') : '\u6c92\u6709\u7d00\u9304 / No commits.';
+    }],
+    cluster_metrics:['/api/metrics', d=>{
+      const m=d.metrics||{}; return `\u53e2\u96c6\u6307\u6a19 / Cluster metrics:\n- Prometheus: ${d.connected?'online':'offline'}\n- Pods: ${m.pod_count!=null?m.pod_count:'?'} (running ${m.running_pods!=null?m.running_pods:'?'})`;
+    }],
+    healer_scan:['/api/healer/scan', d=>{
+      const is=d.issues||[]; return is.length ? `Healer \u6383\u5230 ${is.length} \u500b\u554f\u984c / issues:\n`+is.map(i=>`- ${i.pod_name||i.pod} : ${i.reason||i.status}`).join('\n') : '\u6c92\u6709\u7570\u5e38 Pod / No unhealthy pods.';
+    }],
+  };
+  const entry = map[action];
+  if(!entry){ appendMsg('assistant', '\uff08\u672a\u652f\u63f4\u7684\u67e5\u8a62 / unsupported\uff09'); return; }
+  try{
+    const r = await fetch(entry[0]); const d = await r.json();
+    appendMsg('assistant', entry[1](d));
+  }catch(e){ appendMsg('assistant', 'Error: '+e); }
+}
+
+function startClarify(intent){
+  const g = (intent.args && intent.args.guess) || intent.action;
+  const label = {scale:'\u64f4\u7e2e\u526f\u672c',update_image:'\u66f4\u65b0\u6620\u50cf',rollback:'\u56de\u6efe',delete:'\u522a\u9664',
+                 healer_fix:'\u4fee\u5fa9 Pod',healer_auto_fix:'\u81ea\u52d5\u4fee\u5fa9'}[g] || g;
+  appendMsg('assistant', `\u6211\u4e0d\u592a\u78ba\u5b9a\u4f60\u662f\u8981\u300c${label}\u300d\u9084\u662f\u53ea\u662f\u5728\u554f\u554f\u984c\u3002\u5982\u679c\u8981\u57f7\u884c\uff0c\u8acb\u8b1b\u6e05\u695a\u4e00\u9ede\uff0c\u4f8b\u5982\uff1a\n`+
+    `- scale <deployment> to <\u6578\u91cf>\n- delete <deployment>\n- rollback <deployment>\n`+
+    `I'm not sure if you want to run "${g}" or just asking \u2014 please phrase it as an explicit command.`);
+}
+
+async function runQA(text){
+  try{
+    const hist = (currentChat()?.messages||[]).slice(-10).map(m=>({role:m.role==='assistant'?'assistant':'user',content:m.content}));
+    const r = await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text, history:hist})});
+    const d = await r.json();
+    appendMsg('assistant', d.reply||d.error||'No response', d.sources);
+  }catch(e){ appendMsg('assistant','Connection error: '+e); }
+}
+
 async function sendChat(){
   const inp = document.getElementById('chat-input');
   const text = inp.value.trim();
@@ -2311,90 +2832,25 @@ async function sendChat(){
   appendMsg('user', text);
   appendTyping();
 
-  let replied = false;
+  let intent = matchClientRule(text);
+  if(!intent){
+    try{
+      const r = await fetch('/api/intent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
+      intent = await r.json();
+    }catch(e){ intent = {action:'qa', args:{}, source:'error'}; }
+  }
+  removeTyping();
 
-  if(/^(list|show|\u67e5\u770b|\u986f\u793a)\s*(all\s*)?(pods?|pod|\u5bb9\u5668)/i.test(text)){
-    replied = true;
-    try{
-      const r = await fetch('/api/pods'); const d = await r.json();
-      const pods = d.pods||[];
-      let reply = pods.length ? pods.map(p=>`- ${p.name} [${p.phase}] - ${(p.containers&&p.containers[0]&&p.containers[0].image)||''}`).join('\n') : 'No pods running.';
-      removeTyping(); appendMsg('assistant', 'Running Pods:\n'+reply);
-    }catch(e){ removeTyping(); appendMsg('assistant','Error: '+e); }
-  }
-  else if(/^(list|show|\u67e5\u770b|\u986f\u793a)\s*(all\s*)?(deploy|deployment|\u90e8\u7f72)/i.test(text)){
-    replied = true;
-    try{
-      const r = await fetch('/api/deployments'); const d = await r.json();
-      const deps = d.deployments||[];
-      let reply = deps.length ? deps.map(d=>`- ${d.name} - ${d.ready}/${d.replicas} ready`).join('\n') : 'No deployments.';
-      removeTyping(); appendMsg('assistant', 'Deployments:\n'+reply);
-    }catch(e){ removeTyping(); appendMsg('assistant','Error: '+e); }
-  }
-  else if(/^(delete|remove|\u522a\u9664|del)\s+(\S+)/i.test(text)){
-    replied = true;
-    const name = text.match(/^(?:delete|remove|\u522a\u9664|del)\s+(\S+)/i)[1];
-    try{
-      const r = await fetch('/api/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
-      const d = await r.json();
-      removeTyping(); appendMsg('assistant', d.success ? 'Deleted: '+name : 'Error: '+(d.error||d.message));
-    }catch(e){ removeTyping(); appendMsg('assistant','Error: '+e); }
-  }
-  else if(/scale\s+(\S+)\s+to\s+(\d+)/i.test(text)){
-    replied = true;
-    const m = text.match(/scale\s+(\S+)\s+to\s+(\d+)/i);
-    const app = m[1], n = parseInt(m[2]);
-    try{
-      const r = await fetch('/api/scale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:app,replicas:n})});
-      const d = await r.json();
-      removeTyping(); appendMsg('assistant', d.success ? 'Scaled '+app+' to '+n+' replicas' : 'Error: '+(d.error||d.message));
-    }catch(e){ removeTyping(); appendMsg('assistant','Error: '+e); }
-  }
-  else if(/update\s+(\S+)\s+to\s+(\S+)/i.test(text)){
-    replied = true;
-    const m = text.match(/update\s+(\S+)\s+to\s+(\S+)/i);
-    const app = m[1], image = m[2];
-    try{
-      const r = await fetch('/api/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:app,image})});
-      const d = await r.json();
-      removeTyping(); appendMsg('assistant', d.success ? 'Updated '+app+' to '+image : 'Error: '+(d.error||d.message));
-    }catch(e){ removeTyping(); appendMsg('assistant','Error: '+e); }
-  }
-  else if(/rollback\s+(\S+)/i.test(text)){
-    replied = true;
-    const app = text.match(/rollback\s+(\S+)/i)[1];
-    try{
-      const r = await fetch('/api/rollback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_name:app})});
-      const d = await r.json();
-      removeTyping(); appendMsg('assistant', d.success!==false ? (d.message||'Rolled back '+app) : 'Error: '+(d.error||d.message));
-    }catch(e){ removeTyping(); appendMsg('assistant','Error: '+e); }
-  }
-  else if(/^(deploy|start|launch|run|spin\s+up|\u90e8\u7f72|\u4f48\u7f72|\u90e8\u5c6c|\u8d77\s)/i.test(text) || ((/\u5e6b\u6211|\u8acb/i.test(text)) && /(deploy|\u90e8\u7f72|\u4f48\u7f72|\u90e8\u5c6c|pods?|pod|\u8d77)/i.test(text) && (/\d+\s*(pods?|replicas?|\u500b|\u526f\u672c)/i.test(text) || /(nginx|redis|postgres|node|python|golang|image|\u6620\u50cf|\u93e1\u50cf)/i.test(text)))){
-    replied = true;
-    try{
-      const r = await fetch('/api/deploy/parse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:text})});
-      const d = await r.json();
-      removeTyping();
-      if(d.error || d.rejected){
-        appendMsg('assistant', d.error || d.reason || 'Deployment request was blocked.');
-      } else {
-        const confirmId = 'deploy_confirm_' + Date.now();
-        appendMsg('assistant', deployConfirmHTML(confirmId, d.parsed || {}, text));
-      }
-    }catch(e){
-      removeTyping();
-      appendMsg('assistant','Connection error while parsing deployment: '+e);
-    }
-  }
-
-  if(!replied){
-    try{
-      const hist = (currentChat()?.messages||[]).slice(-10).map(m=>({role:m.role==='assistant'?'assistant':'user',content:m.content}));
-      const r = await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text, history:hist})});
-      const d = await r.json();
-      removeTyping();
-      appendMsg('assistant', d.reply||d.error||'No response', d.sources);
-    }catch(e){ removeTyping(); appendMsg('assistant','Connection error: '+e); }
+  const action = intent.action || 'qa';
+  try{
+    if(action==='qa'){ await runQA(text); }
+    else if(action==='clarify'){ startClarify(intent); }
+    else if(READ_ACTIONS.includes(action)){ await runReadAction(action); }
+    else if(action==='deploy'){ await startDeployFlow(text); }
+    else if(DESTRUCTIVE_KINDS.includes(action)){ await startDestructiveFlow(action, intent.args||{}); }
+    else { await runQA(text); }
+  }catch(e){
+    appendMsg('assistant','\u8655\u7406\u6642\u767c\u751f\u932f\u8aa4 / error: '+e);
   }
 }
 
@@ -2474,6 +2930,61 @@ def _rag_fallback_context(message: str, history: list = None) -> tuple:
         if text:
             parts.append(f"來源 {doc.get('source','RAG')}：\n{text[:900]}")
     return "\n\n".join(parts), docs
+
+
+# ── Chat 意圖辨識：規則層（前端規則的 Python 對應，當安全網）──────────
+# 每條 (action, compiled_regex, group->arg 對應)。第一條命中即回傳。
+_INTENT_RULES = [
+    ("list_pods", re.compile(r"^(list|show|查看|顯示|列出)\s*(all\s*|所有|全部)?\s*(pods?|容器)", re.I), {}),
+    ("list_deployments", re.compile(r"^(list|show|查看|顯示|列出)\s*(all\s*|所有|全部)?\s*(deploy(ment)?s?|部署)", re.I), {}),
+    ("gitops_log", re.compile(r"^(gitops|deploy history|git ?log)|部署(紀錄|歷史|記錄)", re.I), {}),
+    ("cluster_metrics", re.compile(r"^(metrics|cluster (status|health)|叢集(狀態|健康)|指標)", re.I), {}),
+    ("healer_auto_fix", re.compile(r"^(auto ?fix|fix all|自動修復|全部修復)", re.I), {}),
+    ("healer_fix", re.compile(r"^(fix|修復)\s+(\S+)", re.I), {2: "pod_name"}),
+    ("healer_scan", re.compile(r"^(healer|scan)\b|掃描.*(pod|壞|異常)", re.I), {}),
+    ("delete", re.compile(r"^(delete|remove|刪除|del)\s+(\S+)", re.I), {2: "name"}),
+    ("scale", re.compile(r"scale\s+(\S+)\s+to\s+(\d+)", re.I), {1: "name", 2: "replicas"}),
+    ("scale", re.compile(r"把?\s*(\S+?)\s*(?:擴|縮|調).*?(\d+)", re.I), {1: "name", 2: "replicas"}),
+    ("update_image", re.compile(r"update\s+(\S+)\s+to\s+(\S+)", re.I), {1: "name", 2: "image"}),
+    ("update_image", re.compile(r"把?\s*(\S+?)\s*的?\s*(?:image|映像|鏡像)\s*(?:換成|改成|改為|to)?\s*(\S+)", re.I), {1: "name", 2: "image"}),
+    ("rollback", re.compile(r"rollback\s+(\S+)", re.I), {1: "name"}),
+    ("rollback", re.compile(r"(\S+)\s*(?:回滾|回復|還原)", re.I), {1: "name"}),
+    # deploy：前端有更完整的複合 regex，這裡只當 server 端安全網（args 交給 /api/deploy/parse 解析）
+    ("deploy", re.compile(r"^(deploy|start|launch|run|spin\s+up|部署|佈署|部屬)", re.I), {}),
+    ("deploy", re.compile(r"(?:幫我|請).{0,6}(?:deploy|部署|佈署|部屬|跑|起).{0,8}(?:\d+\s*(?:個|pods?|副本)|nginx|redis|postgres|mysql|node|python|image|映像|鏡像)", re.I), {}),
+]
+_INTENT_INT_ARGS = {"replicas", "pods", "port"}
+
+
+def _rule_intent(message: str):
+    """規則比對一句訊息 -> {action, args} 或 None。前端 matchClientRule 的 server 端鏡像。"""
+    msg = (message or "").strip()
+    if not msg:
+        return None
+    for action, rx, groupmap in _INTENT_RULES:
+        m = rx.search(msg)
+        if not m:
+            continue
+        args = {}
+        for gi, key in groupmap.items():
+            try:
+                val = m.group(gi)
+            except (IndexError, re.error):
+                val = None
+            if val is None:
+                continue
+            val = val.strip().strip(".,，。")
+            if key in _INTENT_INT_ARGS:
+                try:
+                    val = int(val)
+                except ValueError:
+                    continue
+            args[key] = val
+        # 有 group 需求卻沒抓到 -> 視為未命中，交給模型
+        if groupmap and len(args) < len(groupmap):
+            continue
+        return {"action": action, "args": args}
+    return None
 
 
 def _looks_like_system_help(message: str) -> bool:
@@ -2620,6 +3131,26 @@ def api_chat():
             for s in sources
         ]
     return jsonify(resp)
+
+
+@app.route("/api/intent", methods=["POST"])
+def api_intent():
+    """把一句聊天訊息分類成動作。前端 matchClientRule 沒命中才會打這裡。
+    回 {action, args, confidence, source}。source: rule | llm | llm_unavailable。
+    action 可能是 clarify（模型不確定的破壞性操作）或 qa（純問答，交回 /api/chat）。"""
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    msg = (request.get_json() or {}).get("message", "").strip()
+    if not msg:
+        return jsonify({"action": "qa", "args": {}, "confidence": 0.0, "source": "empty"})
+    hit = _rule_intent(msg)
+    if hit:
+        return jsonify({**hit, "confidence": 1.0, "source": "rule"})
+    try:
+        result = classify_intent(msg)
+    except Exception:
+        result = {"action": "qa", "args": {}, "confidence": 0.0, "source": "llm_unavailable"}
+    return jsonify(result)
 
 
 @app.route("/api/rag/status")
@@ -2787,19 +3318,62 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
     return parsed, enriched, review, None
 
 
+def _synth_input_from_spec(spec: dict) -> str:
+    """從結構化規格合成一句自然語言（override 但沒帶原始文字時用）。"""
+    spec = spec or {}
+    return (f"deploy {spec.get('pods', 1)} {spec.get('image', 'nginx:latest')} pods "
+            f"for {spec.get('app_name', 'auto-app')}, port {spec.get('port', 80)}")
+
+
+def _resource_summary(parsed: dict, review: dict) -> dict:
+    """把 review 深層巢狀攤平成前端好用的資源摘要，給 Chat 的「檢視資源」步驟顯示。
+    每個 pod 的 cpu/mem 若使用者沒指定就標「未指定」，不編造精度。"""
+    parsed = parsed or {}
+    review = review or {}
+    cost = (((review.get("agents") or {}).get("agents") or {}).get("cost") or {})
+    est = cost.get("cost_estimate") or {}
+    ne = review.get("node_estimate") or {}
+    node_bound = None
+    if ne.get("cpu_bound") and ne.get("memory_bound"):
+        node_bound = "cpu" if ne["cpu_bound"] >= ne["memory_bound"] else "memory"
+    elif ne.get("cpu_bound"):
+        node_bound = "cpu"
+    elif ne.get("memory_bound"):
+        node_bound = "memory"
+    return {
+        "replicas": parsed.get("pods"),
+        "per_pod_cpu": parsed.get("cpu") or "未指定 / unset",
+        "per_pod_mem": parsed.get("memory") or "未指定 / unset",
+        "total_cpu_cores": est.get("cpu_cores"),
+        "total_mem_gib": est.get("memory_gib"),
+        "node_count": ne.get("node_count"),
+        "node_source": ne.get("source"),
+        "node_bound": node_bound,
+        "monthly_usd": est.get("estimated_usd"),
+        "cost_note": est.get("note"),
+        "decision": review.get("decision"),
+    }
+
+
 @app.route("/api/deploy/parse", methods=["POST"])
 def api_deploy_parse():
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
     data = request.get_json() or {}
     user_input = data.get("input", "").strip()
+    parsed_override = data.get("parsed")
+    if not user_input and parsed_override:
+        user_input = _synth_input_from_spec(parsed_override)
     if not user_input or len(user_input) < 3:
         return jsonify({"error": "Input too short"}), 400
-    parsed, enriched, review, error = _prepare_deploy(user_input)
+    parsed, enriched, review, error = _prepare_deploy(user_input, parsed_override)
     if error:
         payload, status = error
         return jsonify(payload), status
-    return jsonify({"parsed": enriched, "raw": parsed, "review": review, "k8s": K8S_ENABLED})
+    return jsonify({
+        "parsed": enriched, "raw": parsed, "review": review, "k8s": K8S_ENABLED,
+        "resource_summary": _resource_summary(parsed, review),
+    })
 
 
 @app.route("/api/deploy", methods=["POST"])
@@ -2810,7 +3384,7 @@ def api_deploy():
     user_input = data.get("input", "").strip()
     parsed_override = data.get("parsed")
     if not user_input and parsed_override:
-        user_input = f"deploy {parsed_override.get('pods', 1)} {parsed_override.get('image', 'nginx:latest')} pods for {parsed_override.get('app_name', 'auto-app')}, port {parsed_override.get('port', 80)}"
+        user_input = _synth_input_from_spec(parsed_override)
     if not user_input or len(user_input) < 3:
         return jsonify({"error": "Input too short"}), 400
 
@@ -2838,7 +3412,8 @@ def api_deploy():
         if not ok:
             review.setdefault("warnings", []).append(f"K8s 部署失敗：{message}")
 
-    return jsonify({"parsed": enriched, "k8s": K8S_ENABLED, "review": review, "gitops": gitops_result, "k8s_deploy": k8s_deploy_result})
+    return jsonify({"parsed": enriched, "k8s": K8S_ENABLED, "review": review, "gitops": gitops_result,
+                    "k8s_deploy": k8s_deploy_result, "resource_summary": _resource_summary(parsed, review)})
 
 @app.route("/api/pods")
 def api_pods():

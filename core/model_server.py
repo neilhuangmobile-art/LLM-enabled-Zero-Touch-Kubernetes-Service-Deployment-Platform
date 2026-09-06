@@ -111,6 +111,12 @@ class DiagnoseRequest(BaseModel):
     temperature: float = 0.2
 
 
+class ClassifyRequest(BaseModel):
+    message: str
+    max_new_tokens: int = 120
+    temperature: float = 0.0
+
+
 CHAT_SYSTEM = (
     "You are ZeroTouch K8s Assistant, a concise Kubernetes and cloud infrastructure assistant. "
     "The user may be a junior engineer who is new to Kubernetes: answer in plain, simple language, "
@@ -141,6 +147,98 @@ DIAGNOSE_SYSTEM = (
     '"suggestion": "<concrete fix steps, Traditional Chinese (zh-TW)>"}\n'
     "The 'action' value must be one of those exact English snake_case codes, nothing else."
 )
+
+
+# ── 意圖分類（Chat 分派用；規則比對不到時才呼叫）──────────────────
+_INTENT_ACTIONS = {
+    "deploy", "scale", "update_image", "rollback", "delete",
+    "list_pods", "list_deployments", "healer_scan", "healer_fix",
+    "healer_auto_fix", "gitops_log", "cluster_metrics", "qa",
+}
+# 每個 action 允許的 args（其餘一律丟棄，避免模型亂塞）
+_INTENT_ARG_KEYS = {
+    "deploy": {"app_name", "image", "pods", "port", "memory", "cpu"},
+    "scale": {"name", "replicas"},
+    "update_image": {"name", "image"},
+    "rollback": {"name"},
+    "delete": {"name"},
+    "healer_fix": {"pod_name"},
+}
+_INTENT_INT_KEYS = {"pods", "port", "replicas"}
+_INTENT_DESTRUCTIVE = {"scale", "update_image", "rollback", "delete",
+                       "healer_fix", "healer_auto_fix"}
+
+INTENT_SYSTEM = (
+    "You are an intent router for a Kubernetes deployment platform. Given ONE user message, "
+    "respond with ONLY a JSON object, no markdown, no code fence:\n"
+    '{"action":"<code>","args":{...},"confidence":<0.0-1.0>}\n'
+    "Action codes (choose EXACTLY one):\n"
+    "  deploy            {app_name?, image?, pods?, port?, memory?}\n"
+    "  scale             {name, replicas}\n"
+    "  update_image      {name, image}\n"
+    "  rollback          {name}\n"
+    "  delete            {name}\n"
+    "  list_pods         {}\n"
+    "  list_deployments  {}\n"
+    "  healer_scan       {}\n"
+    "  healer_fix        {pod_name}\n"
+    "  healer_auto_fix   {}\n"
+    "  gitops_log        {}\n"
+    "  cluster_metrics   {}\n"
+    "  qa                {}   (questions, chit-chat, concept explanations, anything else)\n"
+    "Rules: if the message only ASKS how to do something (no imperative command), use qa. "
+    "If unsure between a destructive action and qa, choose qa with low confidence. "
+    "Never invent a deployment name, pod name, or image that is not present in the message."
+)
+
+INTENT_FEWSHOT = [
+    ("list pods", '{"action":"list_pods","args":{},"confidence":0.99}'),
+    ("顯示所有部署", '{"action":"list_deployments","args":{},"confidence":0.98}'),
+    ("scale web to 3", '{"action":"scale","args":{"name":"web","replicas":3},"confidence":0.98}'),
+    ("幫我把 web-frontend 擴到 5 個", '{"action":"scale","args":{"name":"web-frontend","replicas":5},"confidence":0.95}'),
+    ("deploy 3 nginx pods for shop port 80", '{"action":"deploy","args":{"pods":3,"image":"nginx:latest","app_name":"shop","port":80},"confidence":0.97}'),
+    ("部署一個 redis 給 cache-service", '{"action":"deploy","args":{"image":"redis:latest","app_name":"cache-service"},"confidence":0.9}'),
+    ("roll back the api deployment", '{"action":"rollback","args":{"name":"api"},"confidence":0.9}'),
+    ("delete web-frontend", '{"action":"delete","args":{"name":"web-frontend"},"confidence":0.95}'),
+    ("把 api-gateway 的 image 換成 node:20", '{"action":"update_image","args":{"name":"api-gateway","image":"node:20"},"confidence":0.92}'),
+    ("how do I scale a deployment in kubernetes?", '{"action":"qa","args":{},"confidence":0.9}'),
+    ("掃描壞掉的 pod", '{"action":"healer_scan","args":{},"confidence":0.9}'),
+    ("叢集現在健康嗎", '{"action":"cluster_metrics","args":{},"confidence":0.7}'),
+    ("看一下部署歷史", '{"action":"gitops_log","args":{},"confidence":0.9}'),
+]
+
+
+def _clean_intent(parsed: dict) -> dict:
+    """把模型輸出正規化成 {action, args, confidence}，action 不在 enum 就退回 qa。"""
+    action = str((parsed or {}).get("action", "")).strip()
+    if action not in _INTENT_ACTIONS:
+        return {"action": "qa", "args": {}, "confidence": 0.0}
+    raw_args = (parsed or {}).get("args") or {}
+    if not isinstance(raw_args, dict):
+        raw_args = {}
+    allowed = _INTENT_ARG_KEYS.get(action, set())
+    args = {}
+    for k, v in raw_args.items():
+        if k not in allowed:
+            continue
+        if k in _INTENT_INT_KEYS:
+            try:
+                v = int(v)
+            except (TypeError, ValueError):
+                continue
+        args[k] = v
+    try:
+        confidence = float((parsed or {}).get("confidence", 0.0))
+    except (TypeError, ValueError):
+        confidence = 0.0
+    confidence = max(0.0, min(1.0, confidence))
+    # 破壞性操作：信心不足或必要 arg 缺 → 交給呼叫端當 qa / clarify 處理
+    if action in _INTENT_DESTRUCTIVE:
+        required = _INTENT_ARG_KEYS.get(action, set())
+        if confidence < 0.75 or not required.issubset(args.keys()):
+            return {"action": "clarify", "args": {"guess": action, **args},
+                    "confidence": confidence}
+    return {"action": action, "args": args, "confidence": confidence}
 
 
 # ── 模型載入 ─────────────────────────────────────────────────────
@@ -409,6 +507,27 @@ def diagnose(req: DiagnoseRequest):
             "raw": generated[:400],
         }
     }
+
+
+@app.post("/classify")
+def classify(req: ClassifyRequest):
+    """把一句使用者訊息分類成 {action, args, confidence}，給 Chat 分派用。
+    規則比對不到才會打到這裡；用部署模型（3B），嚴格 JSON、固定 enum。"""
+    if _deploy_model is None:
+        raise HTTPException(status_code=503, detail="部署模型尚未載入")
+
+    messages = [{"role": "system", "content": INTENT_SYSTEM}]
+    for ex_in, ex_out in INTENT_FEWSHOT:
+        messages.append({"role": "user", "content": ex_in})
+        messages.append({"role": "assistant", "content": ex_out})
+    messages.append({"role": "user", "content": str(req.message)[:600]})
+
+    generated = _generate(_deploy_model, _deploy_tok, messages, _deploy_lock,
+                          req.max_new_tokens, req.temperature)
+    parsed = _parse_output(generated) or {}
+    result = _clean_intent(parsed)
+    result["raw"] = generated[:200]
+    return {"result": result}
 
 
 if __name__ == "__main__":
