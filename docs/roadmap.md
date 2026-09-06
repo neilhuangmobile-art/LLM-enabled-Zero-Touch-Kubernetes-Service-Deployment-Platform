@@ -75,7 +75,9 @@
 - **prompt injection 的 `### User` 結構性風險順帶消解**：改用 `tokenizer.apply_chat_template()`
   （Qwen ChatML），角色邊界是特殊 token，使用者字串偽造不出來。舊的 `STOP_MARKERS` /
   `disable_adapter()` 邏輯一併移除。
-- **`eval_*.py` 待遷移**：這些離線 benchmark 還硬編碼 8B + 8B LoRA，不在主流程，本次未動。
+- **`eval_*.py` 已遷移**（2026-09-06）：5 個離線 benchmark（eval_model / eval_hard / eval_simple /
+  eval_speed / eval_baseline）改成從 `core.config` 引用模型設定、ChatML prompt、移除 8B LoRA。
+  smoke 測過可跑；完整 100 筆 benchmark 數字尚未重跑（舊的 8B 數字還在 `reports/`，跟 3B 不能直接比）。
 - **監控模型 CPU 延遲**：1.5B 在 CPU 上單次診斷約 5~15 秒；healer 規則層仍先跑，只有規則
   比不到才呼叫模型，可接受。
 
