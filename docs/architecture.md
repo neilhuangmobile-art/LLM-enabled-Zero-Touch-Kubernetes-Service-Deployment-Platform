@@ -3,13 +3,19 @@
 ## 整體架構
 
 ```
-使用者輸入（自然語言）
+使用者輸入（自然語言，中/英）
          │
          ▼
-┌─────────────────────┐
-│   core/llama_client  │  LLM 推理（Llama 3.1 8B + LoRA）
-│   + rag/retriever    │  RAG 知識注入（防幻覺）
-└──────────┬──────────┘
+┌──────────────────────────┐
+│  core/gemini_client       │  翻譯層：正規化成 ### DeploySpec 區塊
+│  （多 key 輪換，優先執行）  │  只翻譯、不猜使用者沒講的欄位
+└──────────┬───────────────┘
+           │ DeploySpec 齊全 → 直接解析（零 GPU）
+           │ 不齊全 ↓
+┌──────────────────────────┐
+│  llama_client            │  部署小模型 Qwen2.5-3B（4-bit GPU）
+│  + rag deploy_index      │  RAG 撈相似「input→JSON」範例當 few-shot
+└──────────┬───────────────┘
            │ JSON（pods, image, app_name, port, memory）
            ▼
 ┌─────────────────────────────────────────────┐
@@ -41,7 +47,7 @@
            ▼
 ┌─────────────────────────────┐
 │  healer/pod_watcher          │  監聽 CrashLoopBackOff 等
-│  healer/diagnose             │  LLM 根因分析
+│  healer/diagnose             │  規則層 → 監控小模型 Qwen2.5-1.5B（CPU，/diagnose）
 │  healer/remediate            │  自動補救
 │  observability/prometheus    │  Prometheus 指標
 └─────────────────────────────┘
@@ -63,11 +69,11 @@
 ## 資料流
 
 ```
-1. 使用者輸入 → RAG 增強 → LLM 生成 JSON
-2. JSON → build_k8s_manifests() → YAML
-3. YAML → security_agent → cost_agent → perf_agent → 決策
+1. 使用者輸入 → Gemini 翻譯層正規化成 DeploySpec → 齊全就直接解析；不齊全交小模型 + RAG few-shot → JSON
+2. JSON → build_deploy()/k8s_deploy() 用 Python 樣板 → YAML（模型不直接寫 YAML）
+3. manifest dict → security_agent → cost_agent → perf_agent → 決策
 4. 決策 approve/warn → dry_run 驗證 → 部署
-5. 部署後 → pod_watcher 監控 → 發現問題 → diagnose + remediate
+5. 部署後 → pod_watcher 監控 → 規則層 / 監控小模型 diagnose + remediate
 6. 所有變更透過 GitOps 版本控管，可隨時回滾
 ```
 
@@ -75,12 +81,14 @@
 
 | 組件 | 技術 |
 |------|------|
-| LLM 模型 | Meta Llama 3.1 8B Instruct |
-| 微調方法 | LoRA (PEFT) + 4-bit 量化 |
-| K8s 叢集 | K3s（輕量，適合實驗） |
+| 部署模型 | Qwen2.5-3B-Instruct（4-bit GPU，`/infer`、`/chat`） |
+| 監控模型 | Qwen2.5-1.5B-Instruct（CPU，`/diagnose`） |
+| 翻譯層 | Gemini API（`gemini-flash-latest`，多 key 輪換） |
+| 部署引導 | RAG few-shot（`rag/deploy_index.json`，TF-IDF）＋ system prompt，不微調 |
+| K8s 叢集 | Docker Desktop K8s / K3s |
 | GitOps | Argo CD |
 | 監控 | Prometheus + Grafana |
 | 策略執法 | Kyverno / OPA（Guardian 模組簡化實現） |
-| RAG 嵌入 | sentence-transformers (all-MiniLM-L6-v2) |
-| Web UI | Flask |
-| Model Server | FastAPI + uvicorn |
+| RAG 嵌入 | TF-IDF（預設）／sentence-transformers（選用，跑 CPU） |
+| Web UI | Flask（:5050） |
+| Model Server | FastAPI + uvicorn（:8765） |

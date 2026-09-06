@@ -32,6 +32,7 @@ from typing import List, Dict, Optional, Tuple
 RAG_DIR    = os.path.dirname(os.path.abspath(__file__))
 INDEX_PATH = os.path.join(RAG_DIR, "index.json")
 DOCS_DIR   = os.path.join(RAG_DIR, "k8s_docs")
+DEPLOY_INDEX_PATH = os.path.join(RAG_DIR, "deploy_index.json")
 
 # 聊天路徑（/chat）用的相關度門檻，比 retrieve()/retrieve_with_history() 預設的 0.05 嚴格很多。
 # 依據：跑 rag/eval_retrieval.py 的 24 筆標註測試集，top-1 正確命中分數落在 0.505~0.714，
@@ -331,6 +332,60 @@ def format_context_for_display(docs: List[Dict]) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+# ════════════════════════════════════════════════════════════════
+# 部署範例檢索（few-shot）—— 給小模型 /infer 用
+# ════════════════════════════════════════════════════════════════
+
+_deploy_index_cache: Optional[Dict] = None
+_deploy_index_missing = False
+
+
+def _load_deploy_index() -> Optional[Dict]:
+    global _deploy_index_cache, _deploy_index_missing
+    if _deploy_index_cache is not None:
+        return _deploy_index_cache
+    if _deploy_index_missing:
+        return None
+    if not os.path.exists(DEPLOY_INDEX_PATH):
+        _deploy_index_missing = True
+        return None
+    try:
+        with open(DEPLOY_INDEX_PATH, "r", encoding="utf-8") as f:
+            _deploy_index_cache = json.load(f)
+        print(f"[RAG] 部署範例索引已載入：{len(_deploy_index_cache.get('samples', []))} 筆")
+        return _deploy_index_cache
+    except Exception as e:
+        print(f"[RAG] 部署範例索引載入失敗：{e}")
+        _deploy_index_missing = True
+        return None
+
+
+def retrieve_deploy_examples(query: str, top_k: int = 3) -> List[Dict]:
+    """回傳 [{"input": str, "output": dict}, ...]，最相似的部署範例。
+
+    deploy_index.json 不存在時回傳 []（呼叫端小模型仍可靠 system prompt 生成）。
+    """
+    idx = _load_deploy_index()
+    if not idx:
+        return []
+    samples = idx.get("samples", [])
+    vectors = idx.get("vectors", [])
+    vocab   = idx.get("vocab", [])
+    if not samples or not vectors or not vocab:
+        return []
+
+    q_vec  = _embed_query_tfidf(query, vocab)
+    scores = [_cosine_similarity(q_vec, v) for v in vectors]
+    ranked = sorted(zip(scores, samples), key=lambda x: -x[0])
+
+    out = []
+    for score, sample in ranked[:top_k]:
+        if score <= 0:
+            break
+        out.append({"input": sample["input"], "output": sample["output"]})
+    return out
 
 
 # ════════════════════════════════════════════════════════════════

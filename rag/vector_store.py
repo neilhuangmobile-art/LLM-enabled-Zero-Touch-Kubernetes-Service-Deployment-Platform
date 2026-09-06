@@ -44,13 +44,13 @@ def get_device() -> str:
     global _device
     if _device is not None:
         return _device
+    # 2026-09-06：本機只有 6GB VRAM，要留給部署小模型（Qwen2.5-3B）。embedding 模型
+    # 預設改跑 CPU，避免跟 LLM 搶顯存。真的想用 GPU 再設 RAG_EMBED_DEVICE=cuda。
+    forced = os.environ.get("RAG_EMBED_DEVICE")
+    if forced:
+        _device = forced
+        return _device
     _device = "cpu"
-    try:
-        import torch
-        if torch.cuda.is_available():
-            _device = "cuda"
-    except ImportError:
-        pass
     return _device
 
 

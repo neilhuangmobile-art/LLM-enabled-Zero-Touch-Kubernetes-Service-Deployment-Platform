@@ -5,11 +5,14 @@
 | 項目 | 最低需求 |
 |------|---------|
 | Python | 3.9+ |
-| CUDA | 11.8+（GPU 推論必要） |
-| VRAM | 8GB+（4-bit 量化） |
-| RAM | 16GB+ |
-| 磁碟 | 20GB+（模型權重） |
+| CUDA | 11.8+（部署模型 4-bit GPU 推論用） |
+| VRAM | 4GB+（部署模型 Qwen2.5-3B 4-bit 約佔 2.2GB） |
+| RAM | 16GB+（監控模型 Qwen2.5-1.5B 跑 CPU，約佔 6GB） |
+| 磁碟 | 15GB+（Qwen2.5-3B ≈ 6GB + 1.5B ≈ 3GB） |
 | OS | Windows 10/11、Ubuntu 20.04+ |
+
+> 2026-09-06 起改用小模型雙軌（部署 Qwen2.5-3B GPU、監控 Qwen2.5-1.5B CPU），
+> 不再需要 8GB+ VRAM 跑 Llama-3.1-8B。
 
 ---
 
@@ -35,25 +38,31 @@ pip install torch==2.1.0+cu121 --index-url https://download.pytorch.org/whl/cu12
 
 ```bash
 cp .env.example .env
-# 編輯 .env，填入 HF_TOKEN 等設定
+# 編輯 .env：
+#   GEMINI_API_KEYS=key1,key2,...   翻譯層（可放多把 key 自動輪換湊額度）
+#   USE_LLM_NORMALIZE=1             預設開啟翻譯層
 ```
 
 ---
 
 ## 3. 下載模型（首次執行）
 
-LLaMA-3.1-8B-Instruct 需要 Hugging Face 帳號並接受授權：
+Qwen2.5 系列**不需要**登入或接受授權：
 
-1. 前往 [meta-llama/Llama-3.1-8B-Instruct](https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct) 申請存取
-2. 執行下列指令登入：
-   ```bash
-   huggingface-cli login
-   ```
-3. 首次推論時 transformers 會自動下載，約 16GB
+```bash
+hf download Qwen/Qwen2.5-3B-Instruct     # 部署模型，約 6GB
+hf download Qwen/Qwen2.5-1.5B-Instruct   # 監控模型，約 3GB
+```
+
+不下載也可以，`core/model_server.py` 首次啟動時 transformers 會自動抓。
 
 ---
 
-## 4. 訓練 LoRA 微調模型（選用）
+## 4. 訓練 LoRA 微調模型（選用，目前不啟用）
+
+> 2026-09-06 起部署模型改走「Gemini 正規化 → RAG few-shot → Qwen2.5-3B 生成」，
+> **預設不微調**。舊的 8B LoRA（`llama3_k8s_lora_results/`）已棄用（架構對不上 Qwen）。
+> 若之後要在 Qwen2.5-3B 上重訓小 LoRA，訓練完把權重路徑填進 `.env` 的 `DEPLOY_ADAPTER_PATH`。
 
 若要自行訓練，依序執行：
 
@@ -84,8 +93,10 @@ python core/model_server.py
 
 ```bash
 curl http://127.0.0.1:8765/health
-# {"status":"ok","model_loaded":true}
+# {"status":"ok","deploy_loaded":true,"monitor_loaded":true}
 ```
+
+端點：`/infer`（部署 JSON）、`/chat`（一般問答，共用部署模型）、`/diagnose`（healer 根因分析，監控模型 CPU）。
 
 ---
 
@@ -99,7 +110,7 @@ python 0_touch_generate_pods.py
 **Web UI 模式：**
 ```bash
 python web_demo.py
-# 開啟瀏覽器：http://localhost:5000
+# 開啟瀏覽器：http://localhost:5050
 ```
 
 ---
@@ -121,9 +132,15 @@ kubectl get nodes
 ### RAG 知識庫索引
 
 ```bash
-pip install sentence-transformers
-python rag/build_index.py
+python rag/build_index.py --rebuild --deploy
 ```
+
+預設用 TF-IDF（零額外相依），同時建立：
+- `rag/index.json`：k8s 散文知識（給 `/chat`）
+- `rag/deploy_index.json`：部署範例 `input → JSON`（給 `/infer` 當 few-shot）
+
+想要語意向量升級再 `pip install sentence-transformers chromadb`
+（embedding 預設跑 CPU，`RAG_EMBED_DEVICE=cuda` 可改）。
 
 ### GitOps
 

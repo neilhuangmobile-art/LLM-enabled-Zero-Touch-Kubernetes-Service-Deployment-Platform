@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 
 # 從 config 引用，不再硬編碼路徑
 from core.config import (
-    BASE_MODEL, ADAPTER_PATH, DATASET_PATH,
+    BASE_MODEL, DEPLOY_ADAPTER_PATH, DATASET_PATH,
     SYSTEM_PROMPT, MODEL_SERVER_URL, HF_TOKEN,
 )
 
@@ -40,23 +40,20 @@ _DEPLOY_INTENT_RE = re.compile(
 )
 
 
-def _try_augment_with_rag(prompt_text: str) -> str:
+def _deploy_fewshot(prompt_text: str, top_k: int = 3) -> list:
     """
-    嘗試以 K8s 知識庫增強 prompt，防止 LLM 幻覺。
-    若索引未建立或 rag 模組不可用，靜默回傳原始 prompt。
-    部署類指令（例如「deploy 3 pods」）不套用 RAG：範例文件裡的部署句型
-    會誤導 LoRA 模型接龍生成一堆不相關的假部署指令，而部署本身也不需要參考知識。
+    從部署範例索引（dataset/finetune_samples.jsonl 建的 rag/deploy_index.json）撈幾筆
+    最相似的「輸入 → JSON」範例，當 few-shot 引導小模型的輸出格式。
+    索引不存在或 rag 模組不可用時回傳空 list（模型仍可靠 system prompt 生成）。
     """
-    if _DEPLOY_INTENT_RE.search(prompt_text):
-        return prompt_text
     try:
-        from rag.retriever import augment_prompt
-        augmented = augment_prompt(prompt_text, top_k=2, max_context_chars=500)
-        if augmented != prompt_text:
-            print("[RAG] 知識增強已注入")
-        return augmented
+        from rag.retriever import retrieve_deploy_examples
+        examples = retrieve_deploy_examples(prompt_text, top_k=top_k)
+        if examples:
+            print(f"[RAG] 注入 {len(examples)} 筆部署範例 few-shot")
+        return examples
     except Exception:
-        return prompt_text  # 靜默降級，不影響主流程
+        return []
 
 
 def _try_augment_with_rag_ex(prompt_text: str, history: list = None) -> tuple:
@@ -144,11 +141,11 @@ def _auto_start_server() -> bool:
 # ══════════════════════════════════════════════════════════════════
 # HTTP Client（優先使用 Model Server）
 # ══════════════════════════════════════════════════════════════════
-def _try_server(prompt_text: str) -> Optional[dict]:
+def _try_server(prompt_text: str, examples: list = None) -> Optional[dict]:
     """嘗試呼叫常駐 Model Server。未啟動時回傳 None（觸發 fallback）。"""
     try:
         import urllib.request
-        body = json.dumps({"prompt": prompt_text}).encode()
+        body = json.dumps({"prompt": prompt_text, "examples": examples or []}).encode()
         req  = urllib.request.Request(
             f"{MODEL_SERVER_URL}/infer",
             data=body,
@@ -171,9 +168,8 @@ def _load_model_once():
         return _model, _tokenizer
 
     from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-    from peft import PeftModel
 
-    print("[Local] 正在清理顯存並載入 Llama 3.1 GPU 專家模型 (4-bit 量化)...")
+    print(f"[Local] 正在載入部署模型（4-bit 量化）：{BASE_MODEL}")
     print("[Local] 提示：執行 'python core/model_server.py' 可避免每次重載模型")
     torch.cuda.empty_cache()
 
@@ -184,22 +180,21 @@ def _load_model_once():
     )
 
     _tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, token=HF_TOKEN)
-    _tokenizer.pad_token = _tokenizer.eos_token
+    if _tokenizer.pad_token is None:
+        _tokenizer.pad_token = _tokenizer.eos_token
 
-    base = AutoModelForCausalLM.from_pretrained(
+    _model = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL,
         token=HF_TOKEN,
         quantization_config=bnb_config,
         device_map={"": 0},
     )
-    base.config.use_cache = True
+    _model.config.use_cache = True
 
-    if os.path.exists(ADAPTER_PATH):
-        print(f"[Local] 偵測到微調權重，正在合併：{ADAPTER_PATH}")
-        _model = PeftModel.from_pretrained(base, ADAPTER_PATH)
-    else:
-        print("[Local] 未找到 LoRA 權重，使用原始基礎模型")
-        _model = base
+    if DEPLOY_ADAPTER_PATH and os.path.isdir(DEPLOY_ADAPTER_PATH):
+        from peft import PeftModel
+        print(f"[Local] 掛載部署 LoRA：{DEPLOY_ADAPTER_PATH}")
+        _model = PeftModel.from_pretrained(_model, DEPLOY_ADAPTER_PATH)
 
     _model.eval()
     return _model, _tokenizer
@@ -343,6 +338,61 @@ def _deterministic_deploy_parse(prompt_text: str) -> Optional[dict]:
     return result
 
 
+# 翻譯層輸出的 ### DeploySpec 區塊 → dict。key 對照到下游用的欄位名。
+_SPEC_KEY_MAP = {
+    "replicas": "pods", "pods": "pods", "replica": "pods", "count": "pods",
+    "image": "image", "container": "image",
+    "app_name": "app_name", "name": "app_name", "app": "app_name", "service": "app_name",
+    "port": "port", "memory": "memory", "mem": "memory", "cpu": "cpu",
+}
+_SPEC_PLACEHOLDER = {"", "none", "null", "n/a", "-", "<int>", "<name>", "<image:tag>",
+                     "<e.g. 256mi>", "<e.g. 500m>"}
+
+
+def parse_deploy_spec(text: str) -> Optional[dict]:
+    """
+    解析 Gemini 翻譯層輸出的規範化區塊：
+
+        ### DeploySpec
+        replicas: 3
+        image: redis:7
+        ...
+
+    只認 `key: value` 行，沒出現的欄位就是使用者沒講、留白不補。
+    解析不到任何有效欄位時回傳 None。
+    """
+    if not text:
+        return None
+    out: dict = {}
+    for line in text.splitlines():
+        line = line.strip().lstrip("#").strip()
+        if ":" not in line:
+            continue
+        raw_k, raw_v = line.split(":", 1)
+        k = raw_k.strip().lower()
+        v = raw_v.strip().strip('"').strip("'").rstrip(".,，。").strip()
+        key = _SPEC_KEY_MAP.get(k)
+        if not key or v.lower() in _SPEC_PLACEHOLDER:
+            continue
+        if key in ("pods", "port"):
+            m = re.search(r"\d+", v)
+            if not m:
+                continue
+            out[key] = int(m.group())
+        elif key == "app_name":
+            out[key] = _normalize_app_name(v)
+        else:
+            out[key] = v
+    if not out:
+        return None
+    if out.get("image") and ":" not in out["image"] and "/" not in out["image"]:
+        out["image"] = f"{out['image']}:latest"
+    if "app_name" not in out and out.get("image"):
+        out["app_name"] = _normalize_app_name(out["image"].split("/")[-1].split(":")[0])
+    out["_parser"] = "deploy-spec"
+    return out
+
+
 def _parse(text: str) -> Optional[dict]:
     snippet = _extract_first_json(text)
     if snippet:
@@ -408,31 +458,30 @@ def _local_infer(prompt_text: str) -> dict:
     """本地直接推論（fallback 路徑）。"""
     model, tokenizer = _load_model_once()
 
-    full_prompt = (
-        f"### System\n{SYSTEM_PROMPT}\n\n"
-        f"### User\n{prompt_text}\n"
-        "### Assistant\n{"
-    )
-
-    inputs    = tokenizer(full_prompt, return_tensors="pt").to("cuda")
-    input_len = inputs["input_ids"].shape[1]
+    input_ids = tokenizer.apply_chat_template(
+        [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt_text},
+        ],
+        add_generation_prompt=True, return_tensors="pt",
+    ).to(model.device)
+    input_len = input_ids.shape[1]
 
     with torch.no_grad():
         outputs = model.generate(
-            **inputs,
+            input_ids=input_ids,
+            attention_mask=torch.ones_like(input_ids),
             max_new_tokens=200,
             temperature=0.3,
             do_sample=True,
             top_p=0.9,
             repetition_penalty=1.2,
             eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
         )
 
     new_tokens = outputs[0][input_len:]
     generated  = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-    if not generated.startswith("{"):
-        generated = "{" + generated
 
     print(f"[DEBUG] 模型原始輸出：{generated}")
 
@@ -521,56 +570,55 @@ def ask_llama(prompt_text: str) -> dict:
     3. Fallback：本地直接載入
     """
     try:
-        deterministic = _deterministic_deploy_parse(prompt_text)
-        if deterministic and _validate(deterministic):
-            print("[Parser] deterministic deployment parse")
-            return deterministic
-
         _warn_if_stale_normalize_env()
 
-        # 翻譯層（opt-in）：deterministic parser 解不出來時，先用 Gemini 把模糊/口語化的
-        # 輸入正規化成清楚句子，再交回本地 parser／模型繼續處理。Gemini 只負責「聽懂」，
-        # 缺漏欄位一律留白不猜，決定權仍在本地 parser／模型手上。
+        # ── 1. 翻譯層優先：一律先用 Gemini 把中/英、模糊/口語輸入正規化成 ### DeploySpec ──
+        #    Gemini 只負責「聽懂」，沒講的欄位一律留白不猜。spec 齊全就直接回傳（零 GPU），
+        #    不齊全就把 spec 當作模型輸入。Gemini 不可用時 fallback 回原始輸入。
+        model_input = prompt_text
         if os.environ.get("USE_LLM_NORMALIZE") == "1":
             try:
                 from core.gemini_client import gemini_normalize_deploy_request, is_available as gemini_available
                 if gemini_available():
-                    normalized = gemini_normalize_deploy_request(prompt_text)
-                    if normalized:
-                        print(f"[Gemini 翻譯層] {prompt_text!r} → {normalized!r}")
-                        retry = _deterministic_deploy_parse(normalized)
-                        if retry and _validate(retry):
-                            retry["_parser"] = "deterministic-after-gemini-normalize"
-                            return retry
-                        prompt_text = normalized
+                    spec_block = gemini_normalize_deploy_request(prompt_text)
+                    if spec_block:
+                        print(f"[Gemini 翻譯層] {prompt_text!r} →\n{spec_block}")
+                        spec = parse_deploy_spec(spec_block)
+                        if spec and _validate(spec):
+                            return spec
+                        model_input = spec_block
             except Exception as e:
                 print(f"[Gemini 翻譯層] 正規化失敗，改用原始輸入：{e}")
 
-        # Claude API is opt-in. Default path uses the local Model Server.
+        # ── 2. 本地 deterministic 快路徑（乾淨輸入 / Gemini 掛掉時的後備）──
+        deterministic = _deterministic_deploy_parse(model_input)
+        if deterministic and _validate(deterministic):
+            print("[Parser] deterministic deployment parse")
+            return deterministic
+
+        # ── 3. Claude API（opt-in）──
         if os.environ.get("USE_CLAUDE_API") == "1":
             try:
                 from core.claude_client import claude_parse_k8s, is_available as claude_available
                 if claude_available():
-                    result = claude_parse_k8s(prompt_text)
+                    result = claude_parse_k8s(model_input)
                     if result is not None:
                         print("[Claude API] 解析成功")
                         return result
             except Exception:
                 pass
 
-        # RAG 知識增強（索引不存在時自動跳過）
-        enhanced = _try_augment_with_rag(prompt_text)
+        # ── 4. 小模型 + RAG few-shot：撈相似的部署範例當引導 ──
+        examples = _deploy_fewshot(model_input)
 
-        # 2. 自動啟動 Model Server（已在跑則直接跳過）
         _auto_start_server()
 
-        # 嘗試 HTTP server
-        server_result = _try_server(enhanced)
+        server_result = _try_server(model_input, examples=examples)
         if server_result is not None:
             return server_result
 
-        # 3. Fallback：本地直接載入
-        return _local_infer(enhanced)
+        # ── 5. Fallback：本地直接載入 ──
+        return _local_infer(model_input)
 
     except Exception as e:
         return {"error": "解析失敗", "raw": str(e)}
@@ -586,7 +634,7 @@ def chat_llama(message: str, history: list = None) -> tuple:
     try:
         _warn_if_stale_normalize_env()
 
-        if os.environ.get("USE_LLM_NORMALIZE") == "1" and _chat_needs_normalize(message):
+        if os.environ.get("USE_LLM_NORMALIZE") == "1" and message.strip():
             try:
                 from core.gemini_client import gemini_normalize_chat_message, is_available as gemini_available
                 if gemini_available():
@@ -616,6 +664,30 @@ def chat_llama(message: str, history: list = None) -> tuple:
     except Exception as e:
         return f"[Local Model unavailable] {e}", []
     return "[Local Model unavailable] empty response", []
+
+
+def diagnose_with_llm(context: dict) -> Optional[dict]:
+    """呼叫監控小模型（Model Server 的 /diagnose 端點，Qwen2.5-1.5B 跑 CPU）做根因分析。
+
+    回傳 {root_cause, severity, action, suggestion} 或 None（server 未啟動 / 監控模型未載入）。
+    healer/diagnose.py 的規則層仍會先跑，這裡只補規則比不到的深度分析。
+    """
+    try:
+        if not _is_server_alive() and not _auto_start_server():
+            return None
+        import urllib.request
+        body = json.dumps({"context": context}).encode()
+        req = urllib.request.Request(
+            f"{MODEL_SERVER_URL}/diagnose",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read())
+            return data.get("diagnosis")
+    except Exception:
+        return None
 
 
 def save_gold_sample(user_input: str, corrected_json: dict):

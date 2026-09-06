@@ -59,24 +59,25 @@
 實現 Kubernetes SIG-Apps 的 Agent Sandbox CRD，
 利用 gVisor 隔離 LLM 生成的不受信任程式碼。
 
-### 技術債：`/chat` 角色邊界的 prompt injection 結構性風險
+### 2026-09-06：換小模型 + 翻譯層優先 + 雙模型（部署/監控）+ 修 OOM
 
-2026-08-03 測試發現：`core/model_server.py` 的 `/chat` 端點用純文字 `### System/User/Assistant`
-標記當角色邊界，這幾個字對 tokenizer 而言跟一般文字沒兩樣，使用者只要在訊息內容裡打出一樣的
-字串（例如 `###Assistant`／`###User`），就能讓模型誤把它們當成新一輪對話開始，觸發
-completion-style prompt injection（模型自己接龍生成虛構對話、幻覈不存在的 image tag/版本號，
-甚至退化成模板化複讀）。
+專案搬到本機 Windows（RTX 3060 Laptop，6GB VRAM），Llama-3.1-8B 4-bit 佔 97% 顯存、
+長 context 會 OOM。改動：
 
-現況（`STOP_MARKERS` + `stop_strings` 生成時攔截 + 事後字串切割 + system prompt 軟性提醒）只是
-**緩解已知寫法，不是根治**——換一種標記寫法（全形 `＃＃＃`、中文角色詞、`System:`/`Human:` 等
-其他分隔慣例、大小寫變化）大概率一樣能繞過。
-
-真正根治需要把角色邊界改成「分段各自 tokenize 再串接 input_ids」：控制/系統文字段落照常允許
-辨識特殊 token，使用者訊息內容那一段用 `add_special_tokens=False`（或等效設定）編碼，讓使用者
-輸入的任何文字都只能被切成一般子詞 token，不可能產生跟 Llama-3.1 保留特殊 token
-（`<|start_header_id|>` 等）一樣的 token id。這個改動只需要動 `/chat`，不影響 `/infer`
-（LoRA 微調用的就是現在這套純文字格式，不能隨便換），但需要額外時間驗證不會意外改變既有的
-語言判斷、RAG 引用等行為，這次先做緩解，之後有時間再排這項。
+- **部署模型 → Qwen/Qwen2.5-3B-Instruct**（4-bit GPU，約 2.2GB），**監控模型 → Qwen/Qwen2.5-1.5B-Instruct**（CPU）。
+  `core/model_server.py` 一個 process 載兩顆、各一把 lock；新增 `/diagnose` 端點。
+- **8B LoRA 棄用**（`llama3_k8s_lora_results/` 架構對不上 Qwen）。部署改走
+  「Gemini 正規化 → RAG few-shot（`rag/deploy_index.json`，1802 筆 input→JSON）→ 3B 生成」，**不微調**。
+  之後若要在 3B 上重訓小 LoRA，權重路徑填 `.env` 的 `DEPLOY_ADAPTER_PATH`。
+- **翻譯層改為優先執行**：`USE_LLM_NORMALIZE=1` 預設開，部署/聊天路徑一律先過 Gemini
+  正規化成 `### DeploySpec` 區塊。`core/gemini_client.py` 支援 `GEMINI_API_KEYS` 多 key
+  逗號分隔，遇 429/RESOURCE_EXHAUSTED 自動輪換。
+- **prompt injection 的 `### User` 結構性風險順帶消解**：改用 `tokenizer.apply_chat_template()`
+  （Qwen ChatML），角色邊界是特殊 token，使用者字串偽造不出來。舊的 `STOP_MARKERS` /
+  `disable_adapter()` 邏輯一併移除。
+- **`eval_*.py` 待遷移**：這些離線 benchmark 還硬編碼 8B + 8B LoRA，不在主流程，本次未動。
+- **監控模型 CPU 延遲**：1.5B 在 CPU 上單次診斷約 5~15 秒；healer 規則層仍先跑，只有規則
+  比不到才呼叫模型，可接受。
 
 ### 技術債：`/api/deploy` 沒有 idempotency 保證，重試可能造成重複 GitOps commit
 

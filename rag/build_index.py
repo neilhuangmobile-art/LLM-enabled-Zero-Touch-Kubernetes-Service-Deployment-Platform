@@ -38,6 +38,13 @@ INDEX_PATH   = os.path.join(RAG_DIR, "index.json")      # TF-IDF 後備索引
 META_PATH    = os.path.join(RAG_DIR, "index_meta.json")  # 建索引狀態摘要
 SEED_QA_PATH = os.path.join(RAG_DIR, "prompt_qa_seed.jsonl")
 
+# 部署範例索引：input（自然語言）→ output（小 JSON spec），給小模型當 few-shot。
+# 只用 dataset/finetune_samples.jsonl（乾淨的 input→spec 對），不混 prompt_qa_seed
+# （那些 output 是完整 YAML manifest，shape 不同，會誤導小模型）。
+DEPLOY_INDEX_PATH   = os.path.join(RAG_DIR, "deploy_index.json")
+DEPLOY_SAMPLES_PATH = os.path.join(os.path.dirname(RAG_DIR), "dataset", "finetune_samples.jsonl")
+DEPLOY_INDEX_MAX    = 2000
+
 # ── 分塊參數 ─────────────────────────────────────────────────────
 CHUNK_SIZE    = 400   # 每個 chunk 的最大字元數
 CHUNK_OVERLAP = 80    # 相鄰 chunk 的重疊字元數
@@ -187,6 +194,53 @@ def embed_texts_tfidf(texts: List[str], vocab: Optional[List[str]] = None
     return vectors, vocab
 
 
+def build_deploy_index(samples_path: str = DEPLOY_SAMPLES_PATH,
+                       output_path: str = DEPLOY_INDEX_PATH,
+                       limit: int = DEPLOY_INDEX_MAX) -> Dict:
+    """建立部署範例的 TF-IDF 索引（input → output JSON），供小模型 few-shot 檢索。"""
+    if not os.path.exists(samples_path):
+        print(f"[RAG] 找不到部署範例檔：{samples_path}，跳過部署索引")
+        return {}
+
+    seen = set()
+    samples: List[Dict] = []
+    for line in Path(samples_path).read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            item = json.loads(line)
+        except Exception:
+            continue
+        inp = str(item.get("input", "")).strip()
+        out = item.get("output")
+        if not inp or not isinstance(out, dict) or "pods" not in out:
+            continue
+        if inp in seen:
+            continue
+        seen.add(inp)
+        samples.append({"input": inp, "output": out})
+        if len(samples) >= limit:
+            break
+
+    if not samples:
+        print("[RAG] 部署範例檔沒有可用樣本，跳過部署索引")
+        return {}
+
+    vectors, vocab = embed_texts_tfidf([s["input"] for s in samples])
+    index = {
+        "method":   "tfidf",
+        "samples":  samples,
+        "vectors":  vectors,
+        "vocab":    vocab,
+        "built_at": time.time(),
+    }
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(index, f, ensure_ascii=False)
+    print(f"[RAG] 部署範例索引已建立：{output_path}（{len(samples)} 筆）")
+    return {"sample_count": len(samples), "path": output_path}
+
+
 def build_tfidf_index(all_chunks: List[Dict], output_path: str = INDEX_PATH) -> Dict:
     """建立 TF-IDF JSON 後備索引（永遠會執行，成本很低）。"""
     texts = [c["text"] for c in all_chunks]
@@ -278,9 +332,13 @@ if __name__ == "__main__":
     parser.add_argument("--rebuild",  action="store_true", help="強制重建（忽略現有索引）")
     parser.add_argument("--docs-dir", default=DOCS_DIR,   help="文件目錄路徑")
     parser.add_argument("--output",   default=INDEX_PATH, help="TF-IDF 索引輸出路徑")
+    parser.add_argument("--deploy",   action="store_true", help="同時重建部署範例索引（deploy_index.json）")
     args = parser.parse_args()
 
     if not args.rebuild and os.path.exists(args.output) and os.path.exists(META_PATH):
         print(f"[RAG] 索引已存在（{args.output}），使用 --rebuild 強制重建")
     else:
         build_index(docs_dir=args.docs_dir, output_path=args.output)
+
+    if args.deploy or args.rebuild or not os.path.exists(DEPLOY_INDEX_PATH):
+        build_deploy_index()

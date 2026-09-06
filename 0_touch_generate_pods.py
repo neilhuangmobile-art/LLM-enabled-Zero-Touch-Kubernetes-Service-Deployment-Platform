@@ -155,9 +155,9 @@ def main():
     print("  Zero-Touch K8s Deployment  (LLaMA-3 LoRA)")
     print("=" * 55)
 
-    user_query = input("\n請輸入部署指令（中英文皆可）: ").strip()
+    user_query = input("\n請輸入部署指令（中英文皆可）/ Enter your deployment request (Chinese or English): ").strip()
     if not user_query:
-        print("[Error] 輸入不能為空")
+        print("[Error] 輸入不能為空 / Input cannot be empty")
         return
 
     print("\n[AI] 推論中...")
@@ -222,12 +222,13 @@ def main():
         print_result(orch_result)
 
         if orch_result["decision"] == "block":
-            print("\n[Block] 部署已被代理阻斷，請修復上述問題後再試")
+            print("\n[Block] 部署已被代理阻斷，請修復上述問題後再試 / "
+                  "Deployment blocked by agents; fix the issues above and retry")
             return
         if orch_result["decision"] == "warn":
-            ans = input("\n[Warn] 有警告，仍要繼續部署？(y/N): ").strip().lower()
+            ans = input("\n[Warn] 有警告，仍要繼續部署？/ Warnings found, deploy anyway? (y/N): ").strip().lower()
             if ans != "y":
-                print("已取消部署")
+                print("已取消部署 / Deployment cancelled")
                 return
     except ImportError:
         print("   （agents 模組未載入，跳過代理評估）")
@@ -288,7 +289,7 @@ def main():
     print(f"\nDeployment:")
     print(f"   {dep_info.metadata.name} | Ready {ready}/{pods}")
 
-    print(f"\n[Done] Gold sample saved to training dataset.\n")
+    print(f"\n[Done] 部署完成，樣本已存入資料集 / Deployment done, sample saved to dataset.\n")
 
 
 if __name__ == "__main__":

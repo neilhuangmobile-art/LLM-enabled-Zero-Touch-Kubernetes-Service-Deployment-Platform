@@ -1558,22 +1558,22 @@ function showCourtVerdict(myId, originalText, parsed, review){
   verdict.style.display = 'block';
   if(decision === 'approve'){
     verdict.className = 'result-box court-verdict success';
-    verdict.textContent = '✓ ' + (review.reason || 'All agent checks passed');
-    actions.innerHTML = `<button class="deploy-confirm-btn primary" id="court-deploy-btn">Deploy</button>`;
+    verdict.textContent = '✓ 通過 / Approved — ' + (review.reason || '三個代理檢查全部通過 / All agent checks passed');
+    actions.innerHTML = `<button class="deploy-confirm-btn primary" id="court-deploy-btn">確認部署 / Deploy</button>`;
     document.getElementById('court-deploy-btn').onclick = () => courtProceedDeploy(myId, originalText, parsed);
   } else if(decision === 'warn'){
     verdict.className = 'result-box court-verdict warn';
-    verdict.textContent = '⚠ ' + (review.reason || 'Warnings found') +
+    verdict.textContent = '⚠ 警告 / Warning — ' + (review.reason || '發現警告 / Warnings found') +
       (review.warnings && review.warnings.length ? '\n' + review.warnings.map(w => '· ' + w).join('\n') : '');
-    actions.innerHTML = `<button class="deploy-confirm-btn" id="court-cancel-btn">Cancel</button>
-      <button class="deploy-confirm-btn primary" id="court-deploy-btn">Deploy anyway</button>`;
+    actions.innerHTML = `<button class="deploy-confirm-btn" id="court-cancel-btn">取消 / Cancel</button>
+      <button class="deploy-confirm-btn primary" id="court-deploy-btn">仍要部署 / Deploy anyway</button>`;
     document.getElementById('court-deploy-btn').onclick = () => courtProceedDeploy(myId, originalText, parsed);
     document.getElementById('court-cancel-btn').onclick = () => closeCourtPanel(myId);
   } else {
     verdict.className = 'result-box court-verdict error';
-    verdict.textContent = '✗ ' + (review.reason || 'Blocked') +
+    verdict.textContent = '✗ 阻擋 / Blocked — ' + (review.reason || '部署被阻擋 / Deployment blocked') +
       (review.blockers && review.blockers.length ? '\n' + review.blockers.map(b => '· ' + b).join('\n') : '');
-    actions.innerHTML = `<button class="deploy-confirm-btn" id="court-close-btn">Close</button>`;
+    actions.innerHTML = `<button class="deploy-confirm-btn" id="court-close-btn">關閉 / Close</button>`;
     document.getElementById('court-close-btn').onclick = () => closeCourtPanel(myId);
   }
 }
@@ -1599,21 +1599,21 @@ async function courtProceedDeploy(myId, originalText, parsed){
     if(myId !== courtRequestId) return;
     if(d.error || d.rejected){
       verdict.className = 'result-box court-verdict error';
-      verdict.textContent = '✗ ' + (d.error || d.reason || 'Deployment blocked.');
+      verdict.textContent = '✗ 部署被阻擋 / Deployment blocked — ' + (d.error || d.reason || '');
       actions.querySelectorAll('button').forEach(b => b.disabled = false);
       return;
     }
     const p = d.parsed || parsed;
     if(d.k8s_deploy && d.k8s_deploy.ok === false){
       verdict.className = 'result-box court-verdict warn';
-      verdict.textContent = `⚠ GitOps 已提交，但 K8s 實際部署失敗：${d.k8s_deploy.message}`;
-      actions.innerHTML = `<button class="deploy-confirm-btn" id="court-close-btn">Close</button>`;
+      verdict.textContent = `⚠ GitOps 已提交，但 K8s 實際部署失敗 / GitOps committed, but the K8s deploy failed：${d.k8s_deploy.message}`;
+      actions.innerHTML = `<button class="deploy-confirm-btn" id="court-close-btn">關閉 / Close</button>`;
       document.getElementById('court-close-btn').onclick = () => closeCourtPanel(myId);
       return;
     }
     verdict.className = 'result-box court-verdict success';
-    verdict.textContent = `✓ App: ${p.app_name}  ·  Image: ${p.image}  ·  Pods: ${p.pods}${p.port ? '  ·  Port: ' + p.port : ''}`;
-    actions.innerHTML = `<button class="deploy-confirm-btn" id="court-close-btn">Close</button>`;
+    verdict.textContent = `✓ 部署成功 / Deployed — App: ${p.app_name}  ·  Image: ${p.image}  ·  Pods: ${p.pods}${p.port ? '  ·  Port: ' + p.port : ''}`;
+    actions.innerHTML = `<button class="deploy-confirm-btn" id="court-close-btn">關閉 / Close</button>`;
     document.getElementById('court-close-btn').onclick = () => closeCourtPanel(myId);
     loadStats();
     if(document.getElementById('page-pods')?.classList.contains('active')) loadPods();
@@ -2271,7 +2271,7 @@ async function confirmDeploy(id){
       return;
     }
     if(d.k8s_deploy && d.k8s_deploy.ok === false){
-      setDeployConfirmError(root, `GitOps 已提交，但 K8s 實際部署失敗：${d.k8s_deploy.message}`);
+      setDeployConfirmError(root, `GitOps 已提交，但 K8s 實際部署失敗 / GitOps committed, but the K8s deploy failed：${d.k8s_deploy.message}`);
       root.querySelectorAll('input,button').forEach(el=>el.disabled=false);
       if(badge){ badge.textContent='K8s failed'; badge.className='badge failed'; }
       return;
@@ -2281,7 +2281,7 @@ async function confirmDeploy(id){
     const pods = p.pods || parsed.pods;
     const image = p.image || parsed.image;
     const port = p.port || parsed.port;
-    const successText = `部署成功：${appName} 已送出，Pods: ${pods}，Image: ${image}${port ? '，Port: ' + port : ''}。你可以到 Pods / Deployments 頁查看狀態。`;
+    const successText = `部署成功 / Deployed：${appName}，Pods: ${pods}，Image: ${image}${port ? '，Port: ' + port : ''}。可到 Pods / Deployments 頁查看狀態。 You can check status on the Pods / Deployments pages.`;
     const ch = currentChat();
     if(ch){
       ch.messages = ch.messages.filter(m => !(m.role === 'assistant' && String(m.content || '').includes(`id="${id}"`)));

@@ -108,8 +108,14 @@ def diagnose_issue(context: dict, use_llm: bool = True) -> dict:
         llm_result = _llm_analyze(context)
         if llm_result:
             llm_result["pod_name"] = pod_name
-            # 如果規則分析有結果，補充 severity
-            if rule_result["severity"] != "unknown":
+            if rule_result["confidence"] == "rule":
+                # 規則層已經比中已知錯誤模式：補救動作(action)/嚴重度以規則為準（比較可靠，
+                # 且 remediate.py 靠 action 分派），只採用小模型的 root_cause / suggestion 敘述。
+                llm_result["action"]   = rule_result["action"]
+                llm_result["severity"] = rule_result["severity"]
+                if not llm_result.get("suggestion"):
+                    llm_result["suggestion"] = rule_result["suggestion"]
+            elif rule_result["severity"] != "unknown":
                 llm_result.setdefault("severity", rule_result["severity"])
             return llm_result
 
@@ -176,63 +182,32 @@ def _action_to_suggestion(action: str) -> str:
 
 def _llm_analyze(context: dict) -> dict:
     """
-    呼叫 LLM（透過 llama_client）進行深度根因分析。
-    LLM 無法使用時靜默回傳 None。
+    呼叫監控小模型（Model Server 的 /diagnose，Qwen2.5-1.5B 跑 CPU）做深度根因分析。
+    模型不可用時靜默回傳 None（上層 fallback 回規則層結果）。
     """
     try:
-        from llama_client import ask_llama
+        from llama_client import diagnose_with_llm
     except ImportError:
         return None
 
-    pod_name  = context.get("pod_name", "unknown")
-    reason    = context.get("reason",   "Unknown")
-    logs      = (context.get("logs", "") or "")[:800]   # 限制長度
-    events    = context.get("events", [])
-    container = context.get("container", "")
-    restarts  = context.get("restart_count", 0)
-
-    event_str = "; ".join(
-        f"{e.get('reason','?')}: {e.get('message','')[:100]}"
-        for e in events[:5]
-    )
-
-    prompt = f"""You are a Kubernetes SRE expert. Analyze this pod failure and respond in JSON only.
-
-Pod: {pod_name}
-Container: {container}
-Error State: {reason}
-Restart Count: {restarts}
-Recent Logs:
-{logs}
-Events: {event_str}
-
-Respond ONLY with this JSON (no explanation):
-{{
-  "root_cause": "<one sentence root cause in Chinese>",
-  "severity": "<high|medium|low>",
-  "action": "<fix_image|increase_memory|check_dependencies|fix_permissions|create_config|fix_probe|manual_inspect>",
-  "suggestion": "<concrete fix steps in Chinese>"
-}}"""
-
+    reason = context.get("reason", "Unknown")
     try:
-        raw = ask_llama(prompt)
-
-        # ask_llama 對這個 prompt 可能直接回 dict 或有 error
-        if isinstance(raw, dict) and "error" not in raw:
-            # 嘗試從回傳的 dict 取需要的欄位
-            return {
-                "reason"    : reason,
-                "root_cause": raw.get("root_cause", "LLM 分析完成但無法取得根因"),
-                "severity"  : raw.get("severity", "unknown"),
-                "action"    : raw.get("action", "manual_inspect"),
-                "suggestion": raw.get("suggestion", ""),
-                "confidence": "llm",
-                "raw_llm"   : json.dumps(raw, ensure_ascii=False),
-            }
+        diag = diagnose_with_llm(context)
     except Exception:
-        pass
+        diag = None
 
-    return None
+    if not isinstance(diag, dict) or not diag.get("root_cause"):
+        return None
+
+    return {
+        "reason"    : reason,
+        "root_cause": diag.get("root_cause", "LLM 分析完成但無法取得根因"),
+        "severity"  : diag.get("severity", "unknown"),
+        "action"    : diag.get("action", "manual_inspect"),
+        "suggestion": diag.get("suggestion", ""),
+        "confidence": "llm",
+        "raw_llm"   : diag.get("raw", ""),
+    }
 
 
 # ══════════════════════════════════════════════════════════════════

@@ -7,26 +7,28 @@
 ## 專案是什麼
 
 LLM-enabled Zero-Touch Kubernetes Service Deployment Platform：使用者以自然語言描述需求，
-LLM（Llama 3.1 8B + LoRA 微調）將其轉譯為 Kubernetes YAML，經多代理審核與 dry-run 驗證後，
+小模型（Qwen2.5-3B）將其轉譯為 Kubernetes 部署 spec，經多代理審核與 dry-run 驗證後，
 透過 GitOps 部署到叢集，並具備自動監控與自癒能力。詳細架構見 [docs/architecture.md](docs/architecture.md)。
 
 ## 資料流（由輸入到部署）
 
 ```
-使用者輸入 → rag/retriever（RAG 增強）→ llama_client / core/model_server（LLM 生成 JSON）
-→ 轉換為 YAML → agents/orchestrator（security/cost/perf 代理 → approve/warn/block）
+使用者輸入（中/英）→ core/gemini_client（翻譯層優先，正規化成 ### DeploySpec，多 key 輪換）
+→ DeploySpec 齊全就直接解析（零 GPU）；不齊全 → llama_client + rag/deploy_index（few-shot）
+  → core/model_server /infer（Qwen2.5-3B 4-bit GPU 生成 JSON）
+→ 轉換為 YAML（Python 樣板，模型不寫 YAML）→ agents/orchestrator（security/cost/perf → approve/warn/block）
 → guardian/dry_run + guardian/yaml_validator（驗證）
 → gitops/manifest_writer + gitops/argocd_sync（寫入並同步）
-→ K8s 叢集 → healer/pod_watcher + diagnose + remediate（監控與自癒）
+→ K8s 叢集 → healer/pod_watcher + diagnose（規則層 → /diagnose：Qwen2.5-1.5B CPU）+ remediate
 ```
 
 ## 模組地圖
 
 | 目錄 | 功能 |
 |------|------|
-| `core/` | LLM 推理設定、Model Server（FastAPI，常駐避免重載） |
-| `llama_client.py` | Llama 推理入口：HTTP 呼叫 model_server，失敗則本地後備 |
-| `rag/` | 向量索引（`build_index.py`）、查詢（`retriever.py`）、知識文件（`k8s_docs/`） |
+| `core/` | 設定、Model Server（FastAPI 常駐，載部署 3B + 監控 1.5B 兩顆）、`gemini_client.py`（翻譯層，多 key 輪換） |
+| `llama_client.py` | 推理入口：翻譯層 → DeploySpec 快路徑 → `/infer`(3B) + RAG few-shot；`diagnose_with_llm()` 打 `/diagnose`(1.5B) |
+| `rag/` | `index.json`（k8s 散文，給 `/chat`）、`deploy_index.json`（部署範例 input→JSON，給 `/infer` few-shot）、`retriever.py` |
 | `agents/` | security / cost / perf 代理 + `orchestrator.py` 協調決策 |
 | `guardian/` | YAML 驗證、安全政策、kubectl dry-run |
 | `gitops/` | 寫入 Git、Argo CD 同步、版本回滾 |
@@ -41,8 +43,9 @@ LLM（Llama 3.1 8B + LoRA 微調）將其轉譯為 Kubernetes YAML，經多代�
 - 文件與程式碼註解慣用繁體中文（見 `docs/`、既有註解），除非使用者另外指定。
 - `core/config.py` 是路徑設定的單一來源，新增路徑相關設定應加在此處而非散落各檔案。
 - 部署流程改動需同時考慮三層防護：`agents/orchestrator`（策略決策）→ `guardian`（格式/安全驗證）→ `gitops`（版本控管），不要繞過任一層。
-- 修改 `llama_client.py` 或 `core/model_server.py` 前，先確認 Model Server 是否常駐執行（`curl http://127.0.0.1:8765/health`），避免誤判為推論邏輯問題。
-- RAG 索引變更後需重跑 `python rag/build_index.py --rebuild` 才會生效；`rag/index.json`、`rag/index_meta.json` 為可重新產生的產出物，已加進 `.gitignore`，不進版控。實際向量庫存在 chromadb（本機優先存 `/mnt/Data/capstone2025/cache/chroma_db`，不存在時退回 `rag/chroma_db/`），`chromadb` 套件未安裝時才會退回 TF-IDF。
+- 修改 `llama_client.py` 或 `core/model_server.py` 前，先確認 Model Server 是否常駐執行（`curl http://127.0.0.1:8765/health` → `deploy_loaded` / `monitor_loaded`），避免誤判為推論邏輯問題。
+- 模型設定在 `core/config.py`：`BASE_MODEL`（部署 3B）、`MONITOR_MODEL`（監控 1.5B）、`MONITOR_DEVICE`（cpu）、`DEPLOY_ADAPTER_PATH`（空=不掛 LoRA）。prompt 一律走 `tokenizer.apply_chat_template`（Qwen ChatML），不要改回 `### User` 純文字格式。
+- RAG 索引變更後重跑 `python rag/build_index.py --rebuild --deploy`；`rag/index.json`、`rag/index_meta.json`、`rag/deploy_index.json` 都是可重新產生的產出物。預設 TF-IDF，裝了 chromadb+sentence-transformers 才會用語意向量（embedding 預設跑 CPU，留顯存給 3B）。
 - `web_demo_backup*.py` 為歷史備份，非現行程式，修改功能請改動 `web_demo.py` / `web_demo_new.py`。
 
 ## 環境與啟動
@@ -107,9 +110,21 @@ python web_demo.py                # Web UI（localhost:5000）
 
 **2026-08-07 收工狀態**：Model Server（`model_loaded:true`）、Web Demo、K8s（SSH tunnel 連著）三個都跑著且驗證正常，環境是穩定的，下次可以直接接續，不用重新排查連線問題。
 
+## 進行中工作（2026-09-06：換小模型 + 翻譯層優先 + 雙模型 + 修 OOM）
+
+專案搬到本機 Windows（RTX 3060 Laptop，6GB VRAM），8B 跑不動。計畫檔：`C:\Users\neil-\.claude\plans\inherited-finding-lobster.md`。已做完：
+
+- **模型雙軌**：`core/config.py` 的 `BASE_MODEL` → `Qwen/Qwen2.5-3B-Instruct`（4-bit GPU，約 3GB VRAM），新增 `MONITOR_MODEL`=`Qwen/Qwen2.5-1.5B-Instruct`（CPU）、`DEPLOY_ADAPTER_PATH`（空=不掛 LoRA）。`core/model_server.py` 一個 process 載兩顆、各一把 lock、prompt 改 `apply_chat_template`（ChatML），新增 `/diagnose`，`/health` 回 `deploy_loaded`/`monitor_loaded`。8B LoRA 棄用。
+- **翻譯層優先**：`core/gemini_client.py` 改輸出 `### DeploySpec` 區塊 + `GEMINI_API_KEYS` 多 key 逗號分隔輪換（遇 429 換下一把）。`llama_client.ask_llama()` 重排成「Gemini 正規化 → `parse_deploy_spec()` 快路徑（零 GPU）→ deterministic → 小模型 + RAG few-shot」。`.env` 的 `USE_LLM_NORMALIZE=1` 預設開。
+- **RAG 部署範例索引**：`rag/build_index.py` 新增 `build_deploy_index()`（讀 `dataset/finetune_samples.jsonl`，1802 筆 → `rag/deploy_index.json` TF-IDF）；`rag/retriever.py` 新增 `retrieve_deploy_examples()`；`rag/vector_store.py` embedding 預設跑 CPU。重建：`python rag/build_index.py --rebuild --deploy`。
+- **監控接 healer**：`healer/diagnose.py` `_llm_analyze()` 改呼叫 `llama_client.diagnose_with_llm()`（打 `/diagnose`），規則層順序不變。
+- **UI 雙語（選項 B）**：`web_demo.py` 法庭判決 banner / 部署成功失敗訊息、`0_touch_generate_pods.py` 提示，改中英並陳。
+- **文件**：`docs/setup.md`、`docs/architecture.md`、`docs/roadmap.md`、`.env.example`、`requirements.txt` 都更新了。
+- **prompt injection `### User` 結構性風險順帶消解**（改 ChatML）。
+
 **還沒做決定/待接續**：
-- 翻譯層 `USE_LLM_NORMALIZE` 維持關閉，免費層限流問題（每分鐘 5 次、每天 20 次）還沒解，之後要嘛升級付費方案要嘛加請求節流
-- `/api/deploy` 沒有 idempotency 保證這條技術債優先度已調高（見 `docs/roadmap.md`），還沒動手修
-- `/chat` 洩漏 `[參考知識]` RAG context 原文的問題還沒處理
-- prompt injection 的 tokenizer 層級根治還沒做（技術債，見 `docs/roadmap.md`）
-- `K8S_ENABLED` 只在程式啟動時檢查一次、不是即時連線狀態，這個舊限制沒有修（這次改的同步部署機制不依賴它，不受影響，但如果想要更準確的連線狀態顯示，這是還沒處理的點）
+- `_chat_needs_normalize()` 已不使用（保留定義未刪）；`_DEPLOY_INTENT_RE` 仍給 `_try_augment_with_rag_ex`（chat 路徑）用
+- 使用者要跟隊友借 Gemini key 填進 `GEMINI_API_KEYS`（目前只有 1 把）
+- RAG 部署索引是 TF-IDF（keyword-ish），要語意檢索得裝 chromadb+sentence-transformers
+- `eval_*.py` 還硬編碼 8B，待遷移
+- 舊技術債仍在：`/api/deploy` idempotency、`/chat` 洩漏 `[參考知識]`、`K8S_ENABLED` 啟動時才檢查

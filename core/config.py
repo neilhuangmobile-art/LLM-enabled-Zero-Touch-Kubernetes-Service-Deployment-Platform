@@ -33,7 +33,20 @@ if HF_TOKEN:
     os.environ.setdefault("HUGGINGFACE_HUB_TOKEN", HF_TOKEN)
 
 # ── 模型路徑 ────────────────────────────────────────────────────
-BASE_MODEL   = "meta-llama/Llama-3.1-8B-Instruct"
+# 2026-09-06：本機只有 6GB VRAM，跑不動 Llama-3.1-8B。改用小模型雙軌：
+#   - 部署（/infer、/chat）：Qwen2.5-3B-Instruct，4-bit 量化跑 GPU（約 2.2GB）
+#   - 監控（/diagnose）：Qwen2.5-1.5B-Instruct，跑 CPU，顯卡全留給部署模型
+# 8B LoRA（llama3_k8s_lora_results）架構維度對不上 Qwen，直接棄用；部署改走
+# 「Gemini 正規化 → RAG few-shot 範例 → 3B 生成」，不再微調。
+BASE_MODEL     = os.environ.get("BASE_MODEL", "Qwen/Qwen2.5-3B-Instruct")
+MONITOR_MODEL  = os.environ.get("MONITOR_MODEL", "Qwen/Qwen2.5-1.5B-Instruct")
+MONITOR_DEVICE = os.environ.get("MONITOR_DEVICE", "cpu")
+
+# 部署模型的 LoRA adapter；預設空字串 = 不掛 adapter（純 base + RAG few-shot）。
+# 之後若要在 Qwen2.5-3B 上重訓小 LoRA，把權重路徑填進 DEPLOY_ADAPTER_PATH 即可。
+DEPLOY_ADAPTER_PATH = os.environ.get("DEPLOY_ADAPTER_PATH", "")
+
+# 舊名稱保留：仍有 eval_*.py 等離線工具引用 ADAPTER_PATH（那些工具還在跑 8B，不在主流程）。
 ADAPTER_PATH = os.path.join(ROOT, "llama3_k8s_lora_results")
 
 # ── 資料集 ───────────────────────────────────────────────────────
@@ -61,6 +74,8 @@ SYSTEM_PROMPT = (
     "ONLY output a valid JSON object. No explanation, no markdown, no extra text.\n"
     "Required fields: pods (integer), image (string), app_name (string)\n"
     "Optional fields: port (integer), memory (string, e.g. 256Mi), cpu (string, e.g. 500m or 2)\n"
+    "If example input/output pairs are provided, follow their exact field names and JSON shape.\n"
+    "Only include a field when the request actually states it; never invent values the user did not give.\n"
     "If the request states per-node capacity (e.g. \"each node has 4 cpu and 8Gi memory\"), ALSO include: "
     "total_cpu (string, cpu per pod * pods), total_memory (string, memory per pod * pods), "
     "cpu_bound_nodes (integer, ceil(total_cpu / node cpu capacity)), "
