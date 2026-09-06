@@ -12,6 +12,7 @@ __pycache__/
 rag/index.json
 rag/index_meta.json
 rag/deploy_index.json
+rag/chroma_db/
 
 # 本機備份與路徑產生的雜項目錄，不進版控
 llama3_k8s_lora_results.backup_*/
