@@ -11,12 +11,11 @@ import os
 
 import sys as _sys
 _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from core.config import BASE_MODEL, ADAPTER_PATH, EVAL_REPORT as REPORT_PATH, SYSTEM_PROMPT  # 需先於 transformers import，才能讓 .env 的 HF_HOME 生效
+from core.config import BASE_MODEL, DEPLOY_ADAPTER_PATH, EVAL_REPORT as REPORT_PATH, SYSTEM_PROMPT  # 需先於 transformers import，才能讓 .env 的 HF_HOME 生效
 
 import torch
 from datetime import datetime
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from peft import PeftModel
 
 # ==============================
 # 測試案例：pods 1~10 各類情境
@@ -166,44 +165,40 @@ def load_model():
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
     tokenizer.pad_token = tokenizer.eos_token
 
-    base = AutoModelForCausalLM.from_pretrained(
+    model = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL, quantization_config=bnb_config, device_map={"": 0}
     )
-    if os.path.exists(ADAPTER_PATH):
-        print(f"✅ 合併 LoRA 權重：{ADAPTER_PATH}")
-        model = PeftModel.from_pretrained(base, ADAPTER_PATH)
+    if DEPLOY_ADAPTER_PATH and os.path.isdir(DEPLOY_ADAPTER_PATH):
+        from peft import PeftModel
+        print(f"✅ 掛載部署 LoRA：{DEPLOY_ADAPTER_PATH}")
+        model = PeftModel.from_pretrained(model, DEPLOY_ADAPTER_PATH)
     else:
-        print("⚠️  找不到 LoRA 權重，使用原始模型")
-        model = base
+        print("ℹ️  未設定 DEPLOY_ADAPTER_PATH，評估純 base 模型（現行部署路徑實際跑的組態）")
 
     model.eval()
     return model, tokenizer
 
 
 def get_output(model, tokenizer, prompt_text: str) -> str:
-    full_prompt = (
-        f"### System\n{SYSTEM_PROMPT}\n\n"
-        f"### User\n{prompt_text}\n"
-        "### Assistant\n{"
-    )
-    inputs    = tokenizer(full_prompt, return_tensors="pt").to("cuda")
-    input_len = inputs["input_ids"].shape[1]
+    input_ids = tokenizer.apply_chat_template(
+        [{"role": "system", "content": SYSTEM_PROMPT},
+         {"role": "user", "content": prompt_text}],
+        add_generation_prompt=True, return_tensors="pt",
+    ).to(model.device)
+    input_len = input_ids.shape[1]
 
     with torch.no_grad():
         outputs = model.generate(
-            **inputs,
+            input_ids=input_ids,
+            attention_mask=torch.ones_like(input_ids),
             max_new_tokens=200,
             do_sample=False,
             eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
         )
 
     new_tokens = outputs[0][input_len:]
-    raw = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-    if not raw.startswith("{"):
-        raw = "{" + raw
-    # 只取第一行，去掉垃圾字串
-    return raw.split("\n")[0].strip()
+    return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
 
 def check(raw, exp_pods, exp_image, exp_port, exp_mem, exp_cpu=None, exp_node_count=None):

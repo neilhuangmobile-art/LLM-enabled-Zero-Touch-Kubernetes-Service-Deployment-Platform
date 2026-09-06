@@ -3,15 +3,15 @@ eval_speed.py
 比較原始模型 vs 微調模型的推論速度
 執行：python eval_speed.py（約10分鐘）
 """
+import os
+import sys as _sys
+_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from core.config import BASE_MODEL, DEPLOY_ADAPTER_PATH  # 先於 transformers import
+
 import time
 import torch
 import statistics
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from peft import PeftModel
-import os
-
-BASE_MODEL   = "meta-llama/Llama-3.1-8B-Instruct"
-ADAPTER_PATH = r"D:\k8s_new\llama3_k8s_lora_results"
 
 SYSTEM_PROMPT = (
     "You are an AI that converts Kubernetes deployment requests into JSON.\n"
@@ -44,13 +44,12 @@ def load_model(use_lora: bool):
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
     tokenizer.pad_token = tokenizer.eos_token
 
-    base = AutoModelForCausalLM.from_pretrained(
+    model = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL, quantization_config=bnb_config, device_map={"": 0}
     )
-    if use_lora and os.path.exists(ADAPTER_PATH):
-        model = PeftModel.from_pretrained(base, ADAPTER_PATH)
-    else:
-        model = base
+    if use_lora and DEPLOY_ADAPTER_PATH and os.path.isdir(DEPLOY_ADAPTER_PATH):
+        from peft import PeftModel
+        model = PeftModel.from_pretrained(model, DEPLOY_ADAPTER_PATH)
     model.eval()
     return model, tokenizer
 
@@ -64,23 +63,23 @@ def measure_speed(model, tokenizer, label: str, warmup: int = 2, runs: int = 10)
     all_times = []
 
     for prompt_text in TEST_INPUTS:
-        full_prompt = (
-            f"### System\n{SYSTEM_PROMPT}\n\n"
-            f"### User\n{prompt_text}\n"
-            "### Assistant\n{"
-        )
-        inputs    = tokenizer(full_prompt, return_tensors="pt").to("cuda")
-        input_len = inputs["input_ids"].shape[1]
+        input_ids = tokenizer.apply_chat_template(
+            [{"role": "system", "content": SYSTEM_PROMPT},
+             {"role": "user", "content": prompt_text}],
+            add_generation_prompt=True, return_tensors="pt",
+        ).to(model.device)
+        attention_mask = torch.ones_like(input_ids)
+        input_len = input_ids.shape[1]
 
         # Warmup
         for _ in range(warmup):
             with torch.no_grad():
                 model.generate(
-                    **inputs,
+                    input_ids=input_ids, attention_mask=attention_mask,
                     max_new_tokens=80,
                     do_sample=False,
                     eos_token_id=tokenizer.eos_token_id,
-                    pad_token_id=tokenizer.eos_token_id,
+                    pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
                 )
 
         # 正式測速
@@ -90,11 +89,11 @@ def measure_speed(model, tokenizer, label: str, warmup: int = 2, runs: int = 10)
             t0 = time.perf_counter()
             with torch.no_grad():
                 model.generate(
-                    **inputs,
+                    input_ids=input_ids, attention_mask=attention_mask,
                     max_new_tokens=80,
                     do_sample=False,
                     eos_token_id=tokenizer.eos_token_id,
-                    pad_token_id=tokenizer.eos_token_id,
+                    pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
                 )
             torch.cuda.synchronize()
             t1 = time.perf_counter()

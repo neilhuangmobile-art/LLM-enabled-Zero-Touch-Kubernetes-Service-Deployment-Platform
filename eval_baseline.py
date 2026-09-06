@@ -8,12 +8,13 @@ eval_baseline.py
 import re
 import json
 import os
+import sys as _sys
+_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from core.config import BASE_MODEL, EVAL_BASELINE_REPORT as REPORT_PATH  # 先於 transformers import
+
 import torch
 from datetime import datetime
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-
-BASE_MODEL  = "meta-llama/Llama-3.1-8B-Instruct"
-REPORT_PATH = r"D:\k8s_new\eval_baseline_report.json"
 
 SYSTEM_PROMPT = (
     "You are an AI that converts Kubernetes deployment requests into JSON.\n"
@@ -149,28 +150,25 @@ def load_baseline_model():
 
 
 def get_output(model, tokenizer, prompt_text: str) -> str:
-    full_prompt = (
-        f"### System\n{SYSTEM_PROMPT}\n\n"
-        f"### User\n{prompt_text}\n"
-        "### Assistant\n{"
-    )
-    inputs    = tokenizer(full_prompt, return_tensors="pt").to("cuda")
-    input_len = inputs["input_ids"].shape[1]
+    input_ids = tokenizer.apply_chat_template(
+        [{"role": "system", "content": SYSTEM_PROMPT},
+         {"role": "user", "content": prompt_text}],
+        add_generation_prompt=True, return_tensors="pt",
+    ).to(model.device)
+    input_len = input_ids.shape[1]
 
     with torch.no_grad():
         outputs = model.generate(
-            **inputs,
-            max_new_tokens=80,
+            input_ids=input_ids,
+            attention_mask=torch.ones_like(input_ids),
+            max_new_tokens=120,
             do_sample=False,
             eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
         )
 
     new_tokens = outputs[0][input_len:]
-    raw = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-    if not raw.startswith("{"):
-        raw = "{" + raw
-    return raw.split("\n")[0].strip()
+    return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
 
 def check(raw, exp_pods, exp_image, exp_port, exp_mem):

@@ -5,13 +5,13 @@ eval_simple.py - 寬鬆版評估
 執行：python eval_simple.py
 """
 import re
+import os
+import sys as _sys
+_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from core.config import BASE_MODEL, DEPLOY_ADAPTER_PATH  # 先於 transformers import
+
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from peft import PeftModel
-import os
-
-BASE_MODEL   = "meta-llama/Llama-3.1-8B-Instruct"
-ADAPTER_PATH = r"D:\k8s_new\llama3_k8s_lora_results"
 
 SYSTEM_PROMPT = (
     "You are an AI that converts Kubernetes deployment requests into JSON.\n"
@@ -56,44 +56,40 @@ def load_model():
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
     tokenizer.pad_token = tokenizer.eos_token
 
-    base = AutoModelForCausalLM.from_pretrained(
+    model = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL, quantization_config=bnb_config, device_map={"": 0}
     )
-    if os.path.exists(ADAPTER_PATH):
-        print(f"✅ 合併 LoRA 權重：{ADAPTER_PATH}")
-        model = PeftModel.from_pretrained(base, ADAPTER_PATH)
+    if DEPLOY_ADAPTER_PATH and os.path.isdir(DEPLOY_ADAPTER_PATH):
+        from peft import PeftModel
+        print(f"✅ 掛載部署 LoRA：{DEPLOY_ADAPTER_PATH}")
+        model = PeftModel.from_pretrained(model, DEPLOY_ADAPTER_PATH)
     else:
-        print("⚠️  使用原始模型")
-        model = base
+        print("ℹ️  評估純 base 模型（未設定 DEPLOY_ADAPTER_PATH）")
     model.eval()
     return model, tokenizer
 
 
 def get_raw_output(model, tokenizer, prompt_text: str) -> str:
     """直接拿模型的原始輸出，不做任何解析"""
-    full_prompt = (
-        f"### System\n{SYSTEM_PROMPT}\n\n"
-        f"### User\n{prompt_text}\n"
-        "### Assistant\n{"
-    )
-    inputs    = tokenizer(full_prompt, return_tensors="pt").to("cuda")
-    input_len = inputs["input_ids"].shape[1]
+    input_ids = tokenizer.apply_chat_template(
+        [{"role": "system", "content": SYSTEM_PROMPT},
+         {"role": "user", "content": prompt_text}],
+        add_generation_prompt=True, return_tensors="pt",
+    ).to(model.device)
+    input_len = input_ids.shape[1]
 
     with torch.no_grad():
         outputs = model.generate(
-            **inputs,
-            max_new_tokens=80,
-            temperature=0.1,
+            input_ids=input_ids,
+            attention_mask=torch.ones_like(input_ids),
+            max_new_tokens=120,
             do_sample=False,          # greedy，輸出更穩定
             eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
         )
 
     new_tokens = outputs[0][input_len:]
-    raw = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-    if not raw.startswith("{"):
-        raw = "{" + raw
-    return raw
+    return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
 
 def check_output(raw: str, expected_pods: int, expected_keywords: list) -> tuple:

@@ -7,14 +7,13 @@ eval_hard.py
 import re
 import json
 import os
+import sys as _sys
+_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from core.config import BASE_MODEL, DEPLOY_ADAPTER_PATH, EVAL_HARD_REPORT as REPORT_PATH  # 先於 transformers import
+
 import torch
 from datetime import datetime
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from peft import PeftModel
-
-BASE_MODEL   = "meta-llama/Llama-3.1-8B-Instruct"
-ADAPTER_PATH = r"D:\k8s_new\llama3_k8s_lora_results"
-REPORT_PATH  = r"D:\k8s_new\eval_hard_report.json"
 
 SYSTEM_PROMPT = (
     "You are an AI that converts Kubernetes deployment requests into JSON.\n"
@@ -111,47 +110,43 @@ def load_model(use_lora: bool):
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
     tokenizer.pad_token = tokenizer.eos_token
 
-    base = AutoModelForCausalLM.from_pretrained(
+    model = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL, quantization_config=bnb_config, device_map={"": 0}
     )
 
-    if use_lora and os.path.exists(ADAPTER_PATH):
-        model = PeftModel.from_pretrained(base, ADAPTER_PATH)
-        print(f"✅ LoRA 權重合併完成")
+    if use_lora and DEPLOY_ADAPTER_PATH and os.path.isdir(DEPLOY_ADAPTER_PATH):
+        from peft import PeftModel
+        model = PeftModel.from_pretrained(model, DEPLOY_ADAPTER_PATH)
+        print(f"✅ 掛載部署 LoRA：{DEPLOY_ADAPTER_PATH}")
+    elif use_lora:
+        print("ℹ️  未設定 DEPLOY_ADAPTER_PATH，此輪等同 base 模型")
     else:
-        model = base
-        if use_lora:
-            print("⚠️  找不到 LoRA 權重，使用原始模型")
-        else:
-            print("✅ 原始基礎模型載入完成（無 LoRA）")
+        print("✅ base 模型載入完成（無 LoRA）")
 
     model.eval()
     return model, tokenizer
 
 
 def get_output(model, tokenizer, prompt_text: str) -> str:
-    full_prompt = (
-        f"### System\n{SYSTEM_PROMPT}\n\n"
-        f"### User\n{prompt_text}\n"
-        "### Assistant\n{"
-    )
-    inputs    = tokenizer(full_prompt, return_tensors="pt").to("cuda")
-    input_len = inputs["input_ids"].shape[1]
+    input_ids = tokenizer.apply_chat_template(
+        [{"role": "system", "content": SYSTEM_PROMPT},
+         {"role": "user", "content": prompt_text}],
+        add_generation_prompt=True, return_tensors="pt",
+    ).to(model.device)
+    input_len = input_ids.shape[1]
 
     with torch.no_grad():
         outputs = model.generate(
-            **inputs,
-            max_new_tokens=80,
+            input_ids=input_ids,
+            attention_mask=torch.ones_like(input_ids),
+            max_new_tokens=120,
             do_sample=False,
             eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
         )
 
     new_tokens = outputs[0][input_len:]
-    raw = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
-    if not raw.startswith("{"):
-        raw = "{" + raw
-    return raw.split("\n")[0].strip()
+    return tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
 
 def check(raw, exp_pods, exp_image, exp_port, exp_mem):
