@@ -106,13 +106,15 @@ SYSTEM_PROMPT = (
     'Example: {"app_name":"web","image":"nginx:latest","pods":3,"port":80,"memory":"512Mi","namespace":"default"}'
 )
 
-def call_llama(prompt_text: str, timeout: int = 60) -> Optional[dict]:
+def call_llama(prompt_text: str, timeout: int = 150) -> Optional[dict]:
     """呼叫 model server 的 /infer，回傳解析好的 output dict，失敗回傳 None。
 
     2026-09-07：換 Qwen 雙軌後 model server 沒有 /generate，改打 /infer。
     /infer 直接回傳「已解析、已驗證」的 dict（{result: {...}}），不需要再自己抽 JSON。
     """
-    body = json.dumps({"prompt": prompt_text[:500]}).encode("utf-8")
+    # max_new_tokens 壓到 96：output 是小 JSON，這樣可避免模型在長 prompt 上一路生到 200
+    # token（實測長 prompt 會慢到 100 秒以上）。
+    body = json.dumps({"prompt": prompt_text[:500], "max_new_tokens": 96}).encode("utf-8")
     req  = urllib.request.Request(
         f"{MODEL_SERVER}/infer",
         data=body,
