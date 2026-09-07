@@ -8,7 +8,7 @@ enrich_dataset.py
   language    → 規則（zh_tw 檔 = zh-tw，EN 檔 = en）
   complexity  → 規則（prompt 長度 + category 關鍵字）
   namespace   → 規則（從 prompt 文字抽取，抓不到給 default）
-  output      → LLaMA model server（POST /generate）
+  output      → model server（POST /infer，Qwen2.5-3B）
 
 使用方式（在伺服器上執行）：
   python enrich_dataset.py [--dry-run] [--limit 100] [--skip-output]
@@ -28,6 +28,7 @@ import urllib.request
 import urllib.error
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 # ── 路徑設定 ──────────────────────────────────────────────────────
 BASE_DIR    = Path(__file__).parent
@@ -105,17 +106,15 @@ SYSTEM_PROMPT = (
     'Example: {"app_name":"web","image":"nginx:latest","pods":3,"port":80,"memory":"512Mi","namespace":"default"}'
 )
 
-def call_llama(prompt_text: str, timeout: int = 30) -> dict | None:
-    """呼叫 model server，回傳解析好的 output dict，失敗回傳 None"""
-    # 組合成 instruction 格式
-    instruction = (
-        f"{SYSTEM_PROMPT}\n\n"
-        f"User request: {prompt_text[:500]}\n\n"
-        "JSON output:"
-    )
-    body = json.dumps({"prompt": instruction}).encode("utf-8")
+def call_llama(prompt_text: str, timeout: int = 60) -> Optional[dict]:
+    """呼叫 model server 的 /infer，回傳解析好的 output dict，失敗回傳 None。
+
+    2026-09-07：換 Qwen 雙軌後 model server 沒有 /generate，改打 /infer。
+    /infer 直接回傳「已解析、已驗證」的 dict（{result: {...}}），不需要再自己抽 JSON。
+    """
+    body = json.dumps({"prompt": prompt_text[:500]}).encode("utf-8")
     req  = urllib.request.Request(
-        f"{MODEL_SERVER}/generate",
+        f"{MODEL_SERVER}/infer",
         data=body,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -123,13 +122,17 @@ def call_llama(prompt_text: str, timeout: int = 30) -> dict | None:
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read())
-            raw  = data.get("response", data.get("text", ""))
-            return _parse_output(raw)
+        result = data.get("result")
+        if isinstance(result, dict) and "error" not in result:
+            return _validate_output(result)
+        # 舊格式相容 / 意外回了純文字
+        raw = result if isinstance(result, str) else data.get("response", data.get("text", ""))
+        return _parse_output(raw) if raw else None
     except Exception as e:
-        print(f"  [LLaMA ERR] {e}", file=sys.stderr)
+        print(f"  [infer ERR] {e}", file=sys.stderr)
         return None
 
-def _parse_output(raw: str) -> dict | None:
+def _parse_output(raw: str) -> Optional[dict]:
     """從 LLaMA 原始回應中抽取 JSON"""
     # 嘗試直接 parse
     for attempt in [raw, raw.strip()]:
@@ -165,7 +168,7 @@ def _parse_output(raw: str) -> dict | None:
         return result
     return None
 
-def _validate_output(obj: dict) -> dict:
+def _validate_output(obj: dict) -> Optional[dict]:
     """確保必要欄位存在，修正型別"""
     if not isinstance(obj, dict):
         return None
@@ -219,7 +222,7 @@ def process_file(
     is_k8s: bool,
     language: str,
     skip_output: bool,
-    limit: int | None,
+    limit: Optional[int],
     dry_run: bool,
 ):
     if not input_path.exists():
