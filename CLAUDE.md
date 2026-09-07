@@ -170,6 +170,14 @@ python web_demo.py                # Web UI（localhost:5000）
 - **Chat 思考指示**：改成旋轉 spinner + 分階段文字（理解需求 / 解析部署 / 思考中 10–30 秒 / 查詢中），
   部署流程各步驟也加 spinner，避免使用者以為當機。CSS 用既有 `@keyframes spin` + 新增 `.think-row`/`.spinner`。
 
+**2026-09-07 再加：Chat 查單一 pod/deployment 詳情**（feat/chat-unified-assistant）：
+- 新增 3 個只讀意圖 `describe_pod` / `pod_health` / `describe_deployment`（規則 + 分類器 few-shot）。
+- 後端 `web_demo.py`：`k8s_describe_pod`（容器 state/reason/重啟/事件 + 健康判定）、`k8s_describe_deployment`、
+  `_resolve_pods`（完整名/app label/前綴都解析）、`GET /api/pods/<name>`（`?diagnose=1` 不健康時打 `/diagnose` 附根因）、
+  `GET /api/deployments/<name>`。健康判定：目前 running+ready 就算健康，過去 Error 終止只當「曾重啟 N 次」註記。
+- **接地問答**：`/api/chat` 問題牽涉叢集狀態時，`_cluster_snapshot_for()` 撈 deployments 摘要 + 不健康 pod +
+  點名物件詳情，當 `[現況]` 塞給 3B；`CHAT_SYSTEM` 加「`[現況]` 是剛撈的真實狀態，據此回答、勿虛構」。
+
 **事故記錄（2026-09-07）**：清理 smoke test 時誤下 `git reset --hard HEAD~1`，把當時未 commit 的
 Phase 1–4 全部實作連同 gemini round-robin 一起清掉，且 HEAD 多退一格。已從對話記錄逐條重建所有改動、
 `git reset --soft 7afe318` 復原 HEAD、重跑全套測試確認與被清掉的版本一致。教訓：跑 `git reset --hard`
