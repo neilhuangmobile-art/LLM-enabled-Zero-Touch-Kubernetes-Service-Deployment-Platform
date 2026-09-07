@@ -391,6 +391,153 @@ def k8s_get_deployments():
     except Exception:
         return []
 
+_BAD_WAITING = {"CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull",
+                "CreateContainerConfigError", "CreateContainerError", "InvalidImageName"}
+_BAD_TERMINATED = {"OOMKilled", "Error", "ContainerCannotRun", "DeadlineExceeded"}
+
+
+def _resolve_pods(name):
+    """把使用者給的名字解析成一組 pod。可能是完整 pod 名、app label、或名稱前綴。"""
+    if not K8S_ENABLED or not name:
+        return []
+    core = k8s_client.CoreV1Api()
+    try:
+        p = core.read_namespaced_pod(name, NS)
+        return [p]
+    except Exception:
+        pass
+    try:
+        pods = core.list_namespaced_pod(NS, label_selector=f"app={name}")
+        if pods.items:
+            return pods.items
+    except Exception:
+        pass
+    try:
+        allp = core.list_namespaced_pod(NS)
+        pref = [p for p in allp.items if p.metadata.name.startswith(name)]
+        return pref
+    except Exception:
+        return []
+
+
+def _pod_detail(p):
+    """單一 pod 的詳細狀態 + 健康判定。p 是 V1Pod。"""
+    core = k8s_client.CoreV1Api()
+    cs_by_name = {cs.name: cs for cs in (p.status.container_statuses or [])} if p.status else {}
+    containers = []
+    unhealthy_reason = None
+    for c in (p.spec.containers or []):
+        cs = cs_by_name.get(c.name)
+        state, reason, message, last_reason = "unknown", "", "", ""
+        ready, restarts = False, 0
+        if cs:
+            ready = bool(cs.ready)
+            restarts = cs.restart_count or 0
+            st = cs.state
+            if st and st.running:
+                state = "running"
+            elif st and st.waiting:
+                state, reason, message = "waiting", st.waiting.reason or "", (st.waiting.message or "")[:200]
+            elif st and st.terminated:
+                state = "terminated"
+                reason, message = st.terminated.reason or "", (st.terminated.message or "")[:200]
+            if cs.last_state and cs.last_state.terminated:
+                last_reason = cs.last_state.terminated.reason or ""
+        currently_ok = (state == "running" and ready)
+        note = ""
+        if not currently_ok and (reason in _BAD_WAITING or reason in _BAD_TERMINATED):
+            unhealthy_reason = f"{c.name}: {reason}"
+        elif not currently_ok and last_reason in _BAD_TERMINATED:
+            unhealthy_reason = f"{c.name}: 上次因 {last_reason} 終止，尚未恢復"
+        elif currently_ok and restarts >= 5:
+            note = f"{c.name} 目前正常但曾重啟 {restarts} 次" + (f"（上次 {last_reason}）" if last_reason else "")
+        containers.append({
+            "name": c.name, "image": c.image, "ready": ready, "restart_count": restarts,
+            "note": note,
+            "state": state, "reason": reason, "message": message, "last_reason": last_reason,
+            "requests": dict(c.resources.requests) if c.resources and c.resources.requests else {},
+            "limits": dict(c.resources.limits) if c.resources and c.resources.limits else {},
+        })
+    phase = (p.status.phase if p.status else "") or "Unknown"
+    all_ready = bool(containers) and all(x["ready"] for x in containers)
+    healthy = phase in ("Running", "Succeeded") and all_ready and unhealthy_reason is None
+    notes = [x["note"] for x in containers if x.get("note")]
+    if healthy:
+        summary = f"Running，{len(containers)} 個容器都 ready"
+        if notes:
+            summary += "（" + "；".join(notes) + "）"
+    elif unhealthy_reason:
+        summary = unhealthy_reason
+    else:
+        summary = f"phase={phase}" + ("" if all_ready else "，容器尚未全部 ready")
+    # 事件
+    events = []
+    try:
+        evs = core.list_namespaced_event(
+            NS, field_selector=f"involvedObject.name={p.metadata.name}")
+        ev_sorted = sorted(evs.items, key=lambda e: (e.last_timestamp or e.event_time or p.metadata.creation_timestamp), reverse=True)
+        for e in ev_sorted[:5]:
+            events.append({"type": e.type, "reason": e.reason,
+                           "message": (e.message or "")[:200], "count": e.count or 1})
+    except Exception:
+        pass
+    return {
+        "name": p.metadata.name,
+        "app": (p.metadata.labels or {}).get("app", ""),
+        "phase": phase,
+        "node": (p.spec.node_name or "") if p.spec else "",
+        "ip": (p.status.pod_ip or "") if p.status else "",
+        "age": _fmt_k8s_time(p.metadata.creation_timestamp),
+        "restarts": sum(x["restart_count"] for x in containers),
+        "containers": containers,
+        "events": events,
+        "healthy": healthy,
+        "health_summary": summary,
+    }
+
+
+def k8s_describe_pod(name):
+    """回傳一或多個符合 name 的 pod 詳情（list）。找不到回空 list。"""
+    return [_pod_detail(p) for p in _resolve_pods(name)]
+
+
+def k8s_describe_deployment(name):
+    """單一 deployment 的詳細狀態。找不到回 None。"""
+    if not K8S_ENABLED or not name:
+        return None
+    try:
+        api = k8s_client.AppsV1Api()
+        d = api.read_namespaced_deployment(name, NS)
+    except Exception:
+        # 名字可能是 app label 或前綴，退回列表比對
+        for dd in k8s_get_deployments():
+            if dd["name"] == name or dd["name"].startswith(name):
+                return dd
+        return None
+    st = d.status
+    spec_replicas = d.spec.replicas or 0
+    ready = (st.ready_replicas or 0) if st else 0
+    available = (st.available_replicas or 0) if st else 0
+    updated = (st.updated_replicas or 0) if st else 0
+    conds = []
+    if st and st.conditions:
+        for c in st.conditions:
+            conds.append({"type": c.type, "status": c.status,
+                          "reason": c.reason or "", "message": (c.message or "")[:160]})
+    healthy = ready == spec_replicas and spec_replicas > 0
+    return {
+        "name": d.metadata.name,
+        "image": d.spec.template.spec.containers[0].image if d.spec.template.spec.containers else "",
+        "replicas": spec_replicas, "ready": ready, "available": available,
+        "updated": updated, "unavailable": max(0, spec_replicas - available),
+        "age": _fmt_k8s_time(d.metadata.creation_timestamp),
+        "conditions": conds,
+        "healthy": healthy,
+        "health_summary": (f"{ready}/{spec_replicas} ready" if healthy
+                           else f"只有 {ready}/{spec_replicas} ready，{max(0, spec_replicas - available)} 個不可用"),
+    }
+
+
 def k8s_delete_deployment(app_name):
     if not K8S_ENABLED:
         return False, "K8s 未連線"
@@ -2385,7 +2532,8 @@ function removeTyping(){ const el=document.getElementById('typing-indicator'); i
 //  Chat \u610f\u5716\u8fa8\u8b58\uff08\u898f\u5247\u5c64\uff0c\u524d\u7aef\uff1b\u6bd4\u5c0d\u4e0d\u5230\u624d\u6253 /api/intent\uff09
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 const DESTRUCTIVE_KINDS = ['scale','update_image','rollback','delete','healer_fix','healer_auto_fix'];
-const READ_ACTIONS = ['list_pods','list_deployments','gitops_log','cluster_metrics','healer_scan'];
+const READ_ACTIONS = ['list_pods','list_deployments','gitops_log','cluster_metrics','healer_scan',
+                      'describe_pod','pod_health','describe_deployment'];
 
 function matchClientRule(text){
   const t = text.trim();
@@ -2397,6 +2545,13 @@ function matchClientRule(text){
     ['healer_auto_fix', /^(auto ?fix|fix all|\u81ea\u52d5\u4fee\u5fa9|\u5168\u90e8\u4fee\u5fa9)/i, null],
     ['healer_fix', /^(?:fix|\u4fee\u5fa9)\s+(\S+)/i, m=>({pod_name:m[1]})],
     ['healer_scan', /^(healer|scan)\b|\u6383\u63cf.*(pod|\u58de|\u7570\u5e38)/i, null],
+    ['pod_health', /([a-zA-Z0-9][\w.-]*)\s*(?:\u9019\u500b)?\s*(?:pod|deployment|\u90e8\u7f72)?\s*(?:\u6709\u6c92\u6709\u58de|\u58de\u4e86\u6c92|\u58de\u6389\u4e86\u55ce|\u58de\u4e86\u55ce|\u6b63\u5e38\u55ce|\u5065\u5eb7\u55ce|\u639b\u4e86\u55ce|\u639b\u6389\u4e86\u55ce|\u9084\u6d3b\u8457\u55ce|\u6c92\u4e8b\u5427|\u6709\u554f\u984c\u55ce|ok\s*\u55ce)/i, m=>({name:m[1]})],
+    ['pod_health', /^is\s+([a-zA-Z0-9][\w.-]*)\s+(?:ok|okay|healthy|broken|down|up|crashing|running|alive)/i, m=>({name:m[1]})],
+    ['describe_deployment', /(?:deployment|\u90e8\u7f72)\s+([a-zA-Z0-9][\w.-]*)\s*(?:\u7684?\s*(?:\u72c0\u614b|\u7d30\u7bc0|\u8a73\u60c5|status))?/i, m=>({name:m[1]})],
+    ['describe_deployment', /([a-zA-Z0-9][\w.-]*)\s*(?:\u9019\u500b)?\s*(?:deployment|\u90e8\u7f72)\s*(?:\u7684?\s*(?:\u72c0\u614b|\u7d30\u7bc0|\u8a73\u60c5))/i, m=>({name:m[1]})],
+    ['describe_pod', /(?:\u67e5\u770b|detail(?:s)?\s*(?:of)?|describe|\u6aa2\u8996)\s*(?:pod\s+)?([a-zA-Z0-9][\w.-]*)/i, m=>({name:m[1]})],
+    ['describe_pod', /([a-zA-Z0-9][\w.-]*)\s*(?:\u9019\u500b)?\s*pod\s*(?:\u7684?\s*(?:\u7d30\u7bc0|\u72c0\u614b|\u8a73\u60c5|\u8cc7\u8a0a))/i, m=>({name:m[1]})],
+    ['describe_pod', /([a-zA-Z0-9][\w.-]*)\s*(?:\u7684\s*(?:\u7d30\u7bc0|\u8a73\u60c5|\u8a73\u7d30\u72c0\u614b))/i, m=>({name:m[1]})],
     ['delete', /^(?:delete|remove|\u522a\u9664|del)\s+(\S+)/i, m=>({name:m[1]})],
     ['scale', /scale\s+(\S+)\s+to\s+(\d+)/i, m=>({name:m[1],replicas:parseInt(m[2],10)})],
     ['scale', /\u628a?\s*(\S+?)\s*(?:\u64f4|\u7e2e|\u8abf).*?(\d+)/i, m=>({name:m[1],replicas:parseInt(m[2],10)})],
@@ -2824,12 +2979,79 @@ async function runReadAction(action){
       const is=d.issues||[]; return is.length ? `Healer \u6383\u5230 ${is.length} \u500b\u554f\u984c / issues:\n`+is.map(i=>`- ${i.pod_name||i.pod} : ${i.reason||i.status}`).join('\n') : '\u6c92\u6709\u7570\u5e38 Pod / No unhealthy pods.';
     }],
   };
+  // \u9700\u8981\u53c3\u6578\u7684\u55ae\u4e00\u7269\u4ef6\u67e5\u8a62
+  if(action==='describe_pod' || action==='pod_health' || action==='describe_deployment'){
+    const name = (window.__lastIntentArgs && window.__lastIntentArgs.name) || '';
+    if(!name){ appendMsg('assistant','\u8981\u67e5\u54ea\u4e00\u500b\uff1f\u8acb\u8b1b\u6e05\u695a\u540d\u7a31 / which one? give a name.'); return; }
+    try{
+      if(action==='describe_deployment'){
+        const r = await fetch('/api/deployments/'+encodeURIComponent(name));
+        const d = await r.json();
+        if(!d.found){ appendMsg('assistant', d.message || ('\u627e\u4e0d\u5230 '+name)); return; }
+        appendMsg('assistant', fmtDeployDetail(d.deployment));
+      } else {
+        const url = '/api/pods/'+encodeURIComponent(name) + (action==='pod_health'?'?diagnose=1':'');
+        const r = await fetch(url);
+        const d = await r.json();
+        if(!d.found || !(d.pods||[]).length){
+          let msg = d.message || ('\u627e\u4e0d\u5230\u7b26\u5408 '+name+' \u7684 pod');
+          if(d.deployment) msg += '\n\n' + fmtDeployDetail(d.deployment);
+          appendMsg('assistant', msg); return;
+        }
+        appendMsg('assistant', (action==='pod_health'?fmtPodHealth:fmtPodDetail)(d.pods, name));
+      }
+    }catch(e){ appendMsg('assistant', 'Error: '+e); }
+    return;
+  }
   const entry = map[action];
   if(!entry){ appendMsg('assistant', '\uff08\u672a\u652f\u63f4\u7684\u67e5\u8a62 / unsupported\uff09'); return; }
   try{
     const r = await fetch(entry[0]); const d = await r.json();
     appendMsg('assistant', entry[1](d));
   }catch(e){ appendMsg('assistant', 'Error: '+e); }
+}
+
+function _contLine(c){
+  return `  \u00b7 ${c.name} [${c.state}${c.reason?'/'+c.reason:''}] ready=${c.ready?'yes':'no'} restarts=${c.restart_count}`
+    + (c.message?`\n    ${String(c.message).slice(0,160)}`:'');
+}
+function fmtPodDetail(pods, name){
+  return pods.map(p=>{
+    const evs = (p.events||[]).slice(0,3).map(e=>`  event ${e.reason}: ${String(e.message).slice(0,120)}`).join('\n');
+    return `Pod ${p.name}\n`
+      + `phase: ${p.phase}   node: ${p.node||'-'}   ip: ${p.ip||'-'}   age: ${p.age}   restarts: ${p.restarts}\n`
+      + `health: ${p.healthy?'\u2705 \u6b63\u5e38':'\u274c '+p.health_summary}\n`
+      + `containers:\n${(p.containers||[]).map(_contLine).join('\n')}`
+      + (evs?`\nrecent events:\n${evs}`:'');
+  }).join('\n\n');
+}
+function fmtPodHealth(pods, name){
+  const bad = pods.filter(p=>!p.healthy);
+  const head = bad.length
+    ? `\u274c ${name}\uff1a${bad.length}/${pods.length} \u500b pod \u6709\u554f\u984c`
+    : `\u2705 ${name}\uff1a${pods.length} \u500b pod \u90fd\u6b63\u5e38\u904b\u884c`;
+  const lines = pods.map(p=>{
+    let s = `  - ${p.name}: ${p.healthy?'\u6b63\u5e38':p.health_summary}\uff08\u91cd\u555f ${p.restarts} \u6b21\uff09`;
+    if(!p.healthy){
+      const ev = (p.events||[])[0];
+      if(ev) s += `\n    \u6700\u8fd1\u4e8b\u4ef6: ${ev.reason} \u2014 ${String(ev.message).slice(0,140)}`;
+      if(p.diagnosis){
+        const dg = p.diagnosis;
+        s += `\n    \ud83d\udd0e \u6839\u56e0: ${dg.root_cause||'-'}`;
+        if(dg.suggestion) s += `\n    \ud83d\udca1 \u5efa\u8b70: ${dg.suggestion}`;
+      }
+    }
+    return s;
+  }).join('\n');
+  return head + '\n' + lines;
+}
+function fmtDeployDetail(d){
+  const conds = (d.conditions||[]).map(c=>`  \u00b7 ${c.type}=${c.status}${c.reason?' ('+c.reason+')':''}`).join('\n');
+  return `Deployment ${d.name}\n`
+    + `health: ${d.healthy?'\u2705 ':'\u274c '}${d.health_summary}\n`
+    + `replicas: ${d.ready}/${d.replicas} ready, ${d.available} available, ${d.updated} updated\n`
+    + `image: ${d.image}   age: ${d.age}`
+    + (conds?`\nconditions:\n${conds}`:'');
 }
 
 function startClarify(intent){
@@ -2873,7 +3095,7 @@ async function sendChat(){
   try{
     if(action==='qa'){ await runQA(text); }
     else if(action==='clarify'){ startClarify(intent); }
-    else if(READ_ACTIONS.includes(action)){ setTyping('Fetching'); await runReadAction(action); }
+    else if(READ_ACTIONS.includes(action)){ window.__lastIntentArgs = intent.args||{}; setTyping('Fetching'); await runReadAction(action); }
     else if(action==='deploy'){ setTyping('Parsing'); await startDeployFlow(text); }
     else if(DESTRUCTIVE_KINDS.includes(action)){ setTyping('Preparing'); await startDestructiveFlow(action, intent.args||{}); }
     else { await runQA(text); }
@@ -2972,6 +3194,16 @@ _INTENT_RULES = [
     ("healer_auto_fix", re.compile(r"^(auto ?fix|fix all|自動修復|全部修復)", re.I), {}),
     ("healer_fix", re.compile(r"^(fix|修復)\s+(\S+)", re.I), {2: "pod_name"}),
     ("healer_scan", re.compile(r"^(healer|scan)\b|掃描.*(pod|壞|異常)", re.I), {}),
+    # 單一 pod 健康：名字 + 健康疑問句
+    ("pod_health", re.compile(r"([a-zA-Z0-9][\w.-]*)\s*(?:這個)?\s*(?:pod|deployment|部署)?\s*(?:有沒有壞|壞了沒|壞掉了嗎|壞了嗎|正常嗎|健康嗎|掛了嗎|掛掉了嗎|還活著嗎|沒事吧|有問題嗎|ok\s*嗎)", re.I), {1: "name"}),
+    ("pod_health", re.compile(r"^is\s+([a-zA-Z0-9][\w.-]*)\s+(?:ok|okay|healthy|broken|down|up|crashing|running|alive)", re.I), {1: "name"}),
+    # 單一 deployment 狀態
+    ("describe_deployment", re.compile(r"(?:deployment|部署)\s+([a-zA-Z0-9][\w.-]*)\s*(?:的?\s*(?:狀態|細節|詳情|status)|status)?", re.I), {1: "name"}),
+    ("describe_deployment", re.compile(r"([a-zA-Z0-9][\w.-]*)\s*(?:這個)?\s*(?:deployment|部署)\s*(?:的?\s*(?:狀態|細節|詳情))", re.I), {1: "name"}),
+    # 單一 pod 細節
+    ("describe_pod", re.compile(r"(?:查看|detail(?:s)?\s*(?:of)?|describe|檢視)\s*(?:pod\s+)?([a-zA-Z0-9][\w.-]*)", re.I), {1: "name"}),
+    ("describe_pod", re.compile(r"([a-zA-Z0-9][\w.-]*)\s*(?:這個)?\s*pod\s*(?:的?\s*(?:細節|狀態|詳情|資訊))", re.I), {1: "name"}),
+    ("describe_pod", re.compile(r"([a-zA-Z0-9][\w.-]*)\s*(?:的\s*(?:細節|詳情|詳細狀態))", re.I), {1: "name"}),
     ("delete", re.compile(r"^(delete|remove|刪除|del)\s+(\S+)", re.I), {2: "name"}),
     ("scale", re.compile(r"scale\s+(\S+)\s+to\s+(\d+)", re.I), {1: "name", 2: "replicas"}),
     ("scale", re.compile(r"把?\s*(\S+?)\s*(?:擴|縮|調).*?(\d+)", re.I), {1: "name", 2: "replicas"}),
@@ -3015,6 +3247,55 @@ def _rule_intent(message: str):
             continue
         return {"action": action, "args": args}
     return None
+
+
+_CLUSTER_Q_HINTS = (
+    "壞", "掛", "當機", "crash", "crashloop", "健康", "正常", "沒事", "ok",
+    "狀態", "status", "幾個", "多少", "哪個", "哪些", "which", "restart", "重啟",
+    "running", "ready", "unavailable", "pod", "deployment", "部署", "副本", "replica",
+    "image", "映像", "節點", "node", "叢集", "cluster",
+)
+
+
+def _cluster_snapshot_for(message: str) -> str:
+    """問題牽涉即時叢集狀態時，回傳一段精簡快照文字（給接地問答）；否則回空字串。"""
+    if not K8S_ENABLED:
+        return ""
+    low = (message or "").lower()
+    deps = k8s_get_deployments()
+    dep_names = [d["name"] for d in deps]
+    named = [n for n in dep_names if n and n.lower() in low]
+    if not named and not any(h in low for h in _CLUSTER_Q_HINTS):
+        return ""
+    lines = []
+    lines.append("Deployments（default namespace）：")
+    for d in deps:
+        flag = "OK" if d["ready"] == d["replicas"] and d["replicas"] else "異常"
+        lines.append(f"  - {d['name']}: {d['ready']}/{d['replicas']} ready, image={d['image']} [{flag}]")
+    # 不健康的 pod（掃每個 deployment 的 pod）
+    unhealthy = []
+    for name in dep_names:
+        for pd in k8s_describe_pod(name):
+            if not pd["healthy"]:
+                unhealthy.append(f"  - {pd['name']}: {pd['health_summary']}, 重啟 {pd['restarts']} 次")
+    if unhealthy:
+        lines.append("不健康的 Pod：")
+        lines.extend(unhealthy[:8])
+    else:
+        lines.append("所有 Pod 目前健康。")
+    # 使用者點名的物件，補詳情
+    for n in named[:2]:
+        dd = k8s_describe_deployment(n)
+        if dd:
+            lines.append(f"\n{n} 詳情：{dd['health_summary']}；conditions=" +
+                         "; ".join(f"{c['type']}={c['status']}({c['reason']})" for c in dd["conditions"][:3]))
+        for pd in k8s_describe_pod(n)[:3]:
+            evs = "；".join(f"{e['reason']}: {e['message'][:80]}" for e in pd["events"][:2])
+            lines.append(f"  Pod {pd['name']}: phase={pd['phase']}, "
+                         + ", ".join(f"{c['name']}[{c['state']}{('/'+c['reason']) if c['reason'] else ''}]" for c in pd["containers"])
+                         + (f"；事件: {evs}" if evs else ""))
+    text = "\n".join(lines)
+    return text[:2000]
 
 
 def _looks_like_system_help(message: str) -> bool:
@@ -3148,7 +3429,12 @@ def api_chat():
         history = history[-40:]
     if _looks_like_system_help(message):
         return jsonify({"reply": _system_help_reply(message), "source": "system_help"})
-    reply, sources = chat_llama(message, history)
+    # 問題若牽涉即時叢集狀態，先撈一份精簡快照當背景資料塞給模型（接地問答）。
+    grounded = message
+    snap = _cluster_snapshot_for(message)
+    if snap:
+        grounded = f"[現況]\n{snap}\n\n[問題]\n{message}"
+    reply, sources = chat_llama(grounded, history)
     if reply.startswith("[Local Model unavailable]"):
         reply, sources = _fallback_chat_reply(message, history)
     resp = {"reply": reply}
@@ -3456,6 +3742,53 @@ def api_deployments():
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
     return jsonify({"deployments": k8s_get_deployments()})
+
+
+@app.route("/api/pods/<name>")
+def api_pod_detail(name):
+    """單一 pod（或某 app 的一組 pod）的詳細狀態 + 健康判定。
+    ?diagnose=1 且該 pod 不健康時，附上 healer 的 LLM 根因診斷。"""
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    pods = k8s_describe_pod(name)
+    if not pods:
+        dd = k8s_describe_deployment(name)
+        if dd:
+            return jsonify({"pods": [], "found": False, "deployment": dd,
+                            "message": (f"'{name}' 是一個 Deployment，但目前沒有任何 Pod 在跑"
+                                        f"（{dd['ready']}/{dd['replicas']} ready）。可能全部啟動失敗。")}), 200
+        return jsonify({"pods": [], "found": False,
+                        "message": f"找不到符合 '{name}' 的 pod 或 deployment"}), 404
+    if request.args.get("diagnose") == "1":
+        for pd in pods:
+            if pd["healthy"]:
+                continue
+            bad = next((c for c in pd["containers"]
+                        if c["reason"] or c["last_reason"] or c["restart_count"] >= 5), None)
+            ctx = {
+                "pod_name": pd["name"], "container": (bad or {}).get("name", ""),
+                "reason": (bad or {}).get("reason") or (bad or {}).get("last_reason") or pd["phase"],
+                "restart_count": pd["restarts"],
+                "logs": (bad or {}).get("message", ""),
+                "events": [{"reason": e["reason"], "message": e["message"]} for e in pd["events"]],
+            }
+            try:
+                from llama_client import diagnose_with_llm
+                pd["diagnosis"] = diagnose_with_llm(ctx)
+            except Exception as e:
+                pd["diagnosis"] = None
+    return jsonify({"pods": pods, "found": True})
+
+
+@app.route("/api/deployments/<name>")
+def api_deployment_detail(name):
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    d = k8s_describe_deployment(name)
+    if not d:
+        return jsonify({"found": False, "message": f"找不到 deployment '{name}'"}), 404
+    return jsonify({"deployment": d, "found": True})
+
 
 @app.route("/api/delete", methods=["POST"])
 def api_delete():

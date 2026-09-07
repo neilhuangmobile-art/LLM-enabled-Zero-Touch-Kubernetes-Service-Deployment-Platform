@@ -125,6 +125,8 @@ CHAT_SYSTEM = (
     "Do not output JSON unless the user asks for JSON. "
     "If a '[參考知識]' / reference section is included in the user's message, use it only as silent "
     "background context — never quote, list, or repeat the example commands from it. "
+    "If a '[現況]' / live-state section is included, it is the REAL current cluster state pulled just now — "
+    "trust it as fact, base your answer on it, and do NOT contradict it or invent pod/deployment names not in it. "
     "Answer only the user's actual request, in a few sentences. Keep answers short. "
     "LANGUAGE RULE: detect the language of the user's own message and reply in that exact language. "
     "If it is Chinese, reply ONLY in Traditional Chinese (Taiwan, zh-TW) — every character must be "
@@ -152,7 +154,8 @@ DIAGNOSE_SYSTEM = (
 # ── 意圖分類（Chat 分派用；規則比對不到時才呼叫）──────────────────
 _INTENT_ACTIONS = {
     "deploy", "scale", "update_image", "rollback", "delete",
-    "list_pods", "list_deployments", "healer_scan", "healer_fix",
+    "list_pods", "list_deployments", "describe_pod", "pod_health",
+    "describe_deployment", "healer_scan", "healer_fix",
     "healer_auto_fix", "gitops_log", "cluster_metrics", "qa",
 }
 # 每個 action 允許的 args（其餘一律丟棄，避免模型亂塞）
@@ -163,6 +166,9 @@ _INTENT_ARG_KEYS = {
     "rollback": {"name"},
     "delete": {"name"},
     "healer_fix": {"pod_name"},
+    "describe_pod": {"name"},
+    "pod_health": {"name"},
+    "describe_deployment": {"name"},
 }
 _INTENT_INT_KEYS = {"pods", "port", "replicas"}
 _INTENT_DESTRUCTIVE = {"scale", "update_image", "rollback", "delete",
@@ -180,6 +186,9 @@ INTENT_SYSTEM = (
     "  delete            {name}\n"
     "  list_pods         {}\n"
     "  list_deployments  {}\n"
+    "  describe_pod      {name}   (details of ONE named pod)\n"
+    "  pod_health        {name}   (is ONE named pod ok / broken / crashing)\n"
+    "  describe_deployment {name} (status of ONE named deployment)\n"
     "  healer_scan       {}\n"
     "  healer_fix        {pod_name}\n"
     "  healer_auto_fix   {}\n"
@@ -205,6 +214,13 @@ INTENT_FEWSHOT = [
     ("掃描壞掉的 pod", '{"action":"healer_scan","args":{},"confidence":0.9}'),
     ("叢集現在健康嗎", '{"action":"cluster_metrics","args":{},"confidence":0.7}'),
     ("看一下部署歷史", '{"action":"gitops_log","args":{},"confidence":0.9}'),
+    ("web-frontend-abc123 這個 pod 的細節", '{"action":"describe_pod","args":{"name":"web-frontend-abc123"},"confidence":0.95}'),
+    ("show me details of pod api-gateway-6c494d876-66crm", '{"action":"describe_pod","args":{"name":"api-gateway-6c494d876-66crm"},"confidence":0.96}'),
+    ("api-gateway 有沒有壞掉", '{"action":"pod_health","args":{"name":"api-gateway"},"confidence":0.9}'),
+    ("is web-frontend healthy", '{"action":"pod_health","args":{"name":"web-frontend"},"confidence":0.92}'),
+    ("shop 這個 pod 正常嗎", '{"action":"pod_health","args":{"name":"shop"},"confidence":0.9}'),
+    ("看一下 auto-app 的部署狀態", '{"action":"describe_deployment","args":{"name":"auto-app"},"confidence":0.92}'),
+    ("deployment web-frontend status", '{"action":"describe_deployment","args":{"name":"web-frontend"},"confidence":0.93}'),
 ]
 
 
