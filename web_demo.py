@@ -700,6 +700,12 @@ tr:hover td{background:var(--bg)}
 .typing span:nth-child(2){animation-delay:.15s}
 .typing span:nth-child(3){animation-delay:.3s}
 @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.think-row{display:flex;align-items:center;gap:9px;padding:11px 15px;background:var(--surface);border:1px solid var(--border);border-radius:12px;width:fit-content;font-size:13px;color:var(--text2)}
+.spinner{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+.think-dots span{animation:blink 1.4s infinite both}
+.think-dots span:nth-child(2){animation-delay:.2s}
+.think-dots span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:0}40%{opacity:1}}
 
 /* ── Deploy decision court ── */
 .court-panel{margin-top:16px}
@@ -2236,14 +2242,22 @@ function appendMsg(role, content, sources){
   msgs.scrollTop = msgs.scrollHeight;
 }
 
-function appendTyping(){
+function appendTyping(label){
   const msgs = document.getElementById('chat-messages');
-  const div = document.createElement('div');
-  div.className = 'msg ai'; div.id = 'typing-indicator'; div.style.marginBottom='16px';
-  div.innerHTML = '<div class="msg-avatar">K</div><div class="msg-bubble"><span style="opacity:.5">Thinking...</span></div>';
-  msgs.appendChild(div);
+  let div = document.getElementById('typing-indicator');
+  if(!div){
+    div = document.createElement('div');
+    div.className = 'msg ai'; div.id = 'typing-indicator'; div.style.marginBottom='16px';
+    msgs.appendChild(div);
+  }
+  const txt = label || '思考中 / Thinking';
+  div.innerHTML = '<div class="msg-avatar">K</div><div class="think-row">'+
+    '<div class="spinner"></div><span data-role="think-label">'+escHtml(txt)+'</span>'+
+    '<span class="think-dots"><span>.</span><span>.</span><span>.</span></span></div>';
   msgs.scrollTop = msgs.scrollHeight;
 }
+// 更新「思考中」文字但不重建元素（沒有 indicator 就建一個）
+function setTyping(label){ appendTyping(label); }
 
 function deployConfirmHTML(id, parsed, originalText){
   const output = parsed.output || parsed;
@@ -2437,9 +2451,14 @@ function renderFlowCard(flow){
 }
 
 function renderBusyCard(flow, label){
-  return flowShell(flow, `<div class="deploy-confirm-head"><div>
-    <div class="deploy-confirm-title">${esc(label)}</div>
-    <div class="deploy-confirm-sub">\u8acb\u7a0d\u5019 / please wait</div></div>
+  return flowShell(flow, `<div class="deploy-confirm-head">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="spinner"></div>
+      <div>
+        <div class="deploy-confirm-title">${esc(label)}</div>
+        <div class="deploy-confirm-sub">\u8acb\u7a0d\u5019\uff0c\u4e0d\u8981\u95dc\u6389\u9019\u500b\u5206\u9801 / please wait, keep this tab open</div>
+      </div>
+    </div>
     <span class="badge pending">Working</span></div>`);
 }
 
@@ -2660,7 +2679,10 @@ async function flowToReview(id){
   if(!Number.isInteger(spec.port) || spec.port<1 || spec.port>65535){ setFlowError(root, 'Port \u5fc5\u9808\u5728 1\u201365535 \u4e4b\u9593.'); return; }
   if(spec.memory && !/^\d+(Mi|Gi|Ki|M|G)$/.test(spec.memory)){ setFlowError(root, 'Memory \u683c\u5f0f\u9808\u5982 128Mi \u6216 1Gi.'); return; }
   flow.spec = spec;
-  root.querySelectorAll('input,button').forEach(el=>el.disabled=true);
+  // 換成 spinner 卡（不動 flow.step；結尾 persistFlowCard 會依真實狀態重繪）
+  const busyHtml = renderBusyCard(flow, '計算資源與三方審查中 / Reviewing resources & agents…');
+  const dom = document.querySelector('[data-flow-id="'+id+'"]');
+  if(dom){ const w=document.createElement('div'); w.innerHTML=busyHtml; dom.replaceWith(w.firstElementChild); }
   try{
     const r = await fetch('/api/deploy/parse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({parsed:spec})});
     const d = await r.json();
@@ -2814,6 +2836,7 @@ function startClarify(intent){
 }
 
 async function runQA(text){
+  setTyping('\u601d\u8003\u4e2d / Thinking\uff08\u672c\u5730\u6a21\u578b\uff0c\u53ef\u80fd\u8981 10\u201330 \u79d2\uff09');
   try{
     const hist = (currentChat()?.messages||[]).slice(-10).map(m=>({role:m.role==='assistant'?'assistant':'user',content:m.content}));
     const r = await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text, history:hist})});
@@ -2830,7 +2853,7 @@ async function sendChat(){
   inp.style.height = '';
   if(!currentChatId) newChat();
   appendMsg('user', text);
-  appendTyping();
+  appendTyping('\u7406\u89e3\u4f60\u7684\u9700\u6c42 / Understanding');
 
   let intent = matchClientRule(text);
   if(!intent){
@@ -2839,18 +2862,19 @@ async function sendChat(){
       intent = await r.json();
     }catch(e){ intent = {action:'qa', args:{}, source:'error'}; }
   }
-  removeTyping();
 
   const action = intent.action || 'qa';
   try{
     if(action==='qa'){ await runQA(text); }
     else if(action==='clarify'){ startClarify(intent); }
-    else if(READ_ACTIONS.includes(action)){ await runReadAction(action); }
-    else if(action==='deploy'){ await startDeployFlow(text); }
-    else if(DESTRUCTIVE_KINDS.includes(action)){ await startDestructiveFlow(action, intent.args||{}); }
+    else if(READ_ACTIONS.includes(action)){ setTyping('\u67e5\u8a62\u4e2d / Fetching'); await runReadAction(action); }
+    else if(action==='deploy'){ setTyping('\u89e3\u6790\u90e8\u7f72\u9700\u6c42 / Parsing deployment'); await startDeployFlow(text); }
+    else if(DESTRUCTIVE_KINDS.includes(action)){ setTyping('\u6e96\u5099\u4e2d / Preparing'); await startDestructiveFlow(action, intent.args||{}); }
     else { await runQA(text); }
   }catch(e){
     appendMsg('assistant','\u8655\u7406\u6642\u767c\u751f\u932f\u8aa4 / error: '+e);
+  }finally{
+    removeTyping();
   }
 }
 
@@ -3604,8 +3628,9 @@ def api_dataset_run():
         return jsonify({"success": False, "error": "enrich_dataset.py not found", "log": ""})
     cmd = ["python3", script] + (flags.split() if flags else [])
     try:
-        result = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=600)
-        log = result.stdout + ("\nSTDERR:\n" + result.stderr if result.stderr else "")
+        result = subprocess.run(cmd, cwd=ROOT, capture_output=True,
+                                encoding="utf-8", errors="replace", timeout=600)
+        log = (result.stdout or "") + ("\nSTDERR:\n" + result.stderr if result.stderr else "")
         return jsonify({"success": result.returncode == 0, "log": log})
     except subprocess.TimeoutExpired:
         return jsonify({"success": False, "log": "Timeout after 600s", "error": "timeout"})
@@ -3620,10 +3645,10 @@ def api_gitops():
         result = subprocess.run(
             ["git", "log", "--pretty=format:%H|%s|%ai", "--", "manifests/", "yamls/deployments/"],
             cwd=os.path.dirname(os.path.abspath(__file__)),
-            capture_output=True, text=True, timeout=10
+            capture_output=True, encoding="utf-8", errors="replace", timeout=10
         )
         commits = []
-        for line in result.stdout.strip().split("\n"):
+        for line in (result.stdout or "").strip().split("\n"):
             if not line: continue
             parts = line.split("|", 2)
             if len(parts) < 2: continue
