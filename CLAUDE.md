@@ -159,6 +159,17 @@ python web_demo.py                # Web UI（localhost:5000）
   - `k8sEnabled` JS 全域（`{{ k8s }}`）供 B3 判斷 scale/update 在 K8s 未連線時 disable。
 - **舊 `deployConfirmHTML`/`readDeployConfirm`/`confirmDeploy` 保留未刪**（一版緩衝，驗證後再移除）。
 
+**2026-09-07 後續修的 3 件事**（commit `c1a202e`）：
+- **GitOps Log 整頁空白**：`/api/gitops` 的 `subprocess.run(text=True)` 在 Windows 用 cp950 解碼 `git log`，
+  git 歷史一出現中文 commit message（`daabe5e`、`7afe318` 等）就解碼失敗、`result.stdout` 變 `None`、
+  `.strip()` 崩潰。改 `encoding="utf-8", errors="replace"`；`/api/dataset/run` 同 pattern 一併修。
+  **這是唯一真的壞掉的工具**，跟換模型無關（是中文 commit message 進歷史才觸發）。
+- **「工具都無法運作」的真正主因**：`app.secret_key` 沒設 `FLASK_SECRET_KEY` 時每次重啟 `web_demo.py`
+  都換一把隨機金鑰 → 已登入 session 全失效 → 每個工具頁 API 回 401 → 看起來全壞。
+  `.env` / `.env.example` 已加 `FLASK_SECRET_KEY`（`.env` 是 gitignored，值只在本機）。
+- **Chat 思考指示**：改成旋轉 spinner + 分階段文字（理解需求 / 解析部署 / 思考中 10–30 秒 / 查詢中），
+  部署流程各步驟也加 spinner，避免使用者以為當機。CSS 用既有 `@keyframes spin` + 新增 `.think-row`/`.spinner`。
+
 **事故記錄（2026-09-07）**：清理 smoke test 時誤下 `git reset --hard HEAD~1`，把當時未 commit 的
 Phase 1–4 全部實作連同 gemini round-robin 一起清掉，且 HEAD 多退一格。已從對話記錄逐條重建所有改動、
 `git reset --soft 7afe318` 復原 HEAD、重跑全套測試確認與被清掉的版本一致。教訓：跑 `git reset --hard`
