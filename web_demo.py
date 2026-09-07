@@ -2,7 +2,7 @@
 web_demo.py  —  ZeroTouch K8s Platform v2
 Clean white UI + Login/Register + Pod Details + AI Chat + Real K8s
 """
-import sys, os
+import sys, os, shutil
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from core.config import ensure_utf8_output
 ensure_utf8_output()
@@ -3632,9 +3632,15 @@ def api_dataset_run():
     script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "enrich_dataset.py")
     if not os.path.exists(script):
         return jsonify({"success": False, "error": "enrich_dataset.py not found", "log": ""})
-    cmd = ["python3", script] + (flags.split() if flags else [])
+    # enrich_dataset.py 用了 `dict | None` union 語法，需要 Python 3.10+；
+    # sys.executable 這台是 3.9，改用 PATH 上的 python3（Anaconda，3.11）。
+    py = shutil.which("python3") or shutil.which("python") or sys.executable
+    cmd = [py, script] + (flags.split() if flags else [])
+    # 子行程的 print() 在 Windows 預設用 cp950 寫 stdout，父行程用 utf-8 讀就變亂碼。
+    # 逼子行程也用 utf-8。
+    child_env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
     try:
-        result = subprocess.run(cmd, cwd=ROOT, capture_output=True,
+        result = subprocess.run(cmd, cwd=ROOT, capture_output=True, env=child_env,
                                 encoding="utf-8", errors="replace", timeout=600)
         log = (result.stdout or "") + ("\nSTDERR:\n" + result.stderr if result.stderr else "")
         return jsonify({"success": result.returncode == 0, "log": log})
