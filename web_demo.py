@@ -1822,15 +1822,22 @@ async function loadHealer(){
     const issues=d.issues||[];
     document.getElementById('healer-count').textContent=issues.length;
     if(!issues.length){document.getElementById('healer-list').innerHTML='<div style="color:var(--green);font-size:13px">All pods healthy</div>';return;}
-    document.getElementById('healer-list').innerHTML=issues.map(i=>`
+    document.getElementById('healer-list').innerHTML=issues.map(i=>{
+      // scan_once() 回 {pod_name, reason, description, message, container}；
+      // fallback 路徑回 {pod, status, action}。兩種都吃。
+      const pod = i.pod_name || i.pod || 'unknown';
+      const reason = i.reason || i.status || 'Issue';
+      const detail = i.description || i.action || i.message || '';
+      return `
       <div style="border:1px solid #FCA5A5;border-radius:8px;padding:12px;margin-bottom:8px;background:#FFF5F5">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div><span style="font-weight:600;font-size:13px">${i.pod}</span>
-          <span style="margin-left:8px;font-size:11px;background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:10px">${i.status}</span></div>
-          <button onclick="fixPod('${i.pod}')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:none;background:#DC2626;color:#fff;cursor:pointer">Fix</button>
+          <div><span style="font-weight:600;font-size:13px">${escHtml(pod)}</span>
+          <span style="margin-left:8px;font-size:11px;background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:10px">${escHtml(reason)}</span></div>
+          <button onclick="fixPod('${escHtml(pod)}')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:none;background:#DC2626;color:#fff;cursor:pointer">Fix</button>
         </div>
-        <div style="font-size:12px;color:#6B7280;margin-top:4px">${i.action||''}</div>
-      </div>`).join('');
+        <div style="font-size:12px;color:#6B7280;margin-top:4px">${escHtml(detail)}</div>
+      </div>`;
+    }).join('');
   }catch(e){document.getElementById('healer-list').innerHTML='<div style="color:var(--text3)">Error: '+e+'</div>';}
 }
 
@@ -1850,7 +1857,7 @@ async function healerAutoFix(){
 }
 
 async function loadMetrics(){
-  document.getElementById('prom-status').textContent='...';
+  document.getElementById('prom-status').textContent='Checking';
   try{
     const r=await fetch('/api/metrics'); const d=await r.json();
     if(!d.connected){
@@ -3748,12 +3755,14 @@ def api_healer_auto_fix():
 @app.route("/api/metrics")
 def api_metrics():
     if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
-    prom_url = "http://localhost:9090"
+    # localhost 在 Windows 會先試 IPv6 ::1、逾時才 fallback 到 127.0.0.1，每個查詢多等好幾秒。
+    # 直接用 127.0.0.1 省掉那段。可用 PROMETHEUS_URL 覆寫。
+    prom_url = os.environ.get("PROMETHEUS_URL", "http://127.0.0.1:9090").replace("localhost", "127.0.0.1")
     try:
         import urllib.request as ur
         def prom_query(q):
             url = f"{prom_url}/api/v1/query?query={urllib.parse.quote(q)}"
-            with ur.urlopen(url, timeout=3) as r:
+            with ur.urlopen(url, timeout=2) as r:
                 d = json.loads(r.read())
             if d.get("status") == "success" and d["data"]["result"]:
                 return float(d["data"]["result"][0]["value"][1])
