@@ -884,9 +884,14 @@ tr:hover td{background:var(--bg)}
 .think-dots span:nth-child(3){animation-delay:.4s}
 @keyframes blink{0%,80%,100%{opacity:0}40%{opacity:1}}
 
-/* ── 使用說明書 / K8s 小百科 ────────────────────────────────── */
-.manual-btn{display:flex;align-items:center;gap:6px;border:1px solid var(--border2);background:#fff;color:var(--text2);border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit}
-.manual-btn:hover{background:var(--surface2);color:var(--text)}
+/* ── 使用說明書 / K8s 小百科：topbar 按鈕 ────────────────────── */
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:32px;padding:0 11px;border:none;border-radius:999px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.2px;transition:background .15s,transform .1s}
+.icon-btn:active{transform:scale(.93)}
+.icon-btn svg{flex-shrink:0}
+.lang-btn{background:var(--surface2);color:var(--text2)}
+.lang-btn:hover{background:var(--border)}
+.guide-btn{width:32px;padding:0;background:var(--green-light);color:var(--green)}
+.guide-btn:hover{background:var(--green-mid)}
 #manual-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:200;align-items:center;justify-content:center;padding:24px;display:none}
 /* [hidden] 是 HTML 標準屬性，但 #manual-overlay 這條 ID 規則的 specificity 比瀏覽器內建的
    [hidden]{display:none} 規則高，等於蓋掉它——這是之前「一登入就跳出來、關不掉」的根因。
@@ -1317,13 +1322,19 @@ html,body{height:100%;overflow:hidden}
             <div class="chat-subtitle" id="chat-subtitle-txt">Chat, deploy, inspect, and recover Kubernetes services</div>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
-            <button class="manual-btn" onclick="setLang(uiLang==='zh'?'en':'zh')" title="Switch language" aria-label="Switch language">
-              <svg viewBox="0 0 16 16" fill="none" width="15" height="15"><path d="M2 8h12M8 2c1.8 1.8 2.8 4 2.8 6s-1 4.2-2.8 6c-1.8-1.8-2.8-4-2.8-6s1-4.2 2.8-6z" stroke="currentColor" stroke-width="1.3"/></svg>
+            <button class="icon-btn lang-btn" onclick="setLang(uiLang==='zh'?'en':'zh')" title="Switch language" aria-label="Switch language">
+              <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/>
+                <path d="M2 8h12M8 2c1.8 1.8 2.6 4 2.6 6s-.8 4.2-2.6 6c-1.8-1.8-2.6-4-2.6-6s.8-4.2 2.6-6z" stroke="currentColor" stroke-width="1.1"/>
+              </svg>
               <span id="lang-btn-txt">EN</span>
             </button>
-            <button class="manual-btn" onclick="openManual()" title="User guide" aria-label="User guide">
-              <svg viewBox="0 0 16 16" fill="none" width="15" height="15"><path d="M3 3h10v3H3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M3 6v7a1 1 0 001 1h8a1 1 0 001-1V6" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
-              <span id="manual-btn-txt">Guide</span>
+            <button class="icon-btn guide-btn" onclick="openManual()" title="使用說明書 / User guide" aria-label="使用說明書 / User guide">
+              <svg viewBox="0 0 16 16" fill="none" width="17" height="17">
+                <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M6.1 6.3c.1-1.05 1-1.8 2-1.8 1.1 0 2 .78 2 1.75 0 .72-.42 1.13-1.05 1.6-.58.42-.95.78-.95 1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="8" cy="11.4" r=".65" fill="currentColor"/>
+              </svg>
             </button>
             <div class="status-pill"><div class="dot green"></div><span id="workspace-status-txt">Workspace ready</span></div>
           </div>
