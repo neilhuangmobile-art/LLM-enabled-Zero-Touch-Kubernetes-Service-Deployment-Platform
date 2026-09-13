@@ -2548,6 +2548,11 @@ async function loadHealerBgStatus(){
     if(d.running){
       banner.style.background='#ECFDF5'; banner.style.border='1px solid #6EE7B7'; banner.style.color='#065F46';
       banner.textContent=`🟢 自動監控中，每 30 秒自動扫描一次${d.last_scan?'，上次扫描：'+new Date(d.last_scan).toLocaleTimeString():''} / Auto-monitoring active, scans every 30s`;
+    } else if(d.message){
+      // K8s 有連線，但背景執行緒死掉或卡住了——這是真正的異常，不是「K8s 沒連線」這種
+      // 正常情況，用紅色橫幅+具體建議動作顯示，不能只顯示跟正常運行時一樣的灰/黃色調。
+      banner.style.background='#FEF2F2'; banner.style.border='1px solid #FCA5A5'; banner.style.color='#991B1B';
+      banner.textContent='🔴 '+d.message;
     } else {
       banner.style.background='#FFFBEB'; banner.style.border='1px solid #FCD34D'; banner.style.color='#92400E';
       banner.textContent='⚠️ 未啟動自動監控（K8s 未連線），只能手動掃描 / Auto-monitoring is not running (K8s not connected) — manual scan only';
@@ -4783,9 +4788,15 @@ def _real_heal_pod(pod_name: str, namespace: str = "default") -> dict:
     return result
 
 
-# 背景自動監控狀態（記憶體內，重啟 web_demo.py 會清空；不用資料庫，量小且非關鍵資料）
-_healer_bg_state = {"running": False, "last_scan": None, "recent_actions": []}
+# 背景自動監控狀態（記憶體內，重啟 web_demo.py 會清空；不用資料庫，量小且非關鍵資料）。
+# 2026-09-14 修正：之前 "running" 只在啟動那一刻設一次 True，之後永遠不會再檢查，
+# 如果背景執行緒中途死掉，這裡會一直謊報「運行中」——直接違反 AGENT_RULES.md 的
+# 核心原則「判斷即時、不用舊值唬弄」。現在改成即時查真正的執行緒物件是否還活著，
+# 並且額外比對 last_scan 有沒有久到不正常（執行緒卡住/掛住不會被 is_alive() 抓到，
+# 因為卡住的執行緒技術上還「活著」，只是沒有在前進，只能靠比對時間戳才能發現）。
+_healer_bg_state = {"last_scan": None, "recent_actions": [], "started_at": None, "interval": 30}
 _healer_bg_lock = threading.Lock()
+_healer_bg_thread = None  # 全域保存 Thread 物件本身，供 /api/healer/status 查 is_alive()
 _HEALER_BG_MAX_HISTORY = 50
 
 
@@ -4833,15 +4844,59 @@ def _healer_background_loop(interval: int = 30):
             pass
 
 
+def _healer_bg_liveness() -> dict:
+    """即時算出背景自動修復迴圈的真實狀態，不用啟動時設過一次就不再檢查的舊旗標。"""
+    with _healer_bg_lock:
+        last_scan = _healer_bg_state["last_scan"]
+        interval = _healer_bg_state.get("interval", 30)
+        started_at = _healer_bg_state.get("started_at")
+        recent = list(_healer_bg_state["recent_actions"])
+
+    thread_alive = bool(_healer_bg_thread is not None and _healer_bg_thread.is_alive())
+    now = datetime.utcnow()
+    stale = False
+    if K8S_ENABLED and thread_alive:
+        if last_scan is None:
+            # 剛啟動、第一次掃描還沒發生前，給一次 interval 的寬限期，不要誤判成卡住。
+            try:
+                grace_until = datetime.fromisoformat(started_at) + timedelta(seconds=interval * 1.5)
+                stale = now > grace_until
+            except Exception:
+                stale = False
+        else:
+            try:
+                last_dt = datetime.fromisoformat(last_scan)
+                stale = (now - last_dt).total_seconds() > interval * 3
+            except Exception:
+                stale = False
+
+    running = bool(K8S_ENABLED and thread_alive and not stale)
+    message = None
+    if K8S_ENABLED and not thread_alive:
+        message = (
+            "自動監控背景執行緒已經停止（可能因未預期錯誤中斷），現在只能靠手動 Scan Now / "
+            "Auto Fix All，不會自動偵測新問題。請重新啟動 web_demo.py 以恢復自動監控。 / "
+            "The background auto-heal thread has stopped — automatic detection is currently off "
+            "(manual Scan/Fix still works). Restart web_demo.py to recover it."
+        )
+    elif K8S_ENABLED and stale:
+        message = (
+            "自動監控似乎卡住了（太久沒有新的掃描紀錄，可能在等一個沒有逾時設定的 K8s API 呼叫）。"
+            "建議重新啟動 web_demo.py 確認。 / "
+            "Auto-monitoring looks stuck (no recent scan, possibly blocked on a K8s API call with "
+            "no timeout). Consider restarting web_demo.py."
+        )
+
+    return {
+        "running": running, "thread_alive": thread_alive, "last_scan": last_scan,
+        "recent_actions": recent, "message": message,
+    }
+
+
 @app.route("/api/healer/status")
 def api_healer_status():
     if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
-    with _healer_bg_lock:
-        return jsonify({
-            "running": _healer_bg_state["running"] and K8S_ENABLED,
-            "last_scan": _healer_bg_state["last_scan"],
-            "recent_actions": list(_healer_bg_state["recent_actions"]),
-        })
+    return jsonify(_healer_bg_liveness())
 
 
 @app.route("/api/healer/fix", methods=["POST"])
@@ -4934,8 +4989,12 @@ if __name__ == "__main__":
     print(f"  K8s   : {'Connected' if K8S_ENABLED else 'Simulation'}")
     print(f"  Open  : http://localhost:5050")
     if K8S_ENABLED:
-        threading.Thread(target=_healer_background_loop, daemon=True, kwargs={"interval": 30}).start()
-        _healer_bg_state["running"] = True
+        _HEALER_BG_INTERVAL = 30
+        _healer_bg_thread = threading.Thread(
+            target=_healer_background_loop, daemon=True, kwargs={"interval": _HEALER_BG_INTERVAL})
+        _healer_bg_thread.start()
+        _healer_bg_state["started_at"] = datetime.utcnow().isoformat()
+        _healer_bg_state["interval"] = _HEALER_BG_INTERVAL
         print("  Healer: background auto-heal loop started (scan every 30s)")
     else:
         print("  Healer: background auto-heal loop NOT started (K8s not connected)")
