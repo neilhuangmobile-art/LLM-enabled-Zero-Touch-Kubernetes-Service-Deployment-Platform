@@ -3884,6 +3884,59 @@ def _cluster_snapshot_for(message: str) -> str:
     return text[:2000]
 
 
+_POSITIVE_STATUS_WORDS = (
+    "健康", "正常", "沒問題", "沒有問題", "沒有異常", "運作正常", "運行正常",
+    "healthy", "is fine", "is ok", "is okay", "running fine", "running well",
+    "no issues", "is running", "運行良好",
+)
+_IDENTIFIER_CANDIDATE_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9]*(?:-[a-zA-Z0-9]+)+\b")
+
+
+def _verify_grounded_reply(message: str, reply: str) -> str:
+    """
+    2026-09-14：輸出端事實核對（跟輸入端擋 prompt injection 是完全獨立的第二道防線，
+    見 docs/security_review.md 9 節「方法 1」）。不管模型是被注入攻擊說服、還是單純
+    自己幻覈，只要回覆對一個「叢集裡實際不存在的服務/Deployment」講出肯定的健康狀態，
+    這裡都用真實 K8s 清單核對、攔截並改成更正訊息——不相信生成過程，只驗證結果，
+    跟 guardian 對 LLM 產生的 YAML 一定要驗證過才能部署是同一種哲學。
+
+    已知限制：只抓「連字號命名」的候選字（例如 ghost-service-xyz999），單字不含連字號
+    的假名稱（例如 ghostapp）抓不到——這是精確度／覆蓋率的取捨，寧可少擋不要把一般
+    英文單字誤判成服務名稱。
+    """
+    if not K8S_ENABLED:
+        return reply
+    try:
+        real_names = {d["name"].lower() for d in k8s_get_deployments()}
+    except Exception:
+        return reply
+    candidates = set(m.group(0) for m in _IDENTIFIER_CANDIDATE_RE.finditer(message))
+    candidates |= set(m.group(0) for m in _IDENTIFIER_CANDIDATE_RE.finditer(reply))
+    ghost_names = [c for c in candidates if c.lower() not in real_names and len(c) >= 4]
+    if not ghost_names:
+        return reply
+    low_reply = reply.lower()
+    for name in ghost_names:
+        # 模型講到名稱時常常會把連字號念成空格（實測抓到過："ghost-service-xyz999"
+        # 被模型講成 "Ghost service xyz999"），單純字串比對會漏掉這種情況，
+        # 用連字號可以是空白/連字號/無分隔的寬鬆比對。
+        pattern = re.escape(name.lower()).replace(r"\-", r"[-\s]*")
+        m = re.search(pattern, low_reply)
+        if not m:
+            continue
+        idx = m.start()
+        window = low_reply[max(0, idx - 60): idx + 60]
+        if any(w in window for w in _POSITIVE_STATUS_WORDS):
+            return (
+                f"更正：剛才的回覆可能不準確——`{name}` 目前叢集中並不存在，不應該被說成健康或正常。"
+                f"請確認名稱是否正確，或到 Pods / Deployments 頁面查看實際清單。 / "
+                f"Correction: the previous answer may be inaccurate — `{name}` does not exist in the "
+                f"current cluster and should not have been described as healthy. Please double-check "
+                f"the name, or check the Pods/Deployments page for the real list."
+            )
+    return reply
+
+
 def _looks_like_system_help(message: str) -> bool:
     low = (message or '').lower()
     product_terms = (
@@ -4019,6 +4072,8 @@ def api_chat():
     reply, sources = chat_llama(grounded, history)
     if reply.startswith("[Local Model unavailable]"):
         reply, sources = _fallback_chat_reply(message, history)
+    else:
+        reply = _verify_grounded_reply(message, reply)
     resp = {"reply": reply}
     if sources:
         from rag.retriever import confidence_label
