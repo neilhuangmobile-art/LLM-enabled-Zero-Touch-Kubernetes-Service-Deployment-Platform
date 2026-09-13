@@ -18,9 +18,9 @@ Useful chat examples:
 - `How do I debug CrashLoopBackOff?`
 - `How do I use Healer?`
 
-## Deploy Console
+## Deploying from Chat
 
-Deploy Console is for creating Kubernetes Deployments and Services from natural language. Type a request that includes the image, replica count, app name, and optional port or memory limit. The system parses the request, enriches dataset fields, runs Guardian validation, runs agent review, optionally runs kubectl dry-run, then creates the resources when Kubernetes is connected.
+There is no separate "Deploy Console" in the sidebar anymore (removed 2026-09-13 for beginner-friendliness — one entry point, not two). Deploy directly from the Chat page: type a request that includes the image, replica count, app name, and optional port or memory limit. The system parses the request, shows a confirmation card, computes resource usage, runs Guardian validation and agent review, optionally runs kubectl dry-run, then creates the resources when you confirm and Kubernetes is connected.
 
 Recommended format:
 
@@ -76,16 +76,9 @@ Metrics shows Prometheus observability status. It reports whether Prometheus is 
 
 If Prometheus is offline, start or expose Prometheus first. The UI suggests a port-forward command when it cannot connect.
 
-## Dataset Manager
+## Dataset Manager and Knowledge Base (developer tools, not in the sidebar)
 
-Dataset Manager inspects and enriches training data used by the local Kubernetes model. It shows total records, output coverage, K8s/non-K8s ratio, files, and top categories.
-
-Buttons:
-
-- `Quick Fill (rules only)`: fast enrichment without model output.
-- `Full Enrich (LLaMA output)`: slower enrichment using model output.
-- `Dry Run`: preview without writing changes.
-- `Refresh Stats`: reload dataset statistics.
+Dataset Manager (enriches training data) and Knowledge Base (manages the RAG index) are internal developer tools, not end-user features. They were removed from the sidebar on 2026-09-13 so regular users are not confused by ML/training-data jargon they never need. Their backend routes (`/api/dataset/*`, `/api/rag/*`) and pages still exist and can be reached directly by URL if a developer needs them.
 
 ## Safe Deployment Behavior
 

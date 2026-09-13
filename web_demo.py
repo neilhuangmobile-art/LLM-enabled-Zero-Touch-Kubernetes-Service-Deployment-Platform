@@ -884,6 +884,27 @@ tr:hover td{background:var(--bg)}
 .think-dots span:nth-child(3){animation-delay:.4s}
 @keyframes blink{0%,80%,100%{opacity:0}40%{opacity:1}}
 
+/* ── 使用說明書 / K8s 小百科 ────────────────────────────────── */
+.manual-btn{display:flex;align-items:center;gap:6px;border:1px solid var(--border2);background:#fff;color:var(--text2);border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit}
+.manual-btn:hover{background:var(--surface2);color:var(--text)}
+#manual-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px}
+.manual-panel{background:#fff;border-radius:16px;max-width:680px;width:100%;max-height:min(720px,88vh);display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.manual-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 22px;border-bottom:1px solid var(--border)}
+.manual-panel-title{font-size:16px;font-weight:750;color:#111}
+.manual-panel-sub{font-size:12px;color:var(--text3);margin-top:3px}
+.manual-close{border:none;background:var(--surface2);color:var(--text2);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:14px;flex-shrink:0}
+.manual-close:hover{background:var(--border)}
+.manual-panel-body{overflow-y:auto;padding:8px 22px 22px}
+.manual-panel-body details{border:1px solid var(--border);border-radius:12px;margin-top:10px;overflow:hidden}
+.manual-panel-body summary{cursor:pointer;padding:13px 16px;font-weight:700;font-size:13.5px;color:#222;list-style:none;background:var(--surface2)}
+.manual-panel-body summary::-webkit-details-marker{display:none}
+.manual-panel-body summary::before{content:'▸ ';color:var(--green)}
+.manual-panel-body details[open] summary::before{content:'▾ '}
+.manual-section{padding:14px 16px;font-size:13px;color:var(--text2)}
+.manual-section code{background:var(--surface2);padding:1px 6px;border-radius:5px;font-family:'DM Mono',monospace;font-size:12px;color:#B45309}
+.term{border-bottom:1px dotted var(--green);color:var(--green);font-weight:600;cursor:pointer}
+#term-tip{position:fixed;max-width:260px;background:#111827;color:#F1F5F9;font-size:12.5px;line-height:1.6;padding:10px 12px;border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:250}
+
 /* ── Deploy decision court ── */
 .court-panel{margin-top:16px}
 .court-agents{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
@@ -1292,7 +1313,13 @@ html,body{height:100%;overflow:hidden}
             <div class="chat-title">ZeroTouch K8s Assistant</div>
             <div class="chat-subtitle">Chat, deploy, inspect, and recover Kubernetes services</div>
           </div>
-          <div class="status-pill"><div class="dot green"></div><span>Workspace ready</span></div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="manual-btn" onclick="openManual()" title="使用說明書 / User guide" aria-label="使用說明書">
+              <svg viewBox="0 0 16 16" fill="none" width="15" height="15"><path d="M3 3h10v3H3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M3 6v7a1 1 0 001 1h8a1 1 0 001-1V6" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+              說明書
+            </button>
+            <div class="status-pill"><div class="dot green"></div><span>Workspace ready</span></div>
+          </div>
         </div>
         <div class="chat-messages" id="chat-messages"></div>
         <div class="chat-composer">
@@ -1303,6 +1330,89 @@ html,body{height:100%;overflow:hidden}
           <div class="composer-hint">Ask about Kubernetes, deploy services, list pods, scale workloads, or troubleshoot failures.</div>
         </div>
       </div>
+    </div>
+
+    <!-- 使用說明書 + K8s 小科普：新手友善原則（AGENT_RULES.md），點擊展開段落、
+         點名詞看小框框註解，不用另外開分頁或去查資料。 -->
+    <div id="manual-overlay" onclick="if(event.target===this)closeManual()" hidden>
+      <div class="manual-panel">
+        <div class="manual-panel-head">
+          <div>
+            <div class="manual-panel-title">📖 使用說明書 / User Guide</div>
+            <div class="manual-panel-sub">看不懂的名詞（<span style="border-bottom:1px dotted var(--text3)">虛線底線</span>）點一下會展開解釋</div>
+          </div>
+          <button class="manual-close" onclick="closeManual()" aria-label="關閉">✕</button>
+        </div>
+        <div class="manual-panel-body" id="manual-body">
+
+          <details open>
+            <summary>🚀 三步驟快速上手</summary>
+            <div class="manual-section">
+              <ol style="margin:0;padding-left:20px;line-height:1.8">
+                <li>在 Chat 打字描述你要的東西，例如「<code>deploy 3 nginx pods for shop, port 80</code>」，系統會解析成一份規格讓你確認。</li>
+                <li>確認規格沒問題後按「下一步」，系統會算出這次部署要用多少資源、跑一次安全/成本/效能審查，通過才能按「確認部署」。</li>
+                <li>部署完成後畫面會直接給連結，帶你去 <b>Pods</b> / <b>Deployments</b> 頁面確認結果。</li>
+              </ol>
+            </div>
+          </details>
+
+          <details>
+            <summary>💬 Chat 還能幫你做什麼</summary>
+            <div class="manual-section">
+              <p>除了部署，直接在 Chat 打白話就可以：</p>
+              <ul style="margin:6px 0 0;padding-left:20px;line-height:1.9">
+                <li>「<code>list pods</code>」／「<code>顯示所有部署</code>」— 查看目前有什麼在跑</li>
+                <li>「<code>web-frontend 有沒有壞掉</code>」— 精準檢查單一服務健不健康，壞掉會附上根因和修復建議</li>
+                <li>「<code>查看 api-gateway 細節</code>」— 看單一 <span class="term" data-def="最小的部署單位，可以想成一個裝著你程式的小盒子。">Pod</span> 的詳細狀態</li>
+                <li>「<code>scale web-frontend to 5</code>」— 調整副本數（會先出確認卡才真的執行）</li>
+                <li>「<code>rollback api-gateway</code>」— 回滾到上一個版本</li>
+                <li>「<code>什麼是 Deployment</code>」— 問任何 K8s 概念，系統會用簡單的話回答你</li>
+              </ul>
+            </div>
+          </details>
+
+          <details>
+            <summary>🗺️ 側邊欄各頁面在幹什麼</summary>
+            <div class="manual-section">
+              <ul style="margin:0;padding-left:20px;line-height:1.9">
+                <li><b>Pods</b>：目前所有 <span class="term" data-def="最小的部署單位，可以想成一個裝著你程式的小盒子。">Pod</span> 的狀態、IP、所在節點、重啟次數。</li>
+                <li><b>Deployments</b>：每個服務要求幾個副本、實際幾個 ready、用的 image 版本。</li>
+                <li><b>Healer</b>：掃描壞掉的 Pod（<span class="term" data-def="容器一直啟動失敗、一直重開、一直失敗，通常是程式本身有問題或設定錯了。">CrashLoopBackOff</span> 之類），可以一鍵修復重建。</li>
+                <li><b>GitOps Log</b>：部署歷史紀錄，每次部署都會留一筆，方便回滾對照。</li>
+                <li><b>Metrics</b>：Prometheus 監控狀態，看叢集現在跑了多少 Pod。</li>
+              </ul>
+            </div>
+          </details>
+
+          <details>
+            <summary>📚 K8s 小百科（名詞看不懂點這裡）</summary>
+            <div class="manual-section">
+              <p style="margin:0 0 10px;color:var(--text2)">下面每個詞都可以點一下展開解釋，不用去外面查。</p>
+              <p style="line-height:2.1">
+                <span class="term" data-def="最小的部署單位，可以想成一個裝著你程式的小盒子。你打「deploy 3 nginx pods」就是要開 3 個一樣的小盒子。">Pod</span>、
+                <span class="term" data-def="一份「我想要的狀態」的宣告，例如「用某個 image、一直維持 3 個 Pod 在跑」。Pod 壞掉時 Deployment 會自動生一個新的補上。">Deployment</span>、
+                <span class="term" data-def="Deployment 底下自動生出來、負責「數 Pod 數量夠不夠、不夠就補」的東西，一般不需要直接碰它。">ReplicaSet</span>、
+                <span class="term" data-def="固定不變的「門牌號碼」，負責把流量轉發到背後一群 Pod，即使 Pod 重建換了 IP 也不受影響。">Service</span>、
+                <span class="term" data-def="叢集裡用來分隔資源的「資料夾」，這個系統預設都放在叫 default 的 namespace 裡。">Namespace</span>、
+                <span class="term" data-def="打包好的「程式 + 執行環境」，例如 nginx:latest。冒號後面是版本標籤（tag），沒寫預設抓 latest。">Image</span>、
+                <span class="term" data-def="要開幾個一模一樣的 Pod。開多個是為了「一個壞掉還有其他撐著」和「分攤流量」。">Replicas / 副本數</span>、
+                <span class="term" data-def="服務對外接受連線用的門號，例如網頁伺服器常用 80、Redis 常用 6379。">Port</span>、
+                <span class="term" data-def="叢集裡的一台機器，Pod 實際上被排進某個 Node 執行。這個系統用 Docker Desktop 內建的 K8s 模擬節點。">Node</span>、
+                <span class="term" data-def="整套 Kubernetes 系統，由一台或多台機器（Node）組成。">Cluster</span>、
+                <span class="term" data-def="容器一直啟動失敗、一直重開、一直失敗，通常是程式本身有 bug 或設定錯了。">CrashLoopBackOff</span>、
+                <span class="term" data-def="抓不到指定的 image，通常是名字打錯、版本不存在，或私有倉庫沒有權限。">ImagePullBackOff</span>、
+                <span class="term" data-def="這個 Pod 用超過設定的記憶體上限，被系統強制關掉。">OOMKilled</span>、
+                <span class="term" data-def="Kubernetes 內部用來描述資源的設定檔格式。這個系統設計上你完全不用碰 YAML，講白話就好。">YAML</span>、
+                <span class="term" data-def="Kubernetes 官方的命令列工具，工程師平常會打指令操作叢集。這個系統讓你完全不需要學它。">kubectl</span>、
+                <span class="term" data-def="把每次部署的設定都記錄成 git 版本，方便查歷史、方便回滾。這個系統每次部署會自動幫你做。">GitOps</span>、
+                <span class="term" data-def="退回到上一個還正常的版本。在 Chat 打「rollback 應用程式名稱」就會幫你處理。">Rollback</span>
+              </p>
+            </div>
+          </details>
+
+        </div>
+      </div>
+      <div id="term-tip" hidden></div>
     </div>
 
     <div class="page" id="page-dataset">
@@ -1467,6 +1577,34 @@ function autoGrowChatInput(el){
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 180) + 'px';
 }
+
+// ── 使用說明書 / K8s 小百科 ──
+function openManual(){ document.getElementById('manual-overlay').hidden = false; }
+function closeManual(){
+  document.getElementById('manual-overlay').hidden = true;
+  const tip = document.getElementById('term-tip');
+  if(tip) tip.hidden = true;
+}
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape') closeManual();
+});
+// 專有名詞點一下展開小框框註解：用一個共用 tooltip，點哪個詞就移到那個詞下面顯示。
+document.getElementById('manual-body') && document.getElementById('manual-body').addEventListener('click', function(e){
+  const term = e.target.closest('.term');
+  const tip = document.getElementById('term-tip');
+  if(!term){ if(tip) tip.hidden = true; return; }
+  e.stopPropagation();
+  const def = term.getAttribute('data-def') || '';
+  if(!tip.hidden && tip.dataset.forTerm === def){ tip.hidden = true; return; }
+  tip.textContent = def;
+  tip.dataset.forTerm = def;
+  tip.hidden = false;
+  const r = term.getBoundingClientRect();
+  const w = Math.min(260, window.innerWidth - 24);
+  tip.style.width = w + 'px';
+  tip.style.left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12)) + 'px';
+  tip.style.top = (r.bottom + 6) + 'px';
+});
 
 // ── Page nav ──
 function showPage(name){
