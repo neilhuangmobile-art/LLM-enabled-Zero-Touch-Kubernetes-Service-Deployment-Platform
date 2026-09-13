@@ -1093,14 +1093,9 @@ html,body{height:100%;overflow:hidden}
         <svg viewBox="0 0 16 16" fill="none"><path d="M2 12L5 8l3 2 3-4 3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Metrics
       </button>
-      <button class="nav-item" data-page="dataset" onclick="showPage('dataset')">
-        <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="2" rx="1" fill="currentColor"/><rect x="1" y="7" width="14" height="2" rx="1" fill="currentColor" opacity=".6"/><rect x="1" y="11" width="9" height="2" rx="1" fill="currentColor" opacity=".3"/></svg>
-        Dataset
-      </button>
-      <button class="nav-item" data-page="kb" onclick="showPage('kb')">
-        <svg viewBox="0 0 16 16" fill="none"><path d="M3 3h10v3H3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M3 6v7a1 1 0 001 1h8a1 1 0 001-1V6" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M6.5 9.5h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        Knowledge Base
-      </button>
+      <!-- Dataset / Knowledge Base 是給開發者整理訓練資料 / RAG 索引用的內部工具，
+           一般使用者不需要看到，2026-09-13 依使用者要求從側邊欄移除（新手友善原則，見 AGENT_RULES.md）。
+           後端 /api/dataset/*、/api/rag/* 路由與 #page-dataset、#page-kb 都刻意保留，開發者仍可直接呼叫 API。 -->
     </nav>
     <div class="sidebar-footer">
       <div class="user-info">
@@ -1189,26 +1184,27 @@ html,body{height:100%;overflow:hidden}
           </div>
           <div class="enrich-body">
             <div class="enrich-reject-msg" id="enrich-reject-msg" style="display:none"></div>
+            <!-- 這是「系統聽懂了什麼」的白話摘要，不是給開發者看的資料集內部欄位
+                 （is_k8s/complexity/language/dataset ground truth JSON 這些 2026-09-13 已移除，
+                 新手友善原則見 AGENT_RULES.md）。 -->
             <div class="enrich-grid">
               <div class="enrich-field">
-                <div class="lbl">is_k8s</div>
-                <div class="val" id="enrich-isk8s">—</div>
+                <div class="lbl">App name</div>
+                <div class="val" id="enrich-appname">—</div>
               </div>
               <div class="enrich-field">
-                <div class="lbl">complexity</div>
-                <div class="val" id="enrich-complexity">—</div>
+                <div class="lbl">Image</div>
+                <div class="val" id="enrich-image">—</div>
               </div>
               <div class="enrich-field">
-                <div class="lbl">language</div>
-                <div class="val" id="enrich-language">—</div>
+                <div class="lbl">Pods</div>
+                <div class="val" id="enrich-pods">—</div>
               </div>
               <div class="enrich-field">
-                <div class="lbl">namespace</div>
-                <div class="val" id="enrich-namespace">—</div>
+                <div class="lbl">Port</div>
+                <div class="val" id="enrich-port">—</div>
               </div>
             </div>
-            <div class="enrich-output-title">output (dataset ground truth)</div>
-            <pre class="enrich-output" id="enrich-output">{}</pre>
           </div>
         </div>
 
@@ -1566,16 +1562,6 @@ function setInput(el){
 }
 
 // ── Deploy ──
-function _escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function _prettyJson(obj){
-  // 帶語法高亮的 JSON pretty printer
-  const json = JSON.stringify(obj, null, 2);
-  return _escapeHtml(json)
-    .replace(/(&quot;[^&]*?&quot;)(\s*:)/g, '<span class="k">$1</span>$2')
-    .replace(/:\s*(&quot;[^&]*?&quot;)/g, ': <span class="s">$1</span>')
-    .replace(/:\s*(-?\d+(?:\.\d+)?)/g, ': <span class="n">$1</span>')
-    .replace(/:\s*(true|false|null)\b/g, ': <span class="b">$1</span>');
-}
 function renderEnrichCard(p, info){
   // info = { ok: bool, headline: str, rejectMsg: str|null }
   const card = document.getElementById('enrich-card');
@@ -1597,19 +1583,12 @@ function renderEnrichCard(p, info){
     rejBox.style.display = 'none';
   }
 
-  // 4 個 pill 欄位
-  const isk8s = String(p.is_k8s);
-  document.getElementById('enrich-isk8s').innerHTML =
-    `<span class="pill ${isk8s}">${isk8s}</span>`;
-  document.getElementById('enrich-complexity').innerHTML =
-    `<span class="pill ${p.complexity}">${p.complexity}</span>`;
-  const langCls = (p.language === 'zh-tw') ? 'zhtw' : 'en';
-  document.getElementById('enrich-language').innerHTML =
-    `<span class="pill ${langCls}">${p.language}</span>`;
-  document.getElementById('enrich-namespace').textContent = p.namespace || 'default';
-
-  // 結構化 output JSON (dataset ground truth)
-  document.getElementById('enrich-output').innerHTML = _prettyJson(p.output || {});
+  // 白話摘要：系統聽懂的部署規格（不是資料集內部欄位，一般使用者看得懂就好）
+  const out = p.output || p;
+  document.getElementById('enrich-appname').textContent = out.app_name || p.app_name || '—';
+  document.getElementById('enrich-image').textContent = out.image || p.image || '—';
+  document.getElementById('enrich-pods').textContent = out.pods || p.pods || '—';
+  document.getElementById('enrich-port').textContent = out.port || p.port || '—';
 }
 
 let courtRequestId = 0;
@@ -3367,7 +3346,7 @@ def _looks_like_system_help(message: str) -> bool:
     low = (message or '').lower()
     product_terms = (
         'zerotouch', 'this system', 'this app', 'use this', 'how to use', 'how to deploy',
-        'healer', 'gitops', 'dataset', 'metrics', 'deploy console',
+        'healer', 'gitops', 'metrics', 'deploy console',
         '這套', '系統', '怎麼用', '如何使用', '教學', '功能', '使用方式',
         '怎麼部署', '如何部署', '怎麼部屬', '如何部屬', '怎麼佈署', '如何佈署'
     )
@@ -3401,17 +3380,6 @@ def _system_help_reply(message: str) -> str:
             "小技巧：先輸入 `show deployments` 找到正確 app name，再 rollback。"
         )
 
-    if 'dataset' in low or '資料集' in low or 'training' in low or '訓練' in low:
-        return (
-            "Dataset Manager 是用來檢查與補齊 Kubernetes 訓練資料。\n\n"
-            "使用方式：\n"
-            "1. 左側點 `Dataset`。\n"
-            "2. 看 Total Records、Output Filled、K8s / Non-K8s 比例。\n"
-            "3. `Quick Fill (rules only)` 會快速用規則補欄位。\n"
-            "4. `Full Enrich (LLaMA output)` 會用模型補答案，速度較慢。\n"
-            "5. `Dry Run` 可以先預覽，不直接寫入。"
-        )
-
     if 'metrics' in low or 'prometheus' in low or '監控' in low or '指標' in low:
         return (
             "Metrics 頁面用來看 Prometheus 與叢集基本指標。\n\n"
@@ -3442,8 +3410,7 @@ def _system_help_reply(message: str) -> str:
         "- `Deployments`：查看 app image、replicas、ready 數與刪除部署。\n"
         "- `Healer`：掃描 CrashLoopBackOff/OOMKilled/ImagePullBackOff 等異常 Pod，並刪除重建。\n"
         "- `GitOps Log`：看部署歷史與 rollback 線索。\n"
-        "- `Metrics`：看 Prometheus 與叢集基本指標。\n"
-        "- `Dataset`：檢查與補齊訓練資料。\n\n"
+        "- `Metrics`：看 Prometheus 與叢集基本指標。\n\n"
         "如果你要部署，直接輸入例如：`deploy 3 nginx:latest pods for web-frontend, port 80`。"
     )
 
