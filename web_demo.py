@@ -457,6 +457,27 @@ def k8s_get_services():
         return []
 
 
+def k8s_get_node_capacity():
+    """回傳叢集裡「單一節點」最大的可配置 CPU/記憶體（取 allocatable 最大的那個節點）。
+    給部署前檢查「這個 pod 的資源需求有沒有大到連一個節點都放不下」用——這種情況跟
+    「需要幾個節點」不一樣，是不管幾個節點都不會排程成功，Pod 會卡在 Pending 永遠不會動，
+    但 k8s_deploy() 建立 Deployment/Service 物件本身還是會回報成功，使用者看不出來。
+    回傳 None 代表沒連上 K8s 或查不到節點，呼叫端應該跳過這項檢查而不是誤判。"""
+    if not K8S_ENABLED:
+        return None
+    try:
+        core = k8s_client.CoreV1Api()
+        nodes = core.list_node().items
+        if not nodes:
+            return None
+        from agents.cost_agent import _parse_memory_bytes
+        best = max(nodes, key=lambda n: _parse_memory_bytes(n.status.allocatable.get("memory", "0")) or 0)
+        alloc = best.status.allocatable
+        return {"cpu": alloc.get("cpu", "0"), "memory": alloc.get("memory", "0Ki")}
+    except Exception:
+        return None
+
+
 _BAD_WAITING = {"CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull",
                 "CreateContainerConfigError", "CreateContainerError", "InvalidImageName"}
 _BAD_TERMINATED = {"OOMKilled", "Error", "ContainerCannotRun", "DeadlineExceeded"}
@@ -4103,13 +4124,45 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
         # 自己冒出這些欄位（例如問「我想要高可用的服務」），而且算出來的數字前後不一致
         # （total_cpu 跟 cpu×pods 對不上）。沒有明確依據時一律用 cost_agent 的固定公式算，
         # 不要相信模型自己報的數字。
+        real_capacity = k8s_get_node_capacity()  # 真的查叢集節點，不是 core.config 那個固定假設值
         if parsed.get("node_count") is not None and _mentions_node_capacity(user_input):
             review["node_estimate"] = {"node_count": parsed["node_count"], "source": "llm"}
         else:
             from agents.cost_agent import estimate_node_count
-            result = estimate_node_count(parsed.get("cpu"), parsed.get("memory"), parsed.get("pods", 1))
+            kwargs = {"node_capacity": real_capacity} if real_capacity else {}
+            result = estimate_node_count(parsed.get("cpu"), parsed.get("memory"), parsed.get("pods", 1), **kwargs)
             result["source"] = "calculated"
             review["node_estimate"] = result
+
+        # 「需要幾個節點」跟「單一個 pod 大到連一個節點都放不下」是兩件不同的事：前者只是
+        # 貴、後者是不管幾個節點都排不進去，Pod 會卡在 Pending 永遠不會變 Running，但
+        # k8s_deploy() 建立 Deployment 物件本身還是會回報「已部署」成功，使用者看不出來
+        # （這是實測抓到的：部署 64Gi/32 CPU 的 pod，API 回 ok=true，但 kubectl describe
+        #  顯示 FailedScheduling: Insufficient cpu, Insufficient memory）。這裡直接擋掉，
+        # 不是等它卡住之後才靠使用者自己問 pod_health 才發現。
+        if real_capacity:
+            from agents.cost_agent import _parse_cpu_millicores, _parse_memory_bytes
+            node_cpu_mc = _parse_cpu_millicores(real_capacity.get("cpu")) or 0
+            node_mem_b = _parse_memory_bytes(real_capacity.get("memory")) or 0
+            pod_cpu_mc = _parse_cpu_millicores(parsed.get("cpu")) or 0
+            pod_mem_b = _parse_memory_bytes(parsed.get("memory")) or 0
+            over_cpu = node_cpu_mc and pod_cpu_mc > node_cpu_mc
+            over_mem = node_mem_b and pod_mem_b > node_mem_b
+            if over_cpu or over_mem:
+                review["decision"] = "block"
+                review["reason"] = "單一 Pod 的資源需求超出叢集最大節點的容量，無論建立幾個副本都不可能排程成功"
+                review.setdefault("blockers", []).append(
+                    f"資源需求超出叢集容量：這個 Pod 要求 "
+                    f"{f'{pod_cpu_mc}m CPU' if over_cpu else ''}{'、' if over_cpu and over_mem else ''}"
+                    f"{f'{pod_mem_b // (1024**2)}Mi 記憶體' if over_mem else ''}，"
+                    f"但叢集裡最大的節點只有 {node_cpu_mc}m CPU / {node_mem_b // (1024**2)}Mi 記憶體可用。"
+                    f"這不是「需要更多節點」的問題——單一 Pod 一定要能塞進某一個節點才會被排程，"
+                    f"不管有幾個節點都一樣排不進去，部署下去 Pod 會卡在 Pending 永遠不會變 Running。"
+                    f"請降低這次部署要求的 memory/cpu。 / "
+                    f"Resource request exceeds this cluster's largest node — no number of nodes helps, "
+                    f"since a single Pod must fit on ONE node. It would stay stuck Pending forever. "
+                    f"Please lower the requested memory/cpu."
+                )
     except Exception as e:
         review["node_estimate"] = None
         review.setdefault("warnings", []).append(f"node_estimate failed: {e}")
