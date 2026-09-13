@@ -17,3 +17,12 @@ rag/chroma_db/
 # 本機備份與路徑產生的雜項目錄，不進版控
 llama3_k8s_lora_results.backup_*/
 D__/
+
+# 2026-09-13 清理：以下都是執行期會重新產生的產出物，不該進版控
+# （merge_and_train.py 執行時會自動 patch train_local.py 生成 train_local_merged.py；
+#  agents/orchestrator.py 的 save_report=True、0_touch_generate_pods.py 都會生 reports/agent_report_*.json；
+#  model_server.log 是常駐服務的 log 檔）
+train_local_merged.py
+reports/agent_report_*.json
+model_server.log
+*.log

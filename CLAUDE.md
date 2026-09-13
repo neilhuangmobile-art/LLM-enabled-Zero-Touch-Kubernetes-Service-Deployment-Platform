@@ -35,7 +35,7 @@ LLM-enabled Zero-Touch Kubernetes Service Deployment Platform：使用者以自�
 | `healer/` | Pod 監控、LLM 根因診斷、自動補救 |
 | `observability/` | Prometheus 指標、Grafana Dashboard、告警規則 |
 | `training/` | LoRA 微調資料生成、清洗、訓練、評估 |
-| `web_demo.py` / `web_demo_new.py` | Web Dashboard（Flask） |
+| `web_demo.py` | Web Dashboard（Flask），現行唯一入口 |
 | `0_touch_generate_pods.py` | 零接觸部署 CLI 入口 |
 
 ## 工作慣例
@@ -46,7 +46,7 @@ LLM-enabled Zero-Touch Kubernetes Service Deployment Platform：使用者以自�
 - 修改 `llama_client.py` 或 `core/model_server.py` 前，先確認 Model Server 是否常駐執行（`curl http://127.0.0.1:8765/health` → `deploy_loaded` / `monitor_loaded`），避免誤判為推論邏輯問題。
 - 模型設定在 `core/config.py`：`BASE_MODEL`（部署 3B）、`MONITOR_MODEL`（監控 1.5B）、`MONITOR_DEVICE`（cpu）、`DEPLOY_ADAPTER_PATH`（空=不掛 LoRA）。prompt 一律走 `tokenizer.apply_chat_template`（Qwen ChatML），不要改回 `### User` 純文字格式。
 - RAG 索引變更後重跑 `python rag/build_index.py --rebuild --deploy`；`rag/index.json`、`rag/index_meta.json`、`rag/deploy_index.json` 都是可重新產生的產出物。預設 TF-IDF，裝了 chromadb+sentence-transformers 才會用語意向量（embedding 預設跑 CPU，留顯存給 3B）。
-- `web_demo_backup*.py` 為歷史備份，非現行程式，修改功能請改動 `web_demo.py` / `web_demo_new.py`。
+- `web_demo_backup*.py`、`web_demo_new.py`（純占位檔）2026-09-13 已刪除（非現行程式、沒有任何程式碼引用它們），修改功能請改動 `web_demo.py`。
 
 ## 環境與啟動
 
