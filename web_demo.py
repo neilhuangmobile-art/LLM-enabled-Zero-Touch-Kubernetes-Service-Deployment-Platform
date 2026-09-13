@@ -3614,8 +3614,12 @@ def login():
     stored_user = USERS.get(username)
     stored_hash = stored_user.get("password_hash", "") if isinstance(stored_user, dict) else stored_user
     if verify_password(password, stored_hash):
-        if not isinstance(stored_user, dict):
-            USERS[username] = {"password_hash": hash_password(password), "created_at": datetime.now().isoformat()}
+        # 舊帳號可能是「純字串密碼」或「dict 但裡面存的是弱雜湊（沒加鹽的 sha256）」，
+        # 登入成功那一刻密碼是明文可用的，順便升級成 pbkdf2，不用等使用者自己改密碼。
+        if not isinstance(stored_user, dict) or not stored_hash.startswith("pbkdf2_sha256$"):
+            created = stored_user.get("created_at") if isinstance(stored_user, dict) else None
+            USERS[username] = {"password_hash": hash_password(password),
+                               "created_at": created or datetime.now().isoformat()}
             with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json"), "w", encoding="utf-8") as _uf:
                 json.dump(USERS, _uf)
         session["username"] = username
@@ -3861,6 +3865,8 @@ def _fallback_chat_reply(message: str, history: list = None) -> tuple:
 
 @app.route("/api/status")
 def api_status():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
     ready, loading = _model_status()
     docker_running, docker_message = _check_docker()
     k8s_live = _check_k8s_live()
@@ -4401,6 +4407,8 @@ def api_rollback():
 
 @app.route("/api/dataset/stats")
 def api_dataset_stats():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
     import glob
     dataset_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dataset")
     files_info = {}
@@ -4451,6 +4459,8 @@ def api_dataset_stats():
 
 @app.route("/api/dataset/run", methods=["POST"])
 def api_dataset_run():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
     import subprocess
     data = request.get_json() or {}
     flags = data.get("flags", "--skip-output")
