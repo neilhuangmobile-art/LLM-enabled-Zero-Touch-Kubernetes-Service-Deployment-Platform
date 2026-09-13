@@ -193,6 +193,36 @@ try:
 except Exception as e:
     print(f"[K8s] 未連線（模擬模式）：{e}")
 
+def _check_docker():
+    """檢查 Docker daemon 是否真的在跑（不是只看 kubeconfig 存不存在）。
+    給新手看的訊息，所以區分「Docker 沒開」跟「Docker 開了但 K8s 連不上」兩種情況。"""
+    import subprocess
+    try:
+        r = subprocess.run(["docker", "info", "--format", "{{.ServerVersion}}"],
+                           capture_output=True, text=True, timeout=4)
+        if r.returncode == 0 and r.stdout.strip():
+            return True, ""
+        return False, "Docker 指令跑得動，但 daemon 沒回應，請確認 Docker Desktop 已完全啟動。"
+    except FileNotFoundError:
+        return False, "找不到 docker 指令，請先安裝 Docker Desktop。"
+    except subprocess.TimeoutExpired:
+        return False, "Docker 沒有回應（逾時），可能還在啟動中，請稍候再重新整理。"
+    except Exception as e:
+        return False, f"檢查 Docker 狀態時發生錯誤：{e}"
+
+
+def _check_k8s_live():
+    """即時探測 K8s API 是否連得上（K8S_ENABLED 只在啟動時檢查一次，這裡每次 /api/status 都重測，
+    避免 Docker/K8s 中途掛掉卻一直顯示 Connected）。"""
+    if not K8S_ENABLED:
+        return False
+    try:
+        k8s_client.CoreV1Api().list_namespace(_request_timeout=(2, 3), limit=1)
+        return True
+    except Exception:
+        return False
+
+
 NS  = "default"
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
@@ -1085,6 +1115,15 @@ html,body{height:100%;overflow:hidden}
 
   <!-- Main Content -->
   <div class="main">
+    <!-- Docker/K8s 沒開時的新手警告：整條顯眼橫幅，不是小圓點而已 -->
+    <div id="docker-warning" style="display:none;background:#FEF3C7;border:1px solid #F59E0B;border-radius:10px;padding:12px 16px;margin-bottom:12px;font-size:13px;color:#92400E;align-items:flex-start;gap:10px">
+      <span style="font-size:18px;line-height:1">⚠️</span>
+      <div>
+        <div style="font-weight:700" id="docker-warning-title">Docker 沒有啟動 / Docker is not running</div>
+        <div style="margin-top:2px" id="docker-warning-body">請先開啟 Docker Desktop，等它完全啟動後重新整理這個頁面。<br>Please start Docker Desktop, wait until it's fully running, then refresh this page.</div>
+      </div>
+    </div>
+
     <!-- Status Bar -->
     <div class="status-bar">
       <div class="status-pill">
@@ -1092,8 +1131,8 @@ html,body{height:100%;overflow:hidden}
         <span id="model-status">Model loading...</span>
       </div>
       <div class="status-pill">
-        <div class="dot {% if k8s %}green{% else %}red{% endif %}"></div>
-        <span>K8s {% if k8s %}Connected{% else %}Simulation{% endif %}</span>
+        <div class="dot {% if k8s %}green{% else %}red{% endif %}" id="k8s-dot"></div>
+        <span id="k8s-status">K8s {% if k8s %}Connected{% else %}Simulation{% endif %}</span>
       </div>
       <div class="status-pill" style="margin-left:auto;font-size:12px;color:var(--text3)" id="clock"></div>
     </div>
@@ -1468,6 +1507,32 @@ async function pollStatus(){
       dot.className = 'dot yellow';
       if(ms) ms.textContent = 'Model Loading...';
       if(txt) txt.textContent = 'Loading';
+    }
+
+    const k8sDot = document.getElementById('k8s-dot');
+    const k8sTxt = document.getElementById('k8s-status');
+    if(k8sDot) k8sDot.className = 'dot ' + (d.k8s ? 'green' : 'red');
+    if(k8sTxt) k8sTxt.textContent = 'K8s ' + (d.k8s ? 'Connected' : 'Simulation');
+
+    // 新手警告：Docker 沒開 / 開了但 K8s 連不上，兩種訊息分開講清楚原因跟解法
+    const warn = document.getElementById('docker-warning');
+    const wTitle = document.getElementById('docker-warning-title');
+    const wBody = document.getElementById('docker-warning-body');
+    if(warn){
+      if(!d.docker_running){
+        wTitle.textContent = 'Docker 沒有啟動 / Docker is not running';
+        wBody.innerHTML = (d.docker_message ? escHtml(d.docker_message)+'<br>' : '') +
+          '請先開啟 Docker Desktop，等它完全啟動（圖示變綠/穩定）後重新整理這個頁面。<br>' +
+          "Please start Docker Desktop, wait until it's fully running, then refresh this page.";
+        warn.style.display = 'flex';
+      } else if(!d.k8s){
+        wTitle.textContent = 'Docker 已啟動，但 Kubernetes 連不上 / Docker is running, but Kubernetes is unreachable';
+        wBody.innerHTML = '請確認 Docker Desktop 設定裡的 Kubernetes 功能已開啟（Settings → Kubernetes → Enable Kubernetes），啟動可能需要 1–2 分鐘。<br>' +
+          'Please check that Kubernetes is enabled in Docker Desktop settings (Settings → Kubernetes → Enable Kubernetes) — it can take 1–2 minutes to start.';
+        warn.style.display = 'flex';
+      } else {
+        warn.style.display = 'none';
+      }
     }
   } catch(e){}
 }
@@ -3414,7 +3479,14 @@ def _fallback_chat_reply(message: str, history: list = None) -> tuple:
 @app.route("/api/status")
 def api_status():
     ready, loading = _model_status()
-    return jsonify({"model_ready": ready, "model_loading": loading, "k8s": K8S_ENABLED, "claude_api": claude_available()})
+    docker_running, docker_message = _check_docker()
+    k8s_live = _check_k8s_live()
+    return jsonify({
+        "model_ready": ready, "model_loading": loading, "claude_api": claude_available(),
+        "k8s": k8s_live,                       # 即時探測，不是啟動時的舊值
+        "docker_running": docker_running,
+        "docker_message": docker_message,
+    })
 
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
