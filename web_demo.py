@@ -1068,10 +1068,10 @@ html,body{height:100%;overflow:hidden}
         <svg viewBox="0 0 16 16" fill="none"><path d="M2.5 3.5a2 2 0 012-2h7a2 2 0 012 2v5a2 2 0 01-2 2H8l-3.5 3v-3a2 2 0 01-2-2v-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
         Chat
       </button>
-      <button class="nav-item" data-page="deploy" onclick="showPage('deploy')">
-        <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" fill="currentColor"/><rect x="9" y="2" width="5" height="5" rx="1" fill="currentColor" opacity=".5"/><rect x="2" y="9" width="5" height="5" rx="1" fill="currentColor" opacity=".5"/><rect x="9" y="9" width="5" height="5" rx="1" fill="currentColor"/></svg>
-        Deploy Console
-      </button>
+      <!-- Deploy Console 側邊欄入口 2026-09-13 移除：Chat 的多步部署流程（規格確認→資源+三方
+           審查→執行→完成指路）已經是它的超集合，兩條路走同一套後端會分裂維護（這次才修好
+           Deploy Console 法庭卡巢狀讀取少一層的舊 bug 就是徵兆）。#page-deploy 頁面與
+           /api/deploy(/parse) 路由完全沒刪，網址列仍可進（見 AGENT_RULES.md 新手友善原則）。 -->
       <button class="nav-item" data-page="pods" onclick="showPage('pods')">
         <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
         Pods
@@ -3346,7 +3346,7 @@ def _looks_like_system_help(message: str) -> bool:
     low = (message or '').lower()
     product_terms = (
         'zerotouch', 'this system', 'this app', 'use this', 'how to use', 'how to deploy',
-        'healer', 'gitops', 'metrics', 'deploy console',
+        'healer', 'gitops', 'metrics',
         '這套', '系統', '怎麼用', '如何使用', '教學', '功能', '使用方式',
         '怎麼部署', '如何部署', '怎麼部屬', '如何部屬', '怎麼佈署', '如何佈署'
     )
@@ -3393,7 +3393,7 @@ def _system_help_reply(message: str) -> str:
 
     if 'deploy' in low or '部署' in low or 'pod' in low or 'pods' in low:
         return (
-            "你可以用 Chat 或 Deploy Console 部署 Pod。建議格式：\n\n"
+            "直接在 Chat 打字描述你要部署的東西就可以了。建議格式：\n\n"
             "`deploy <數量> <image> pods for <app-name>, port <port>`\n\n"
             "範例：\n"
             "- `deploy 3 nginx:latest pods for web-frontend, port 80`\n"
@@ -3404,8 +3404,7 @@ def _system_help_reply(message: str) -> str:
 
     return (
         "這套 ZeroTouch K8s 主要有幾個區塊：\n\n"
-        "- `Chat`：問問題、列 Pods、部署服務、scale/update/rollback。\n"
-        "- `Deploy Console`：用自然語言建立 Deployment/Service。\n"
+        "- `Chat`：問問題、部署服務、查 Pod 狀態/健康、scale/update/rollback，一個地方全部搞定。\n"
         "- `Pods`：查看 Pod 狀態、IP、node、restart。\n"
         "- `Deployments`：查看 app image、replicas、ready 數與刪除部署。\n"
         "- `Healer`：掃描 CrashLoopBackOff/OOMKilled/ImagePullBackOff 等異常 Pod，並刪除重建。\n"
