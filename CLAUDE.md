@@ -51,10 +51,13 @@ pytest                                 # 跑全部（目前 60 個），跑在�
 pytest -m "not integration"           # CI 用這個；integration 標記的測試需要真實 K8s/model server
 ```
 
-需要真實環境（K8s 連線、model server 常駐）才能跑的測試要標 `@pytest.mark.integration`，
-目前還沒有這類測試（web_demo.py 的 K8s 呼叫路徑目前靠手動 curl/建測試 pod 驗證，尚未寫成自動化測試，
-是已知的覆蓋缺口）。`.github/workflows/test.yml` 在 push/PR 時自動跑 `pytest -m "not integration"`，
-故意不裝 `torch`/`transformers`/`bitsandbytes`（CI runner 沒 GPU、裝了也用不到，只會拖慢又可能裝不起來）。
+需要真實環境（K8s 連線、model server 常駐、或單純 import 就會拉進 torch/transformers 這些重依賴）
+才能跑的測試標 `@pytest.mark.integration`——目前只有 `tests/test_model_server_injection.py`
+（測 `core/model_server.py` 的 `_looks_like_prompt_injection()`，import 這個檔案就會連帶
+import torch，CI 沒裝這些套件跑不起來）。`web_demo.py` 的 K8s 呼叫路徑目前仍靠手動
+curl/建測試 pod 驗證，還沒寫成自動化測試，是已知的覆蓋缺口。`.github/workflows/test.yml`
+在 push/PR 時自動跑 `pytest -m "not integration"`，故意不裝 `torch`/`transformers`/
+`bitsandbytes`（CI runner 沒 GPU、裝了也用不到，只會拖慢又可能裝不起來）。
 
 ## 工作慣例
 
