@@ -199,9 +199,81 @@ kubectl」），結果這條規則**稀釋了前兩條的效果**——模型又
 
 ---
 
+## 6. 自癒／監控系統：宣稱的能力跟實際行為有落差
+
+### 6.1 沒有背景常駐監控，Web UI 的「Fix」其實只是刪 Pod，沒有真正診斷根因
+
+**風險**：`CLAUDE.md` 資料流圖畫的鏈路是 `healer/pod_watcher + diagnose（規則層 →
+Qwen2.5-1.5B）+ remediate`，但實測發現：
+1. 機器上只有 `model_server.py`、`web_demo.py` 兩個 process 在跑，`pod_watcher.py` 的
+   `watch_forever()`（持續每 30 秒掃描）從未被啟動，`/api/healer/scan` 呼叫 `scan_once()`
+   也沒帶 `auto_heal=True`，等於「只偵測、不會自動處理」。
+2. Web UI 的「Fix」/「Auto Fix All」按鈕打的 `/api/healer/fix`、`/api/healer/auto_fix`，
+   是完全獨立寫的一套邏輯：只要 Pod 狀態在 `{CrashLoopBackOff, OOMKilled, ImagePullBackOff,
+   ErrImagePull, Error}` 裡就直接 `delete_namespaced_pod`，**完全沒有呼叫**
+   `healer/diagnose.py`、`healer/remediate.py`。
+
+**為什麼重要**：「零接觸自癒」是本專案核心宣稱之一，但實際落地的是「使用者手動按鈕 →
+盲目刪 Pod」，不是「系統自動偵測 → 根因分析 → 對應動作」。如果根因不是暫時性的（例如
+image tag 打錯、記憶體給太少這種設定性錯誤），刪除 Pod 後 ReplicaSet 重建出來的新 Pod
+會用同一份錯誤設定，**再壞一次**，使用者會看到「按了 Fix 但問題沒解決、還一直跳出來」，
+這是評審最容易當場問「那你這個自癒到底做了什麼」的落差點。
+
+**解決方式**：
+- `web_demo.py` 新增 `_real_heal_pod(pod_name, namespace)`：組裝跟 `pod_watcher._trigger_heal()`
+  相同的 context（pod 狀態＋日誌＋事件）→ `healer.diagnose.diagnose_issue()`（規則層優先，
+  規則沒中才用 Qwen2.5-1.5B）→ `healer.remediate.remediate()`（依 action 分派：OOMKilled 
+  調高記憶體 limit、ImagePullBackOff 嘗試 `kubectl rollout undo`、CrashLoopBackOff 印出崩潰前
+  日誌再重建、探針失敗調大 `initialDelaySeconds` 等，只有真的無法自動處理的才回退到
+  「列出診斷結果供人工排查」）。`/api/healer/fix`、`/api/healer/auto_fix` 改呼叫這個函式，
+  回應附上 `root_cause`／實際執行的 `action`，不再是單純的「已刪除」。
+- 新增背景常駐執行緒 `_healer_background_loop()`，`web_demo.py` 啟動時（K8s 已連線才啟動）
+  自動開始，每 30 秒掃描一次，偵測到新的異常 Pod 就自動跑上述診斷＋補救鏈路，不需要使用者
+  手動觸發或另開 terminal 跑 `python healer/pod_watcher.py --watch`。同一個 (namespace, pod,
+  reason) 問題不會重複觸發（用 `seen` 集合去重，問題消失後才清除，避免無限重試同一個
+  已知會失敗的補救）。
+- Healer 頁面新增即時橫幅（綠色「自動監控中」／黃色「未啟動」，符合「不能靜默、要講現況」
+  的新手友善原則），以及「自動修復紀錄」列表，讓使用者看得到系統背景到底做了什麼、對哪個
+  Pod、判斷根因是什麼、採取了什麼動作。
+
+**驗證**：故意建立一個 image tag 打錯的 Deployment（`nginx:this-tag-does-not-exist-xyz`），
+確認：(1) Pod 進入 `ImagePullBackOff`；(2) 背景迴圈在下一次 30 秒 tick 內偵測到，規則層正確
+判定根因為「映像拉取失敗」、action 為 `fix_image`，嘗試 `kubectl rollout undo`（因為這個
+Deployment 從建立起就沒有更早的正常 revision，回滾本身會回報失敗，但這正是誠實反映
+「這個問題目前無法自動修復、需要人工介入」，不是靜默假裝成功）；(3) `/api/healer/status`
+可以看到這筆記錄，`root_cause`／`action`／`ok` 欄位都正確填入。
+
+### 6.2 `scale` 只檢查單一 Deployment 的副本數上限，沒檢查會不會把整個叢集資源撐爆
+
+**風險**：`/api/scale` 原本只驗證 `1 <= replicas <= 100`，沒有檢查「把這個 Deployment
+擴大到 N 個副本之後，加上叢集裡其他所有 Deployment 的資源需求，總量會不會超出節點容量」。
+
+**為什麼重要**：跟 3.2 節「單一 Pod 過大」是不同層次的風險——這裡是「每個 Pod 本身都不大，
+但疊加起來的總量超過節點能放的量」。使用者只是把某個服務從 3 個擴到 30 個，操作本身不會
+報錯，但多出來排不進去的 Pod 會卡在 `Pending`，跟 3.2 節一樣是「看起來成功、實際上沒用」
+的靜默失敗，而且 scale 是使用者最容易「手滑打錯一個數字」的操作。
+
+**解決方式**：新增 `_check_scale_risk(name, new_replicas)`：查詢叢集最大節點的 allocatable
+容量，加總「套用這次變更後」所有 Deployment 的資源請求（cpu request × replicas 加總），
+超出節點容量就直接擋下這次 scale（回 409），訊息裡列出「這樣做需要多少 vs. 節點只有多少」
+的具體數字，並說明是「多出來的 Pod 會卡在 Pending、不會顯示錯誤」，而不是等使用者自己發現。
+查不到節點容量或部署本身沒設資源請求時直接放行（不誤判——這是操作前的提醒機制，不是唯一
+的安全網，寧可少擋不要錯擋）。
+
+**驗證**：程式碼審查確認邏輯（沿用 3.2 節已驗證過的 `_parse_cpu_millicores`／
+`_parse_memory_bytes`／`k8s_get_node_capacity` 這套已測過的工具函式，只是套用場景從
+「單一 Pod」換成「整叢集加總」）；尚待用真實會超出節點容量的 scale 請求做端到端測試
+（目前叢集內現有 Deployment 資源需求都不大，難以自然觸發，需要之後刻意建構測試情境）。
+
+---
+
 ## 尚待排查（可作為報告中「未來工作」的項目）
 
 - K8s ServiceAccount 實際權限範圍（目前用 Docker Desktop 的 kubeconfig，很可能是 cluster-admin
   等級，沒有做 RBAC 範圍限制，配合 1.3 節「任何註冊使用者都有完整權限」一起看是比較大的風險）
 - `agents/guardian` 其他規則的覆蓋度（目前只抽查過 `security_agent.py` 的幾條規則）
 - prompt injection 現況重新驗證（`CLAUDE.md` 歷史記錄過部分已知殘留漏洞，換模型後沒有重新測試）
+- `healer/remediate.py` 的 `fix_image`（`kubectl rollout undo`）在「這個 Deployment 從建立起
+  就沒有正常過的 revision」時必然失敗，這種情況下比較合理的動作其實是「提示使用者這個
+  image tag 本身打錯，需要人工改正確的 tag」而不是嘗試回滾；目前 6.1 節的修復讓這種情況
+  誠實回報失敗，但還沒有針對「從未成功過」這個特例給更精準的建議文字，可以之後補強。

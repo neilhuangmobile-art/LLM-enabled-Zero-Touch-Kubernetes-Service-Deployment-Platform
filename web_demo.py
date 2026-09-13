@@ -478,6 +478,52 @@ def k8s_get_node_capacity():
         return None
 
 
+def _check_scale_risk(name: str, new_replicas: int):
+    """在真的調整 replicas 前先檢查：整個叢集（所有 Deployment 加總）在套用這個新
+    replicas 之後，資源需求會不會超出最大節點的容量。跟部署時的單一 Pod 檢查是
+    不同層次的風險——這裡是「單個 Pod 都放得下，但疊加起來的總量放不下」，超出的
+    那些副本會卡在 Pending 永遠排不進去，操作本身不會報錯，使用者不會馬上發現。
+    回傳 (blocked: bool, message: str|None)；查不到容量或沒有設資源限制時直接放行
+    （不誤判），因為這只是「操作前的風險提醒」，不是唯一的安全網。"""
+    try:
+        real_capacity = k8s_get_node_capacity()
+        if not real_capacity or not K8S_ENABLED:
+            return False, None
+        from agents.cost_agent import _parse_cpu_millicores, _parse_memory_bytes
+        node_cpu_mc = _parse_cpu_millicores(real_capacity.get("cpu")) or 0
+        node_mem_b = _parse_memory_bytes(real_capacity.get("memory")) or 0
+        if not node_cpu_mc and not node_mem_b:
+            return False, None
+        apps_api = k8s_client.AppsV1Api()
+        deployments = apps_api.list_namespaced_deployment(NS).items
+        total_cpu_mc = 0
+        total_mem_b = 0
+        for d in deployments:
+            containers = d.spec.template.spec.containers if d.spec.template.spec else []
+            if not containers or not containers[0].resources or not containers[0].resources.requests:
+                continue
+            reps = new_replicas if d.metadata.name == name else (d.spec.replicas or 1)
+            req = containers[0].resources.requests
+            total_cpu_mc += (_parse_cpu_millicores(req.get("cpu")) or 0) * reps
+            total_mem_b += (_parse_memory_bytes(req.get("memory")) or 0) * reps
+        over_cpu = node_cpu_mc and total_cpu_mc > node_cpu_mc
+        over_mem = node_mem_b and total_mem_b > node_mem_b
+        if over_cpu or over_mem:
+            return True, (
+                f"這個操作會讓整個叢集的資源需求超出節點容量：套用後全部 Deployment 合計約需要 "
+                f"{total_cpu_mc}m CPU / {total_mem_b // (1024**2)}Mi 記憶體，"
+                f"但叢集最大節點只有 {node_cpu_mc}m CPU / {node_mem_b // (1024**2)}Mi 可用。"
+                f"多出來排不進去的 Pod 會卡在 Pending 狀態，不會顯示錯誤，容易被忽略。"
+                f"已阻止這次操作，請降低副本數或先移除/縮小其他部署。 / "
+                f"This would push total cluster resource demand past the largest node's capacity — "
+                f"the extra pods would get stuck Pending silently. Blocked; please lower the replica "
+                f"count or scale down other deployments first."
+            )
+        return False, None
+    except Exception:
+        return False, None
+
+
 _BAD_WAITING = {"CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull",
                 "CreateContainerConfigError", "CreateContainerError", "InvalidImageName"}
 _BAD_TERMINATED = {"OOMKilled", "Error", "ContainerCannotRun", "DeadlineExceeded"}
@@ -1562,6 +1608,7 @@ html,body{height:100%;overflow:hidden}
     <div class="page" id="page-healer">
       <div class="page-title">Healer</div>
       <div class="page-sub">Pod auto self-healing</div>
+      <div id="healer-bg-banner" style="margin-bottom:14px;padding:10px 14px;border-radius:10px;font-size:13px"></div>
       <div class="grid-3" style="margin-bottom:16px">
         <div class="card"><div class="card-title">Issues Found</div><div class="stat-num" id="healer-count">--</div><div class="stat-label">Abnormal pods</div></div>
         <div class="card"><div class="card-title">Last Scan</div><div class="stat-num" style="font-size:14px" id="healer-time">--</div><div class="stat-label">Scan time</div></div>
@@ -1573,6 +1620,11 @@ html,body{height:100%;overflow:hidden}
           <button class="btn-primary" onclick="healerAutoFix()" style="background:#DC2626">Auto Fix All</button>
         </div>
         <div id="healer-list"><div style="color:var(--text3);font-size:13px">Loading...</div></div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-title">自動修復紀錄 / Auto-heal history</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:8px">系統背景每 30 秒自動掃描一次，偵測到異常 Pod 會自動診斷根因並嘗試修復（非單純刪除）。/ The system scans every 30s in the background; on detecting an unhealthy pod it automatically diagnoses the root cause and attempts a matching fix (not just a blind delete).</div>
+        <div id="healer-bg-list"><div style="color:var(--text3);font-size:13px">--</div></div>
       </div>
     </div>
 
@@ -1914,7 +1966,7 @@ function showPage(name){
   if(name === 'deployments') loadDeployments();
   if(name === 'dataset') loadDatasetStats();
   if(name === 'gitops') loadGitops();
-  if(name === 'healer') loadHealer();
+  if(name === 'healer') { loadHealer(); loadHealerBgStatus(); }
   if(name === 'metrics') loadMetrics();
   if(name === 'kb') loadKB();
 }
@@ -2467,16 +2519,49 @@ async function loadHealer(){
 async function fixPod(pod){
   const r=await fetch('/api/healer/fix',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pod_name:pod})});
   const d=await r.json();
-  alert(d.message||d.error||'Done');
+  let msg=d.message||d.error||'Done';
+  if(d.root_cause) msg=`根因 / Root cause：${d.root_cause}\n修復動作 / Action：${d.action||'-'}\n\n${msg}`;
+  alert(msg);
   loadHealer();
+  loadHealerBgStatus();
 }
 
 async function healerAutoFix(){
   if(!confirm('Auto fix all issues?'))return;
   const r=await fetch('/api/healer/auto_fix',{method:'POST'});
   const d=await r.json();
-  alert('Fixed: '+d.fixed+', Failed: '+d.failed);
+  let msg='Fixed: '+d.fixed+', Failed: '+d.failed;
+  if(Array.isArray(d.details) && d.details.length){
+    msg+='\n\n'+d.details.map(x=>`- ${x.pod}: ${x.root_cause||x.error||'-'} → ${x.action||'-'}`).join('\n');
+  }
+  alert(msg);
   loadHealer();
+  loadHealerBgStatus();
+}
+
+async function loadHealerBgStatus(){
+  const banner=document.getElementById('healer-bg-banner');
+  const list=document.getElementById('healer-bg-list');
+  if(!banner||!list) return;
+  try{
+    const r=await fetch('/api/healer/status'); const d=await r.json();
+    if(d.running){
+      banner.style.background='#ECFDF5'; banner.style.border='1px solid #6EE7B7'; banner.style.color='#065F46';
+      banner.textContent=`🟢 自動監控中，每 30 秒自動扫描一次${d.last_scan?'，上次扫描：'+new Date(d.last_scan).toLocaleTimeString():''} / Auto-monitoring active, scans every 30s`;
+    } else {
+      banner.style.background='#FFFBEB'; banner.style.border='1px solid #FCD34D'; banner.style.color='#92400E';
+      banner.textContent='⚠️ 未啟動自動監控（K8s 未連線），只能手動掃描 / Auto-monitoring is not running (K8s not connected) — manual scan only';
+    }
+    const acts=d.recent_actions||[];
+    list.innerHTML = acts.length ? acts.map(a=>`
+      <div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;font-size:12px">
+          <span style="font-weight:600">${escHtml(a.pod||'')}</span>
+          <span style="color:var(--text3)">${a.time?new Date(a.time).toLocaleTimeString():''}</span>
+        </div>
+        <div style="font-size:12px;color:#6B7280;margin-top:2px">${escHtml(a.reason||'')} → ${escHtml(a.root_cause||a.error||'-')} → ${escHtml(a.action||'-')} ${a.ok===false?'❌':'✅'}</div>
+      </div>`).join('') : '<div style="color:var(--text3);font-size:13px">尚未發生自動修復事件 / No auto-heal events yet</div>';
+  }catch(e){}
 }
 
 async function loadMetrics(){
@@ -4384,6 +4469,9 @@ def api_scale():
         return jsonify({"success": False, "error": "Name required"}), 400
     if not 1 <= replicas <= 100:
         return jsonify({"success": False, "error": "replicas must be between 1 and 100"}), 400
+    blocked, risk_msg = _check_scale_risk(name, replicas)
+    if blocked:
+        return jsonify({"success": False, "error": risk_msg, "blocked_reason": "resource_exceeded"}), 409
     try:
         api = k8s_client.AppsV1Api()
         body = {"spec": {"replicas": replicas}}
@@ -4616,6 +4704,91 @@ def api_healer_scan():
             return jsonify({"issues": [], "error": str(e2)})
 
 
+def _real_heal_pod(pod_name: str, namespace: str = "default") -> dict:
+    """對單一 pod 執行真正的診斷＋補救（規則層/LLM 根因分析 → healer.remediate 對應動作），
+    不是單純刪除 pod。刪除只是 remediate 眾多動作之一（CrashLoopBackOff 才會用到），
+    OOMKilled 會改記憶體 limit、ImagePullBackOff 會嘗試 rollout undo，各自對應。"""
+    from kubernetes import client as k8s_client, config as k8s_config
+    k8s_config.load_kube_config()
+    v1 = k8s_client.CoreV1Api()
+    pod = v1.read_namespaced_pod(name=pod_name, namespace=namespace)
+    from healer.pod_watcher import _check_pod, _get_pod_logs, _get_pod_events
+    issue = _check_pod(pod)
+    if not issue:
+        return {"ok": True, "action": "none", "message": f"Pod {pod_name} 目前狀態正常，無需修復 / already healthy", "root_cause": None}
+    logs = _get_pod_logs(issue["pod_name"], issue["namespace"], issue["container"])
+    events = _get_pod_events(issue["pod_name"], issue["namespace"])
+    context = {**issue, "logs": logs, "events": events}
+    from healer.diagnose import diagnose_issue
+    diagnosis = diagnose_issue(context)
+    from healer.remediate import remediate
+    result = remediate(issue, diagnosis)
+    result["root_cause"] = diagnosis.get("root_cause")
+    result["severity"] = diagnosis.get("severity")
+    return result
+
+
+# 背景自動監控狀態（記憶體內，重啟 web_demo.py 會清空；不用資料庫，量小且非關鍵資料）
+_healer_bg_state = {"running": False, "last_scan": None, "recent_actions": []}
+_healer_bg_lock = threading.Lock()
+_HEALER_BG_MAX_HISTORY = 50
+
+
+def _healer_background_loop(interval: int = 30):
+    """比照 healer/pod_watcher.py 的 watch_forever()，但常駐在 web_demo.py process 裡，
+    讓部署完成後不需要使用者手動開另一個 terminal 跑 --watch 就會自動掃描+修復。
+    每個 pod 問題用 (namespace, pod_name, reason) 當 key，避免同一個問題重複觸發修復
+    造成無限刪除/修改迴圈；問題消失後 key 會被清掉，之後再發生會重新處理。"""
+    seen = set()
+    stop = threading.Event()
+    while not stop.wait(interval):
+        if not K8S_ENABLED:
+            continue
+        try:
+            from healer.pod_watcher import scan_once
+            issues = scan_once(namespace=NS) or []
+            now_keys = set()
+            for issue in issues:
+                key = f"{issue['namespace']}/{issue['pod_name']}/{issue['reason']}"
+                now_keys.add(key)
+                if key in seen:
+                    continue
+                seen.add(key)
+                try:
+                    result = _real_heal_pod(issue["pod_name"], issue["namespace"])
+                    entry = {
+                        "time": datetime.utcnow().isoformat(), "pod": issue["pod_name"],
+                        "namespace": issue["namespace"], "reason": issue["reason"],
+                        "root_cause": result.get("root_cause"), "action": result.get("action"),
+                        "ok": result.get("ok"), "message": result.get("message"),
+                    }
+                except Exception as e:
+                    entry = {
+                        "time": datetime.utcnow().isoformat(), "pod": issue["pod_name"],
+                        "namespace": issue["namespace"], "reason": issue["reason"],
+                        "ok": False, "error": str(e),
+                    }
+                with _healer_bg_lock:
+                    _healer_bg_state["recent_actions"].insert(0, entry)
+                    _healer_bg_state["recent_actions"] = _healer_bg_state["recent_actions"][:_HEALER_BG_MAX_HISTORY]
+            seen &= now_keys
+            with _healer_bg_lock:
+                _healer_bg_state["last_scan"] = datetime.utcnow().isoformat()
+        except Exception:
+            pass
+
+
+@app.route("/api/healer/status")
+def api_healer_status():
+    if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
+    with _healer_bg_lock:
+        return jsonify({
+            "running": _healer_bg_state["running"] and K8S_ENABLED,
+            "last_scan": _healer_bg_state["last_scan"],
+            "recent_actions": list(_healer_bg_state["recent_actions"]),
+        })
+
+
 @app.route("/api/healer/fix", methods=["POST"])
 def api_healer_fix():
     if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
@@ -4624,11 +4797,13 @@ def api_healer_fix():
     if not pod_name:
         return jsonify({"success": False, "error": "No pod name"})
     try:
-        from kubernetes import client as k8s_client, config as k8s_config
-        k8s_config.load_kube_config()
-        v1 = k8s_client.CoreV1Api()
-        v1.delete_namespaced_pod(name=pod_name, namespace="default")
-        return jsonify({"success": True, "message": f"Pod {pod_name} deleted, ReplicaSet will recreate"})
+        result = _real_heal_pod(pod_name, NS)
+        return jsonify({
+            "success": result.get("ok", False),
+            "message": result.get("message"),
+            "root_cause": result.get("root_cause"),
+            "action": result.get("action"),
+        })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
 
@@ -4637,26 +4812,25 @@ def api_healer_fix():
 def api_healer_auto_fix():
     if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
     try:
-        from kubernetes import client as k8s_client, config as k8s_config
-        k8s_config.load_kube_config()
-        v1 = k8s_client.CoreV1Api()
-        pods = v1.list_namespaced_pod(namespace="default")
-        fixed = 0
-        failed = 0
-        bad = {"CrashLoopBackOff", "OOMKilled", "ImagePullBackOff", "ErrImagePull", "Error"}
-        for pod in pods.items:
-            if pod.status and pod.status.container_statuses:
-                for cs in pod.status.container_statuses:
-                    reason = ""
-                    if cs.state and cs.state.waiting:
-                        reason = cs.state.waiting.reason or ""
-                    if reason in bad:
-                        try:
-                            v1.delete_namespaced_pod(name=pod.metadata.name, namespace="default")
-                            fixed += 1
-                        except:
-                            failed += 1
-        return jsonify({"fixed": fixed, "failed": failed})
+        from healer.pod_watcher import scan_once
+        issues = scan_once(namespace=NS) or []
+        fixed, failed, details = 0, 0, []
+        for issue in issues:
+            try:
+                result = _real_heal_pod(issue["pod_name"], issue["namespace"])
+                if result.get("ok"):
+                    fixed += 1
+                else:
+                    failed += 1
+                details.append({
+                    "pod": issue["pod_name"], "action": result.get("action"),
+                    "root_cause": result.get("root_cause"), "ok": result.get("ok"),
+                    "message": result.get("message"),
+                })
+            except Exception as e:
+                failed += 1
+                details.append({"pod": issue["pod_name"], "ok": False, "error": str(e)})
+        return jsonify({"fixed": fixed, "failed": failed, "details": details})
     except Exception as e:
         return jsonify({"fixed": 0, "failed": 0, "error": str(e)})
 
@@ -4704,4 +4878,10 @@ if __name__ == "__main__":
     print("=" * 60)
     print(f"  K8s   : {'Connected' if K8S_ENABLED else 'Simulation'}")
     print(f"  Open  : http://localhost:5050")
+    if K8S_ENABLED:
+        threading.Thread(target=_healer_background_loop, daemon=True, kwargs={"interval": 30}).start()
+        _healer_bg_state["running"] = True
+        print("  Healer: background auto-heal loop started (scan every 30s)")
+    else:
+        print("  Healer: background auto-heal loop NOT started (K8s not connected)")
     app.run(host="0.0.0.0", port=5050, debug=False)
