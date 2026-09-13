@@ -17,7 +17,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 pytestmark = pytest.mark.integration
 
-import web_demo
+# collection 階段就會 import，@pytest.mark.integration 擋不住 CI 沒裝 flask/torch
+# 時直接炸掉整個 pytest run（見 test_model_server_injection.py 的說明，實測驗證過）。
+web_demo = pytest.importorskip("web_demo")
 
 
 @pytest.fixture

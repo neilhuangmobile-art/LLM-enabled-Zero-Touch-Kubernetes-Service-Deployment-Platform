@@ -59,7 +59,20 @@ K8s），兩個都是 import 檔案本身就會連帶 import torch（`llama_clie
 CI 沒裝這些套件跑不起來。`web_demo.py` 其餘的 K8s 呼叫路徑目前仍靠手動 curl/建測試 pod 驗證，
 還沒寫成自動化測試，是已知的覆蓋缺口。`.github/workflows/test.yml` 在 push/PR 時自動跑
 `pytest -m "not integration"`，故意不裝 `torch`/`transformers`/`bitsandbytes`（CI runner
-沒 GPU、裝了也用不到，只會拖慢又可能裝不起來）。
+沒 GPU、裝了也用不到，只會拖慢又可能裝不起來），但會裝 `kubernetes==34.1.0`（純 Python
+HTTP client，不需要 GPU，讓 `healer/remediate.py` 的 mock 測試在 CI 也能真的跑，不用跳過）。
+
+**踩過的坑，別重踩**：`@pytest.mark.integration` 標記本身**擋不住 collection 階段的
+import 錯誤**——pytest 在套用 `-m` 篩選前會先 import 每個測試檔案，如果檔案頂層寫
+`import web_demo` 或 `import core.model_server`，CI 沒裝 torch/flask 時這行 import
+本身就會拋例外，讓整個 `pytest` 指令回非零 exit code（不是那個測試被跳過，是整批
+collection 直接失敗）。2026-09-14 實測過：push 上去 CI 第一次真的跑就是這樣掛的。
+正確做法是用 `pytest.importorskip("torch")`（或 `web_demo = pytest.importorskip("web_demo")`）
+取代裸的 `import`，讓缺依賴時變成優雅跳過而不是收集錯誤——`tests/test_model_server_injection.py`、
+`test_chat_grounding.py`、`test_healer_liveness.py`、`test_web_demo_routes.py` 都是這樣寫的，
+之後新增需要重依賴的測試檔要照抄這個寫法。驗證方式：本機建一個只裝
+`pytest+pyyaml+kubernetes`（跟 CI 一致）的乾淨 venv 重現，不要只在裝好全部依賴的
+開發環境裡跑過就當作沒問題。
 
 ## 工作慣例
 

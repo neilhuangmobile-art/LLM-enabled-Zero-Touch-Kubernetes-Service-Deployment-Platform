@@ -22,6 +22,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 pytestmark = pytest.mark.integration
 
+# pytest 在套用 -m 篩選前會先 import 每個測試檔（collection 階段），單純標
+# @pytest.mark.integration 擋不住 CI 在沒裝 torch 的環境下 collection 直接炸掉、
+# 整個 pytest run 回非零 exit code——2026-09-14 實測過（先在本機建一個乾淨、
+# 只裝 pytest+pyyaml 的 venv 重現 CI 環境，確認真的會這樣壞）。importorskip 會把
+# 這條 import 鏈裡任何 ImportError（這裡是 torch）轉成「優雅跳過」，不是收集錯誤。
+pytest.importorskip("torch")
 from core.model_server import _looks_like_prompt_injection
 
 
