@@ -177,11 +177,35 @@ def _handle_fix_image(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
                 "message": f"已回滾 Deployment {deploy_name}（從 revision {current_rev}）",
                 "details": {"stdout": proc.stdout.strip()},
             }
-        else:
+        stderr = proc.stderr.strip()
+        if "no rollout history" in stderr.lower():
+            # 這個 Deployment 從建立起就沒有成功過的 revision 可以回滾——這種情況下
+            # 「回滾失敗」是誤導使用者的講法（聽起來像系統故障），實際上是「這個
+            # image tag 本身打錯／不存在，需要人工改成正確的 tag 再重新部署」，
+            # 沒有辦法自動修（沒有『正確版本』這個資訊可以自動猜）。
+            image = ""
+            try:
+                image = deploy.spec.template.spec.containers[0].image
+            except Exception:
+                pass
             return {
                 "ok"     : False,
-                "message": f"回滾失敗：{proc.stderr.strip()}",
+                "message": (
+                    f"這個 Deployment 從建立起就沒有成功過的版本可以回滾，不是「暫時性故障」。"
+                    f"目前設定的映像是 {image or '未知'}，最可能的原因是 image tag 打錯或不存在。"
+                    f"請到 Deployments 頁面用正確的 tag 更新映像（或重新部署），"
+                    f"這一步需要人工確認正確的版本，系統無法自動猜。 / "
+                    f"This Deployment has never had a working revision to roll back to — this isn't "
+                    f"a transient failure. The current image is {image or 'unknown'}; the most likely "
+                    f"cause is a wrong or non-existent image tag. Please update it to a correct tag "
+                    f"manually — there's no earlier good version to infer from."
+                ),
+                "details": {"stderr": stderr},
             }
+        return {
+            "ok"     : False,
+            "message": f"回滾失敗：{stderr}",
+        }
     except FileNotFoundError:
         return {"ok": False, "message": "kubectl 未安裝，無法執行回滾"}
     except Exception as e:

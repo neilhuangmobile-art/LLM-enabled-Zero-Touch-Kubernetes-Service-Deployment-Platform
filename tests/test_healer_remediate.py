@@ -5,10 +5,18 @@ CI 不需要 kubeconfig。真正會呼叫 K8s API 的路徑標成 integration，
 """
 import sys
 import os
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from healer.remediate import remediate, _infer_deployment_name, _double_memory
+from healer.remediate import remediate, _infer_deployment_name, _double_memory, _handle_fix_image
+
+# healer/__init__.py 執行 `from healer.remediate import remediate`，這會把套件
+# `healer` 命名空間裡的 `remediate` 屬性從「子模組物件」覆寫成「函式物件」——
+# `import healer.remediate as X` 或字串式 `patch("healer.remediate.xxx")` 都是透過
+# 這個已經被覆寫的屬性去解析，會撈到函式而不是模組，導致 patch 失敗。
+# 直接從 sys.modules 拿真正的子模組物件，繞過這個命名空間覆寫陷阱。
+remediate_module = sys.modules["healer.remediate"]
 
 
 def _issue(pod_name="api-7d6b8c9f4-xk2pq", namespace="default", container="api"):
@@ -64,6 +72,36 @@ class TestRemediateDryRun:
         )
         assert "timestamp" in result
         assert result["action"] == "analyze_logs"
+
+    @patch.object(remediate_module, "k8s_client")
+    @patch.object(remediate_module, "_load_k8s_config")
+    @patch("subprocess.run")
+    def test_fix_image_never_had_working_revision_gives_specific_advice(
+        self, mock_subprocess_run, mock_load_config, mock_k8s_client,
+    ):
+        # 模擬：這個 Deployment 從建立起就沒有成功過的 revision，
+        # `kubectl rollout undo` 會回 "no rollout history found"（2026-09-14 修的情境，
+        # 見 docs/security_review.md 6.1 節「尚待排查」——原本這種情況只會顯示
+        # 「回滾失敗：<原始 stderr>」，容易被誤以為是系統故障而不是 image tag 打錯）。
+        mock_deploy = MagicMock()
+        mock_deploy.metadata.annotations = {}
+        mock_deploy.spec.template.spec.containers = [MagicMock(image="nginx:does-not-exist")]
+        mock_apps_v1 = MagicMock()
+        mock_apps_v1.read_namespaced_deployment.return_value = mock_deploy
+        mock_k8s_client.AppsV1Api.return_value = mock_apps_v1
+        mock_subprocess_run.return_value = MagicMock(
+            returncode=1, stdout="",
+            stderr='error: no rollout history found for deployment "my-app"',
+        )
+        result = _handle_fix_image(
+            {"pod_name": "my-app-7d6b8c9f4-xk2pq", "namespace": "default"},
+            {"action": "fix_image"}, dry_run=False,
+        )
+        assert result["ok"] is False
+        assert "nginx:does-not-exist" in result["message"]
+        assert "人工" in result["message"]
+        # 不應該再出現原本那種容易誤導的「回滾失敗：」開頭訊息
+        assert not result["message"].startswith("回滾失敗")
 
     def test_fix_port_conflict_and_manual_inspect_never_touch_k8s_even_without_dry_run(self):
         # 這兩個動作本身設計上就是「只給建議、不操作」，不需要 dry_run 保護，
