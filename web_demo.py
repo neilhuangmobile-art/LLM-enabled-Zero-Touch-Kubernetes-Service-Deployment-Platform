@@ -887,7 +887,10 @@ tr:hover td{background:var(--bg)}
 /* ── 使用說明書 / K8s 小百科 ────────────────────────────────── */
 .manual-btn{display:flex;align-items:center;gap:6px;border:1px solid var(--border2);background:#fff;color:var(--text2);border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit}
 .manual-btn:hover{background:var(--surface2);color:var(--text)}
-#manual-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px}
+#manual-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:200;align-items:center;justify-content:center;padding:24px;display:none}
+/* [hidden] 是 HTML 標準屬性，但 #manual-overlay 這條 ID 規則的 specificity 比瀏覽器內建的
+   [hidden]{display:none} 規則高，等於蓋掉它——這是之前「一登入就跳出來、關不掉」的根因。
+   改用 JS 直接控制 style.display，不依賴 [hidden] 屬性，徹底避開這個 specificity 陷阱。 */
 .manual-panel{background:#fff;border-radius:16px;max-width:680px;width:100%;max-height:min(720px,88vh);display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
 .manual-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 22px;border-bottom:1px solid var(--border)}
 .manual-panel-title{font-size:16px;font-weight:750;color:#111}
@@ -1310,107 +1313,44 @@ html,body{height:100%;overflow:hidden}
       <div class="chat-shell">
         <div class="chat-topbar">
           <div>
-            <div class="chat-title">ZeroTouch K8s Assistant</div>
-            <div class="chat-subtitle">Chat, deploy, inspect, and recover Kubernetes services</div>
+            <div class="chat-title" id="chat-title-txt">ZeroTouch K8s Assistant</div>
+            <div class="chat-subtitle" id="chat-subtitle-txt">Chat, deploy, inspect, and recover Kubernetes services</div>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
-            <button class="manual-btn" onclick="openManual()" title="使用說明書 / User guide" aria-label="使用說明書">
-              <svg viewBox="0 0 16 16" fill="none" width="15" height="15"><path d="M3 3h10v3H3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M3 6v7a1 1 0 001 1h8a1 1 0 001-1V6" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
-              說明書
+            <button class="manual-btn" onclick="setLang(uiLang==='zh'?'en':'zh')" title="Switch language" aria-label="Switch language">
+              <svg viewBox="0 0 16 16" fill="none" width="15" height="15"><path d="M2 8h12M8 2c1.8 1.8 2.8 4 2.8 6s-1 4.2-2.8 6c-1.8-1.8-2.8-4-2.8-6s1-4.2 2.8-6z" stroke="currentColor" stroke-width="1.3"/></svg>
+              <span id="lang-btn-txt">EN</span>
             </button>
-            <div class="status-pill"><div class="dot green"></div><span>Workspace ready</span></div>
+            <button class="manual-btn" onclick="openManual()" title="User guide" aria-label="User guide">
+              <svg viewBox="0 0 16 16" fill="none" width="15" height="15"><path d="M3 3h10v3H3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M3 6v7a1 1 0 001 1h8a1 1 0 001-1V6" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+              <span id="manual-btn-txt">Guide</span>
+            </button>
+            <div class="status-pill"><div class="dot green"></div><span id="workspace-status-txt">Workspace ready</span></div>
           </div>
         </div>
         <div class="chat-messages" id="chat-messages"></div>
         <div class="chat-composer">
           <div class="composer-box">
             <textarea class="chat-input" id="chat-input" placeholder="Message ZeroTouch K8s..." rows="1" oninput="autoGrowChatInput(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
-            <button class="chat-send" onclick="sendChat()" aria-label="Send message">Send</button>
+            <button class="chat-send" onclick="sendChat()" aria-label="Send message" id="chat-send-txt">Send</button>
           </div>
-          <div class="composer-hint">Ask about Kubernetes, deploy services, list pods, scale workloads, or troubleshoot failures.</div>
+          <div class="composer-hint" id="composer-hint-txt">Ask about Kubernetes, deploy services, list pods, scale workloads, or troubleshoot failures.</div>
         </div>
       </div>
     </div>
 
     <!-- 使用說明書 + K8s 小科普：新手友善原則（AGENT_RULES.md），點擊展開段落、
          點名詞看小框框註解，不用另外開分頁或去查資料。 -->
-    <div id="manual-overlay" onclick="if(event.target===this)closeManual()" hidden>
+    <div id="manual-overlay" onclick="if(event.target===this)closeManual()">
       <div class="manual-panel">
         <div class="manual-panel-head">
           <div>
-            <div class="manual-panel-title">📖 使用說明書 / User Guide</div>
-            <div class="manual-panel-sub">看不懂的名詞（<span style="border-bottom:1px dotted var(--text3)">虛線底線</span>）點一下會展開解釋</div>
+            <div class="manual-panel-title" id="manual-title">📖 User Guide</div>
+            <div class="manual-panel-sub" id="manual-sub">Terms with a dotted underline are clickable definitions.</div>
           </div>
-          <button class="manual-close" onclick="closeManual()" aria-label="關閉">✕</button>
+          <button class="manual-close" onclick="closeManual()" aria-label="Close">✕</button>
         </div>
-        <div class="manual-panel-body" id="manual-body">
-
-          <details open>
-            <summary>🚀 三步驟快速上手</summary>
-            <div class="manual-section">
-              <ol style="margin:0;padding-left:20px;line-height:1.8">
-                <li>在 Chat 打字描述你要的東西，例如「<code>deploy 3 nginx pods for shop, port 80</code>」，系統會解析成一份規格讓你確認。</li>
-                <li>確認規格沒問題後按「下一步」，系統會算出這次部署要用多少資源、跑一次安全/成本/效能審查，通過才能按「確認部署」。</li>
-                <li>部署完成後畫面會直接給連結，帶你去 <b>Pods</b> / <b>Deployments</b> 頁面確認結果。</li>
-              </ol>
-            </div>
-          </details>
-
-          <details>
-            <summary>💬 Chat 還能幫你做什麼</summary>
-            <div class="manual-section">
-              <p>除了部署，直接在 Chat 打白話就可以：</p>
-              <ul style="margin:6px 0 0;padding-left:20px;line-height:1.9">
-                <li>「<code>list pods</code>」／「<code>顯示所有部署</code>」— 查看目前有什麼在跑</li>
-                <li>「<code>web-frontend 有沒有壞掉</code>」— 精準檢查單一服務健不健康，壞掉會附上根因和修復建議</li>
-                <li>「<code>查看 api-gateway 細節</code>」— 看單一 <span class="term" data-def="最小的部署單位，可以想成一個裝著你程式的小盒子。">Pod</span> 的詳細狀態</li>
-                <li>「<code>scale web-frontend to 5</code>」— 調整副本數（會先出確認卡才真的執行）</li>
-                <li>「<code>rollback api-gateway</code>」— 回滾到上一個版本</li>
-                <li>「<code>什麼是 Deployment</code>」— 問任何 K8s 概念，系統會用簡單的話回答你</li>
-              </ul>
-            </div>
-          </details>
-
-          <details>
-            <summary>🗺️ 側邊欄各頁面在幹什麼</summary>
-            <div class="manual-section">
-              <ul style="margin:0;padding-left:20px;line-height:1.9">
-                <li><b>Pods</b>：目前所有 <span class="term" data-def="最小的部署單位，可以想成一個裝著你程式的小盒子。">Pod</span> 的狀態、IP、所在節點、重啟次數。</li>
-                <li><b>Deployments</b>：每個服務要求幾個副本、實際幾個 ready、用的 image 版本。</li>
-                <li><b>Healer</b>：掃描壞掉的 Pod（<span class="term" data-def="容器一直啟動失敗、一直重開、一直失敗，通常是程式本身有問題或設定錯了。">CrashLoopBackOff</span> 之類），可以一鍵修復重建。</li>
-                <li><b>GitOps Log</b>：部署歷史紀錄，每次部署都會留一筆，方便回滾對照。</li>
-                <li><b>Metrics</b>：Prometheus 監控狀態，看叢集現在跑了多少 Pod。</li>
-              </ul>
-            </div>
-          </details>
-
-          <details>
-            <summary>📚 K8s 小百科（名詞看不懂點這裡）</summary>
-            <div class="manual-section">
-              <p style="margin:0 0 10px;color:var(--text2)">下面每個詞都可以點一下展開解釋，不用去外面查。</p>
-              <p style="line-height:2.1">
-                <span class="term" data-def="最小的部署單位，可以想成一個裝著你程式的小盒子。你打「deploy 3 nginx pods」就是要開 3 個一樣的小盒子。">Pod</span>、
-                <span class="term" data-def="一份「我想要的狀態」的宣告，例如「用某個 image、一直維持 3 個 Pod 在跑」。Pod 壞掉時 Deployment 會自動生一個新的補上。">Deployment</span>、
-                <span class="term" data-def="Deployment 底下自動生出來、負責「數 Pod 數量夠不夠、不夠就補」的東西，一般不需要直接碰它。">ReplicaSet</span>、
-                <span class="term" data-def="固定不變的「門牌號碼」，負責把流量轉發到背後一群 Pod，即使 Pod 重建換了 IP 也不受影響。">Service</span>、
-                <span class="term" data-def="叢集裡用來分隔資源的「資料夾」，這個系統預設都放在叫 default 的 namespace 裡。">Namespace</span>、
-                <span class="term" data-def="打包好的「程式 + 執行環境」，例如 nginx:latest。冒號後面是版本標籤（tag），沒寫預設抓 latest。">Image</span>、
-                <span class="term" data-def="要開幾個一模一樣的 Pod。開多個是為了「一個壞掉還有其他撐著」和「分攤流量」。">Replicas / 副本數</span>、
-                <span class="term" data-def="服務對外接受連線用的門號，例如網頁伺服器常用 80、Redis 常用 6379。">Port</span>、
-                <span class="term" data-def="叢集裡的一台機器，Pod 實際上被排進某個 Node 執行。這個系統用 Docker Desktop 內建的 K8s 模擬節點。">Node</span>、
-                <span class="term" data-def="整套 Kubernetes 系統，由一台或多台機器（Node）組成。">Cluster</span>、
-                <span class="term" data-def="容器一直啟動失敗、一直重開、一直失敗，通常是程式本身有 bug 或設定錯了。">CrashLoopBackOff</span>、
-                <span class="term" data-def="抓不到指定的 image，通常是名字打錯、版本不存在，或私有倉庫沒有權限。">ImagePullBackOff</span>、
-                <span class="term" data-def="這個 Pod 用超過設定的記憶體上限，被系統強制關掉。">OOMKilled</span>、
-                <span class="term" data-def="Kubernetes 內部用來描述資源的設定檔格式。這個系統設計上你完全不用碰 YAML，講白話就好。">YAML</span>、
-                <span class="term" data-def="Kubernetes 官方的命令列工具，工程師平常會打指令操作叢集。這個系統讓你完全不需要學它。">kubectl</span>、
-                <span class="term" data-def="把每次部署的設定都記錄成 git 版本，方便查歷史、方便回滾。這個系統每次部署會自動幫你做。">GitOps</span>、
-                <span class="term" data-def="退回到上一個還正常的版本。在 Chat 打「rollback 應用程式名稱」就會幫你處理。">Rollback</span>
-              </p>
-            </div>
-          </details>
-
-        </div>
+        <div class="manual-panel-body" id="manual-body"></div>
       </div>
       <div id="term-tip" hidden></div>
     </div>
@@ -1565,6 +1505,218 @@ html,body{height:100%;overflow:hidden}
 const loggedIn = {{ 'true' if logged_in else 'false' }};
 const k8sEnabled = {{ 'true' if k8s else 'false' }};
 
+// ══════════════════════════════════════════════════════════════════
+//  中英切換（Chat 分頁 + 使用說明書）。專有名詞（Pod/Deployment/...）
+//  兩種語言都固定用英文，只有說明文字跟著切換。
+// ══════════════════════════════════════════════════════════════════
+let uiLang = 'zh';
+try { uiLang = localStorage.getItem('zt_lang') || 'zh'; } catch(e){}
+
+const I18N = {
+  zh: {
+    langBtn: 'EN',
+    manualBtn: '說明書',
+    chatTitle: 'ZeroTouch K8s 助理',
+    chatSubtitle: '聊天、部署、檢視並修復 Kubernetes 服務',
+    workspaceReady: '系統就緒',
+    sendBtn: '送出',
+    composerHint: '用自然語言部署服務、查詢 Pod 狀態、調整副本數，或詢問任何 Kubernetes 問題。',
+    emptyTitle: '有什麼我能協助你處理叢集的？',
+    emptyDesc: '用自然語言描述你想做的事：部署服務、檢視運作狀態、排查錯誤，或詢問任何 Kubernetes 概念。',
+    cards: [
+      {title:'部署服務', example:'deploy 3 nginx:latest pods for web-frontend', send:'deploy 3 nginx:latest pods for web-frontend'},
+      {title:'檢視叢集狀態', example:'list pods and show deployments', send:'list pods'},
+      {title:'學習 Kubernetes', example:'Explain Deployment vs Service', send:'Explain Kubernetes Deployment vs Service'},
+      {title:'排查問題', example:'How do I debug CrashLoopBackOff?', send:'How do I debug CrashLoopBackOff?'},
+    ],
+    manualTitle: '📖 使用說明書',
+    manualSub: '名詞下方有虛線底線的可以點擊展開簡明定義',
+  },
+  en: {
+    langBtn: '中文',
+    manualBtn: 'Guide',
+    chatTitle: 'ZeroTouch K8s Assistant',
+    chatSubtitle: 'Chat, deploy, inspect, and recover Kubernetes services',
+    workspaceReady: 'Workspace ready',
+    sendBtn: 'Send',
+    composerHint: 'Ask about Kubernetes, deploy services, list pods, scale workloads, or troubleshoot failures.',
+    emptyTitle: 'How can I help with your cluster?',
+    emptyDesc: 'Use natural language to deploy services, inspect workloads, troubleshoot failures, or ask Kubernetes questions.',
+    cards: [
+      {title:'Deploy a service', example:'deploy 3 nginx:latest pods for web-frontend', send:'deploy 3 nginx:latest pods for web-frontend'},
+      {title:'Check cluster status', example:'list pods and show deployments', send:'list pods'},
+      {title:'Learn Kubernetes', example:'Explain Deployment vs Service', send:'Explain Kubernetes Deployment vs Service'},
+      {title:'Troubleshoot', example:'How do I debug CrashLoopBackOff?', send:'How do I debug CrashLoopBackOff?'},
+    ],
+    manualTitle: '📖 User Guide',
+    manualSub: 'Terms with a dotted underline are clickable for a concise definition.',
+  },
+};
+
+function setLang(l){
+  uiLang = (l === 'en') ? 'en' : 'zh';
+  try { localStorage.setItem('zt_lang', uiLang); } catch(e){}
+  applyLang();
+}
+
+function applyLang(){
+  const t = I18N[uiLang];
+  const set = (id, text) => { const el = document.getElementById(id); if(el) el.textContent = text; };
+  set('lang-btn-txt', t.langBtn);
+  set('manual-btn-txt', t.manualBtn);
+  set('chat-title-txt', t.chatTitle);
+  set('chat-subtitle-txt', t.chatSubtitle);
+  set('workspace-status-txt', t.workspaceReady);
+  set('chat-send-txt', t.sendBtn);
+  set('composer-hint-txt', t.composerHint);
+  set('manual-title', t.manualTitle);
+  set('manual-sub', t.manualSub);
+  renderManualBody();
+  // 只有在聊天室是空的（歡迎畫面）時才需要重繪，避免打斷正在進行的多步流程卡片
+  const ch = typeof currentChat === 'function' ? currentChat() : null;
+  if(ch && !ch.messages.length && typeof renderMessages === 'function') renderMessages();
+}
+
+// ── 使用說明書內容：中英兩份獨立寫，專有名詞一律保留英文 ──
+const MANUAL_ZH = `
+  <details open>
+    <summary>🚀 三步驟快速上手</summary>
+    <div class="manual-section">
+      <ol style="margin:0;padding-left:20px;line-height:1.9">
+        <li>在 Chat 輸入部署需求，例如「<code>deploy 3 nginx pods for shop, port 80</code>」，系統會解析為結構化規格供你確認。</li>
+        <li>確認規格後選擇「下一步」，系統會計算此次部署所需的資源用量，並執行一次安全性、成本與效能的自動化審查；審查通過後才能執行部署。</li>
+        <li>部署完成後，畫面會提供連結，導向 <b>Pods</b> / <b>Deployments</b> 頁面確認執行結果。</li>
+      </ol>
+    </div>
+  </details>
+
+  <details>
+    <summary>💬 Chat 還能協助你做什麼</summary>
+    <div class="manual-section">
+      <p style="margin:0 0 8px">除了部署，你也可以直接在 Chat 輸入以下指令：</p>
+      <ul style="margin:0;padding-left:20px;line-height:2">
+        <li><code>list pods</code> ／ <code>顯示所有部署</code> — 檢視目前叢集內的運作狀態</li>
+        <li><code>web-frontend 有沒有壞掉</code> — 精確檢查單一服務的健康狀態，異常時附上根因分析與修復建議</li>
+        <li><code>查看 api-gateway 細節</code> — 檢視單一 <span class="term" data-def="Kubernetes 中最小的可部署運算單位，用於封裝並執行你的應用程式容器。">Pod</span> 的詳細狀態</li>
+        <li><code>scale web-frontend to 5</code> — 調整副本數（執行前會先出示確認畫面）</li>
+        <li><code>rollback api-gateway</code> — 回滾至上一個版本</li>
+        <li><code>什麼是 Deployment</code> — 詢問任何 Kubernetes 概念，系統會以簡明的方式回答</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>🗺️ 側邊欄各頁面說明</summary>
+    <div class="manual-section">
+      <ul style="margin:0;padding-left:20px;line-height:2">
+        <li><b>Pods</b>：目前所有 <span class="term" data-def="Kubernetes 中最小的可部署運算單位，用於封裝並執行你的應用程式容器。">Pod</span> 的狀態、IP、所在節點與重啟次數。</li>
+        <li><b>Deployments</b>：各服務要求與實際的副本數量，以及所使用的映像版本。</li>
+        <li><b>Healer</b>：掃描異常 <span class="term" data-def="Kubernetes 中最小的可部署運算單位，用於封裝並執行你的應用程式容器。">Pod</span>（如 <span class="term" data-def="容器持續啟動失敗並反覆重啟，通常代表應用程式本身發生錯誤或設定有誤。">CrashLoopBackOff</span>），可一鍵修復重建。</li>
+        <li><b>GitOps Log</b>：部署歷史紀錄，每次部署皆會留下版本，便於回滾比對。</li>
+        <li><b>Metrics</b>：Prometheus 監控狀態，檢視叢集目前的運作規模。</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>📚 K8s 小百科</summary>
+    <div class="manual-section">
+      <p style="margin:0 0 10px;color:var(--text2)">以下名詞皆可點擊展開簡明定義。</p>
+      <p style="line-height:2.3">
+        <span class="term" data-def="Kubernetes 中最小的可部署運算單位，用於封裝並執行你的應用程式容器。">Pod</span>、
+        <span class="term" data-def="描述所需狀態的宣告式設定（例如映像版本與副本數量），Kubernetes 會持續協調實際狀態以符合此設定，並在 Pod 異常時自動重建。">Deployment</span>、
+        <span class="term" data-def="由 Deployment 自動建立，負責維持指定數量的 Pod 正常運作，一般不需直接操作。">ReplicaSet</span>、
+        <span class="term" data-def="提供固定不變的存取位址，將流量轉發至背後的一組 Pod，不受 Pod 重建後 IP 變動的影響。">Service</span>、
+        <span class="term" data-def="叢集內用於劃分資源的邊界，本系統預設將所有資源建立於 default 命名空間。">Namespace</span>、
+        <span class="term" data-def="打包完成的「應用程式 + 執行環境」，例如 nginx:latest；冒號後方為版本標籤（tag），未指定時預設為 latest。">Image</span>、
+        <span class="term" data-def="欲維持運作的 Pod 數量。設定多個副本可提升容錯能力並分攤流量負載。">Replicas</span>、
+        <span class="term" data-def="服務對外接受連線的埠號，例如網頁伺服器常用 80，Redis 常用 6379。">Port</span>、
+        <span class="term" data-def="叢集中的一台運算機器，Pod 會被排程至某個 Node 上執行。本系統以 Docker Desktop 內建的 Kubernetes 模擬節點環境。">Node</span>、
+        <span class="term" data-def="由一台或多台 Node 組成的完整 Kubernetes 系統。">Cluster</span>、
+        <span class="term" data-def="容器持續啟動失敗並反覆重啟，通常代表應用程式本身發生錯誤或設定有誤。">CrashLoopBackOff</span>、
+        <span class="term" data-def="無法取得指定的映像檔，常見原因為名稱錯誤、版本不存在，或私有倉庫權限不足。">ImagePullBackOff</span>、
+        <span class="term" data-def="Pod 使用的記憶體超過設定上限，遭系統強制終止。">OOMKilled</span>、
+        <span class="term" data-def="Kubernetes 內部用於描述資源的設定檔格式。本系統的設計目標即是讓使用者無需編寫 YAML。">YAML</span>、
+        <span class="term" data-def="Kubernetes 官方提供的命令列工具。本系統的核心價值在於讓使用者無需學習此工具即可完成部署與維運。">kubectl</span>、
+        <span class="term" data-def="將每次部署的設定變更記錄為 Git 版本，以利追蹤歷史與執行回滾。本系統會在每次部署時自動完成此流程。">GitOps</span>、
+        <span class="term" data-def="將服務退回至前一個穩定版本。於 Chat 輸入「rollback 應用程式名稱」即可執行。">Rollback</span>
+      </p>
+    </div>
+  </details>
+`;
+
+const MANUAL_EN = `
+  <details open>
+    <summary>🚀 Quick Start in 3 Steps</summary>
+    <div class="manual-section">
+      <ol style="margin:0;padding-left:20px;line-height:1.9">
+        <li>Describe what you need in Chat, e.g. "<code>deploy 3 nginx pods for shop, port 80</code>". The system parses it into a structured spec for you to confirm.</li>
+        <li>After confirming, choose "Next" — the system calculates the resource footprint for this deployment and runs an automated security, cost, and performance review. Deployment proceeds only after the review passes.</li>
+        <li>Once deployed, you'll get direct links to the <b>Pods</b> / <b>Deployments</b> pages to verify the result.</li>
+      </ol>
+    </div>
+  </details>
+
+  <details>
+    <summary>💬 What Else Chat Can Do</summary>
+    <div class="manual-section">
+      <p style="margin:0 0 8px">Beyond deployment, you can type these directly in Chat:</p>
+      <ul style="margin:0;padding-left:20px;line-height:2">
+        <li><code>list pods</code> / <code>show deployments</code> — inspect the current cluster state</li>
+        <li><code>is web-frontend healthy</code> — precisely check a single service's health, with root-cause analysis and remediation suggestions when something is wrong</li>
+        <li><code>describe pod api-gateway</code> — inspect the detailed status of a single <span class="term" data-def="The smallest deployable unit in Kubernetes, used to package and run your application container(s).">Pod</span></li>
+        <li><code>scale web-frontend to 5</code> — adjust replica count (a confirmation step is shown first)</li>
+        <li><code>rollback api-gateway</code> — revert to the previous version</li>
+        <li><code>what is a Deployment</code> — ask about any Kubernetes concept and get a plain-language answer</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>🗺️ Sidebar Pages</summary>
+    <div class="manual-section">
+      <ul style="margin:0;padding-left:20px;line-height:2">
+        <li><b>Pods</b>: status, IP, node, and restart count for every <span class="term" data-def="The smallest deployable unit in Kubernetes, used to package and run your application container(s).">Pod</span>.</li>
+        <li><b>Deployments</b>: desired vs. actual replica counts and the image version in use.</li>
+        <li><b>Healer</b>: scans for unhealthy <span class="term" data-def="The smallest deployable unit in Kubernetes, used to package and run your application container(s).">Pods</span> (e.g. <span class="term" data-def="A container keeps failing to start and restarting repeatedly, usually indicating an application bug or misconfiguration.">CrashLoopBackOff</span>) and can remediate them with one click.</li>
+        <li><b>GitOps Log</b>: deployment history — every deployment leaves a version for rollback comparison.</li>
+        <li><b>Metrics</b>: Prometheus monitoring status and current cluster scale.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>📚 Kubernetes Glossary</summary>
+    <div class="manual-section">
+      <p style="margin:0 0 10px;color:var(--text2)">Click any term below to expand a concise definition.</p>
+      <p style="line-height:2.3">
+        <span class="term" data-def="The smallest deployable unit in Kubernetes, used to package and run your application container(s).">Pod</span>,
+        <span class="term" data-def="A declarative description of the desired state (e.g. image version and replica count). Kubernetes continuously reconciles the actual state to match it, automatically recreating Pods that fail.">Deployment</span>,
+        <span class="term" data-def="Automatically created by a Deployment to maintain the specified number of running Pods; you generally don't interact with it directly.">ReplicaSet</span>,
+        <span class="term" data-def="A stable, fixed address that routes traffic to a group of Pods behind it, unaffected by Pod IP changes after recreation.">Service</span>,
+        <span class="term" data-def="A boundary used to partition resources within a cluster. This system creates all resources in the default namespace.">Namespace</span>,
+        <span class="term" data-def="A packaged 'application + runtime environment', e.g. nginx:latest. The part after the colon is the version tag; it defaults to latest if omitted.">Image</span>,
+        <span class="term" data-def="The number of identical Pods to keep running. Multiple replicas improve fault tolerance and distribute load.">Replicas</span>,
+        <span class="term" data-def="The network port a service accepts connections on, e.g. 80 for web servers, 6379 for Redis.">Port</span>,
+        <span class="term" data-def="A machine in the cluster that Pods are scheduled onto. This system simulates nodes using Docker Desktop's built-in Kubernetes.">Node</span>,
+        <span class="term" data-def="The complete Kubernetes system, made up of one or more Nodes.">Cluster</span>,
+        <span class="term" data-def="A container keeps failing to start and restarting repeatedly, usually indicating an application bug or misconfiguration.">CrashLoopBackOff</span>,
+        <span class="term" data-def="The specified image could not be retrieved — commonly due to a typo, a missing tag, or insufficient registry permissions.">ImagePullBackOff</span>,
+        <span class="term" data-def="The Pod exceeded its configured memory limit and was forcibly terminated by the system.">OOMKilled</span>,
+        <span class="term" data-def="The configuration file format Kubernetes uses internally to describe resources. This system is designed so you never need to write YAML yourself.">YAML</span>,
+        <span class="term" data-def="Kubernetes' official command-line tool. This system's core value is letting you deploy and operate without ever learning it.">kubectl</span>,
+        <span class="term" data-def="Recording every deployment's configuration as a Git version, enabling history tracking and rollback. This system does this automatically on every deployment.">GitOps</span>,
+        <span class="term" data-def="Reverting a service to its previous stable version. Type 'rollback &lt;app-name&gt;' in Chat to trigger it.">Rollback</span>
+      </p>
+    </div>
+  </details>
+`;
+
+function renderManualBody(){
+  const body = document.getElementById('manual-body');
+  if(body) body.innerHTML = (uiLang === 'en') ? MANUAL_EN : MANUAL_ZH;
+}
+
 // ── Clock ──
 function updateClock(){
   const el = document.getElementById('clock');
@@ -1579,9 +1731,12 @@ function autoGrowChatInput(el){
 }
 
 // ── 使用說明書 / K8s 小百科 ──
-function openManual(){ document.getElementById('manual-overlay').hidden = false; }
+function openManual(){
+  renderManualBody();
+  document.getElementById('manual-overlay').style.display = 'flex';
+}
 function closeManual(){
-  document.getElementById('manual-overlay').hidden = true;
+  document.getElementById('manual-overlay').style.display = 'none';
   const tip = document.getElementById('term-tip');
   if(tip) tip.hidden = true;
 }
@@ -2515,24 +2670,16 @@ function renderMessages(){
   if(!msgs) return;
   const ch = currentChat();
   if(!ch || !ch.messages.length){
+    const t = I18N[uiLang];
+    const cardsHtml = t.cards.map(c =>
+      `<div class="prompt-card" onclick="document.getElementById('chat-input').value=${JSON.stringify(c.send)};sendChat()">
+         <strong>${escHtml(c.title)}</strong><span>${escHtml(c.example)}</span>
+       </div>`).join('');
     msgs.innerHTML = `<div class="chat-empty">
       <div class="chat-empty-logo">K</div>
-      <h1>How can I help with your cluster?</h1>
-      <p>Use natural language to deploy services, inspect workloads, troubleshoot failures, or ask Kubernetes questions.</p>
-      <div class="prompt-grid">
-        <div class="prompt-card" onclick="document.getElementById('chat-input').value='deploy 3 nginx:latest pods for web-frontend';sendChat()">
-          <strong>Deploy a service</strong><span>deploy 3 nginx:latest pods for web-frontend</span>
-        </div>
-        <div class="prompt-card" onclick="document.getElementById('chat-input').value='list pods';sendChat()">
-          <strong>Check cluster status</strong><span>list pods and show deployments</span>
-        </div>
-        <div class="prompt-card" onclick="document.getElementById('chat-input').value='Explain Kubernetes Deployment vs Service';sendChat()">
-          <strong>Learn Kubernetes</strong><span>Explain Deployment vs Service</span>
-        </div>
-        <div class="prompt-card" onclick="document.getElementById('chat-input').value='How do I debug CrashLoopBackOff?';sendChat()">
-          <strong>Troubleshoot</strong><span>How do I debug CrashLoopBackOff?</span>
-        </div>
-      </div>
+      <h1>${escHtml(t.emptyTitle)}</h1>
+      <p>${escHtml(t.emptyDesc)}</p>
+      <div class="prompt-grid">${cardsHtml}</div>
     </div>`;
     return;
   }
@@ -3291,6 +3438,7 @@ async function sendChat(){
 
 window.addEventListener('DOMContentLoaded', function(){
   if(loggedIn){
+    applyLang();
     initChats();
     showPage('chat');
   }
