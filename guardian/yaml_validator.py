@@ -76,6 +76,16 @@ def validate_yaml(
         errors.extend(f"{doc_id}: {e}" for e in res_errs)
         warnings.extend(f"{doc_id}: {w}" for w in res_warns)
 
+        # 命名規則
+        name_errs, name_warns = _check_naming(doc, policy)
+        errors.extend(f"{doc_id}: {e}" for e in name_errs)
+        warnings.extend(f"{doc_id}: {w}" for w in name_warns)
+
+        # 映像規則
+        img_errs, img_warns = _check_images(doc, policy)
+        errors.extend(f"{doc_id}: {e}" for e in img_errs)
+        warnings.extend(f"{doc_id}: {w}" for w in img_warns)
+
     return {
         "ok"      : len(errors) == 0,
         "errors"  : errors,
@@ -195,6 +205,67 @@ def _check_security(doc: dict, policy: dict) -> tuple:
                     f"容器 '{name}' 使用了 'latest' 或無版本 tag（{image}）"
                     "，生產環境建議使用固定版本"
                 )
+
+    return errors, warnings
+
+
+def _check_naming(doc: dict, policy: dict) -> tuple:
+    """
+    命名規則檢查，對應 policy_rules.yaml 的 naming 區塊。
+    2026-09-14 補上——這個區塊（denied_names、max_name_length）在 policy_rules.yaml
+    裡已經定義很久，但 validate_yaml() 從沒讀取過，是純裝飾用的設定，完全沒被強制執行。
+    """
+    errors   = []
+    warnings = []
+    naming_policy = policy.get("naming", {})
+    if not naming_policy:
+        return errors, warnings
+
+    name = (doc.get("metadata") or {}).get("name", "")
+    if not name:
+        return errors, warnings
+
+    denied = naming_policy.get("denied_names", [])
+    if name in denied:
+        errors.append(f"名稱 '{name}' 是禁止使用的名稱（與系統保留名稱衝突或不建議使用）")
+
+    max_len = naming_policy.get("max_name_length")
+    if max_len and len(name) > max_len:
+        errors.append(f"名稱 '{name}' 長度 {len(name)} 超過上限 {max_len}（K8s DNS label 規範）")
+
+    return errors, warnings
+
+
+def _check_images(doc: dict, policy: dict) -> tuple:
+    """
+    映像規則檢查，對應 policy_rules.yaml 的 images 區塊（denied_images、
+    allowed_registries）。跟 _check_naming 一樣，2026-09-14 之前從沒被呼叫過。
+    兩個清單預設都是空的（policy_rules.yaml 註解掉的範例），空清單代表「不限制」，
+    不會誤擋現有部署。
+    """
+    errors   = []
+    warnings = []
+    img_policy = policy.get("images", {})
+    if not img_policy:
+        return errors, warnings
+
+    denied   = img_policy.get("denied_images") or []
+    allowed  = img_policy.get("allowed_registries") or []
+    if not denied and not allowed:
+        return errors, warnings
+
+    for c in _get_containers(doc):
+        name  = c.get("name", "?")
+        image = c.get("image", "")
+        if not image:
+            continue
+        if image in denied:
+            errors.append(f"容器 '{name}' 使用了禁止的映像：{image}")
+        if allowed and not any(image.startswith(prefix) for prefix in allowed):
+            errors.append(
+                f"容器 '{name}' 的映像 {image} 不在允許的倉庫清單內"
+                f"（允許前綴：{', '.join(allowed)}）"
+            )
 
     return errors, warnings
 

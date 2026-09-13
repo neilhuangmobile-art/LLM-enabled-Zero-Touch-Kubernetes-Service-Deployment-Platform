@@ -312,13 +312,50 @@ healer 自動修復、`/api/scale` 風險檢查都是手動建測試 pod/呼叫 
 
 ---
 
+## 8. `guardian/policy_rules.yaml` 有兩個規則區塊定義了卻從沒被執行過
+
+**風險**：審查 `agents/guardian` 的規則覆蓋度時，逐條比對 `policy_rules.yaml` 宣告的規則
+跟 `guardian/yaml_validator.py` 實際讀取的規則，發現 `naming`（`denied_names`、
+`max_name_length`）跟 `images`（`denied_images`、`allowed_registries`）這兩個區塊，
+從寫進這份政策檔案起就**沒有任何程式碼讀取或執行過**。全專案搜尋 `denied_names`、
+`denied_images`、`allowed_registries`、`max_name_length` 這幾個關鍵字，只有
+`policy_rules.yaml` 自己出現，`yaml_validator.py`、`security_agent.py`、`orchestrator.py`
+都沒有引用。
+
+**為什麼重要**：這是典型的「文件/設定宣稱 vs. 實際行為」落差——政策檔案裡寫著
+「app_name 不允許使用 `kube-system`/`default` 等系統保留名稱」「可以設定允許的映像倉庫
+白名單」，讀這份政策檔案的人（包含評審）會以為這些規則真的在把關，但實際上使用者可以
+用任何名稱（包含 `kube-system`）、任何倉庫的任何映像部署，這兩個區塊純粹是裝飾。跟這次
+session 修的 healer「Fix 按鈕其實只是刪 pod」是同一種問題模式：政策/文件寫了，程式碼沒接。
+
+**解決方式**：`guardian/yaml_validator.py` 新增 `_check_naming()`、`_check_images()`，
+在 `validate_yaml()` 的掃描迴圈裡呼叫（跟既有 `_check_security`／`_check_resources` 平行）：
+- `_check_naming`：名稱在 `denied_names` 清單裡，或超過 `max_name_length` → 阻斷性錯誤。
+- `_check_images`：映像在 `denied_images` 清單裡，或（設定了 `allowed_registries` 時）
+  映像不是任何允許前綴開頭 → 阻斷性錯誤。
+兩個清單目前預設都是空的（`policy_rules.yaml` 裡的範例都註解掉），空清單代表「不限制」，
+不會誤擋現有的正常部署——這點特別寫測試驗證過。
+
+**驗證**：新增 5 個測試案例（`tests/test_yaml_validator.py`）：
+1. `app_name="kube-system"` → 正確阻斷
+2. 名稱 64 字元（超過上限 63）→ 正確阻斷
+3. 手動設定 `denied_images` 含 `alpine:latest`、映像剛好是 `alpine:latest` → 正確阻斷
+4. 手動設定 `allowed_registries`、映像不在允許前綴內 → 正確阻斷
+5. 用預設的空清單政策，跑一個正常的部署 → 確認**不會**被誤擋（`ok=True`）
+全部通過；同時把既有 60 個測試重跑一次確認這個改動沒有讓 orchestrator/security_agent
+的既有決策邏輯退步（`pytest tests/` → `66 passed`，沿用 7 節建的測試骨架，這正是那節
+提到「有測試就能放心改」的實際案例）。
+
+---
+
 ## 尚待排查（可作為報告中「未來工作」的項目）
 
 - K8s ServiceAccount 實際權限範圍（目前用 Docker Desktop 的 kubeconfig，很可能是 cluster-admin
-  等級，沒有做 RBAC 範圍限制，配合 1.3 節「任何註冊使用者都有完整權限」一起看是比較大的風險）
-- `agents/guardian` 其他規則的覆蓋度（目前只抽查過 `security_agent.py` 的幾條規則）
+  等級，沒有做 RBAC 範圍限制，配合 1.3 節「任何註冊使用者都有完整權限」一起看是比較大的風險。
+  這項**刻意先不動**——使用者已經明確決定跟 1.3 節的 `0.0.0.0` 監聽／開放註冊放在一起，
+  等之後要往正式環境擴展時再一次處理，不要在還沒決定角色分層方案之前先動 RBAC）
 - prompt injection 現況重新驗證（`CLAUDE.md` 歷史記錄過部分已知殘留漏洞，換模型後沒有重新測試）
-- `healer/remediate.py` 的 `fix_image`（`kubectl rollout undo`）在「這個 Deployment 從建立起
-  就沒有正常過的 revision」時必然失敗，這種情況下比較合理的動作其實是「提示使用者這個
-  image tag 本身打錯，需要人工改正確的 tag」而不是嘗試回滾；目前 6.1 節的修復讓這種情況
-  誠實回報失敗，但還沒有針對「從未成功過」這個特例給更精準的建議文字，可以之後補強。
+
+已處理完的項目（原本列在這裡，現在移到對應章節）：`agents/guardian` 規則覆蓋度審查
+→ 見 8 節（抓到 `naming`/`images` 兩個政策區塊從未被執行，已修復）；`fix_image` 特例訊息
+→ 見 6.1 節（已補上「從未成功過」情境的專屬建議文字）。
