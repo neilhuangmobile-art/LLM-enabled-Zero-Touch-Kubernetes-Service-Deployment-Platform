@@ -146,6 +146,45 @@ _DIAGNOSE_ACTIONS = {
     "fix_image", "increase_memory", "check_dependencies", "fix_permissions",
     "create_config", "fix_probe", "fix_port_conflict", "analyze_logs", "manual_inspect",
 }
+# 模型常常「懂語意但吐錯字串」（例如 fix_permission 少一個 s、自己發明
+# fix_environment_variable），直接卡 enum 只會把這些降級成沒用的 manual_inspect，
+# 白白浪費掉模型本來判斷對的那部分。這裡先做寬鬆比對，比對不到才真的 fallback。
+_DIAGNOSE_ACTION_ALIASES = {
+    "fix_permission": "fix_permissions",
+    "fix_perm": "fix_permissions",
+    "fix_rbac": "fix_permissions",
+    "fix_environment_variable": "create_config",
+    "fix_env_var": "create_config",
+    "fix_env": "create_config",
+    "missing_env_var": "create_config",
+    "set_environment_variable": "create_config",
+    "fix_config": "create_config",
+    "fix_configmap": "create_config",
+    "fix_secret": "create_config",
+    "check_dependency": "check_dependencies",
+    "fix_dependency": "check_dependencies",
+    "fix_dependencies": "check_dependencies",
+    "fix_memory": "increase_memory",
+    "increase_resources": "increase_memory",
+    "fix_resources": "increase_memory",
+    "fix_oom": "increase_memory",
+    "fix_readiness_probe": "fix_probe",
+    "fix_liveness_probe": "fix_probe",
+    "fix_port": "fix_port_conflict",
+    "check_logs": "analyze_logs",
+    "review_logs": "analyze_logs",
+    "check_image": "fix_image",
+    "fix_image_tag": "fix_image",
+}
+
+
+def _normalize_diagnose_action(action: str) -> str:
+    if action in _DIAGNOSE_ACTIONS:
+        return action
+    key = action.lower().strip().replace("-", "_")
+    if key in _DIAGNOSE_ACTIONS:
+        return key
+    return _DIAGNOSE_ACTION_ALIASES.get(key, "manual_inspect")
 
 DIAGNOSE_SYSTEM = (
     "You are a Kubernetes SRE expert. You are given a pod failure context (error reason, recent "
@@ -155,8 +194,34 @@ DIAGNOSE_SYSTEM = (
     '"action": "<EXACTLY ONE of: fix_image, increase_memory, check_dependencies, fix_permissions, '
     'create_config, fix_probe, fix_port_conflict, analyze_logs, manual_inspect>", '
     '"suggestion": "<concrete fix steps, Traditional Chinese (zh-TW)>"}\n'
-    "The 'action' value must be one of those exact English snake_case codes, nothing else."
+    "The 'action' value must be one of those exact English snake_case codes, nothing else — do not "
+    "invent a different code (e.g. write 'fix_permissions' not 'fix_permission', 'create_config' for "
+    "a missing environment variable or ConfigMap/Secret, not a made-up code like 'fix_env_var').\n"
+    "If the logs and events are empty or give no specific signal (e.g. reason is 'Unknown' or blank), "
+    "you do NOT have enough evidence for a specific root cause — do NOT guess something concrete like "
+    "a bad image or a missing dependency. Instead say the evidence is insufficient, use severity "
+    "'low' unless restart_count is high, and set action to 'manual_inspect'. Only name a specific root "
+    "cause when the logs or events actually contain a concrete signal supporting it."
 )
+
+DIAGNOSE_FEWSHOT = [
+    (
+        "Pod: mystery-pod\nContainer: app\nError State: Unknown\nRestart Count: 1\nRecent Logs:\n\nEvents: ",
+        '{"root_cause":"目前的 log 與事件都沒有明確訊號，證據不足以判斷具體根因","severity":"low","action":"manual_inspect","suggestion":"建議人工檢視 Pod 的完整日誌與事件記錄，或稍候重新掃描確認是否仍在發生"}',
+    ),
+    (
+        "Pod: worker-1\nContainer: app\nError State: CrashLoopBackOff\nRestart Count: 6\nRecent Logs:\nError: EACCES: permission denied, open '/data/app.lock'\nEvents: Started container app",
+        '{"root_cause":"應用程式對 /data 目錄沒有寫入權限","severity":"high","action":"fix_permissions","suggestion":"檢查容器的 securityContext 與掛載的 volume 權限設定，確保執行使用者對 /data 有寫入權限"}',
+    ),
+    (
+        "Pod: billing-api-1\nContainer: billing-api\nError State: CrashLoopBackOff\nRestart Count: 12\nRecent Logs:\npanic: environment variable DATABASE_URL is required but was not set\nEvents: Back-off restarting failed container",
+        '{"root_cause":"缺少必要的環境變數 DATABASE_URL","severity":"high","action":"create_config","suggestion":"在 Deployment 或對應的 ConfigMap/Secret 補上 DATABASE_URL 這個環境變數"}',
+    ),
+    (
+        "Pod: cache-1\nContainer: redis\nError State: OOMKilled\nRestart Count: 4\nRecent Logs:\n\nEvents: Container cache-1 was OOMKilled",
+        '{"root_cause":"容器記憶體使用量超過設定上限被強制終止","severity":"high","action":"increase_memory","suggestion":"提高這個容器的 memory limit，或檢查是否有記憶體洩漏"}',
+    ),
+]
 
 
 # ── 意圖分類（Chat 分派用；規則比對不到時才呼叫）──────────────────
@@ -508,23 +573,28 @@ def diagnose(req: DiagnoseRequest):
         f"Recent Logs:\n{str(ctx.get('logs', ''))[:800]}\n"
         f"Events: {event_str}"
     )
-    messages = [
-        {"role": "system", "content": DIAGNOSE_SYSTEM},
-        {"role": "user", "content": user_content},
-    ]
+    messages = [{"role": "system", "content": DIAGNOSE_SYSTEM}]
+    for ex_in, ex_out in DIAGNOSE_FEWSHOT:
+        messages.append({"role": "user", "content": ex_in})
+        messages.append({"role": "assistant", "content": ex_out})
+    messages.append({"role": "user", "content": user_content})
 
     generated = _generate(_monitor_model, _monitor_tok, messages, _monitor_lock,
                           req.max_new_tokens, req.temperature)
     parsed = _parse_output(generated) or {}
-    action = str(parsed.get("action", "")).strip()
-    if action not in _DIAGNOSE_ACTIONS:
-        action = "manual_inspect"
+    action = _normalize_diagnose_action(str(parsed.get("action", "")).strip())
     severity = str(parsed.get("severity", "")).strip().lower()
     if severity not in ("high", "medium", "low"):
         severity = "unknown"
+    root_cause = str(parsed.get("root_cause", "")).strip()
+    if not root_cause:
+        # 模型輸出解析失敗或給了空字串時，不要讓使用者看到空白——這種情況本身
+        # 就代表證據不足，跟 action 統一降級成 manual_inspect 一起呈現。
+        root_cause = "證據不足，無法判定明確根因，建議人工檢視"
+        action = "manual_inspect"
     return {
         "diagnosis": {
-            "root_cause": _to_tw(parsed.get("root_cause", "")),
+            "root_cause": _to_tw(root_cause),
             "severity": severity,
             "action": action,
             "suggestion": _to_tw(parsed.get("suggestion", "")),
