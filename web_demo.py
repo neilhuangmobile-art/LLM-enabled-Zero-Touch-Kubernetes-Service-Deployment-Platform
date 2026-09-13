@@ -4036,6 +4036,16 @@ def _sanitize_deploy_payload(raw: dict) -> dict:
     return clean
 
 
+_NODE_CAPACITY_HINT_RE = re.compile(
+    r"(node|節點).{0,15}(cpu|core|記憶體|memory|gi|mi)", re.IGNORECASE
+)
+
+
+def _mentions_node_capacity(text: str) -> bool:
+    """使用者是否真的講了「每個 node 有多少 cpu/記憶體」這種話。"""
+    return bool(_NODE_CAPACITY_HINT_RE.search(text or ""))
+
+
 def _prepare_deploy(user_input: str, parsed_override: dict = None):
     parsed = _sanitize_deploy_payload(parsed_override) if parsed_override else ask_llama(user_input)
     if "error" in parsed:
@@ -4067,8 +4077,12 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
 
     review = _review_deployment(parsed)
     try:
-        if parsed.get("node_count") is not None:
-            # 模型自己判斷出來的 node_count（訓練資料裡有明講 node 容量時才會出現）
+        # 只有使用者自己真的講了「每個 node 多少 cpu/記憶體」，才信任模型自己算出來的
+        # node_count/total_cpu 等欄位——實測發現模型會在使用者沒提 node 容量的情況下
+        # 自己冒出這些欄位（例如問「我想要高可用的服務」），而且算出來的數字前後不一致
+        # （total_cpu 跟 cpu×pods 對不上）。沒有明確依據時一律用 cost_agent 的固定公式算，
+        # 不要相信模型自己報的數字。
+        if parsed.get("node_count") is not None and _mentions_node_capacity(user_input):
             review["node_estimate"] = {"node_count": parsed["node_count"], "source": "llm"}
         else:
             from agents.cost_agent import estimate_node_count
