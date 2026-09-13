@@ -291,17 +291,32 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None):
         _api_client = k8s_client.ApiClient(configuration=_cfg)
         api  = k8s_client.AppsV1Api(_api_client)
         core = k8s_client.CoreV1Api(_api_client)
-        resources = None
-        if memory or cpu:
-            cpu_req = cpu or "100m"
-            resources = k8s_client.V1ResourceRequirements(
-                requests={"memory": memory, "cpu": cpu_req} if memory else {"cpu": cpu_req},
-                limits  ={"memory": memory, "cpu": cpu_req} if memory else {"cpu": cpu_req},
-            )
+        # 使用者沒填 memory/cpu 時，過去完全不設限制（一個 Pod 有機會吃光整台節點資源）。
+        # 改成套用 agents/cost_agent 既有的「依 image 類型推薦資源」規則（跟審查卡上顯示
+        # 給使用者看的建議是同一份 profile，不會兩邊數字不一致）；使用者有指定的維度就照使用者的，
+        # 沒指定的維度才補預設值。
+        try:
+            from agents.cost_agent import _APP_PROFILES, _detect_app_type
+            _profile = _APP_PROFILES.get(_detect_app_type(image, app_name), _APP_PROFILES["default"])
+            _req_cpu, _req_mem, _lim_cpu, _lim_mem = _profile
+        except Exception:
+            _req_cpu, _req_mem, _lim_cpu, _lim_mem = 100, 128, 500, 256
+        cpu_req = cpu or f"{_req_cpu}m"
+        cpu_lim = cpu or f"{_lim_cpu}m"
+        mem_req = memory or f"{_req_mem}Mi"
+        mem_lim = memory or f"{_lim_mem}Mi"
+        resources = k8s_client.V1ResourceRequirements(
+            requests={"memory": mem_req, "cpu": cpu_req},
+            limits={"memory": mem_lim, "cpu": cpu_lim},
+        )
         container = k8s_client.V1Container(
             name=app_name, image=image,
             ports=[k8s_client.V1ContainerPort(container_port=port)],
             resources=resources,
+            # 安全性最低硬化：擋掉容器內程序取得比父程序更高的權限。不強制 runAsNonRoot/
+            # 丟棄 capabilities，因為這個平台常部署的官方 image（nginx 綁 80 port 等）預設
+            # 用 root 執行，硬上非 root 反而會讓現有 demo 流程直接壞掉。
+            security_context=k8s_client.V1SecurityContext(allow_privilege_escalation=False),
         )
         deploy = k8s_client.V1Deployment(
             api_version="apps/v1", kind="Deployment",
