@@ -1,0 +1,28 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      # 故意不裝 requirements.txt 全部套件（torch/bitsandbytes/transformers 又大又要 GPU，
+      # CI runner 沒有 GPU、裝了也用不到），只裝這些純邏輯測試真正需要的東西。
+      # GPU/model server/K8s 相關的整合測試（標記 @pytest.mark.integration）本來就
+      # 設計成要在有真實環境的本機手動跑，不在這裡執行。
+      - name: Install minimal test dependencies
+        run: pip install pytest==8.4.2 pyyaml==6.0.3
+
+      - name: Syntax check all Python files
+        run: python -m compileall -q .
+
+      - name: Run unit tests (skip integration-marked tests)
+        run: python -m pytest tests/ -m "not integration" -v

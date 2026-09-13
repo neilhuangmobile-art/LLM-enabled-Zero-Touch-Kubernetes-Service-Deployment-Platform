@@ -267,6 +267,48 @@ Deployment 從建立起就沒有更早的正常 revision，回滾本身會回報
 
 ---
 
+## 7. 沒有自動化測試／CI，改動無法快速驗證有沒有壞掉
+
+**風險**：整個專案原本沒有 `tests/` 目錄、沒有 pytest、沒有 CI。每次改動（包含這次 session 改的
+healer/scale 風險檢查）都只能靠手動 curl、手動建測試 pod、肉眼比對輸出，沒辦法在幾秒內確認
+「這次改動有沒有讓別的功能壞掉」。
+
+**為什麼重要**：這個專案的核心價值在於「多代理審核會不會正確 block/warn/approve」「Pod 壞了會不會
+被正確判斷根因」，這些都是純邏輯計算（`agents/cost_agent.py`、`agents/security_agent.py`、
+`agents/orchestrator.py`、`guardian/yaml_validator.py`、`healer/diagnose.py` 的規則層），完全不需要
+真實 K8s/GPU 就能測，卻一直沒有自動化覆蓋——代表每次改 prompt、改規則、改門檻值，都只能憑印象
+判斷有沒有影響到其他情境，跟這次 session 修 hallucination 時「多加一條規則、意外讓已修好的案例
+退步」是同一種風險（見 4.3 節），差別是那次是 LLM prompt、這次會是純邏輯層。
+
+**解決方式**：
+- 新增 `tests/`，針對上述純邏輯模組寫了 60 個測試案例，涵蓋：單位轉換（`_parse_memory_bytes`／
+  `_parse_cpu_millicores`）、node 數量估算（含「50 副本疊加不能算錯」這種之前真的抓到過的 bug 情境）、
+  安全掃描的 8 條規則（privileged/hostNetwork/hostPID 等 critical 判定）、orchestrator 的最終決策
+  邏輯（approve/warn/block，含「單副本高可用警告」「缺健康探針警告」這些容易被忽略的真實規則）、
+  healer 規則層根因判斷（OOMKilled/ImagePullBackOff/CrashLoopBackOff 等 8 種模式）、remediate 的
+  dry-run 分派邏輯與工具函式（`_infer_deployment_name`、`_double_memory`）。
+- 新增 `.github/workflows/test.yml`：push/PR 時自動跑 `python -m compileall`（全專案語法檢查）
+  + `pytest -m "not integration"`。故意不裝 `torch`/`transformers`/`bitsandbytes`（CI runner 沒
+  GPU），只裝 `pytest`+`pyyaml`，讓 CI 快、穩、不受本地 GPU 環境影響。
+- 新增 `requirements-dev.txt`（只放 `pytest`），跟正式依賴的 `requirements.txt` 分開，不影響
+  上次剛釘死的版本號。
+
+**驗證**：60 個測試全部通過（`pytest tests/ -v` → `60 passed`）；過程中這套測試**真的抓到兩個
+我自己寫測試時對系統行為的錯誤假設**（不是程式碼 bug，是我以為「乾淨的部署」會被 approve，
+實際是 perf_agent 的「單副本無高可用」「缺健康探針」兩條 high severity 規則會讓它變成
+warn——這正是自動化測試的價值：把「隱性的系統行為」變成「寫下來、可驗證的規格」，下次有人
+改動 `PERF_HIGH_ISSUE_WARN_LIMIT` 之類的門檻值，測試會立刻告訴他影響了什麼）；`python -m
+compileall -q .` 對整個專案跑過確認語法零錯誤。
+
+**尚未覆蓋（誠實記錄，不要在報告裡假裝已經完整）**：`web_demo.py` 本身（Flask 路由、多步部署
+確認流程、healer 背景自動修復迴圈）、`core/model_server.py`、`llama_client.py` 這些需要真實
+K8s 連線或 model server 常駐的路徑，目前完全沒有自動化測試，只能靠手動驗證（這次 session 驗證
+healer 自動修復、`/api/scale` 風險檢查都是手動建測試 pod/呼叫 API 完成的）。這些之後可以用
+`unittest.mock` 假造 `kubernetes.client` 的回應來測，標記 `@pytest.mark.integration`，是明確的
+下一步工作，不是「做不到」。
+
+---
+
 ## 尚待排查（可作為報告中「未來工作」的項目）
 
 - K8s ServiceAccount 實際權限範圍（目前用 Docker Desktop 的 kubeconfig，很可能是 cluster-admin

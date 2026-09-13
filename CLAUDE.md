@@ -38,6 +38,24 @@ LLM-enabled Zero-Touch Kubernetes Service Deployment Platform：使用者以自�
 | `web_demo.py` | Web Dashboard（Flask），現行唯一入口 |
 | `0_touch_generate_pods.py` | 零接觸部署 CLI 入口 |
 
+## 測試
+
+`tests/`（pytest，2026-09-14 新增）覆蓋 `agents/`、`guardian/yaml_validator.py`、`healer/diagnose.py`
+（規則層）、`healer/remediate.py`（`dry_run=True`）這些純邏輯／不需要真實環境的部分——這些正是
+「部署會不會被 block/warn」「Pod 壞了會被判成什麼根因」的實際計算依據，改動這些檔案後**務必**
+先跑測試再回報完成。
+
+```bash
+pip install -r requirements-dev.txt   # 只裝 pytest，不動 requirements.txt 正式依賴
+pytest                                 # 跑全部（目前 60 個），跑在專案的 Python 3.9 環境
+pytest -m "not integration"           # CI 用這個；integration 標記的測試需要真實 K8s/model server
+```
+
+需要真實環境（K8s 連線、model server 常駐）才能跑的測試要標 `@pytest.mark.integration`，
+目前還沒有這類測試（web_demo.py 的 K8s 呼叫路徑目前靠手動 curl/建測試 pod 驗證，尚未寫成自動化測試，
+是已知的覆蓋缺口）。`.github/workflows/test.yml` 在 push/PR 時自動跑 `pytest -m "not integration"`，
+故意不裝 `torch`/`transformers`/`bitsandbytes`（CI runner 沒 GPU、裝了也用不到，只會拖慢又可能裝不起來）。
+
 ## 工作慣例
 
 - 文件與程式碼註解慣用繁體中文（見 `docs/`、既有註解），除非使用者另外指定。
