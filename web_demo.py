@@ -944,6 +944,11 @@ tr:hover td{background:var(--bg)}
 .lang-btn:hover{background:var(--border)}
 .guide-btn{width:32px;padding:0;background:var(--green-light);color:var(--green)}
 .guide-btn:hover{background:var(--green-mid)}
+/* ── 是/否確認彈窗（名稱已存在 / port 被佔用）───────────────── */
+.confirm-dialog{background:#fff;border-radius:14px;max-width:420px;width:100%;padding:20px 22px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.confirm-dialog-title{font-size:15px;font-weight:750;color:#111;margin-bottom:8px}
+.confirm-dialog-body{font-size:13px;color:var(--text2);line-height:1.6}
+.confirm-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
 #manual-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:200;align-items:center;justify-content:center;padding:24px;display:none}
 /* [hidden] 是 HTML 標準屬性，但 #manual-overlay 這條 ID 規則的 specificity 比瀏覽器內建的
    [hidden]{display:none} 規則高，等於蓋掉它——這是之前「一登入就跳出來、關不掉」的根因。
@@ -1418,6 +1423,20 @@ html,body{height:100%;overflow:hidden}
       <div id="term-tip" hidden></div>
     </div>
 
+    <!-- 通用是/否確認彈窗：部署第一步偵測到名稱已存在或 port 被佔用時用，
+         askConfirm() 回傳 Promise<boolean>，跟 startClarify 那種純文字提示不同，
+         這個會真的擋住流程等使用者按下按鈕。 -->
+    <div id="confirm-dialog-overlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:300;align-items:center;justify-content:center;padding:24px">
+      <div class="confirm-dialog">
+        <div class="confirm-dialog-title" id="confirm-dialog-title"></div>
+        <div class="confirm-dialog-body" id="confirm-dialog-body"></div>
+        <div class="confirm-dialog-actions">
+          <button class="deploy-confirm-btn" id="confirm-dialog-no">No</button>
+          <button class="deploy-confirm-btn primary" id="confirm-dialog-yes">Yes</button>
+        </div>
+      </div>
+    </div>
+
     <div class="page" id="page-dataset">
       <div class="page-title">Dataset Manager</div>
       <div class="page-sub">Enrich &amp; inspect the K8s training dataset</div>
@@ -1806,6 +1825,27 @@ function closeManual(){
 document.addEventListener('keydown', function(e){
   if(e.key === 'Escape') closeManual();
 });
+
+// 通用是/否確認彈窗。回傳 Promise<boolean>：true=按了 Yes、false=按了 No 或關掉。
+function askConfirm(title, bodyHtml, yesLabel, noLabel){
+  return new Promise(function(resolve){
+    const overlay = document.getElementById('confirm-dialog-overlay');
+    document.getElementById('confirm-dialog-title').textContent = title;
+    document.getElementById('confirm-dialog-body').innerHTML = bodyHtml;
+    const yesBtn = document.getElementById('confirm-dialog-yes');
+    const noBtn = document.getElementById('confirm-dialog-no');
+    yesBtn.textContent = yesLabel || (uiLang === 'en' ? 'Yes, continue' : '是，繼續');
+    noBtn.textContent = noLabel || (uiLang === 'en' ? 'No, go back' : '否，回去修改');
+    overlay.style.display = 'flex';
+    function done(v){
+      overlay.style.display = 'none';
+      yesBtn.onclick = null; noBtn.onclick = null;
+      resolve(v);
+    }
+    yesBtn.onclick = function(){ done(true); };
+    noBtn.onclick = function(){ done(false); };
+  });
+}
 // 專有名詞點一下展開小框框註解：用一個共用 tooltip，點哪個詞就移到那個詞下面顯示。
 document.getElementById('manual-body') && document.getElementById('manual-body').addEventListener('click', function(e){
   const term = e.target.closest('.term');
@@ -3231,6 +3271,34 @@ async function flowToReview(id){
   if(!Number.isInteger(spec.pods) || spec.pods<1 || spec.pods>100){ setFlowError(root, 'Pods \u5fc5\u9808\u5728 1\u2013100 \u4e4b\u9593.'); return; }
   if(!Number.isInteger(spec.port) || spec.port<1 || spec.port>65535){ setFlowError(root, 'Port \u5fc5\u9808\u5728 1\u201365535 \u4e4b\u9593.'); return; }
   if(spec.memory && !/^\d+(Mi|Gi|Ki|M|G)$/.test(spec.memory)){ setFlowError(root, 'Memory \u683c\u5f0f\u9808\u5982 128Mi \u6216 1Gi.'); return; }
+
+  // 名稱已存在 / port 被佔用：在第一步就先問清楚，不是等審查跑完才在一堆警告裡看到。
+  try{
+    const cr = await fetch('/api/deploy/conflicts?app_name='+encodeURIComponent(spec.app_name)+'&port='+encodeURIComponent(spec.port));
+    const cd = await cr.json();
+    if(!flowAlive(flow)) return;
+    if(cd.name_exists){
+      const ok = await askConfirm(
+        uiLang==='en' ? 'Name already exists' : '名稱已存在',
+        uiLang==='en'
+          ? `A Deployment named <b>${escHtml(spec.app_name)}</b> already exists. Continuing will <b>update it in place</b> instead of creating a new one. Replace it?`
+          : `名稱「<b>${escHtml(spec.app_name)}</b>」已經存在，繼續的話會<b>直接取代／更新</b>現有的服務，不會建立新的。是否取代？`
+      );
+      if(!flowAlive(flow)) return;
+      if(!ok) return;
+    }
+    if(cd.port_conflict){
+      const ok = await askConfirm(
+        uiLang==='en' ? 'Port already in use' : 'Port 已被佔用',
+        uiLang==='en'
+          ? `Port <b>${escHtml(spec.port)}</b> is already used by <b>${escHtml(cd.port_conflict)}</b>. Only one service can be externally reachable on this port, so this one may not be reachable from your browser. Continue anyway?`
+          : `Port <b>${escHtml(spec.port)}</b> 已經被「<b>${escHtml(cd.port_conflict)}</b>」佔用，同一個 port 只有一個服務能真的對外連線，這次部署可能連不到。是否仍要繼續？`
+      );
+      if(!flowAlive(flow)) return;
+      if(!ok) return;
+    }
+  }catch(e){ /* 檢查本身失敗就不擋流程，後面的審查步驟還會再檢查一次 */ }
+
   flow.spec = spec;
   // 換成 spinner 卡（不動 flow.step；結尾 persistFlowCard 會依真實狀態重繪）
   const busyHtml = renderBusyCard(flow, 'Reviewing');
@@ -4056,6 +4124,29 @@ def _resource_summary(parsed: dict, review: dict) -> dict:
         "cost_note": est.get("note"),
         "decision": review.get("decision"),
     }
+
+
+@app.route("/api/deploy/conflicts")
+def api_deploy_conflicts():
+    """第一步（規格確認）就先問使用者：名稱已存在／port 被佔用，是否仍要繼續。
+    比 /api/deploy/parse 快很多（不跑 guardian/agents/dry-run），適合在使用者
+    按「下一步」的當下就先問清楚，而不是等審查跑完才在一堆警告裡看到。"""
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    app_name = (request.args.get("app_name") or "").strip()
+    port_raw = (request.args.get("port") or "").strip()
+    name_exists = bool(app_name) and app_name in {d["name"] for d in k8s_get_deployments()}
+    port_conflict = None
+    if port_raw:
+        try:
+            port = int(port_raw)
+            for s in k8s_get_services():
+                if s["port"] == port and s["app"] != app_name:
+                    port_conflict = s["app"] or s["name"]
+                    break
+        except ValueError:
+            pass
+    return jsonify({"name_exists": name_exists, "port_conflict": port_conflict})
 
 
 @app.route("/api/deploy/parse", methods=["POST"])
