@@ -421,6 +421,27 @@ def k8s_get_deployments():
     except Exception:
         return []
 
+
+def k8s_get_services():
+    """列出目前所有 LoadBalancer Service 的 {name, app, port}，給部署前的 port 衝突檢查用。
+    Docker Desktop 的 K8s 一個 port 只能真的綁一個 LoadBalancer Service 到 localhost，
+    兩個服務搶同一個 port 時，其中一個會卡在 external-ip pending、瀏覽器連不到。"""
+    if not K8S_ENABLED:
+        return []
+    try:
+        core = k8s_client.CoreV1Api()
+        result = []
+        for s in core.list_namespaced_service(NS).items:
+            if s.spec.type != "LoadBalancer":
+                continue
+            app = (s.spec.selector or {}).get("app", "")
+            for p in (s.spec.ports or []):
+                result.append({"name": s.metadata.name, "app": app, "port": p.port})
+        return result
+    except Exception:
+        return []
+
+
 _BAD_WAITING = {"CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull",
                 "CreateContainerConfigError", "CreateContainerError", "InvalidImageName"}
 _BAD_TERMINATED = {"OOMKilled", "Error", "ContainerCannotRun", "DeadlineExceeded"}
@@ -668,6 +689,37 @@ def _review_deployment(parsed):
             review["warnings"].extend(dry.get("warnings", []))
     except Exception as e:
         review["warnings"].append(f"dry-run unavailable: {e}")
+
+    # 使用者輸入本身可不可行的檢查：名稱撞名、port 撞別的服務。
+    # 這兩個是 2026-09-13 真的在這台機器上遇到的問題（web-frontend/auto-app/zt-smoke
+    # 三個都要 port 80，Docker Desktop 一個 port 只能真的綁一個 LoadBalancer，
+    # 其中一個會卡在 external-ip pending、瀏覽器連不到）——不是假設性風險。
+    try:
+        app_name = parsed.get("app_name")
+        if app_name and app_name in {d["name"] for d in k8s_get_deployments()}:
+            review["warnings"].append(
+                f"名稱衝突：Deployment「{app_name}」已經存在，這次部署會更新現有的服務（例如換 image "
+                f"或副本數），不會建立新的服務。如果你是想建一個不一樣的新服務，請換一個名字。 / "
+                f"Name conflict: a Deployment named '{app_name}' already exists — this will update it "
+                f"in place, not create a new one. Use a different name if you meant to create a separate service."
+            )
+        port = parsed.get("port")
+        if port:
+            port = int(port)
+            conflicts = [s for s in k8s_get_services()
+                        if s["port"] == port and s["app"] != app_name]
+            if conflicts:
+                other = conflicts[0]["app"] or conflicts[0]["name"]
+                review["warnings"].append(
+                    f"Port 衝突：port {port} 已經被「{other}」這個服務用掉了。Docker Desktop 的 K8s "
+                    f"一個 port 只能真的對外綁一個服務，這次部署完可能會拿不到外部連線位址、瀏覽器連不到，"
+                    f"建議換一個 port。 / "
+                    f"Port conflict: port {port} is already used by '{other}'. Only one LoadBalancer "
+                    f"service can be externally reachable per port on Docker Desktop, so this deployment "
+                    f"may not get a working external address — consider using a different port."
+                )
+    except Exception as e:
+        review["warnings"].append(f"conflict check unavailable: {e}")
 
     if review["decision"] != "block" and review["warnings"]:
         review["decision"] = "warn"
