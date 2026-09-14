@@ -20,7 +20,7 @@ spec:
   min_ready_seconds: null
   paused: null
   progress_deadline_seconds: null
-  replicas: 6
+  replicas: 3
   revision_history_limit: null
   selector:
     match_expressions: null
@@ -70,14 +70,26 @@ spec:
         resources:
           claims: null
           limits:
-            cpu: 100m
-            memory: 4Gi
+            cpu: 500m
+            memory: 256Mi
           requests:
             cpu: 100m
-            memory: 4Gi
+            memory: 128Mi
         restart_policy: null
         restart_policy_rules: null
-        security_context: null
+        security_context:
+          allow_privilege_escalation: false
+          app_armor_profile: null
+          capabilities: null
+          privileged: null
+          proc_mount: null
+          read_only_root_filesystem: null
+          run_as_group: null
+          run_as_non_root: null
+          run_as_user: null
+          se_linux_options: null
+          seccomp_profile: null
+          windows_options: null
         startup_probe: null
         stdin: null
         stdin_once: null
@@ -124,7 +136,6 @@ spec:
       tolerations: null
       topology_spread_constraints: null
       volumes: null
-      workload_ref: null
 status: null
 ---
 api_version: v1
