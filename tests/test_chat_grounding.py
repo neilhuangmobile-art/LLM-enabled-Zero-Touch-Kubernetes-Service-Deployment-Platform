@@ -28,7 +28,7 @@ def fake_cluster(monkeypatch):
     monkeypatch.setattr(web_demo, "K8S_ENABLED", True)
     monkeypatch.setattr(
         web_demo, "k8s_get_deployments",
-        lambda: [{"name": "auto-app"}, {"name": "my-cache"}, {"name": "zt-smoke"}],
+        lambda namespace=None: [{"name": "auto-app"}, {"name": "my-cache"}, {"name": "zt-smoke"}],
     )
     yield
 

@@ -277,7 +277,8 @@ def _fmt_k8s_time(ts):
         return str(ts)[:16]
 
 
-def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None):
+def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namespace=None):
+    namespace = namespace or NS
     if not K8S_ENABLED:
         return False, "K8s 未連線（模擬模式）"
     try:
@@ -340,13 +341,13 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None):
             ),
         )
         try:
-            api.replace_namespaced_deployment(app_name, NS, deploy, _request_timeout=(5, 10))
+            api.replace_namespaced_deployment(app_name, namespace, deploy, _request_timeout=(5, 10))
         except Exception:
-            api.create_namespaced_deployment(NS, deploy, _request_timeout=(5, 10))
+            api.create_namespaced_deployment(namespace, deploy, _request_timeout=(5, 10))
         try:
-            core.replace_namespaced_service(f"{app_name}-svc", NS, svc, _request_timeout=(5, 10))
+            core.replace_namespaced_service(f"{app_name}-svc", namespace, svc, _request_timeout=(5, 10))
         except Exception:
-            core.create_namespaced_service(NS, svc, _request_timeout=(5, 10))
+            core.create_namespaced_service(namespace, svc, _request_timeout=(5, 10))
         os.makedirs(YAML_DIR, exist_ok=True)
         path = os.path.join(YAML_DIR, f"{app_name}.yaml")
         with open(path, "w", encoding="utf-8") as f:
@@ -357,13 +358,14 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None):
     except Exception as e:
         return False, str(e)
 
-def k8s_get_pods(app_name=None):
+def k8s_get_pods(app_name=None, namespace=None):
+    namespace = namespace or NS
     if not K8S_ENABLED:
         return []
     try:
         core = k8s_client.CoreV1Api()
         selector = f"app={app_name}" if app_name else None
-        pods = core.list_namespaced_pod(NS, label_selector=selector)
+        pods = core.list_namespaced_pod(namespace, label_selector=selector)
         result = []
         for p in pods.items:
             containers = []
@@ -397,13 +399,14 @@ def k8s_get_pods(app_name=None):
     except Exception:
         return []
 
-def k8s_get_deployments():
+def k8s_get_deployments(namespace=None):
+    namespace = namespace or NS
     if not K8S_ENABLED:
         return []
     try:
         api = k8s_client.AppsV1Api()
         core = k8s_client.CoreV1Api()
-        deps = api.list_namespaced_deployment(NS)
+        deps = api.list_namespaced_deployment(namespace)
         result = []
         for d in deps.items:
             updated_ts = d.metadata.creation_timestamp
@@ -417,7 +420,7 @@ def k8s_get_deployments():
                 labels = d.spec.selector.match_labels or {}
                 selector = ",".join(f"{k}={v}" for k, v in labels.items()) or None
                 if selector:
-                    pods = core.list_namespaced_pod(NS, label_selector=selector)
+                    pods = core.list_namespaced_pod(namespace, label_selector=selector)
                     for pod in pods.items:
                         ts = pod.metadata.creation_timestamp
                         if ts and (updated_ts is None or ts > updated_ts):
@@ -437,16 +440,21 @@ def k8s_get_deployments():
         return []
 
 
-def k8s_get_services():
+def k8s_get_services(namespace=None, all_namespaces=False):
     """列出目前所有 LoadBalancer Service 的 {name, app, port}，給部署前的 port 衝突檢查用。
     Docker Desktop 的 K8s 一個 port 只能真的綁一個 LoadBalancer Service 到 localhost，
-    兩個服務搶同一個 port 時，其中一個會卡在 external-ip pending、瀏覽器連不到。"""
+    兩個服務搶同一個 port 時，其中一個會卡在 external-ip pending、瀏覽器連不到——這是
+    host 層級的實體限制，不因為每個帳號有自己的 namespace 就消失，所以 port 衝突檢查
+    要跨所有 namespace 查（all_namespaces=True），不能只看自己的 namespace。"""
+    namespace = namespace or NS
     if not K8S_ENABLED:
         return []
     try:
         core = k8s_client.CoreV1Api()
         result = []
-        for s in core.list_namespaced_service(NS).items:
+        items = (core.list_service_for_all_namespaces().items if all_namespaces
+                 else core.list_namespaced_service(namespace).items)
+        for s in items:
             if s.spec.type != "LoadBalancer":
                 continue
             app = (s.spec.selector or {}).get("app", "")
@@ -478,13 +486,79 @@ def k8s_get_node_capacity():
         return None
 
 
-def _check_scale_risk(name: str, new_replicas: int):
-    """在真的調整 replicas 前先檢查：整個叢集（所有 Deployment 加總）在套用這個新
-    replicas 之後，資源需求會不會超出最大節點的容量。跟部署時的單一 Pod 檢查是
-    不同層次的風險——這裡是「單個 Pod 都放得下，但疊加起來的總量放不下」，超出的
+def _user_namespace(username: str) -> str:
+    """把帳號名稱轉成合法的 K8s namespace 名稱（DNS-1123 label：小寫字母數字+連字號，
+    開頭結尾不能是連字號，長度上限 63）。每個帳號固定對應一個 namespace，讓
+    Pod/Deployment/Chat 等資源天然互相隔離（K8s 層級的隔離，不是 UI 濾掉而已）。"""
+    safe = re.sub(r"[^a-z0-9-]", "-", (username or "").lower()).strip("-")[:50]
+    return f"user-{safe or 'unknown'}"
+
+
+def _ensure_user_namespace(namespace: str):
+    """namespace 不存在就建立；已存在直接跳過。刻意設計成「隨時呼叫都安全」而不是
+    只在註冊時做一次——即使註冊當下 K8s 剛好斷線，之後第一次真的要部署時還是會
+    自動補建，不會讓使用者卡住（符合「不能靜默失敗」但也不能「因為當下環境沒設好
+    就整個功能壞掉」的專案原則）。"""
+    if not K8S_ENABLED:
+        return
+    try:
+        core = k8s_client.CoreV1Api()
+        try:
+            core.read_namespace(namespace)
+        except Exception:
+            core.create_namespace(k8s_client.V1Namespace(
+                metadata=k8s_client.V1ObjectMeta(name=namespace)))
+    except Exception:
+        pass  # 建立失敗（例如剛好重複建立的 race）不阻擋操作，讓後續呼叫自然報錯
+
+
+def _save_users():
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json"), "w", encoding="utf-8") as _uf:
+        json.dump(USERS, _uf)
+
+
+def _record_violation(username: str) -> bool:
+    """記一次惡意誘導/操縱行為違規，回傳這次是否觸發封鎖（累積滿 3 次）。"""
+    user = USERS.get(username)
+    if not isinstance(user, dict):
+        return False
+    user["violation_count"] = user.get("violation_count", 0) + 1
+    if user["violation_count"] >= 3:
+        _ban_user(username)
+        _save_users()
+        return True
+    _save_users()
+    return False
+
+
+def _ban_user(username: str):
+    """標記帳號為封鎖，並刪除該帳號的 K8s namespace（連同裡面所有 Pod/Deployment/
+    Service 一次清掉）。故意不動 git 裡 manifests/<namespace>/ 底下的歷史檔案——
+    那些是 GitOps 的稽核軌跡，只刪除叢集裡活著的資源。"""
+    user = USERS.get(username)
+    if isinstance(user, dict):
+        user["banned"] = True
+    if K8S_ENABLED:
+        try:
+            k8s_client.CoreV1Api().delete_namespace(_user_namespace(username))
+        except Exception:
+            pass
+
+
+def _check_scale_risk(name: str, new_replicas: int, namespace: str = None):
+    """在真的調整 replicas 前先檢查：整個叢集（所有 namespace 的所有 Deployment 加總）
+    在套用這個新 replicas 之後，資源需求會不會超出最大節點的容量。跟部署時的單一 Pod
+    檢查是不同層次的風險——這裡是「單個 Pod 都放得下，但疊加起來的總量放不下」，超出的
     那些副本會卡在 Pending 永遠排不進去，操作本身不會報錯，使用者不會馬上發現。
+
+    故意查「全叢集所有 namespace」而不是只查目前使用者自己的 namespace——每個帳號
+    有自己的 namespace 是為了隔離「看得到誰的東西」，但節點的實體資源（CPU/記憶體）
+    是所有 namespace 共用的，A 使用者部署時如果只看自己的 namespace，會忽略掉
+    B 使用者已經用掉的資源，兩個人都以為自己還有空間、疊加起來真的把節點塞爆。
+
     回傳 (blocked: bool, message: str|None)；查不到容量或沒有設資源限制時直接放行
     （不誤判），因為這只是「操作前的風險提醒」，不是唯一的安全網。"""
+    namespace = namespace or NS
     try:
         real_capacity = k8s_get_node_capacity()
         if not real_capacity or not K8S_ENABLED:
@@ -495,14 +569,15 @@ def _check_scale_risk(name: str, new_replicas: int):
         if not node_cpu_mc and not node_mem_b:
             return False, None
         apps_api = k8s_client.AppsV1Api()
-        deployments = apps_api.list_namespaced_deployment(NS).items
+        deployments = apps_api.list_deployment_for_all_namespaces().items
         total_cpu_mc = 0
         total_mem_b = 0
         for d in deployments:
             containers = d.spec.template.spec.containers if d.spec.template.spec else []
             if not containers or not containers[0].resources or not containers[0].resources.requests:
                 continue
-            reps = new_replicas if d.metadata.name == name else (d.spec.replicas or 1)
+            is_target = d.metadata.name == name and d.metadata.namespace == namespace
+            reps = new_replicas if is_target else (d.spec.replicas or 1)
             req = containers[0].resources.requests
             total_cpu_mc += (_parse_cpu_millicores(req.get("cpu")) or 0) * reps
             total_mem_b += (_parse_memory_bytes(req.get("memory")) or 0) * reps
@@ -529,24 +604,25 @@ _BAD_WAITING = {"CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull",
 _BAD_TERMINATED = {"OOMKilled", "Error", "ContainerCannotRun", "DeadlineExceeded"}
 
 
-def _resolve_pods(name):
+def _resolve_pods(name, namespace=None):
     """把使用者給的名字解析成一組 pod。可能是完整 pod 名、app label、或名稱前綴。"""
+    namespace = namespace or NS
     if not K8S_ENABLED or not name:
         return []
     core = k8s_client.CoreV1Api()
     try:
-        p = core.read_namespaced_pod(name, NS)
+        p = core.read_namespaced_pod(name, namespace)
         return [p]
     except Exception:
         pass
     try:
-        pods = core.list_namespaced_pod(NS, label_selector=f"app={name}")
+        pods = core.list_namespaced_pod(namespace, label_selector=f"app={name}")
         if pods.items:
             return pods.items
     except Exception:
         pass
     try:
-        allp = core.list_namespaced_pod(NS)
+        allp = core.list_namespaced_pod(namespace)
         pref = [p for p in allp.items if p.metadata.name.startswith(name)]
         return pref
     except Exception:
@@ -607,7 +683,7 @@ def _pod_detail(p):
     events = []
     try:
         evs = core.list_namespaced_event(
-            NS, field_selector=f"involvedObject.name={p.metadata.name}")
+            p.metadata.namespace, field_selector=f"involvedObject.name={p.metadata.name}")
         ev_sorted = sorted(evs.items, key=lambda e: (e.last_timestamp or e.event_time or p.metadata.creation_timestamp), reverse=True)
         for e in ev_sorted[:5]:
             events.append({"type": e.type, "reason": e.reason,
@@ -629,21 +705,22 @@ def _pod_detail(p):
     }
 
 
-def k8s_describe_pod(name):
+def k8s_describe_pod(name, namespace=None):
     """回傳一或多個符合 name 的 pod 詳情（list）。找不到回空 list。"""
-    return [_pod_detail(p) for p in _resolve_pods(name)]
+    return [_pod_detail(p) for p in _resolve_pods(name, namespace)]
 
 
-def k8s_describe_deployment(name):
+def k8s_describe_deployment(name, namespace=None):
     """單一 deployment 的詳細狀態。找不到回 None。"""
+    namespace = namespace or NS
     if not K8S_ENABLED or not name:
         return None
     try:
         api = k8s_client.AppsV1Api()
-        d = api.read_namespaced_deployment(name, NS)
+        d = api.read_namespaced_deployment(name, namespace)
     except Exception:
         # 名字可能是 app label 或前綴，退回列表比對
-        for dd in k8s_get_deployments():
+        for dd in k8s_get_deployments(namespace):
             if dd["name"] == name or dd["name"].startswith(name):
                 return dd
         return None
@@ -671,15 +748,16 @@ def k8s_describe_deployment(name):
     }
 
 
-def k8s_delete_deployment(app_name):
+def k8s_delete_deployment(app_name, namespace=None):
+    namespace = namespace or NS
     if not K8S_ENABLED:
         return False, "K8s 未連線"
     try:
         api  = k8s_client.AppsV1Api()
         core = k8s_client.CoreV1Api()
-        api.delete_namespaced_deployment(app_name, NS)
+        api.delete_namespaced_deployment(app_name, namespace)
         try:
-            core.delete_namespaced_service(f"{app_name}-svc", NS)
+            core.delete_namespaced_service(f"{app_name}-svc", namespace)
         except Exception:
             pass
         return True, f"已刪除 {app_name}"
@@ -1674,6 +1752,10 @@ html,body{height:100%;overflow:hidden}
 // ── Auth guard ──
 const loggedIn = {{ 'true' if logged_in else 'false' }};
 const k8sEnabled = {{ 'true' if k8s else 'false' }};
+// 2026-09-15：Chat 歷史用 localStorage 存，是跟著瀏覽器走、不是跟著登入帳號走——
+// 同一台瀏覽器換帳號登入會看到上一個帳號的聊天記錄。用 CURRENT_USER 把 key 綁定到
+// 帳號，換帳號登入時就不會看到別人（或自己上一個帳號）的聊天內容。
+const CURRENT_USER = "{{ username }}";
 
 // ══════════════════════════════════════════════════════════════════
 //  中英切換（Chat 分頁 + 使用說明書）。專有名詞（Pod/Deployment/...）
@@ -2825,9 +2907,12 @@ function hydrateChatFlows(){
   saveChats();
 }
 
+function _chatsKey(){ return 'k8s_chats_' + CURRENT_USER; }
+function _currentChatKey(){ return 'k8s_current_chat_' + CURRENT_USER; }
+
 function initChats(){
-  try { chats = JSON.parse(localStorage.getItem('k8s_chats')||'[]'); } catch(e){ chats=[]; }
-  currentChatId = localStorage.getItem('k8s_current_chat') || null;
+  try { chats = JSON.parse(localStorage.getItem(_chatsKey())||'[]'); } catch(e){ chats=[]; }
+  currentChatId = localStorage.getItem(_currentChatKey()) || null;
   if(!chats.length){
     const id = 'chat_' + Date.now();
     chats.push({id, title:'New Chat', messages:[]});
@@ -2843,13 +2928,13 @@ function initChats(){
 }
 
 function saveChats(){
-  localStorage.setItem('k8s_chats', JSON.stringify(chats));
-  localStorage.setItem('k8s_current_chat', currentChatId||'');
+  localStorage.setItem(_chatsKey(), JSON.stringify(chats));
+  localStorage.setItem(_currentChatKey(), currentChatId||'');
 }
 
 function newChat(){
   if(!chats.length){
-    try { chats = JSON.parse(localStorage.getItem('k8s_chats')||'[]'); } catch(e){ chats=[]; }
+    try { chats = JSON.parse(localStorage.getItem(_chatsKey())||'[]'); } catch(e){ chats=[]; }
   }
   const id = 'chat_' + Date.now();
   chats.push({id, title:'New Chat', messages:[]});
@@ -3727,9 +3812,11 @@ def register():
         return render_template_string(HTML, logged_in=False, page='register', error="Username already taken", k8s=K8S_ENABLED, username='')
     if len(password) < 6:
         return render_template_string(HTML, logged_in=False, page='register', error="Password must be at least 6 characters", k8s=K8S_ENABLED, username='')
-    USERS[username] = {"password_hash": hash_password(password), "created_at": datetime.now().isoformat()}
+    USERS[username] = {"password_hash": hash_password(password), "created_at": datetime.now().isoformat(),
+                       "violation_count": 0, "banned": False}
     with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json"), "w", encoding="utf-8") as _uf:
         json.dump(USERS, _uf)
+    _ensure_user_namespace(_user_namespace(username))
     session["username"] = username
     return redirect("/")
 
@@ -3740,14 +3827,23 @@ def login():
     stored_user = USERS.get(username)
     stored_hash = stored_user.get("password_hash", "") if isinstance(stored_user, dict) else stored_user
     if verify_password(password, stored_hash):
+        if isinstance(stored_user, dict) and stored_user.get("banned"):
+            # 帳號已被封鎖（通常是 Gemini 判定累積達到門檻自動觸發，見 _ban_user）。
+            # 不能只回 401——要講清楚原因，不然使用者會以為是打錯密碼。
+            return render_template_string(
+                HTML, logged_in=False, page='login',
+                error="This account has been banned for repeated malicious behavior. / 此帳號因累積多次惡意行為已被封鎖。",
+                k8s=K8S_ENABLED, username='')
         # 舊帳號可能是「純字串密碼」或「dict 但裡面存的是弱雜湊（沒加鹽的 sha256）」，
         # 登入成功那一刻密碼是明文可用的，順便升級成 pbkdf2，不用等使用者自己改密碼。
         if not isinstance(stored_user, dict) or not stored_hash.startswith("pbkdf2_sha256$"):
             created = stored_user.get("created_at") if isinstance(stored_user, dict) else None
             USERS[username] = {"password_hash": hash_password(password),
-                               "created_at": created or datetime.now().isoformat()}
+                               "created_at": created or datetime.now().isoformat(),
+                               "violation_count": 0, "banned": False}
             with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json"), "w", encoding="utf-8") as _uf:
                 json.dump(USERS, _uf)
+        _ensure_user_namespace(_user_namespace(username))
         session["username"] = username
         return redirect("/")
     return render_template_string(HTML, logged_in=False, page='login', error="Invalid username or password", k8s=K8S_ENABLED, username='')
@@ -3756,6 +3852,24 @@ def login():
 def logout():
     session.clear()
     return redirect("/")
+
+
+@app.before_request
+def _enforce_ban():
+    """集中檢查封鎖狀態，不用在 ~25 個路由裡各自加一次判斷。即使被封鎖的當下使用者
+    還有一個活著的 session（登入時還沒被封鎖），這裡會在下一次任何請求時擋下並
+    清掉 session——不需要額外做 session 撤銷機制，符合「不能靜默失敗」：不是裸的
+    401/403，要講清楚原因。"""
+    username = session.get("username")
+    if username and USERS.get(username, {}).get("banned"):
+        session.clear()
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "This account has been banned for repeated malicious behavior. / 此帳號因累積多次惡意行為已被封鎖。"}), 403
+        return render_template_string(
+            HTML, logged_in=False, page='login',
+            error="This account has been banned for repeated malicious behavior. / 此帳號因累積多次惡意行為已被封鎖。",
+            k8s=K8S_ENABLED, username='')
+    return None
 
 
 def _rag_fallback_context(message: str, history: list = None) -> tuple:
@@ -3848,25 +3962,28 @@ _CLUSTER_Q_HINTS = (
 )
 
 
-def _cluster_snapshot_for(message: str) -> str:
-    """問題牽涉即時叢集狀態時，回傳一段精簡快照文字（給接地問答）；否則回空字串。"""
+def _cluster_snapshot_for(message: str, namespace: str = None) -> str:
+    """問題牽涉即時叢集狀態時，回傳一段精簡快照文字（給接地問答）；否則回空字串。
+    只查傳入的 namespace（預設呼叫端使用者自己的 namespace），不會洩漏其他帳號的
+    Deployment 資訊給接地問答用。"""
+    namespace = namespace or NS
     if not K8S_ENABLED:
         return ""
     low = (message or "").lower()
-    deps = k8s_get_deployments()
+    deps = k8s_get_deployments(namespace)
     dep_names = [d["name"] for d in deps]
     named = [n for n in dep_names if n and n.lower() in low]
     if not named and not any(h in low for h in _CLUSTER_Q_HINTS):
         return ""
     lines = []
-    lines.append("Deployments（default namespace）：")
+    lines.append("Deployments（your namespace）：")
     for d in deps:
         flag = "OK" if d["ready"] == d["replicas"] and d["replicas"] else "異常"
         lines.append(f"  - {d['name']}: {d['ready']}/{d['replicas']} ready, image={d['image']} [{flag}]")
     # 不健康的 pod（掃每個 deployment 的 pod）
     unhealthy = []
     for name in dep_names:
-        for pd in k8s_describe_pod(name):
+        for pd in k8s_describe_pod(name, namespace):
             if not pd["healthy"]:
                 unhealthy.append(f"  - {pd['name']}: {pd['health_summary']}, 重啟 {pd['restarts']} 次")
     if unhealthy:
@@ -3876,11 +3993,11 @@ def _cluster_snapshot_for(message: str) -> str:
         lines.append("所有 Pod 目前健康。")
     # 使用者點名的物件，補詳情
     for n in named[:2]:
-        dd = k8s_describe_deployment(n)
+        dd = k8s_describe_deployment(n, namespace)
         if dd:
             lines.append(f"\n{n} 詳情：{dd['health_summary']}；conditions=" +
                          "; ".join(f"{c['type']}={c['status']}({c['reason']})" for c in dd["conditions"][:3]))
-        for pd in k8s_describe_pod(n)[:3]:
+        for pd in k8s_describe_pod(n, namespace)[:3]:
             evs = "；".join(f"{e['reason']}: {e['message'][:80]}" for e in pd["events"][:2])
             lines.append(f"  Pod {pd['name']}: phase={pd['phase']}, "
                          + ", ".join(f"{c['name']}[{c['state']}{('/'+c['reason']) if c['reason'] else ''}]" for c in pd["containers"])
@@ -3897,22 +4014,24 @@ _POSITIVE_STATUS_WORDS = (
 _IDENTIFIER_CANDIDATE_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9]*(?:-[a-zA-Z0-9]+)+\b")
 
 
-def _verify_grounded_reply(message: str, reply: str) -> str:
+def _verify_grounded_reply(message: str, reply: str, namespace: str = None) -> str:
     """
     2026-09-14：輸出端事實核對（跟輸入端擋 prompt injection 是完全獨立的第二道防線，
     見 docs/security_review.md 9 節「方法 1」）。不管模型是被注入攻擊說服、還是單純
     自己幻覈，只要回覆對一個「叢集裡實際不存在的服務/Deployment」講出肯定的健康狀態，
     這裡都用真實 K8s 清單核對、攔截並改成更正訊息——不相信生成過程，只驗證結果，
-    跟 guardian 對 LLM 產生的 YAML 一定要驗證過才能部署是同一種哲學。
+    跟 guardian 對 LLM 產生的 YAML 一定要驗證過才能部署是同一種哲學。只查傳入的
+    namespace（呼叫端使用者自己的），避免拿別的帳號的清單來核對。
 
     已知限制：只抓「連字號命名」的候選字（例如 ghost-service-xyz999），單字不含連字號
     的假名稱（例如 ghostapp）抓不到——這是精確度／覆蓋率的取捨，寧可少擋不要把一般
     英文單字誤判成服務名稱。
     """
+    namespace = namespace or NS
     if not K8S_ENABLED:
         return reply
     try:
-        real_names = {d["name"].lower() for d in k8s_get_deployments()}
+        real_names = {d["name"].lower() for d in k8s_get_deployments(namespace)}
     except Exception:
         return reply
     candidates = set(m.group(0) for m in _IDENTIFIER_CANDIDATE_RE.finditer(message))
@@ -4014,20 +4133,21 @@ def _system_help_reply(message: str) -> str:
     )
 
 
-def _fallback_chat_reply(message: str, history: list = None) -> tuple:
+def _fallback_chat_reply(message: str, history: list = None, namespace: str = None) -> tuple:
     """回傳 (reply, sources)。只有走到 RAG 知識庫的分支才會有非空的 sources。"""
+    namespace = namespace or NS
     text = message.strip()
     low = text.lower()
     greetings = ("hi", "hello", "hey", "嗨", "你好", "哈囉", "早安", "午安", "晚安")
     if any(g in low for g in greetings):
         return "嗨，我是 ZeroTouch K8s Assistant。你可以跟我閒聊，也可以問 Kubernetes、查 Pods/Deployments、排查錯誤，或用自然語言部署服務。", []
     if "pod" in low or "pods" in low or "容器" in low:
-        pods = k8s_get_pods()
+        pods = k8s_get_pods(namespace=namespace)
         if pods:
             lines = [f"- {p['name']} [{p['phase']}] app={p.get('app') or '-'} restarts={p.get('restarts', 0)}" for p in pods[:12]]
             return "目前 Pods：\n" + "\n".join(lines), []
     if "deployment" in low or "deployments" in low or "部署" in low:
-        deps = k8s_get_deployments()
+        deps = k8s_get_deployments(namespace)
         if deps:
             lines = [f"- {d['name']} ready={d['ready']}/{d['replicas']} image={d['image']}" for d in deps[:12]]
             return "目前 Deployments：\n" + "\n".join(lines), []
@@ -4069,16 +4189,45 @@ def api_chat():
         history = history[-40:]
     if _looks_like_system_help(message):
         return jsonify({"reply": _system_help_reply(message), "source": "system_help"})
+
+    # Gemini 惡意誘導/控制行為偵測（第二層輔助判斷，本地 core/model_server.py 的
+    # _looks_like_prompt_injection() 是第一層確定性防線）。只在真的會送進 LLM 的訊息上
+    # 跑，不對上面已經走 system_help 短路的訊息跑，省額度。累犯到門檻直接封鎖帳號＋
+    # 刪除該帳號的 namespace（見 _record_violation/_ban_user）。
+    try:
+        from core.gemini_client import classify_malicious_intent
+        verdict = classify_malicious_intent(message)
+    except Exception:
+        verdict = {"malicious": False, "reason": "gemini unavailable"}
+    if verdict.get("malicious"):
+        banned_now = _record_violation(session["username"])
+        if banned_now:
+            session.clear()
+            return jsonify({
+                "reply": "偵測到多次惡意誘導/操縱行為，此帳號已被封鎖並移除所有部署的資源。 / "
+                         "Repeated malicious/manipulative behavior detected — this account has been "
+                         "banned and all its deployed resources have been removed.",
+                "banned": True,
+            }), 403
+        return jsonify({
+            "reply": f"這則訊息被判定為嘗試誘導/操縱系統行為（{verdict.get('reason','')}），已記一次違規。"
+                     f"累積達到門檻將自動封鎖帳號。 / "
+                     f"This message was flagged as an attempt to manipulate the system "
+                     f"({verdict.get('reason','')}). A violation has been recorded; repeated "
+                     f"violations will result in an automatic ban.",
+        })
+
+    user_ns = _user_namespace(session["username"])
     # 問題若牽涉即時叢集狀態，先撈一份精簡快照當背景資料塞給模型（接地問答）。
     grounded = message
-    snap = _cluster_snapshot_for(message)
+    snap = _cluster_snapshot_for(message, user_ns)
     if snap:
         grounded = f"[現況]\n{snap}\n\n[問題]\n{message}"
     reply, sources = chat_llama(grounded, history)
     if reply.startswith("[Local Model unavailable]"):
-        reply, sources = _fallback_chat_reply(message, history)
+        reply, sources = _fallback_chat_reply(message, history, user_ns)
     else:
-        reply = _verify_grounded_reply(message, reply)
+        reply = _verify_grounded_reply(message, reply, user_ns)
     resp = {"reply": reply}
     if sources:
         from rag.retriever import confidence_label
@@ -4366,14 +4515,15 @@ def api_deploy_conflicts():
     按「下一步」的當下就先問清楚，而不是等審查跑完才在一堆警告裡看到。"""
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
+    user_ns = _user_namespace(session["username"])
     app_name = (request.args.get("app_name") or "").strip()
     port_raw = (request.args.get("port") or "").strip()
-    name_exists = bool(app_name) and app_name in {d["name"] for d in k8s_get_deployments()}
+    name_exists = bool(app_name) and app_name in {d["name"] for d in k8s_get_deployments(user_ns)}
     port_conflict = None
     if port_raw:
         try:
             port = int(port_raw)
-            for s in k8s_get_services():
+            for s in k8s_get_services(all_namespaces=True):
                 if s["port"] == port and s["app"] != app_name:
                     port_conflict = s["app"] or s["name"]
                     break
@@ -4407,6 +4557,8 @@ def api_deploy_parse():
 def api_deploy():
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
+    user_ns = _user_namespace(session["username"])
+    _ensure_user_namespace(user_ns)
     data = request.get_json() or {}
     user_input = data.get("input", "").strip()
     parsed_override = data.get("parsed")
@@ -4423,7 +4575,7 @@ def api_deploy():
     gitops_result = None
     try:
         from gitops.manifest_writer import write_manifest
-        gitops_result = write_manifest(parsed, repo_path=ROOT, namespace=NS, dry_run=False, commit=True)
+        gitops_result = write_manifest(parsed, repo_path=ROOT, namespace=user_ns, dry_run=False, commit=True)
     except Exception as e:
         gitops_result = {"ok": False, "message": str(e), "files": [], "commit_sha": None}
         review.setdefault("warnings", []).append(f"GitOps manifest write failed: {e}")
@@ -4434,7 +4586,7 @@ def api_deploy():
     # k8s_deploy() 內部四個 API 呼叫都已加上 _request_timeout=(5,10) 且 retries=0，不會無限期卡住這個 request。
     k8s_deploy_result = None
     if K8S_ENABLED:
-        ok, message = k8s_deploy(parsed["app_name"], parsed["image"], parsed["pods"], parsed.get("port", 80), parsed.get("memory"), parsed.get("cpu"))
+        ok, message = k8s_deploy(parsed["app_name"], parsed["image"], parsed["pods"], parsed.get("port", 80), parsed.get("memory"), parsed.get("cpu"), namespace=user_ns)
         k8s_deploy_result = {"ok": ok, "message": message}
         if not ok:
             review.setdefault("warnings", []).append(f"K8s 部署失敗：{message}")
@@ -4446,13 +4598,13 @@ def api_deploy():
 def api_pods():
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    return jsonify({"pods": k8s_get_pods()})
+    return jsonify({"pods": k8s_get_pods(namespace=_user_namespace(session["username"]))})
 
 @app.route("/api/deployments")
 def api_deployments():
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    return jsonify({"deployments": k8s_get_deployments()})
+    return jsonify({"deployments": k8s_get_deployments(_user_namespace(session["username"]))})
 
 
 @app.route("/api/pods/<name>")
@@ -4461,9 +4613,10 @@ def api_pod_detail(name):
     ?diagnose=1 且該 pod 不健康時，附上 healer 的 LLM 根因診斷。"""
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    pods = k8s_describe_pod(name)
+    user_ns = _user_namespace(session["username"])
+    pods = k8s_describe_pod(name, user_ns)
     if not pods:
-        dd = k8s_describe_deployment(name)
+        dd = k8s_describe_deployment(name, user_ns)
         if dd:
             return jsonify({"pods": [], "found": False, "deployment": dd,
                             "message": (f"'{name}' 是一個 Deployment，但目前沒有任何 Pod 在跑"
@@ -4495,7 +4648,7 @@ def api_pod_detail(name):
 def api_deployment_detail(name):
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    d = k8s_describe_deployment(name)
+    d = k8s_describe_deployment(name, _user_namespace(session["username"]))
     if not d:
         return jsonify({"found": False, "message": f"找不到 deployment '{name}'"}), 404
     return jsonify({"deployment": d, "found": True})
@@ -4508,7 +4661,7 @@ def api_delete():
     name = (request.get_json() or {}).get("name","").strip()
     if not name:
         return jsonify({"error": "Name required"}), 400
-    ok, msg = k8s_delete_deployment(name)
+    ok, msg = k8s_delete_deployment(name, _user_namespace(session["username"]))
     return jsonify({"success": ok, "message": msg, "error": None if ok else msg})
 
 
@@ -4529,13 +4682,14 @@ def api_scale():
         return jsonify({"success": False, "error": "Name required"}), 400
     if not 1 <= replicas <= 100:
         return jsonify({"success": False, "error": "replicas must be between 1 and 100"}), 400
-    blocked, risk_msg = _check_scale_risk(name, replicas)
+    user_ns = _user_namespace(session["username"])
+    blocked, risk_msg = _check_scale_risk(name, replicas, user_ns)
     if blocked:
         return jsonify({"success": False, "error": risk_msg, "blocked_reason": "resource_exceeded"}), 409
     try:
         api = k8s_client.AppsV1Api()
         body = {"spec": {"replicas": replicas}}
-        api.patch_namespaced_deployment_scale(name=name, namespace=NS, body=body)
+        api.patch_namespaced_deployment_scale(name=name, namespace=user_ns, body=body)
         return jsonify({"success": True, "message": f"已調整 {name} replicas={replicas}"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -4547,6 +4701,7 @@ def api_update():
         return jsonify({"error": "Not authenticated"}), 401
     if not K8S_ENABLED:
         return jsonify({"success": False, "error": "K8s 未連線"}), 503
+    user_ns = _user_namespace(session["username"])
     data = request.get_json() or {}
     name = data.get("name", "").strip()
     image = data.get("image", "").strip()
@@ -4554,7 +4709,7 @@ def api_update():
         return jsonify({"success": False, "error": "name and image are required"}), 400
     try:
         api = k8s_client.AppsV1Api()
-        dep = api.read_namespaced_deployment(name, NS)
+        dep = api.read_namespaced_deployment(name, user_ns)
         if not dep.spec.template.spec.containers:
             return jsonify({"success": False, "error": "deployment has no containers"}), 400
         old_image = dep.spec.template.spec.containers[0].image
@@ -4563,7 +4718,7 @@ def api_update():
         annotations["zerotouch.k8s/updated-at"] = datetime.utcnow().isoformat()
         dep.spec.template.metadata.annotations = annotations
         dep.spec.template.spec.containers[0].image = image
-        api.patch_namespaced_deployment(name, NS, dep)
+        api.patch_namespaced_deployment(name, user_ns, dep)
         return jsonify({"success": True, "message": f"已更新 {name} image={image}", "previous_image": old_image})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -4573,13 +4728,14 @@ def api_update():
 def api_rollback():
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
+    user_ns = _user_namespace(session["username"])
     data = request.get_json() or {}
     app_name = (data.get("app_name") or data.get("name") or "").strip()
     if not app_name:
         return jsonify({"success": False, "error": "app_name required"}), 400
     try:
         from gitops.rollback import rollback
-        result = rollback(app_name, namespace=NS, repo_path=ROOT, strategy="auto", dry_run=False)
+        result = rollback(app_name, namespace=user_ns, repo_path=ROOT, strategy="auto", dry_run=False)
         if result.get("ok"):
             return jsonify({
                 "success": True,
@@ -4596,7 +4752,7 @@ def api_rollback():
         if not K8S_ENABLED:
             return jsonify({"success": False, "error": "K8s 未連線"}), 503
         api = k8s_client.AppsV1Api()
-        dep = api.read_namespaced_deployment(app_name, NS)
+        dep = api.read_namespaced_deployment(app_name, user_ns)
         annotations = dep.spec.template.metadata.annotations or {}
         previous = annotations.get("zerotouch.k8s/previous-image")
         if not previous:
@@ -4610,7 +4766,7 @@ def api_rollback():
         annotations["zerotouch.k8s/rolled-back-at"] = datetime.utcnow().isoformat()
         dep.spec.template.metadata.annotations = annotations
         dep.spec.template.spec.containers[0].image = previous
-        api.patch_namespaced_deployment(app_name, NS, dep)
+        api.patch_namespaced_deployment(app_name, user_ns, dep)
         return jsonify({
             "success": True,
             "message": f"已回滾 {app_name} image {current} → {previous}",
@@ -4703,10 +4859,13 @@ def api_dataset_run():
 @app.route("/api/gitops")
 def api_gitops():
     if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
+    user_ns = _user_namespace(session["username"])
     import subprocess
     try:
+        # 只看自己 namespace 底下的歷史（manifests/<namespace>/），不要把所有帳號的
+        # GitOps 紀錄混在一起顯示——這也是隔離範圍的一部分，不是只有 Pod/Deployment。
         result = subprocess.run(
-            ["git", "log", "--pretty=format:%H|%s|%ai", "--", "manifests/", "yamls/deployments/"],
+            ["git", "log", "--pretty=format:%H|%s|%ai", "--", f"manifests/{user_ns}/"],
             cwd=os.path.dirname(os.path.abspath(__file__)),
             capture_output=True, encoding="utf-8", errors="replace", timeout=10
         )
@@ -4737,16 +4896,17 @@ def api_gitops():
 @app.route("/api/healer/scan")
 def api_healer_scan():
     if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
+    user_ns = _user_namespace(session["username"])
     try:
         from healer.pod_watcher import scan_once
-        issues = scan_once()
+        issues = scan_once(namespace=user_ns)
         return jsonify({"issues": issues or []})
     except Exception as e:
         try:
             from kubernetes import client as k8s_client, config as k8s_config
             k8s_config.load_kube_config()
             v1 = k8s_client.CoreV1Api()
-            pods = v1.list_namespaced_pod(namespace="default")
+            pods = v1.list_namespaced_pod(namespace=user_ns)
             issues = []
             bad = {"CrashLoopBackOff", "OOMKilled", "ImagePullBackOff", "ErrImagePull", "Error"}
             for pod in pods.items:
@@ -4804,7 +4964,13 @@ def _healer_background_loop(interval: int = 30):
     """比照 healer/pod_watcher.py 的 watch_forever()，但常駐在 web_demo.py process 裡，
     讓部署完成後不需要使用者手動開另一個 terminal 跑 --watch 就會自動掃描+修復。
     每個 pod 問題用 (namespace, pod_name, reason) 當 key，避免同一個問題重複觸發修復
-    造成無限刪除/修改迴圈；問題消失後 key 會被清掉，之後再發生會重新處理。"""
+    造成無限刪除/修改迴圈；問題消失後 key 會被清掉，之後再發生會重新處理。
+
+    掃全叢集（namespace=""，scan_once 本來就支援空字串＝全部 namespace），不是只掃
+    default——每個帳號有自己的 namespace 之後，這樣新使用者的 namespace 也會被自動
+    監控到，「零接觸自癒」才對所有使用者都成立，不是只對舊的共用資源成立。跟使用者
+    主動觸發的 /api/healer/scan／fix／auto_fix（只看/只修自己 namespace）是不同範圍，
+    刻意設計成不同——背景監控要顧到所有人，主動操作不能讓一個使用者修到別人的 Pod。"""
     seen = set()
     stop = threading.Event()
     while not stop.wait(interval):
@@ -4812,7 +4978,7 @@ def _healer_background_loop(interval: int = 30):
             continue
         try:
             from healer.pod_watcher import scan_once
-            issues = scan_once(namespace=NS) or []
+            issues = scan_once(namespace="") or []
             now_keys = set()
             for issue in issues:
                 key = f"{issue['namespace']}/{issue['pod_name']}/{issue['reason']}"
@@ -4907,7 +5073,7 @@ def api_healer_fix():
     if not pod_name:
         return jsonify({"success": False, "error": "No pod name"})
     try:
-        result = _real_heal_pod(pod_name, NS)
+        result = _real_heal_pod(pod_name, _user_namespace(session["username"]))
         return jsonify({
             "success": result.get("ok", False),
             "message": result.get("message"),
@@ -4923,7 +5089,7 @@ def api_healer_auto_fix():
     if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
     try:
         from healer.pod_watcher import scan_once
-        issues = scan_once(namespace=NS) or []
+        issues = scan_once(namespace=_user_namespace(session["username"])) or []
         fixed, failed, details = 0, 0, []
         for issue in issues:
             try:

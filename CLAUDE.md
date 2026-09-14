@@ -83,6 +83,14 @@ collection 直接失敗）。2026-09-14 實測過：push 上去 CI 第一次真�
 - 模型設定在 `core/config.py`：`BASE_MODEL`（部署 3B）、`MONITOR_MODEL`（監控 1.5B）、`MONITOR_DEVICE`（cpu）、`DEPLOY_ADAPTER_PATH`（空=不掛 LoRA）。prompt 一律走 `tokenizer.apply_chat_template`（Qwen ChatML），不要改回 `### User` 純文字格式。
 - RAG 索引變更後重跑 `python rag/build_index.py --rebuild --deploy`；`rag/index.json`、`rag/index_meta.json`、`rag/deploy_index.json` 都是可重新產生的產出物。預設 TF-IDF，裝了 chromadb+sentence-transformers 才會用語意向量（embedding 預設跑 CPU，留顯存給 3B）。
 - `web_demo_backup*.py`、`web_demo_new.py`（純占位檔）2026-09-13 已刪除（非現行程式、沒有任何程式碼引用它們），修改功能請改動 `web_demo.py`。
+- **2026-09-15 起：每個帳號一個 K8s namespace**（`_user_namespace(username)` →
+  `user-<帳號>`），不再共用 `default`。新增任何會查/改 K8s 資源的函式或路由，都要
+  接受/傳遞 `namespace` 參數（預設值 `NS="default"` 只當 fallback，不要當作正式行為
+  依賴），不要假設所有資源都在 `default`。例外兩處刻意跨所有 namespace 查詢：
+  節點資源容量檢查（`_check_scale_risk`，實體節點是所有帳號共用的）跟 port 衝突檢查
+  （`k8s_get_services(all_namespaces=True)`，host port 綁定是共用的）。舊的 3 個
+  共用 Deployment（`auto-app`/`my-cache`/`zt-smoke`）留在 `default`，當共用/管理者
+  資源，沒有被搬動。詳見 [docs/security_review.md](docs/security_review.md) 11 節。
 
 ## 環境與啟動
 

@@ -520,6 +520,79 @@ RoleBinding，讓 `k8s_deploy()` 等操作走這個受限身分，取代目前�
 
 ---
 
+## 11. 多租戶隔離（每人一個 K8s namespace）+ Gemini 惡意行為偵測與自動封鎖
+
+**風險**：這次審查一開始只打算加一個功能——用 Gemini 判斷聊天訊息有沒有惡意誘導/
+操縱行為，累犯就封鎖帳號並刪除該帳號部署的 Pod。實作前先查程式碼，發現一個更根本
+的缺口：**系統完全沒有記錄「這個 Deployment 是哪個帳號部署的」**，所有帳號共用同一個
+`default` namespace，`/api/pods`、`/api/deployments`、Chat 的接地問答都會把**所有
+帳號**部署的東西混在一起顯示給任何登入的人看——這是使用者資料互相洩漏的風險，
+不是原本要修的那個功能而已。
+
+**為什麼重要**：多人共用同一套帳號系統卻沒有資源隔離，任何一個帳號都能看到、
+甚至（透過 scale/update/delete）操作到別人部署的東西；而「刪除某帳號的所有 Pod」
+這個原始需求，在沒有「這個資源屬於誰」的記錄之前，技術上根本做不到。
+
+**解決方式**：
+- **每個帳號一個真正的 K8s namespace**（`user-<帳號名稱>`），不是共用 namespace +
+  UI 濾掉——隔離是 K8s 層級的，`kubectl` 直接查也看不到別人的東西。註冊/登入時
+  呼叫 `_ensure_user_namespace()`（冪等，隨時呼叫都安全，K8s 斷線時不會擋住登入）。
+  `web_demo.py` 裡原本 28 個寫死 `NS="default"` 的地方，全部改成接受 `namespace`
+  參數；`gitops/manifest_writer.py`／`gitops/rollback.py`／`healer/remediate.py`
+  這三個底層模組本來就已經是 namespace 參數化的，不用改。
+- **例外，刻意維持跨 namespace 檢查的兩處**：(1) 部署/scale 前的節點資源容量檢查
+  （`_check_scale_risk`）改用 `list_deployment_for_all_namespaces()`——這是所有帳號
+  共用的實體節點限制，只看自己的 namespace 會讓兩個帳號都以為自己還有空間、疊加
+  起來真的把節點塞爆；(2) port 衝突檢查（`k8s_get_services(all_namespaces=True)`）
+  ——Docker Desktop 的 LoadBalancer port 綁定是 host 層級的實體資源，不因為每個帳號
+  有自己的 namespace 就不會衝突。
+- **背景自動修復迴圈改掃全叢集**（`scan_once(namespace="")`），讓新使用者的
+  namespace 也享有自動監控；使用者主動觸發的 `/api/healer/scan`／`fix`／`auto_fix`
+  則維持「只看/只修自己 namespace」，避免修到別人的 Pod。
+- **Chat 歷史改跟帳號綁定**：原本存在 localStorage 的 key 是固定字串
+  （`k8s_chats`），同一台瀏覽器換帳號登入會看到上一個帳號的聊天記錄——改成
+  `k8s_chats_<帳號>`，前端新增 `CURRENT_USER` 變數。
+- **Gemini 惡意行為偵測**：`core/gemini_client.py` 新增 `classify_malicious_intent()`，
+  在 `/api/chat` 呼叫本地模型之前先跑，判斷訊息是不是在誘導/操縱 AI 助理違背設計
+  （角色重定義、洩漏系統設定、誘導忽略安全規則等）。累積 3 次違規（`users.json` 新增
+  `violation_count`/`banned` 欄位）就自動封鎖帳號並 `delete_namespace()`，一次清掉
+  該帳號的所有 Pod/Deployment/Service（不動 git 裡的歷史 manifest，那是稽核軌跡）。
+  用 Flask `before_request` 集中檢查 `banned` 狀態，不用在 ~25 個路由裡各自加判斷，
+  也讓已經登入中的帳號在下一次任何請求就被擋下，不需要額外的 session 撤銷機制。
+
+**驗證**：
+1. **隔離**（真實環境端到端）：兩個帳號分別部署服務，`kubectl get ns` 確認真的建立
+   `user-<帳號>` namespace；A 帳號的 `/api/deployments` 只看到自己部署的，看不到 B
+   帳號的；`kubectl get deploy -n default` 確認 `auto-app`/`my-cache`/`zt-smoke`
+   三個舊共用資源沒有被搬動、新帳號也看不到它們。
+2. **跨 namespace 保護**（真實環境）：A 帳號部署一個佔用特定 port 的服務後，B 帳號
+   查詢同一個 port 的部署衝突檢查，正確回報跟 A 帳號的服務衝突——證明 port 檢查
+   真的在看全叢集，不是只看自己 namespace。
+3. **Gemini 判定**（真實 API 呼叫）：送已知的注入手法（假冒 ChatML 標記＋要求複誦
+   系統提示詞），Gemini 正確標記 `malicious=true` 並給出具體理由。
+4. **單元測試**：新增 `tests/test_moderation_and_isolation.py`（16 案例，namespace
+   名稱正規化、違規累積、封鎖流程、`before_request` 攔截、`/api/chat` 全流程含
+   fail-open、封鎖時真的呼叫 `delete_namespace`）；既有 130 個測試（含這次順手修正
+   `test_chat_grounding.py` 的 mock 簽名）全部通過，確認 28 處 `NS` 改參數化沒有
+   造成回歸。
+
+**實測發現的殘留限制（誠實記錄，不要假裝萬無一失）**：連續對同一句已知攻擊文字測
+5 次 `classify_malicious_intent`，只有 3 次正確判定為惡意，另外 2 次是 Gemini
+`gemini-flash-latest` 回傳 `503 UNAVAILABLE`（Google 那端暫時性過載，不是配額用盡、
+也不是模型判斷不一致）——這證實了 9 節設計時的假設：**Gemini 這層是輔助判斷、
+fail-open，不是唯一防線**。當 Gemini API 暫時不穩定時，這層等於在那段時間完全沒有
+保護效果，完全依賴 `core/model_server.py` 的 `_looks_like_prompt_injection()`
+確定性規則層撐著（實測中這層在那兩次 503 期間確實還是正常擋下了同一句攻擊）。
+這不是這次能解決的問題（第三方 API 的穩定性不受這個專案控制），但這正是「兩層
+防線缺一層都會漏」的具體證據，值得寫進報告。
+
+**已知但故意不修的小落差**：`k8s_deploy()` 本地備份用的 `yamls/deployments/<app_name>.yaml`
+（純debug 用途，從沒被任何 API 讀取回顯示）沒有跟著 namespace 隔離，如果兩個帳號
+用了同一個 `app_name`，這個本地備份檔會互相覆蓋——因為這個檔案不會被讀取顯示給
+使用者，只是留檔用途，不影響隔離的實際效果，這次故意不修，記錄在此。
+
+---
+
 ## 尚待排查（優先度較低，不是資源受限，只是還沒排到）
 
 - `/diagnose` 端點雖然也套用了跟 `/chat` 一樣的文字淨化，但沒有等價的
