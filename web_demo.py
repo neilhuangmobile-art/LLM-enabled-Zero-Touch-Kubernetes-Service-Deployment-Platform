@@ -1749,7 +1749,7 @@ html,body{height:100%;overflow:hidden}
       <div class="page-sub">Prometheus observability</div>
       <div class="grid-3" style="margin-bottom:16px">
         <div class="card"><div class="card-title">Prometheus</div><div class="stat-num" id="prom-status">--</div><div class="stat-label">Connection</div></div>
-        <div class="card"><div class="card-title">Running Pods</div><div class="stat-num" id="prom-pods">--</div><div class="stat-label">default namespace</div></div>
+        <div class="card"><div class="card-title">Running Pods</div><div class="stat-num" id="prom-pods">--</div><div class="stat-label">你的 namespace / your namespace</div></div>
         <div class="card"><div class="card-title">Endpoint</div><div class="stat-num" style="font-size:13px" id="prom-url">--</div><div class="stat-label">Prometheus URL</div></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
@@ -1917,7 +1917,7 @@ const MANUAL_ZH = `
         <span class="term" data-def="描述所需狀態的宣告式設定（例如映像版本與副本數量），Kubernetes 會持續協調實際狀態以符合此設定，並在 Pod 異常時自動重建。">Deployment</span>、
         <span class="term" data-def="由 Deployment 自動建立，負責維持指定數量的 Pod 正常運作，一般不需直接操作。">ReplicaSet</span>、
         <span class="term" data-def="提供固定不變的存取位址，將流量轉發至背後的一組 Pod，不受 Pod 重建後 IP 變動的影響。">Service</span>、
-        <span class="term" data-def="叢集內用於劃分資源的邊界，本系統預設將所有資源建立於 default 命名空間。">Namespace</span>、
+        <span class="term" data-def="叢集內用於劃分資源的邊界。本系統每個帳號會有自己的 namespace，你部署的東西只會建立在你自己的 namespace，其他帳號看不到。">Namespace</span>、
         <span class="term" data-def="打包完成的「應用程式 + 執行環境」，例如 nginx:latest；冒號後方為版本標籤（tag），未指定時預設為 latest。">Image</span>、
         <span class="term" data-def="欲維持運作的 Pod 數量。設定多個副本可提升容錯能力並分攤流量負載。">Replicas</span>、
         <span class="term" data-def="服務對外接受連線的埠號，例如網頁伺服器常用 80，Redis 常用 6379。">Port</span>、
@@ -1984,7 +1984,7 @@ const MANUAL_EN = `
         <span class="term" data-def="A declarative description of the desired state (e.g. image version and replica count). Kubernetes continuously reconciles the actual state to match it, automatically recreating Pods that fail.">Deployment</span>,
         <span class="term" data-def="Automatically created by a Deployment to maintain the specified number of running Pods; you generally don't interact with it directly.">ReplicaSet</span>,
         <span class="term" data-def="A stable, fixed address that routes traffic to a group of Pods behind it, unaffected by Pod IP changes after recreation.">Service</span>,
-        <span class="term" data-def="A boundary used to partition resources within a cluster. This system creates all resources in the default namespace.">Namespace</span>,
+        <span class="term" data-def="A boundary used to partition resources within a cluster. This system gives each account its own namespace — what you deploy only lands in your own namespace and is invisible to other accounts.">Namespace</span>,
         <span class="term" data-def="A packaged 'application + runtime environment', e.g. nginx:latest. The part after the colon is the version tag; it defaults to latest if omitted.">Image</span>,
         <span class="term" data-def="The number of identical Pods to keep running. Multiple replicas improve fault tolerance and distribute load.">Replicas</span>,
         <span class="term" data-def="The network port a service accepts connections on, e.g. 80 for web servers, 6379 for Redis.">Port</span>,
@@ -2816,7 +2816,7 @@ async function loadHealerBgStatus(){
     const r=await fetch('/api/healer/status'); const d=await r.json();
     if(d.running){
       banner.style.background='#ECFDF5'; banner.style.border='1px solid #6EE7B7'; banner.style.color='#065F46';
-      banner.textContent=`🟢 自動監控中，每 30 秒自動扫描一次${d.last_scan?'，上次扫描：'+new Date(d.last_scan).toLocaleTimeString():''} / Auto-monitoring active, scans every 30s`;
+      banner.textContent=`🟢 自動監控中，每 30 秒自動掃描一次${d.last_scan?'，上次掃描：'+new Date(d.last_scan).toLocaleTimeString():''} / Auto-monitoring active, scans every 30s`;
     } else if(d.message){
       // K8s 有連線，但背景執行緒死掉或卡住了——這是真正的異常，不是「K8s 沒連線」這種
       // 正常情況，用紅色橫幅+具體建議動作顯示，不能只顯示跟正常運行時一樣的灰/黃色調。
@@ -2855,9 +2855,9 @@ async function loadMetrics(){
     document.getElementById('prom-url').textContent=d.url||'localhost:9090';
     document.getElementById('metrics-rows').innerHTML=[
       ['Prometheus','UP'],
-      ['Pod Count',m.pod_count!=null?m.pod_count:'N/A'],
-      ['Running Pods',m.running_pods!=null?m.running_pods:'N/A'],
-      ['Kube Pods',m.kube_pods!=null?m.kube_pods:'N/A'],
+      ['你的 Pod 數 / Your Pods',m.pod_count!=null?m.pod_count:'N/A'],
+      ['你的 Running Pods / Your Running',m.running_pods!=null?m.running_pods:'N/A'],
+      ['整個叢集 Pod 數 / Cluster-wide Pods',m.cluster_pods!=null?m.cluster_pods:'N/A'],
     ].map(([k,v])=>'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2);font-size:12px">'+k+'</span><span style="font-size:12px;font-weight:500">'+v+'</span></div>').join('');
   }catch(e){document.getElementById('prom-status').textContent='ERR';}
 }
@@ -5353,11 +5353,19 @@ def api_healer_auto_fix():
 @app.route("/api/metrics")
 def api_metrics():
     if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
+    # 2026-09-15 修好一個多租戶隔離漏掉的地方：這幾條 Prometheus 查詢原本寫死
+    # namespace="default"（多租戶改成每人一個 namespace 之前留下的），改成每人
+    # 一個 namespace 之後從沒更新過，導致這頁一直顯示舊的共用 default namespace
+    # 的統計（例如顯示 9 個 pod，其實是 auto-app+my-cache+zt-smoke 加總，不是
+    # 使用者自己部署的數量）——跟 Healer 頁面顯示的「Total Pods」互相矛盾，
+    # 使用者實測時直接發現這個不一致。
+    user_ns = _user_namespace(session["username"])
     # localhost 在 Windows 會先試 IPv6 ::1、逾時才 fallback 到 127.0.0.1，每個查詢多等好幾秒。
     # 直接用 127.0.0.1 省掉那段。可用 PROMETHEUS_URL 覆寫。
     prom_url = os.environ.get("PROMETHEUS_URL", "http://127.0.0.1:9090").replace("localhost", "127.0.0.1")
     try:
         import urllib.request as ur
+        import urllib.parse
         def prom_query(q):
             url = f"{prom_url}/api/v1/query?query={urllib.parse.quote(q)}"
             with ur.urlopen(url, timeout=2) as r:
@@ -5365,24 +5373,24 @@ def api_metrics():
             if d.get("status") == "success" and d["data"]["result"]:
                 return float(d["data"]["result"][0]["value"][1])
             return None
-        import urllib.parse
         metrics = {}
         metrics["prometheus_up"] = True
-        try: metrics["pod_count"] = prom_query('count(kube_pod_info{namespace="default"})')
+        try: metrics["pod_count"] = prom_query(f'count(kube_pod_info{{namespace="{user_ns}"}})')
         except: metrics["pod_count"] = None
-        try: metrics["running_pods"] = prom_query('count(kube_pod_status_phase{phase="Running",namespace="default"})')
+        try: metrics["running_pods"] = prom_query(f'count(kube_pod_status_phase{{phase="Running",namespace="{user_ns}"}})')
         except: metrics["running_pods"] = None
-        try: metrics["kube_pods"] = prom_query("count(kube_pod_info)")
-        except: metrics["kube_pods"] = None
+        # kube_pods 保留「不分 namespace」的整叢集數字，但明確標成 cluster_pods，
+        # 不要跟上面兩個「使用者自己」的數字混在一起看，前端要分開標示清楚。
+        try: metrics["cluster_pods"] = prom_query("count(kube_pod_info)")
+        except: metrics["cluster_pods"] = None
         if K8S_ENABLED and (metrics["pod_count"] is None or metrics["running_pods"] is None):
-            pods = k8s_get_pods()
+            pods = k8s_get_pods(namespace=user_ns)
             if metrics["pod_count"] is None:
                 metrics["pod_count"] = len(pods)
             if metrics["running_pods"] is None:
                 metrics["running_pods"] = len([p for p in pods if p.get("phase") == "Running"])
-            if metrics["kube_pods"] is None:
-                metrics["kube_pods"] = len(pods)
             metrics["source"] = "prometheus+k8s-fallback"
+        metrics["namespace"] = user_ns
         return jsonify({"connected": True, "url": prom_url, "metrics": metrics})
     except Exception as e:
         return jsonify({"connected": False, "error": str(e)})

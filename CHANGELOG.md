@@ -133,3 +133,21 @@ ready/total）進記憶體內的 `_pod_history`（key 是 `namespace/pod_name`�
 正確累積出多筆取樣點；確認 `/api/pods/<name>` 詳情跟頁面渲染都正常、說明書 modal
 沒有受影響；新增 8 個測試覆蓋 `_pod_light_snapshot`/`_get_pod_history`（含跨帳號
 隔離不外洩），既有 130 個測試沒有回歸，全部 138 個測試通過。
+
+### 22:15 — 修復：`/api/metrics` 沒有跟上多租戶隔離、Healer 橫幅簡體字殘留
+使用者用瀏覽器實測時直接發現：Healer 頁面顯示自己只有 3 個 Pod，但 Metrics 頁面
+顯示 9 個——`/api/metrics` 的 Prometheus 查詢跟 k8s fallback 都還寫死
+`namespace="default"`（多租戶隔離改成每人一個 namespace 之前留下的），從沒更新過，
+一直顯示舊的共用 `default` namespace 的加總（`auto-app`(5)+`my-cache`(2)+`zt-smoke`(2)=9），
+跟使用者自己實際部署的數量完全無關。改成查詢使用者自己的 namespace；不分 namespace
+的整叢集數字改名成 `cluster_pods`、跟「你自己的」數字分開標示，不再混在一起看。
+順手更新了 Namespace 詞彙解釋（中英文兩份），原本寫「本系統將所有資源建立於 default
+namespace」已經不是事實，改成正確描述每人一個 namespace 的隔離機制。
+
+另外修好 Healer 自動監控橫幅裡兩個簡體字（「扫描」→「掃描」），是這次 session
+唯一漏掉沒轉繁體的地方，已全文掃描確認沒有其他遺漏。
+
+過程中發現一個相關但不同的既有問題（這次沒有動）：`prometheus_up` 這個欄位是寫死
+`True`，沒有真的檢查 Prometheus 是否連得上，即使 Prometheus 現在連不到，畫面還是會
+顯示「Online」——跟這次修的「namespace 寫死」是同一種模式（宣稱 vs 實際落差），
+但範圍不同，先記錄不修，之後有空再處理。
