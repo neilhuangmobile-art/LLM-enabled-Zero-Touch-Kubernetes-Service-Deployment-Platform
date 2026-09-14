@@ -576,15 +576,28 @@ RoleBinding，讓 `k8s_deploy()` 等操作走這個受限身分，取代目前�
    `test_chat_grounding.py` 的 mock 簽名）全部通過，確認 28 處 `NS` 改參數化沒有
    造成回歸。
 
-**實測發現的殘留限制（誠實記錄，不要假裝萬無一失）**：連續對同一句已知攻擊文字測
-5 次 `classify_malicious_intent`，只有 3 次正確判定為惡意，另外 2 次是 Gemini
-`gemini-flash-latest` 回傳 `503 UNAVAILABLE`（Google 那端暫時性過載，不是配額用盡、
-也不是模型判斷不一致）——這證實了 9 節設計時的假設：**Gemini 這層是輔助判斷、
-fail-open，不是唯一防線**。當 Gemini API 暫時不穩定時，這層等於在那段時間完全沒有
-保護效果，完全依賴 `core/model_server.py` 的 `_looks_like_prompt_injection()`
-確定性規則層撐著（實測中這層在那兩次 503 期間確實還是正常擋下了同一句攻擊）。
-這不是這次能解決的問題（第三方 API 的穩定性不受這個專案控制），但這正是「兩層
-防線缺一層都會漏」的具體證據，值得寫進報告。
+**實測發現的殘留限制（誠實記錄，不要假裝萬無一失）**：做過兩輪獨立實測。第一輪
+連續對同一句已知攻擊文字測 5 次 `classify_malicious_intent`，3 次判定惡意、2 次是
+Gemini `gemini-flash-latest` 回傳 `503 UNAVAILABLE`（暫時性過載）。第二輪是完整的
+「先部署 2 個真實 Pod → 送同一句攻擊文字直到累積 3 次違規」端到端測試，這次連續
+送了 9 次才湊到 3 次真正被判定為惡意——追查 server log 發現：**9 次裡只有 1 次是
+503 錯誤，其他 5 次「沒被判定惡意」是 Gemini 真的回了 `malicious: false`**，不是
+API 出錯。這代表殘留限制比原本記錄的更根本：**不只是「Gemini 暫時不穩定時沒有
+保護」，是「即使 Gemini API 正常運作，對同一句已知攻擊文字的判定本身就不穩定」**
+——這是 LLM 分類器本質上的機率性，跟 `core/model_server.py` 的
+`_looks_like_prompt_injection()` 這種確定性 regex 規則（同一句輸入永遠給同一個
+結果）是完全不同等級的可靠度。這證實了 9 節設計時的假設：**Gemini 這層只能當
+輔助判斷，不是唯一防線**，實測中兩輪測試裡，這層漏掉的攻擊都被
+`_looks_like_prompt_injection()` 的確定性規則層正常擋下。這不是這次能解決的問題
+（LLM 分類器的機率性跟第三方 API 的穩定性都不受這個專案控制），但這正是「兩層
+防線缺一層都會漏」的具體證據，值得寫進報告——而且證據比原本記錄的更有力。
+
+**端到端完整驗證（含使用者要求的「先部署 Pod 再攻擊」情境）**：真實建立測試帳號、
+先用 `/api/deploy` 部署 2 個真實 Pod（`pretest-web`、`pretest-cache`，`kubectl`
+確認建立成功），再送已知攻擊文字直到累積 3 次違規，確認：(1) 第 3 次違規時
+`/api/chat` 回 `403` + `banned: true`；(2) `kubectl get namespace` 確認該帳號的
+namespace（含裡面兩個 Pod）已經整個消失（`NotFound`）；(3) 該帳號嘗試重新登入，
+正確顯示「此帳號因累積多次惡意行為已被封鎖」，不是誤導使用者的「密碼錯誤」。
 
 **已知但故意不修的小落差**：`k8s_deploy()` 本地備份用的 `yamls/deployments/<app_name>.yaml`
 （純debug 用途，從沒被任何 API 讀取回顯示）沒有跟著 namespace 隔離，如果兩個帳號
