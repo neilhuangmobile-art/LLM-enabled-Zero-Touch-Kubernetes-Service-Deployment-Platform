@@ -2839,26 +2839,39 @@ async function loadHealerBgStatus(){
 }
 
 async function loadMetrics(){
+  // 2026-09-15：之前這裡完全沒讀 m.prometheus_up（後端算好了但前端沒用），
+  // 「Online」是只要這個 API 路由本身沒有拋例外就顯示，跟 Prometheus 有沒有
+  // 真的連得上完全無關——即使 Prometheus 掛了，畫面還是會唬弄使用者說 Online。
   document.getElementById('prom-status').textContent='Checking';
   try{
     const r=await fetch('/api/metrics'); const d=await r.json();
     if(!d.connected){
-      document.getElementById('prom-status').textContent='Offline';
+      document.getElementById('prom-status').textContent='Error';
       document.getElementById('prom-pods').textContent='--';
-      document.getElementById('prom-url').textContent='Not connected';
-      document.getElementById('metrics-rows').innerHTML='<div style="color:var(--text3)">Run: kubectl port-forward -n monitoring svc/prometheus 9090:9090</div>';
+      document.getElementById('prom-url').textContent='Error';
+      document.getElementById('metrics-rows').innerHTML='<div style="color:var(--text3)">查詢失敗 / Query failed: '+escHtml(d.error||'')+'</div>';
       return;
     }
     const m=d.metrics||{};
-    document.getElementById('prom-status').textContent='Online';
+    const up = !!m.prometheus_up;
+    document.getElementById('prom-status').textContent = up ? 'Online' : 'Offline';
+    document.getElementById('prom-status').style.color = up ? 'var(--green)' : '#DC2626';
     document.getElementById('prom-pods').textContent=m.running_pods!=null?m.running_pods:'N/A';
     document.getElementById('prom-url').textContent=d.url||'localhost:9090';
-    document.getElementById('metrics-rows').innerHTML=[
-      ['Prometheus','UP'],
+    const rows = [
+      ['Prometheus', up ? 'UP' : 'DOWN'],
       ['你的 Pod 數 / Your Pods',m.pod_count!=null?m.pod_count:'N/A'],
       ['你的 Running Pods / Your Running',m.running_pods!=null?m.running_pods:'N/A'],
-      ['整個叢集 Pod 數 / Cluster-wide Pods',m.cluster_pods!=null?m.cluster_pods:'N/A'],
-    ].map(([k,v])=>'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2);font-size:12px">'+k+'</span><span style="font-size:12px;font-weight:500">'+v+'</span></div>').join('');
+    ];
+    if(up){
+      rows.push(['整個叢集 Pod 數 / Cluster-wide Pods',m.cluster_pods!=null?m.cluster_pods:'N/A']);
+    } else {
+      // Prometheus 連不上，但 Pod 數字仍然是真的（改用 K8s API 直接查），要講清楚
+      // 資料來源改變了，不能讓使用者以為 Prometheus 連得上、資料是它給的。
+      rows.push(['資料來源 / Data source', '直接查 K8s API（Prometheus 連不上） / Direct K8s API (Prometheus unreachable)']);
+    }
+    document.getElementById('metrics-rows').innerHTML = rows
+      .map(([k,v])=>'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2);font-size:12px">'+k+'</span><span style="font-size:12px;font-weight:500">'+v+'</span></div>').join('');
   }catch(e){document.getElementById('prom-status').textContent='ERR';}
 }
 
@@ -5373,23 +5386,46 @@ def api_metrics():
             if d.get("status") == "success" and d["data"]["result"]:
                 return float(d["data"]["result"][0]["value"][1])
             return None
-        metrics = {}
-        metrics["prometheus_up"] = True
-        try: metrics["pod_count"] = prom_query(f'count(kube_pod_info{{namespace="{user_ns}"}})')
-        except: metrics["pod_count"] = None
-        try: metrics["running_pods"] = prom_query(f'count(kube_pod_status_phase{{phase="Running",namespace="{user_ns}"}})')
-        except: metrics["running_pods"] = None
-        # kube_pods 保留「不分 namespace」的整叢集數字，但明確標成 cluster_pods，
-        # 不要跟上面兩個「使用者自己」的數字混在一起看，前端要分開標示清楚。
-        try: metrics["cluster_pods"] = prom_query("count(kube_pod_info)")
-        except: metrics["cluster_pods"] = None
+
+        # 2026-09-15 修好一個「宣稱 vs 實際」落差：這欄位之前是寫死 True，完全沒有
+        # 真的檢查連線，即使 Prometheus 根本連不上，前端還是會顯示「Online」。
+        # 現在真的打一次 /api/v1/query?query=up 探測，只有這次請求真的成功執行
+        # （不管有沒有查到資料）才算連得上——跟「連得上但查無資料」是不同的意思。
+        prometheus_up = False
+        try:
+            probe_url = f"{prom_url}/api/v1/query?query=up"
+            with ur.urlopen(probe_url, timeout=2) as r:
+                probe = json.loads(r.read())
+            prometheus_up = (probe.get("status") == "success")
+        except Exception:
+            prometheus_up = False
+
+        metrics = {"prometheus_up": prometheus_up}
+        if prometheus_up:
+            try: metrics["pod_count"] = prom_query(f'count(kube_pod_info{{namespace="{user_ns}"}})')
+            except Exception: metrics["pod_count"] = None
+            try: metrics["running_pods"] = prom_query(f'count(kube_pod_status_phase{{phase="Running",namespace="{user_ns}"}})')
+            except Exception: metrics["running_pods"] = None
+            # kube_pods 保留「不分 namespace」的整叢集數字，但明確標成 cluster_pods，
+            # 不要跟上面兩個「使用者自己」的數字混在一起看，前端要分開標示清楚。
+            try: metrics["cluster_pods"] = prom_query("count(kube_pod_info)")
+            except Exception: metrics["cluster_pods"] = None
+        else:
+            # 已經知道連不上，不用再浪費時間逐一嘗試（每次 timeout=2 秒，三次疊起來
+            # 會多等 6 秒），直接跳到下面的 K8s API 備援。cluster_pods 沒有對應的
+            # K8s API 備援（那需要跨所有使用者 namespace 加總，這裡先不做），
+            # 保持 None，前端在 Prometheus 離線時本來就不會顯示這一項。
+            metrics["pod_count"] = None
+            metrics["running_pods"] = None
+            metrics["cluster_pods"] = None
+
         if K8S_ENABLED and (metrics["pod_count"] is None or metrics["running_pods"] is None):
             pods = k8s_get_pods(namespace=user_ns)
             if metrics["pod_count"] is None:
                 metrics["pod_count"] = len(pods)
             if metrics["running_pods"] is None:
                 metrics["running_pods"] = len([p for p in pods if p.get("phase") == "Running"])
-            metrics["source"] = "prometheus+k8s-fallback"
+            metrics["source"] = "k8s-api-direct (Prometheus unreachable)" if not prometheus_up else "prometheus+k8s-fallback"
         metrics["namespace"] = user_ns
         return jsonify({"connected": True, "url": prom_url, "metrics": metrics})
     except Exception as e:

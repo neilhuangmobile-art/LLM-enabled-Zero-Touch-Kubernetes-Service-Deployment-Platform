@@ -147,7 +147,22 @@ namespace」已經不是事實，改成正確描述每人一個 namespace 的隔
 另外修好 Healer 自動監控橫幅裡兩個簡體字（「扫描」→「掃描」），是這次 session
 唯一漏掉沒轉繁體的地方，已全文掃描確認沒有其他遺漏。
 
-過程中發現一個相關但不同的既有問題（這次沒有動）：`prometheus_up` 這個欄位是寫死
+過程中發現一個相關但不同的既有問題：`prometheus_up` 這個欄位是寫死
 `True`，沒有真的檢查 Prometheus 是否連得上，即使 Prometheus 現在連不到，畫面還是會
-顯示「Online」——跟這次修的「namespace 寫死」是同一種模式（宣稱 vs 實際落差），
-但範圍不同，先記錄不修，之後有空再處理。
+顯示「Online」——跟這次修的「namespace 寫死」是同一種模式（宣稱 vs 實際落差）。
+
+### 22:25 — 修復：Metrics 頁面「Prometheus: Online」是寫死的，沒有真的檢查連線
+使用者馬上追問要不要順便修掉上面剛記錄的問題。查證後發現不只後端寫死，前端
+`loadMetrics()` 也**從沒讀取** `m.prometheus_up` 這個欄位（後端算好了但前端沒用），
+畫面顯示「Online」的真正邏輯是「只要 `/api/metrics` 這個 API 路由本身沒有拋例外」，
+跟 Prometheus 有沒有真的連得上完全無關——這是兩層獨立的落差疊在一起。
+
+改成先打一次 `/api/v1/query?query=up` 做真的連線探測，這次請求「真的成功執行」
+（不管有沒有查到資料）才算連得上，跟「連得上但查無資料」是不同的意思。已知連不上
+時直接跳過剩下的 Prometheus 查詢（省掉 3 次 timeout=2 秒疊加的等待時間），改用
+K8s API 直接查（跟原本的備援邏輯一樣，只是現在會誠實顯示「Offline」+ 資料來源
+改變了，不會讓使用者以為 Prometheus 連得上）。
+
+驗證：實測環境的 Prometheus 目前真的連不上，修好前 API 回 `prometheus_up: true`
+（假的），修好後正確回 `false`、`source: "k8s-api-direct (Prometheus unreachable)"`；
+Pod 數字仍然是真的（改用 K8s API 直接查，不受影響）。138 個測試沒有回歸。
