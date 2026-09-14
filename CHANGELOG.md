@@ -166,3 +166,32 @@ K8s API 直接查（跟原本的備援邏輯一樣，只是現在會誠實顯示
 驗證：實測環境的 Prometheus 目前真的連不上，修好前 API 回 `prometheus_up: true`
 （假的），修好後正確回 `false`、`source: "k8s-api-direct (Prometheus unreachable)"`；
 Pod 數字仍然是真的（改用 K8s API 直接查，不受影響）。138 個測試沒有回歸。
+
+### 23:40 — 新功能+稽核：真的部署 Prometheus（kube-prometheus-stack），並修好過程中發現的另外兩個「宣稱有但沒接上」落差
+使用者問「裝了 Prometheus 能有什麼效果」，回答完使用者說「當然要做」，並要求做完後
+全系統再稽核一次。查證發現：這個叢集從來沒有真的裝過 Prometheus，`observability/`
+整個模組（查詢客戶端 + 11 條告警規則 + Grafana 儀表板）從寫進去那天起就是死代碼。
+
+用 Helm 裝 `kube-prometheus-stack`（含 Operator/Prometheus/Alertmanager/
+kube-state-metrics/node-exporter/Grafana），LoadBalancer 曝露到 `127.0.0.1:9090`。
+過程中另外修好兩個獨立落差：(1) `alert_rules.yaml` 的 `PrometheusRule` 套用成功但
+label 對不上 Operator 的 `ruleSelector`，Prometheus 從沒真的讀取這 11 條規則，補
+`release: kube-prom` label 後 `/api/v1/rules` 確認全部載入；(2) `prometheus_client.py`
+的 CPU/記憶體查詢在 Docker Desktop 上因為 `container!=""` 過濾條件永遠查不到資料
+（該環境 cAdvisor 沒有 `container` label），拿掉這個過濾條件改用 Pod 層級彙總。
+
+`web_demo.py` 的 `/api/metrics` 改用 `PrometheusClient`（拿掉重複的土砲版本）；
+`/api/pods/<name>` 新增 `real_usage`，Healer Pod 詳情頁顯示真實 CPU/記憶體用量，
+查不到時明確顯示「無法取得」而非留空白或誤導成 0。Grafana 儀表板透過 API 匯入成功
+（過程中發現 host 3000 port 被另一個無關專案佔用，Grafana 改用 3001 port）。
+
+全系統誠實度稽核：`grep` 過 `web_demo.py` 找其他寫死狀態旗標，確認既有的
+`_check_docker`/`_check_k8s_live`/`_healer_bg_liveness`/`api_status` 都是真的即時
+檢查，沒有找到新的假象。
+
+驗證：`kubectl get pods -n monitoring` 六個元件全部 Running；兩個測試帳號登入
+`/api/metrics` 回 `prometheus_up: true`；部署真實 Pod 等待取樣後 `real_usage` 回真實
+數字（CPU 0.0 核、記憶體 16.5 Mi）；Grafana 儀表板 14 個 panel 確認匯入成功；
+`pytest`（138 個）全過；兩帳號互相看不到彼此的 pod，確認新增的 `monitoring`
+namespace 沒有被誤撈進使用者查詢；測試帳號與測試 Pod 已清除。詳見
+`docs/security_review.md` 12 節。

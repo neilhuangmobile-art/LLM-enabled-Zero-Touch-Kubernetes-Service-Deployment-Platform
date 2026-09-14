@@ -126,10 +126,21 @@ class PrometheusClient:
         """
         查詢 Pod 的 CPU 使用率（單位：核心數）。
         使用 rate() 取過去 5 分鐘平均值。
+
+        2026-09-15 實測發現：Docker Desktop 的 kubelet cAdvisor 只會輸出
+        Pod 層級的 cgroup 彙總（`id=".../besteffort/pod<uid>"`），完全不帶
+        `container` 這個 label（不是空字串，是這個 label 根本不存在）。
+        PromQL 的 `container!=""` 對「沒有這個 label」一樣視為空字串，會把
+        這唯一存在的資料排除掉，導致這台機器上查詢永遠回傳空結果——這是
+        Docker Desktop 環境特有的限制（跟真正的 kubeadm/雲端叢集會有逐容器
+        明細不同），不是查詢語法寫錯。拿掉這個過濾條件，直接用 Pod 層級
+        彙總值（單容器 Pod 這個數字本來就等於容器用量，多容器 Pod 則是
+        該 Pod 全部容器加總——跟函式名稱 `pod_cpu_usage`／回傳時做 `sum()`
+        彙整的語意一致，不算失真）。
         """
         promql = (
             f'sum(rate(container_cpu_usage_seconds_total{{'
-            f'pod="{pod_name}",namespace="{namespace}",container!=""'
+            f'pod="{pod_name}",namespace="{namespace}"'
             f'}}[5m]))'
         )
         results = self.query(promql)
@@ -138,10 +149,11 @@ class PrometheusClient:
         return None
 
     def pod_memory_usage_bytes(self, pod_name: str, namespace: str = "default") -> Optional[float]:
-        """查詢 Pod 的記憶體使用量（bytes）。"""
+        """查詢 Pod 的記憶體使用量（bytes）。同 `pod_cpu_usage` 的說明，Docker
+        Desktop 上這個指標沒有 `container` label，故不加該過濾條件。"""
         promql = (
             f'sum(container_memory_working_set_bytes{{'
-            f'pod="{pod_name}",namespace="{namespace}",container!=""'
+            f'pod="{pod_name}",namespace="{namespace}"'
             f'}})'
         )
         results = self.query(promql)

@@ -606,6 +606,71 @@ namespace（含裡面兩個 Pod）已經整個消失（`NotFound`）；(3) 該�
 
 ---
 
+## 12. Prometheus 監控從未真的部署過——`observability/` 整個模組是死代碼，另外還修好一個「畫面顯示 Online 但沒真的檢查」的假象
+
+**風險**：使用者實測 Metrics 頁面時發現「Prometheus: Online」是寫死的字串，回報後修好
+（改成真的打 `/-/healthy` 探測）——但緊接著查證發現一個更根本的事實：**這個叢集裡
+從來沒有真的裝過 Prometheus**（`kubectl get pods/svc/ns -A | grep -i prometheus`
+完全沒有結果）。而 `observability/prometheus_client.py`（完整的查詢客戶端）、
+`observability/alert_rules.yaml`（11 條告警規則）、`observability/grafana_dashboard.json`
+（Grafana 儀表板）三個檔案都早就寫好了，卻從寫進去那天起就沒有真正的 Prometheus 可以接，
+是「設計好但完全沒接上」的死代碼——跟本檔案已經記錄過的其他幾次落差（6 節健康迴圈、
+8 節 policy_rules.yaml）是同一種模式。
+
+**為什麼重要**：這種「檔案存在、程式邏輯看起來完整、甚至有文件說明用法」的死代碼，
+比明顯缺失的功能更容易在報告/口試時被誤以為已經運作，是最容易被抓到「講的跟做的不一致」
+的一種風險；而 Healer 頁面原本只能顯示 K8s API 提供的「設定值」（request/limit），
+沒有「實際用了多少」，也是因為缺這一層才長期沒被填上。
+
+**解決方式**：
+- 用 Helm 裝 `kube-prometheus-stack`（Prometheus Operator + Prometheus + Alertmanager +
+  kube-state-metrics + node-exporter + Grafana），Service 全部設 LoadBalancer（配合這台
+  機器 Docker Desktop K8s 一律用 LoadBalancer 曝露到 `127.0.0.1:<port>` 的既有慣例，
+  不要求使用者手動開 `kubectl port-forward` 背景程序）。
+- 修好過程中另外抓到兩個獨立的「宣稱有但沒接上／沒對上」落差：
+  1. **`alert_rules.yaml` 的 `PrometheusRule` 套用了但從未被讀取**——Prometheus Operator
+     用 `spec.ruleSelector` 決定撿哪些規則，kube-prometheus-stack 預設只認
+     `release: kube-prom` 這個 label，原檔案的 label 完全對不上，`kubectl apply` 成功
+     不代表規則真的生效。補上 `release: kube-prom` label 後，`/api/v1/rules` 確認全部
+     11 條規則都載入了。
+  2. **`prometheus_client.py` 的 CPU/記憶體查詢在 Docker Desktop 上永遠查不到資料**——
+     Docker Desktop 的 kubelet cAdvisor 只輸出 Pod 層級的 cgroup 彙總指標，完全沒有
+     `container` 這個 label（不是空字串，是這個 label 不存在），但查詢語法寫了
+     `container!=""` 過濾，PromQL 對「不存在的 label」視為空字串，會把這唯一存在的資料
+     排除掉。拿掉這個過濾條件，改用 Pod 層級彙總（單容器 Pod 數字不變，多容器 Pod 則是
+     該 Pod 全部容器加總，跟函式語意一致，不算失真）。
+- `web_demo.py` 的 `/api/metrics` 改成真的呼叫 `observability/prometheus_client.py`
+  的 `PrometheusClient`，拿掉重複維護的土砲 `prom_query()`。
+- `/api/pods/<name>` 新增 `real_usage` 欄位（`_pod_real_usage()`），Healer Pod 詳情頁
+  在容器狀態旁多顯示一行「實際使用」；Prometheus 查不到時明確顯示「無法取得實際用量」
+  而不是留空白或顯示成 0（0 會被誤讀成「真的量到零用量」，是另一種誤導）。
+- Grafana 預先寫好的儀表板透過 `/api/dashboards/import` API 匯入（過程中發現這台機器
+  host 的 3000 port 已被另一個無關專案佔用，Grafana 的 LoadBalancer 因此永遠連不上——
+  改成 3001 port 才是真的接到 Grafana，之前若只用「連得到 3000 port 的網頁」當驗證
+  會被誤導，因為那個網頁根本是別的程式）。
+
+**驗證**：
+1. `kubectl get pods -n monitoring` 六個元件（operator/prometheus/alertmanager/
+   kube-state-metrics/node-exporter/grafana）全部 `Running`。
+2. `curl http://127.0.0.1:9090/api/v1/rules` 確認 11 條告警規則名稱全部 `FOUND`。
+3. 兩個測試帳號登入 `/api/metrics`，回應 `prometheus_up: true`（之前是永遠
+   `false`，因為根本沒裝）。
+4. 部署一個真實 Pod（`promcheck-nginx`），等待約 2 分鐘讓 cAdvisor 累積足夠取樣點後，
+   `/api/pods/promcheck-nginx` 回應 `real_usage: {"available": true, "cpu_cores": 0.0,
+   "memory_mi": 16.5}`——確認修掉 `container!=""` 過濾條件後真的查得到資料，不是查詢
+   本身失敗被優雅降級成 None。
+5. `curl -u admin:<password> http://127.0.0.1:3001/api/dashboards/uid/k8s-zero-touch-platform`
+   確認匯入的儀表板真的存在、14 個 panel 都在。
+6. `pytest`（138 個）全過，改動全部在 `web_demo.py`/`observability/prometheus_client.py`，
+   沒有動到既有測試覆蓋的 `agents`/`guardian`/`healer` 邏輯。
+7. **多租戶隔離重新確認**：兩個新建測試帳號各自登入，`/api/pods` 互相看不到彼此，
+   確認新增的系統層級 `monitoring` namespace（不屬於任何使用者）沒有被
+   `k8s_get_pods`/`k8s_get_deployments`（本來就是 `list_namespaced_*` 指定單一
+   namespace）意外撈進來。驗證完成後已清除兩個測試帳號（`users.json` 還原、
+   `kubectl delete namespace user-promcheck1 user-promcheck2`）與測試 Pod。
+
+---
+
 ## 尚待排查（優先度較低，不是資源受限，只是還沒排到）
 
 - `/diagnose` 端點雖然也套用了跟 `/chat` 一樣的文字淨化，但沒有等價的

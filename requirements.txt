@@ -24,6 +24,11 @@ pydantic==2.12.5
 kubernetes==34.1.0
 pyyaml==6.0.3
 
+# ── 可觀測性（observability/prometheus_client.py 用，2026-09-15 起真的接上
+#    kube-prometheus-stack 之後才第一次被實際呼叫，之前這個依賴一直沒被列出來
+#    是因為程式碼從沒被執行過，不是漏寫，只是先前沒被發現的死代碼）───────
+requests==2.32.5
+
 # ── Web Demo ──────────────────────────────────────────────────
 flask==3.1.2
 

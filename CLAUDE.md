@@ -33,7 +33,7 @@ LLM-enabled Zero-Touch Kubernetes Service Deployment Platform：使用者以自�
 | `guardian/` | YAML 驗證、安全政策、kubectl dry-run |
 | `gitops/` | 寫入 Git、Argo CD 同步、版本回滾 |
 | `healer/` | Pod 監控、LLM 根因診斷、自動補救 |
-| `observability/` | Prometheus 指標、Grafana Dashboard、告警規則 |
+| `observability/` | Prometheus 指標、Grafana Dashboard、告警規則（2026-09-15 起真的部署了 kube-prometheus-stack，不再是死代碼，見下方「進行中工作」與 `observability/README.md`） |
 | `training/` | LoRA 微調資料生成、清洗、訓練、評估 |
 | `web_demo.py` | Web Dashboard（Flask），現行唯一入口 |
 | `0_touch_generate_pods.py` | 零接觸部署 CLI 入口 |
@@ -232,3 +232,31 @@ Phase 1–4 全部實作連同 gemini round-robin 一起清掉，且 HEAD 多退
   移除舊 deployConfirm 死碼、更新 `docs/architecture.md` 資料流圖
 - 使用者要在瀏覽器實測整條多步部署流程
 - `/api/deploy` 沒有 idempotency：多步流程讓「使用者第一次看到失敗會重試」變常態，重複 GitOps commit 風險上升（舊技術債，未修）
+
+## 進行中工作（2026-09-15：真的部署 Prometheus + 全系統誠實度稽核）
+
+Metrics 頁面「Prometheus: Online」查出來是寫死的（已修成真的探測），修完後發現更根本的
+事實：**這個叢集從來沒有真的裝過 Prometheus**，`observability/` 整個模組（查詢客戶端 +
+告警規則 + Grafana 儀表板）從寫進去那天起就是死代碼。使用者確認要做，並要求做完後
+全系統再稽核一次，細節見 [docs/security_review.md](docs/security_review.md) 12 節。
+
+**做完的**：
+- 用 Helm 裝 `kube-prometheus-stack`（release `kube-prom`，namespace `monitoring`），
+  LoadBalancer 曝露到 `127.0.0.1:9090`（Prometheus）/`127.0.0.1:3001`（Grafana，見下方
+  3000 port 衝突說明）/`127.0.0.1:9093`（Alertmanager）。
+- 修好兩個過程中發現的「套用了/寫了但沒真的生效」落差：`alert_rules.yaml` 的
+  `PrometheusRule` label 對不上 Operator 的 `ruleSelector`（補 `release: kube-prom`）；
+  `prometheus_client.py` 的 CPU/記憶體查詢 `container!=""` 過濾條件在 Docker Desktop 上
+  永遠查不到資料（該環境 cAdvisor 沒有 `container` label，已拿掉這個過濾條件）。
+- `web_demo.py` 的 `/api/metrics` 改用 `observability/prometheus_client.py` 的
+  `PrometheusClient`，拿掉重複的土砲 `prom_query()`；`/api/pods/<name>` 新增
+  `real_usage`（真實 CPU/記憶體用量），Healer Pod 詳情頁顯示，Prometheus 查不到時
+  明確顯示「無法取得」而不是留空白或顯示 0。
+- Grafana 儀表板透過 `/api/dashboards/import` 匯入成功（**發現這台機器 host 的 3000 port
+  被另一個無關專案佔用**，Grafana LoadBalancer 一直 `<pending>`，改成 3001 才是真的接到）。
+- 全系統誠實度稽核：`grep` 過 `web_demo.py` 找其他「寫死的狀態旗標」模式，`_check_docker`/
+  `_check_k8s_live`/`_healer_bg_liveness`/`api_status` 這些都確認是真的即時檢查，沒有
+  找到新的假象；`pytest`（138 個）全過；兩個新建測試帳號驗證多租戶隔離在新增
+  `monitoring` namespace 之後依然成立，驗證完已清除。
+- `requirements.txt` 補上 `requests==2.32.5`（`prometheus_client.py` 需要，之前沒被
+  列出來是因為程式碼從沒被執行過）。

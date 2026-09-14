@@ -710,6 +710,25 @@ def k8s_describe_pod(name, namespace=None):
     return [_pod_detail(p) for p in _resolve_pods(name, namespace)]
 
 
+def _pod_real_usage(namespace, pod_name):
+    """查詢 Pod 實際 CPU/記憶體用量（來自真實部署的 kube-prometheus-stack，
+    2026-09-15 起才真的接上）。Prometheus 不可用時回傳 available=False，
+    前端要顯示「無法取得」而不是留空白或誤導成 0（不能靜默失敗）。"""
+    try:
+        from observability.prometheus_client import PrometheusClient
+        prom_url = os.environ.get("PROMETHEUS_URL", "http://127.0.0.1:9090").replace("localhost", "127.0.0.1")
+        client = PrometheusClient(prom_url, timeout=2)
+        if not client.is_alive():
+            return {"available": False, "cpu_cores": None, "memory_mi": None}
+        return {
+            "available": True,
+            "cpu_cores": client.pod_cpu_usage(pod_name, namespace),
+            "memory_mi": client.pod_memory_usage_mi(pod_name, namespace),
+        }
+    except Exception:
+        return {"available": False, "cpu_cores": None, "memory_mi": None}
+
+
 def k8s_describe_deployment(name, namespace=None):
     """單一 deployment 的詳細狀態。找不到回 None。"""
     namespace = namespace or NS
@@ -2709,6 +2728,12 @@ function renderPodDetail(name, detailData, history){
       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.name)} <span style="color:var(--text3)">(${escHtml(c.image)})</span></span>
       <span style="flex-shrink:0;color:${c.ready?'#16A34A':'#DC2626'}">${c.ready ? 'ready' : escHtml((c.state||'')+(c.reason?'/'+c.reason:''))} · restarts ${c.restart_count}</span>
     </div>`).join('');
+  const ru = pod.real_usage || {};
+  html += `<div style="font-size:12px;color:var(--text3);padding-top:6px">實際使用 / Actual usage：` +
+    (ru.available
+      ? `CPU ${ru.cpu_cores!=null ? ru.cpu_cores.toFixed(3)+' 核' : 'N/A'}　記憶體 ${ru.memory_mi!=null ? ru.memory_mi+' Mi' : 'N/A'}`
+      : `Prometheus 未連線，無法取得實際用量 / Prometheus unreachable, actual usage unavailable`) +
+    `</div>`;
   html += `</div>`;
   if(pod.events && pod.events.length){
     html += `<div class="pod-detail-section"><div class="pod-detail-section-title">最近事件 / Recent Events</div>`;
@@ -4833,6 +4858,8 @@ def api_pod_detail(name):
                                         f"（{dd['ready']}/{dd['replicas']} ready）。可能全部啟動失敗。")}), 200
         return jsonify({"pods": [], "found": False,
                         "message": f"找不到符合 '{name}' 的 pod 或 deployment"}), 404
+    for pd in pods:
+        pd["real_usage"] = _pod_real_usage(user_ns, pd["name"])
     if request.args.get("diagnose") == "1":
         for pd in pods:
             if pd["healthy"]:
@@ -5377,28 +5404,20 @@ def api_metrics():
     # 直接用 127.0.0.1 省掉那段。可用 PROMETHEUS_URL 覆寫。
     prom_url = os.environ.get("PROMETHEUS_URL", "http://127.0.0.1:9090").replace("localhost", "127.0.0.1")
     try:
-        import urllib.request as ur
-        import urllib.parse
+        # 2026-09-15：這裡原本是自己土砲寫一個 urllib 版本的 prom_query()，完全沒用
+        # observability/prometheus_client.py 這個早就寫好的模組——因為那時 Prometheus
+        # 根本沒真的部署過，這段程式碼從沒被跑過也沒人發現。現在 kube-prometheus-stack
+        # 真的裝上去了，改成呼叫這個模組，不要維護兩份重複的查詢邏輯。
+        from observability.prometheus_client import PrometheusClient
+        client = PrometheusClient(prom_url, timeout=2)
+
         def prom_query(q):
-            url = f"{prom_url}/api/v1/query?query={urllib.parse.quote(q)}"
-            with ur.urlopen(url, timeout=2) as r:
-                d = json.loads(r.read())
-            if d.get("status") == "success" and d["data"]["result"]:
-                return float(d["data"]["result"][0]["value"][1])
+            results = client.query(q)
+            if results:
+                return results[0]["value"]
             return None
 
-        # 2026-09-15 修好一個「宣稱 vs 實際」落差：這欄位之前是寫死 True，完全沒有
-        # 真的檢查連線，即使 Prometheus 根本連不上，前端還是會顯示「Online」。
-        # 現在真的打一次 /api/v1/query?query=up 探測，只有這次請求真的成功執行
-        # （不管有沒有查到資料）才算連得上——跟「連得上但查無資料」是不同的意思。
-        prometheus_up = False
-        try:
-            probe_url = f"{prom_url}/api/v1/query?query=up"
-            with ur.urlopen(probe_url, timeout=2) as r:
-                probe = json.loads(r.read())
-            prometheus_up = (probe.get("status") == "success")
-        except Exception:
-            prometheus_up = False
+        prometheus_up = client.is_alive()
 
         metrics = {"prometheus_up": prometheus_up}
         if prometheus_up:

@@ -7,7 +7,17 @@
 #
 # 套用方式：
 #   kubectl apply -f observability/alert_rules.yaml
-#   （需要 Prometheus Operator 或手動掛載到 Prometheus 設定）
+#   （需要 Prometheus Operator，例如透過 helm install kube-prom
+#    prometheus-community/kube-prometheus-stack -n monitoring 安裝）
+#
+# 2026-09-15 實測發現：光是套用這個 CRD 物件不代表 Prometheus 真的會讀取它——
+# Prometheus CR 用 spec.ruleSelector 決定要撿哪些 PrometheusRule，
+# kube-prometheus-stack 預設只認 release=<helm release 名稱> 這個 label，
+# 不是隨便寫的 label 就會被撿到（之前這裡的 label 完全對不上，套用了但
+# Prometheus 端從沒真的載入這 11 條規則，是另一個「宣稱有但沒接上」的落差）。
+# 如果你用不同的 helm release 名稱安裝，這裡的 release 值要對應改掉，或用
+# `kubectl get prometheus -n monitoring -o jsonpath='{.items[0].spec.ruleSelector}'`
+# 查目前實際要求的 label 是什麼。
 
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
@@ -18,6 +28,7 @@ metadata:
     prometheus: kube-prometheus
     role: alert-rules
     app: k8s-zero-touch-platform
+    release: kube-prom
 
 spec:
   groups:

@@ -2,6 +2,28 @@
 
 Prometheus 指標查詢 + Grafana 儀表板 + 告警規則，讓平台具備資料驅動的決策能力。
 
+**2026-09-15 現況**：這個模組實際部署上去了，不再只是設計文件。用 Helm
+`prometheus-community/kube-prometheus-stack`（release 名稱 `kube-prom`，
+namespace `monitoring`）裝了 Prometheus Operator + Prometheus + Alertmanager +
+kube-state-metrics + node-exporter + Grafana，Service 全部是 LoadBalancer，
+在這台機器（Docker Desktop K8s）對應到：Prometheus `127.0.0.1:9090`、
+Grafana `127.0.0.1:3001`（**不是預設的 3000**——這台機器 host 的 3000 port
+已經被另一個無關專案佔用，裝的時候發現 Grafana 的 LoadBalancer `EXTERNAL-IP`
+一直卡在 `<pending>`，改成 3001 才是真的接到 Grafana，之後這個位址要跟著
+`helm upgrade ... --set grafana.service.port=<port>` 改）、
+Alertmanager `127.0.0.1:9093`。`web_demo.py` 的 `/api/metrics`、
+`/api/pods/<name>` 的 `real_usage` 欄位都已經改成真的呼叫這個模組（見
+`docs/security_review.md` 12 節）。
+
+**部署上遇到的兩個 Docker Desktop 特有問題（換到別的環境要留意）**：
+1. node-exporter 預設會把 host `/` mount 進去偵測磁碟，Docker Desktop 的 VM
+   layer 不支援，要加 `--set prometheus-node-exporter.hostRootFsMount.enabled=false`。
+2. Docker Desktop 的 kubelet cAdvisor 只輸出 Pod 層級的 cgroup 彙總指標，
+   `container_cpu_usage_seconds_total`／`container_memory_working_set_bytes`
+   完全沒有 `container` 這個 label（不是空字串，是這個 label 不存在）——真正的
+   kubeadm/雲端叢集通常會有逐容器明細。`pod_cpu_usage()`/`pod_memory_usage_bytes()`
+   已經拿掉原本寫的 `container!=""` 過濾條件來配合這個環境限制，見函式內註解。
+
 ## 模組說明
 
 | 檔案 | 功能 |
@@ -50,9 +72,17 @@ results = client.query('histogram_quantile(0.95, rate(http_request_duration_seco
 # 需要 Prometheus Operator（kube-prometheus-stack）
 kubectl apply -f observability/alert_rules.yaml
 
-# 確認規則已載入
+# 確認規則已載入（光是 apply 成功不代表 Prometheus 真的讀了，見下方說明）
 kubectl get prometheusrule -n monitoring
+curl http://127.0.0.1:9090/api/v1/rules   # 逐條核對規則名稱有沒有出現
 ```
+
+**套用了不代表生效**：Prometheus CR 用 `spec.ruleSelector` 決定要撿哪些
+`PrometheusRule`，kube-prometheus-stack 預設只認 `release=<helm release 名稱>`
+這個 label（這裡是 `release: kube-prom`，已經寫進 `alert_rules.yaml` 的
+`metadata.labels`）。換了不同的 helm release 名稱，這裡的 label 要對應改掉，
+或用 `kubectl get prometheus -n monitoring -o jsonpath='{.items[0].spec.ruleSelector}'`
+查目前實際要求的 label 是什麼。
 
 ### 告警清單
 
