@@ -207,3 +207,14 @@ namespace 沒有被誤撈進使用者查詢；測試帳號與測試 Pod 已清�
 同一個值），Prometheus 連不上時顯示「無法取得位址」而非死連結。順手 `grep` 過整份
 `web_demo.py` 找其他寫死的 `http://`/`https://` 網址，確認沒有其他殘留。138 個測試
 全過。記錄在 `docs/security_review.md` 12 節（「稽核漏網之魚」段落）。
+
+### 23:33 — 新功能：Pods/Deployments 分頁（每頁 20 筆）+ 最新部署排最上面
+使用者要求 Pods/Deployments 列表超過 20 筆要能換頁（上一頁/下一頁 + 第幾頁/共幾頁），
+且最新部署的要排在最上面。後端 `k8s_get_pods`/`k8s_get_deployments` 改用真正的
+`creation_timestamp`（不是格式化後的字串）排序，最新的排最前面；前端 `loadPods()`/
+`loadDeployments()` 一次抓回全部資料後在瀏覽器端切頁（`PAGE_SIZE=20`），新增
+`podsGoPage()`/`depsGoPage()` 控制翻頁，頁碼超出範圍（例如刪除後）會自動拉回最後一頁。
+
+驗證：建立 23 個測試 Pod（超過 20），`/api/pods` 確認總數 23、排序是最新建立的在前
+（同一秒內建立的多個 Pod 因為 K8s `creation_timestamp` 只有秒級精度，彼此之間順序
+不保證，但跨秒的排序正確）；138 個測試全過；測試 Pod 與帳號已清除。

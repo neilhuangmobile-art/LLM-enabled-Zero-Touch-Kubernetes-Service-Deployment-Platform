@@ -366,8 +366,14 @@ def k8s_get_pods(app_name=None, namespace=None):
         core = k8s_client.CoreV1Api()
         selector = f"app={app_name}" if app_name else None
         pods = core.list_namespaced_pod(namespace, label_selector=selector)
+        # 2026-09-15：K8s API 回傳的順序沒有保證，使用者要求「最新部署的排最上面」，
+        # 用真正的 creation_timestamp（不是後面才格式化成字串的 age）排序，前端分頁
+        # 才不用自己再排一次。
+        items = sorted(pods.items,
+                        key=lambda p: p.metadata.creation_timestamp.timestamp() if p.metadata.creation_timestamp else 0,
+                        reverse=True)
         result = []
-        for p in pods.items:
+        for p in items:
             containers = []
             if p.spec and p.spec.containers:
                 for c in p.spec.containers:
@@ -407,8 +413,13 @@ def k8s_get_deployments(namespace=None):
         api = k8s_client.AppsV1Api()
         core = k8s_client.CoreV1Api()
         deps = api.list_namespaced_deployment(namespace)
+        # 2026-09-15：跟 k8s_get_pods 一樣，改用真正的 creation_timestamp 排序，
+        # 最新部署的排最上面，不用前端再排一次。
+        deps_items = sorted(deps.items,
+                             key=lambda d: d.metadata.creation_timestamp.timestamp() if d.metadata.creation_timestamp else 0,
+                             reverse=True)
         result = []
-        for d in deps.items:
+        for d in deps_items:
             updated_ts = d.metadata.creation_timestamp
             if d.status and d.status.conditions:
                 for cond in d.status.conditions:
@@ -1048,6 +1059,8 @@ tr:hover td{background:var(--bg)}
 .mono{font-family:'DM Mono',monospace;font-size:12px}
 .btn-sm{padding:5px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:var(--surface);font-family:inherit;transition:all .15s}
 .btn-sm:hover{border-color:var(--blue);color:var(--blue)}
+.btn-sm:disabled{opacity:.4;cursor:not-allowed;border-color:var(--border2);color:inherit}
+.btn-sm:disabled:hover{border-color:var(--border2);color:inherit}
 .btn-danger{border-color:#FECACA;color:var(--red)}
 .btn-danger:hover{background:var(--red-light);border-color:var(--red)}
 .action-btns{display:flex;gap:6px}
@@ -1540,6 +1553,11 @@ html,body{height:100%;overflow:hidden}
             </tbody>
           </table>
         </div>
+        <div class="pager" id="pods-pager" style="display:none;align-items:center;justify-content:space-between;padding:12px 4px 2px;font-size:13px;color:var(--text2)">
+          <button class="btn-sm" id="pods-prev" onclick="podsGoPage(-1)">‹ 上一頁 / Prev</button>
+          <span id="pods-page-info">第 1 頁 / 共 1 頁</span>
+          <button class="btn-sm" id="pods-next" onclick="podsGoPage(1)">下一頁 / Next ›</button>
+        </div>
       </div>
     </div>
 
@@ -1565,6 +1583,11 @@ html,body{height:100%;overflow:hidden}
               <tr><td colspan="7" class="empty"><p>Loading...</p></td></tr>
             </tbody>
           </table>
+        </div>
+        <div class="pager" id="deps-pager" style="display:none;align-items:center;justify-content:space-between;padding:12px 4px 2px;font-size:13px;color:var(--text2)">
+          <button class="btn-sm" id="deps-prev" onclick="depsGoPage(-1)">‹ 上一頁 / Prev</button>
+          <span id="deps-page-info">第 1 頁 / 共 1 頁</span>
+          <button class="btn-sm" id="deps-next" onclick="depsGoPage(1)">下一頁 / Next ›</button>
         </div>
       </div>
     </div>
@@ -2449,18 +2472,41 @@ async function courtProceedDeploy(myId, originalText, parsed){
 }
 
 // ── Pods ──
-async function loadPods(){
+// 2026-09-15：Pods/Deployments 列表加分頁，每頁最多 20 筆，超過就要換頁——
+// 後端 k8s_get_pods/k8s_get_deployments 已經改成用真正的 creation_timestamp
+// 排序（最新部署排最上面），這裡只需要照後端給的順序切頁，不用再排一次。
+const PAGE_SIZE = 20;
+let _podsAll = [];
+let _podsPage = 1;
+
+function _renderPager(prefix, page, totalPages){
+  const pager = document.getElementById(prefix+'-pager');
+  if(totalPages <= 1){ pager.style.display = 'none'; return; }
+  pager.style.display = 'flex';
+  document.getElementById(prefix+'-page-info').textContent = `第 ${page} 頁 / 共 ${totalPages} 頁 (Page ${page} of ${totalPages})`;
+  document.getElementById(prefix+'-prev').disabled = (page <= 1);
+  document.getElementById(prefix+'-next').disabled = (page >= totalPages);
+}
+
+function podsGoPage(delta){
+  const totalPages = Math.max(1, Math.ceil(_podsAll.length / PAGE_SIZE));
+  _podsPage = Math.min(totalPages, Math.max(1, _podsPage + delta));
+  renderPodsPage();
+}
+
+function renderPodsPage(){
   const tbody = document.getElementById('pods-tbody');
   if(!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text3)">Loading...</td></tr>';
-  try {
-    const r = await fetch('/api/pods');
-    const d = await r.json();
-    if(!d.pods.length){
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text3)">No pods found</td></tr>';
-      return;
-    }
-    tbody.innerHTML = d.pods.map(p => `
+  if(!_podsAll.length){
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text3)">No pods found</td></tr>';
+    _renderPager('pods', 1, 1);
+    return;
+  }
+  const totalPages = Math.max(1, Math.ceil(_podsAll.length / PAGE_SIZE));
+  _podsPage = Math.min(totalPages, Math.max(1, _podsPage));
+  const start = (_podsPage - 1) * PAGE_SIZE;
+  const pageItems = _podsAll.slice(start, start + PAGE_SIZE);
+  tbody.innerHTML = pageItems.map(p => `
       <tr>
         <td class="mono">${p.name}</td>
         <td>${p.app || '—'}</td>
@@ -2476,6 +2522,21 @@ async function loadPods(){
         </td>
       </tr>
     `).join('');
+  _renderPager('pods', _podsPage, totalPages);
+}
+
+async function loadPods(){
+  const tbody = document.getElementById('pods-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text3)">Loading...</td></tr>';
+  try {
+    const r = await fetch('/api/pods');
+    const d = await r.json();
+    _podsAll = d.pods || [];
+    // 重新整理清單時，如果原本停在的頁數超過新的總頁數（例如刪掉 pod 後），拉回最後一頁。
+    const totalPages = Math.max(1, Math.ceil(_podsAll.length / PAGE_SIZE));
+    if(_podsPage > totalPages) _podsPage = totalPages;
+    renderPodsPage();
   } catch(e){
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--red)">Failed to load pods</td></tr>';
   }
@@ -2543,18 +2604,28 @@ function closeModal(){ document.getElementById('pod-modal').classList.remove('op
 document.getElementById('pod-modal')?.addEventListener('click', function(e){ if(e.target===this) closeModal(); });
 
 // ── Deployments ──
-async function loadDeployments(){
+let _depsAll = [];
+let _depsPage = 1;
+
+function depsGoPage(delta){
+  const totalPages = Math.max(1, Math.ceil(_depsAll.length / PAGE_SIZE));
+  _depsPage = Math.min(totalPages, Math.max(1, _depsPage + delta));
+  renderDepsPage();
+}
+
+function renderDepsPage(){
   const tbody = document.getElementById('deps-tbody');
   if(!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">Loading...</td></tr>';
-  try {
-    const r = await fetch('/api/deployments');
-    const d = await r.json();
-    if(!d.deployments.length){
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">No deployments found</td></tr>';
-      return;
-    }
-    tbody.innerHTML = d.deployments.map(dep => `
+  if(!_depsAll.length){
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">No deployments found</td></tr>';
+    _renderPager('deps', 1, 1);
+    return;
+  }
+  const totalPages = Math.max(1, Math.ceil(_depsAll.length / PAGE_SIZE));
+  _depsPage = Math.min(totalPages, Math.max(1, _depsPage));
+  const start = (_depsPage - 1) * PAGE_SIZE;
+  const pageItems = _depsAll.slice(start, start + PAGE_SIZE);
+  tbody.innerHTML = pageItems.map(dep => `
       <tr>
         <td style="font-weight:500">${dep.name}</td>
         <td class="mono">${dep.image}</td>
@@ -2573,6 +2644,20 @@ async function loadDeployments(){
         </td>
       </tr>
     `).join('');
+  _renderPager('deps', _depsPage, totalPages);
+}
+
+async function loadDeployments(){
+  const tbody = document.getElementById('deps-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">Loading...</td></tr>';
+  try {
+    const r = await fetch('/api/deployments');
+    const d = await r.json();
+    _depsAll = d.deployments || [];
+    const totalPages = Math.max(1, Math.ceil(_depsAll.length / PAGE_SIZE));
+    if(_depsPage > totalPages) _depsPage = totalPages;
+    renderDepsPage();
   } catch(e){
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--red)">Failed to load</td></tr>';
   }
