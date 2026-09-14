@@ -195,3 +195,15 @@ label 對不上 Operator 的 `ruleSelector`，Prometheus 從沒真的讀取這 1
 `pytest`（138 個）全過；兩帳號互相看不到彼此的 pod，確認新增的 `monitoring`
 namespace 沒有被誤撈進使用者查詢；測試帳號與測試 Pod 已清除。詳見
 `docs/security_review.md` 12 節。
+
+### 23:20 — 修復：Metrics 頁面「Full UI」連結是寫死的舊網址（使用者實測發現，稽核漏網）
+使用者截圖回報 Metrics 頁面右下角「PromQL Quick Reference」卡片的「Full UI」連結寫死
+`http://192.168.50.219:30922`——查證是很久以前某次遠端環境/NodePort 設定殘留下來的
+舊網址，跟這次真正裝上去的 Prometheus 位址（`127.0.0.1:9090`）完全對不上，點下去會
+連到不存在的地方。這是上一筆記錄的全系統稽核只查了 Python 後端的旗標邏輯，沒搜尋
+前端 HTML 裡的靜態連結字面值，漏掉的同一類假象。
+
+改成用 `/api/metrics` 回傳的真實 `url` 動態填入連結（跟畫面上 Endpoint 卡片顯示
+同一個值），Prometheus 連不上時顯示「無法取得位址」而非死連結。順手 `grep` 過整份
+`web_demo.py` 找其他寫死的 `http://`/`https://` 網址，確認沒有其他殘留。138 個測試
+全過。記錄在 `docs/security_review.md` 12 節（「稽核漏網之魚」段落）。

@@ -1783,7 +1783,7 @@ html,body{height:100%;overflow:hidden}
             <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:12px;color:var(--text2)">Running pods</span><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:4px">kube_pod_status_phase</code></div>
             <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:12px;color:var(--text2)">Deployments</span><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:4px">kube_deployment_spec_replicas</code></div>
             <div style="display:flex;justify-content:space-between;padding:6px 0"><span style="font-size:12px;color:var(--text2)">Prometheus up</span><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:4px">up</code></div>
-            <div style="margin-top:10px;font-size:11px;color:var(--text3)">Full UI: <a href="http://192.168.50.219:30922" target="_blank" style="color:var(--green)">Prometheus (port 30922)</a></div>
+            <div style="margin-top:10px;font-size:11px;color:var(--text3)">Full UI: <a id="prom-full-ui-link" href="#" target="_blank" style="color:var(--green)">--</a></div>
           </div>
         </div>
       </div>
@@ -2875,6 +2875,8 @@ async function loadMetrics(){
       document.getElementById('prom-pods').textContent='--';
       document.getElementById('prom-url').textContent='Error';
       document.getElementById('metrics-rows').innerHTML='<div style="color:var(--text3)">查詢失敗 / Query failed: '+escHtml(d.error||'')+'</div>';
+      const errLink = document.getElementById('prom-full-ui-link');
+      errLink.href = '#'; errLink.textContent = '無法取得位址 / Unavailable';
       return;
     }
     const m=d.metrics||{};
@@ -2883,6 +2885,14 @@ async function loadMetrics(){
     document.getElementById('prom-status').style.color = up ? 'var(--green)' : '#DC2626';
     document.getElementById('prom-pods').textContent=m.running_pods!=null?m.running_pods:'N/A';
     document.getElementById('prom-url').textContent=d.url||'localhost:9090';
+    // 2026-09-15：這個連結之前是寫死 http://192.168.50.219:30922（很久以前某次
+    // 遠端/NodePort 設定殘留下來的舊網址），跟現在真正部署的 Prometheus 位址完全
+    // 對不上，點下去會連到不存在的地方——改成用 /api/metrics 剛回的真實 url，
+    // 跟畫面上 Endpoint 那張卡片顯示的是同一個值，不會再兩邊講不同的位址。
+    const fullUiLink = document.getElementById('prom-full-ui-link');
+    const promUrl = d.url || '';
+    fullUiLink.href = promUrl || '#';
+    fullUiLink.textContent = promUrl ? 'Prometheus' : '無法取得位址 / Unavailable';
     const rows = [
       ['Prometheus', up ? 'UP' : 'DOWN'],
       ['你的 Pod 數 / Your Pods',m.pod_count!=null?m.pod_count:'N/A'],
