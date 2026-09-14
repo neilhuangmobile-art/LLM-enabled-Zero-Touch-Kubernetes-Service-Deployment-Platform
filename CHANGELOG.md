@@ -106,3 +106,30 @@ API 偶爾 503，即使 API 正常運作也可能給出不同判定），跟本�
 **同一天也二次確認的決定（未變動程式碼）**：安全模型三項（`0.0.0.0` 監聽、開放
 自行註冊、無 RBAC）使用者主動問過要不要重新考慮，明確決定仍然維持先不動。
 （commit `7dc6181`）
+
+### 21:33 — 新功能：CHANGELOG.md 版本更新紀錄
+建立這份檔案本身，並在 `AGENT_RULES.md` 新增規則：之後每次有實質分量的改動都要
+主動補一條進來，不用等使用者交代。（commit `3dfaf9f`）
+
+### 21:55 — 新功能：Healer 視覺化——一行式 Pod 清單 + 點擊進入的趨勢圖詳情頁
+取代原本只有掃描/修復按鈕的 Healer 頁面。清單顯示使用者自己 namespace 底下**所有**
+Pod（不只異常的），每個 Pod 一行文字、CSS 用 `flex + overflow:hidden + ellipsis`
+確保不換行、長名稱自動截斷；點擊進入詳情頁看容器狀態、最近事件、（不健康時）診斷
+根因跟 Fix 按鈕。
+
+新建一套時間序列記錄機制：`_healer_background_loop()` 每 30 秒 tick 額外查一次全
+叢集所有 Pod（`list_pod_for_all_namespaces()`），存輕量快照（phase/restarts/
+ready/total）進記憶體內的 `_pod_history`（key 是 `namespace/pod_name`，上限 120
+筆 ≈ 1 小時）。新增 `GET /api/pods/<name>/history`（照多租戶隔離規則，只回傳使用者
+自己 namespace 的資料）。詳情頁用手寫 inline SVG（沒有另外裝圖表套件）畫兩張圖：
+重啟次數趨勢折線圖、健康狀態時間軸色帶；資料點少於 2 筆時顯示「觀察中」而不是
+空圖或報錯。
+
+已知限制：K8s Pod 名稱不是永久的，Healer 真的刪掉重建壞 Pod 後，新 Pod 會有新
+名稱、歷史自然斷掉重新開始（沒有跨 Pod 名稱拼接歷史，那是要比對 `app` label 的
+更大工程，這次沒做）。
+
+驗證：真實環境部署測試 Pod，等 2-3 個 30 秒 tick 後確認 `/api/pods/<name>/history`
+正確累積出多筆取樣點；確認 `/api/pods/<name>` 詳情跟頁面渲染都正常、說明書 modal
+沒有受影響；新增 8 個測試覆蓋 `_pod_light_snapshot`/`_get_pod_history`（含跨帳號
+隔離不外洩），既有 130 個測試沒有回歸，全部 138 個測試通過。

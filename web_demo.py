@@ -1125,6 +1125,26 @@ tr:hover td{background:var(--bg)}
 .manual-panel-body summary::-webkit-details-marker{display:none}
 .manual-panel-body summary::before{content:'▸ ';color:var(--green)}
 .manual-panel-body details[open] summary::before{content:'▾ '}
+/* 2026-09-15 Healer 視覺化：一行式 Pod 清單，永遠不換行、名字太長用省略號截斷
+   （flex:1 1 auto + overflow:hidden 在名字上；其他固定寬度欄位用 flex:0 0 auto，
+   不會被擠爆）。詳情彈窗照抄 #manual-overlay 的 style.display 開關模式，不用
+   [hidden]，避開同一個 CSS specificity 陷阱。 */
+.pod-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;
+  cursor:pointer;white-space:nowrap;overflow:hidden;border:1px solid transparent}
+.pod-row:hover{background:var(--bg);border-color:var(--border)}
+.pod-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-family:monospace;font-size:13px;color:var(--text)}
+.pod-dot{flex:0 0 auto;width:9px;height:9px;border-radius:50%}
+.pod-meta{flex:0 0 auto;font-size:12px;color:var(--text3);min-width:0}
+.pod-meta.pod-meta-age{display:none}
+@media (min-width:560px){.pod-meta.pod-meta-age{display:inline}}
+#pod-detail-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:200;
+  align-items:center;justify-content:center;padding:24px;display:none}
+.pod-detail-section{margin-top:14px}
+.pod-detail-section-title{font-size:12.5px;font-weight:700;color:var(--text2);
+  text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px}
+.pod-chart-empty{font-size:12px;color:var(--text3);padding:16px;text-align:center;
+  border:1px dashed var(--border);border-radius:8px}
 .manual-section{padding:14px 16px;font-size:13px;color:var(--text2)}
 .manual-section code{background:var(--surface2);padding:1px 6px;border-radius:5px;font-family:'DM Mono',monospace;font-size:12px;color:#B45309}
 .term{border-bottom:1px dotted var(--green);color:var(--green);font-weight:600;cursor:pointer}
@@ -1685,17 +1705,20 @@ html,body{height:100%;overflow:hidden}
 
     <div class="page" id="page-healer">
       <div class="page-title">Healer</div>
-      <div class="page-sub">Pod auto self-healing</div>
+      <div class="page-sub">你自己的 Pod 一覽 + 自動自癒 / Your pods at a glance + auto self-healing</div>
       <div id="healer-bg-banner" style="margin-bottom:14px;padding:10px 14px;border-radius:10px;font-size:13px"></div>
       <div class="grid-3" style="margin-bottom:16px">
-        <div class="card"><div class="card-title">Issues Found</div><div class="stat-num" id="healer-count">--</div><div class="stat-label">Abnormal pods</div></div>
+        <div class="card"><div class="card-title">Total Pods</div><div class="stat-num" id="healer-count">--</div><div class="stat-label">你的 Pod 總數 / your pods</div></div>
         <div class="card"><div class="card-title">Last Scan</div><div class="stat-num" style="font-size:14px" id="healer-time">--</div><div class="stat-label">Scan time</div></div>
         <div class="card"><div class="card-title">Status</div><div class="stat-num" id="healer-fixed">OK</div><div class="stat-label">Healer state</div></div>
       </div>
       <div class="card">
-        <div style="display:flex;gap:10px;margin-bottom:12px">
-          <button class="btn-primary" onclick="loadHealer()">Scan Now</button>
-          <button class="btn-primary" onclick="healerAutoFix()" style="background:#DC2626">Auto Fix All</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+          <span style="font-size:13px;color:var(--text2)">點一個 Pod 看完整狀態跟趨勢圖 / Click a pod for full status &amp; trend charts</span>
+          <div style="display:flex;gap:10px">
+            <button class="btn-primary" onclick="loadHealer()">Scan Now</button>
+            <button class="btn-primary" onclick="healerAutoFix()" style="background:#DC2626">Auto Fix All</button>
+          </div>
         </div>
         <div id="healer-list"><div style="color:var(--text3);font-size:13px">Loading...</div></div>
       </div>
@@ -1703,6 +1726,21 @@ html,body{height:100%;overflow:hidden}
         <div class="card-title">自動修復紀錄 / Auto-heal history</div>
         <div style="font-size:12px;color:var(--text3);margin-bottom:8px">系統背景每 30 秒自動掃描一次，偵測到異常 Pod 會自動診斷根因並嘗試修復（非單純刪除）。/ The system scans every 30s in the background; on detecting an unhealthy pod it automatically diagnoses the root cause and attempts a matching fix (not just a blind delete).</div>
         <div id="healer-bg-list"><div style="color:var(--text3);font-size:13px">--</div></div>
+      </div>
+    </div>
+
+    <!-- Pod 詳情彈窗（Healer 視覺化）：仿照 #manual-overlay 的 style.display 開關
+         模式（不用 [hidden]，之前踩過 CSS specificity 的坑，見 openManual/closeManual）。 -->
+    <div id="pod-detail-overlay" onclick="if(event.target===this)closePodDetail()">
+      <div class="manual-panel" style="max-width:640px">
+        <div class="manual-panel-head">
+          <div>
+            <div class="manual-panel-title" id="pod-detail-title" style="font-family:monospace;font-size:16px">pod-name</div>
+            <div class="manual-panel-sub" id="pod-detail-sub">--</div>
+          </div>
+          <button class="manual-close" onclick="closePodDetail()" aria-label="Close">✕</button>
+        </div>
+        <div class="manual-panel-body" id="pod-detail-body"></div>
       </div>
     </div>
 
@@ -2048,7 +2086,7 @@ function showPage(name){
   if(name === 'deployments') loadDeployments();
   if(name === 'dataset') loadDatasetStats();
   if(name === 'gitops') loadGitops();
-  if(name === 'healer') { loadHealer(); loadHealerBgStatus(); }
+  if(name === 'healer') { loadPodList(); loadHealerBgStatus(); }
   if(name === 'metrics') loadMetrics();
   if(name === 'kb') loadKB();
 }
@@ -2571,31 +2609,179 @@ async function doRollback(app){
   loadGitops();
 }
 
-async function loadHealer(){
-  document.getElementById('healer-list').innerHTML='<div style="color:var(--text3);font-size:13px">Scanning...</div>';
-  document.getElementById('healer-time').textContent=new Date().toLocaleTimeString();
+// ══════════════════════════════════════════════════════════════════
+//  Healer 視覺化（2026-09-15）：一行式 Pod 清單（#healer-list）+ 點擊進入的
+//  詳情彈窗（#pod-detail-overlay，含隨時間變化的趨勢圖）。
+// ══════════════════════════════════════════════════════════════════
+
+async function loadPodList(){
+  const el = document.getElementById('healer-list');
+  el.innerHTML = '<div style="color:var(--text3);font-size:13px">Loading...</div>';
   try{
-    const r=await fetch('/api/healer/scan'); const d=await r.json();
-    const issues=d.issues||[];
-    document.getElementById('healer-count').textContent=issues.length;
-    if(!issues.length){document.getElementById('healer-list').innerHTML='<div style="color:var(--green);font-size:13px">All pods healthy</div>';return;}
-    document.getElementById('healer-list').innerHTML=issues.map(i=>{
-      // scan_once() 回 {pod_name, reason, description, message, container}；
-      // fallback 路徑回 {pod, status, action}。兩種都吃。
-      const pod = i.pod_name || i.pod || 'unknown';
-      const reason = i.reason || i.status || 'Issue';
-      const detail = i.description || i.action || i.message || '';
-      return `
-      <div style="border:1px solid #FCA5A5;border-radius:8px;padding:12px;margin-bottom:8px;background:#FFF5F5">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div><span style="font-weight:600;font-size:13px">${escHtml(pod)}</span>
-          <span style="margin-left:8px;font-size:11px;background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:10px">${escHtml(reason)}</span></div>
-          <button onclick="fixPod('${escHtml(pod)}')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:none;background:#DC2626;color:#fff;cursor:pointer">Fix</button>
-        </div>
-        <div style="font-size:12px;color:#6B7280;margin-top:4px">${escHtml(detail)}</div>
+    const r = await fetch('/api/pods'); const d = await r.json();
+    const pods = d.pods || [];
+    document.getElementById('healer-count').textContent = pods.length;
+    document.getElementById('healer-time').textContent = new Date().toLocaleTimeString();
+    if(!pods.length){
+      el.innerHTML = '<div style="color:var(--text3);font-size:13px">目前沒有任何 Pod，用 Chat 部署一個試試看 / No pods yet — try deploying one from Chat</div>';
+      return;
+    }
+    el.innerHTML = pods.map(p => {
+      const readyCond = (p.conditions||[]).find(c=>c.type==='Ready');
+      const isReady = readyCond ? readyCond.status==='True' : false;
+      let color, label;
+      if(p.phase==='Running' && isReady){ color='#16A34A'; label='Running'; }
+      else if(p.phase==='Pending'){ color='#D97706'; label='Pending'; }
+      else { color='#DC2626'; label=p.phase||'Unknown'; }
+      return `<div class="pod-row" onclick="openPodDetail('${escHtml(p.name)}')">
+        <span class="pod-dot" style="background:${color}" title="${escHtml(label)}"></span>
+        <span class="pod-name">${escHtml(p.name)}</span>
+        <span class="pod-meta">${escHtml(label)}</span>
+        <span class="pod-meta">↻ ${p.restarts||0}</span>
+        <span class="pod-meta pod-meta-age">${escHtml(p.age||'')}</span>
       </div>`;
     }).join('');
-  }catch(e){document.getElementById('healer-list').innerHTML='<div style="color:var(--text3)">Error: '+e+'</div>';}
+  }catch(e){ el.innerHTML = '<div style="color:var(--text3)">Error: '+e+'</div>'; }
+}
+
+async function loadHealer(){
+  // 「Scan Now」按鈕：主動打 /api/healer/scan 取得異常清單摘要，掃完刷新一行式清單
+  // （清單本身平時只顯示現況，不會自動跑診斷；按這顆才會真的觸發一次掃描）。
+  document.getElementById('healer-time').textContent = new Date().toLocaleTimeString();
+  try{
+    const r = await fetch('/api/healer/scan'); const d = await r.json();
+    const issues = d.issues || [];
+    await loadPodList();
+    if(issues.length){
+      alert(`掃描完成，發現 ${issues.length} 個異常 Pod，點清單裡標紅點的 Pod 可以看詳情跟修復。 / `+
+            `Scan complete — found ${issues.length} unhealthy pod(s). Click a red-dot pod below for details/fix.`);
+    } else {
+      alert('掃描完成，所有 Pod 健康 / Scan complete — all pods healthy.');
+    }
+  }catch(e){ alert('掃描失敗 / Scan failed: '+e); }
+}
+
+let _podDetailCurrent = null;
+
+function closePodDetail(){
+  document.getElementById('pod-detail-overlay').style.display = 'none';
+  _podDetailCurrent = null;
+}
+
+async function openPodDetail(name){
+  _podDetailCurrent = name;
+  document.getElementById('pod-detail-overlay').style.display = 'flex';
+  document.getElementById('pod-detail-title').textContent = name;
+  document.getElementById('pod-detail-sub').textContent = 'Loading...';
+  document.getElementById('pod-detail-body').innerHTML = '<div style="color:var(--text3);font-size:13px">Loading...</div>';
+  try{
+    const [detailR, histR] = await Promise.all([
+      fetch(`/api/pods/${encodeURIComponent(name)}`),
+      fetch(`/api/pods/${encodeURIComponent(name)}/history`),
+    ]);
+    const detailData = await detailR.json();
+    const histData = await histR.json();
+    if(_podDetailCurrent !== name) return;  // 使用者可能在等待期間換點了別的 Pod 或關掉
+    renderPodDetail(name, detailData, histData.history || []);
+  }catch(e){
+    if(_podDetailCurrent !== name) return;
+    document.getElementById('pod-detail-body').innerHTML = '<div style="color:#DC2626;font-size:13px">Error: '+e+'</div>';
+  }
+}
+
+function renderPodDetail(name, detailData, history){
+  const pod = (detailData.pods || [])[0];
+  const sub = document.getElementById('pod-detail-sub');
+  const body = document.getElementById('pod-detail-body');
+  if(!pod){
+    sub.textContent = detailData.message || '找不到這個 Pod / Not found';
+    body.innerHTML = detailData.deployment
+      ? `<div class="pod-detail-section"><div class="pod-detail-section-title">Deployment</div>
+         <div style="font-size:13px">${escHtml(detailData.deployment.health_summary||'')}</div></div>`
+      : '';
+    return;
+  }
+  sub.textContent = pod.healthy ? '✅ Healthy' : ('⚠️ ' + (pod.health_summary || 'Unhealthy'));
+  let html = '';
+  html += `<div class="pod-detail-section"><div class="pod-detail-section-title">容器狀態 / Containers</div>`;
+  html += (pod.containers||[]).map(c => `
+    <div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.name)} <span style="color:var(--text3)">(${escHtml(c.image)})</span></span>
+      <span style="flex-shrink:0;color:${c.ready?'#16A34A':'#DC2626'}">${c.ready ? 'ready' : escHtml((c.state||'')+(c.reason?'/'+c.reason:''))} · restarts ${c.restart_count}</span>
+    </div>`).join('');
+  html += `</div>`;
+  if(pod.events && pod.events.length){
+    html += `<div class="pod-detail-section"><div class="pod-detail-section-title">最近事件 / Recent Events</div>`;
+    html += pod.events.map(e => `<div style="font-size:12px;color:var(--text2);padding:3px 0">[${escHtml(e.type)}] ${escHtml(e.reason)}: ${escHtml(e.message)}</div>`).join('');
+    html += `</div>`;
+  }
+  if(!pod.healthy){
+    html += `<div class="pod-detail-section" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="btn-primary" onclick="diagnosePodDetail('${escHtml(name)}')" style="background:var(--surface);color:var(--text);border:1px solid var(--border)">診斷根因 / Diagnose</button>
+      <button class="btn-primary" onclick="fixPod('${escHtml(name)}')" style="background:#DC2626">Fix</button>
+    </div>
+    <div id="pod-diagnosis-result" class="pod-detail-section" style="font-size:13px;display:none"></div>`;
+  }
+  html += `<div class="pod-detail-section"><div class="pod-detail-section-title">重啟次數趨勢 / Restart Trend</div>${renderRestartChart(history)}</div>`;
+  html += `<div class="pod-detail-section"><div class="pod-detail-section-title">健康狀態時間軸 / Health Timeline</div>${renderHealthTimeline(history)}</div>`;
+  body.innerHTML = html;
+}
+
+async function diagnosePodDetail(name){
+  let el = document.getElementById('pod-diagnosis-result');
+  if(!el) return;
+  el.style.display = 'block';
+  el.textContent = '診斷中... / Diagnosing...';
+  try{
+    const r = await fetch(`/api/pods/${encodeURIComponent(name)}?diagnose=1`);
+    const d = await r.json();
+    const diag = ((d.pods||[])[0]||{}).diagnosis;
+    el.innerHTML = diag
+      ? `<b>根因 / Root cause：</b>${escHtml(diag.root_cause||'-')}<br><b>建議 / Suggestion：</b>${escHtml(diag.suggestion||'-')}`
+      : '無法取得診斷（可能是監控模型尚未啟動） / Diagnosis unavailable';
+  }catch(e){ el.textContent = 'Error: '+e; }
+}
+
+function _fmtChartTime(iso){
+  try{ return new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+  catch(e){ return ''; }
+}
+
+function renderRestartChart(history){
+  if(!history || history.length < 2){
+    return '<div class="pod-chart-empty">觀察中，累積更多資料後會顯示趨勢圖（背景每 30 秒取樣一次） / '+
+           'Collecting data — the trend chart appears once enough samples are recorded (sampled every 30s)</div>';
+  }
+  const w=560, h=100, pad=24;
+  const restarts = history.map(s => s.restarts||0);
+  const maxR = Math.max(1, ...restarts);
+  const stepX = (w - pad*2) / (history.length - 1);
+  const pts = restarts.map((v,i) => [pad + i*stepX, h - pad - (v/maxR)*(h-pad*2)]);
+  const path = pts.map((p,i) => (i===0?'M':'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block">
+    <path d="${path}" fill="none" stroke="#2563EB" stroke-width="2"/>
+    ${pts.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.5" fill="#2563EB"/>`).join('')}
+    <text x="${pad}" y="${h-4}" font-size="10" fill="#9CA3AF">${escHtml(_fmtChartTime(history[0].t))}</text>
+    <text x="${w-pad}" y="${h-4}" font-size="10" fill="#9CA3AF" text-anchor="end">${escHtml(_fmtChartTime(history[history.length-1].t))}</text>
+    <text x="${w-pad}" y="14" font-size="11" fill="#2563EB" text-anchor="end">目前 / current: ${restarts[restarts.length-1]}</text>
+  </svg>`;
+}
+
+function renderHealthTimeline(history){
+  if(!history || history.length < 2){
+    return '<div class="pod-chart-empty">觀察中，累積更多資料後會顯示趨勢圖（背景每 30 秒取樣一次） / '+
+           'Collecting data — the trend chart appears once enough samples are recorded (sampled every 30s)</div>';
+  }
+  const w=560, h=28;
+  const segW = w / history.length;
+  const rects = history.map((s,i) => {
+    const healthy = s.total>0 && s.ready===s.total && s.phase==='Running';
+    return `<rect x="${(i*segW).toFixed(1)}" y="0" width="${Math.ceil(segW)}" height="${h}" fill="${healthy?'#16A34A':'#DC2626'}"/>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block;border-radius:4px;overflow:hidden">${rects}</svg>
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:#9CA3AF;margin-top:2px">
+      <span>${escHtml(_fmtChartTime(history[0].t))}</span><span>${escHtml(_fmtChartTime(history[history.length-1].t))}</span>
+    </div>`;
 }
 
 async function fixPod(pod){
@@ -2604,8 +2790,9 @@ async function fixPod(pod){
   let msg=d.message||d.error||'Done';
   if(d.root_cause) msg=`根因 / Root cause：${d.root_cause}\n修復動作 / Action：${d.action||'-'}\n\n${msg}`;
   alert(msg);
-  loadHealer();
+  loadPodList();
   loadHealerBgStatus();
+  if(_podDetailCurrent === pod) openPodDetail(pod);  // 修復後如果詳情頁還開著，重新整理它
 }
 
 async function healerAutoFix(){
@@ -2617,7 +2804,7 @@ async function healerAutoFix(){
     msg+='\n\n'+d.details.map(x=>`- ${x.pod}: ${x.root_cause||x.error||'-'} → ${x.action||'-'}`).join('\n');
   }
   alert(msg);
-  loadHealer();
+  loadPodList();
   loadHealerBgStatus();
 }
 
@@ -4607,6 +4794,16 @@ def api_deployments():
     return jsonify({"deployments": k8s_get_deployments(_user_namespace(session["username"]))})
 
 
+@app.route("/api/pods/<name>/history")
+def api_pod_history(name):
+    """給 Healer 視覺化的趨勢圖用：這個 Pod 過去累積的輕量快照（重啟次數/健康狀態
+    隨時間變化）。只回傳使用者自己 namespace 的資料。"""
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    user_ns = _user_namespace(session["username"])
+    return jsonify({"history": _get_pod_history(user_ns, name)})
+
+
 @app.route("/api/pods/<name>")
 def api_pod_detail(name):
     """單一 pod（或某 app 的一組 pod）的詳細狀態 + 健康判定。
@@ -4959,6 +5156,33 @@ _healer_bg_lock = threading.Lock()
 _healer_bg_thread = None  # 全域保存 Thread 物件本身，供 /api/healer/status 查 is_alive()
 _HEALER_BG_MAX_HISTORY = 50
 
+# 2026-09-15：Pod 時間序列記錄（Healer 視覺化的趨勢圖用），跟 _healer_bg_state
+# 是不同的東西——那個只記「有問題、被修復過」的 Pod，這裡記「每一個 Pod 每一刻的
+# 輕量快照」，不管有沒有問題都記，才能畫出「這段時間大部分健康還是一直在壞」的圖。
+# key 是 pod 名稱（不是 Deployment 名稱）——K8s 裡 Pod 名稱不是永久的，如果 Healer
+# 真的刪掉壞 Pod 讓它重建，新 Pod 會有新名稱、歷史自然斷掉重新開始，這是已知、
+# 可接受的限制（沒有跨 Pod 名稱拼接歷史，那是要比對 app label 的更大工程）。
+_pod_history = {}  # key: f"{namespace}/{pod_name}" -> list[sample dict]
+_pod_history_lock = threading.Lock()
+_POD_HISTORY_MAX_SAMPLES = 120  # 30 秒一次，120 筆 ≈ 1 小時
+
+
+def _pod_light_snapshot(pod) -> dict:
+    """給時間序列用的輕量快照，不像 _pod_detail() 那麼重（不查 events，那個較貴）。"""
+    statuses = pod.status.container_statuses or []
+    return {
+        "t": datetime.utcnow().isoformat(),
+        "phase": (pod.status.phase if pod.status else "") or "Unknown",
+        "restarts": sum(cs.restart_count for cs in statuses),
+        "ready": sum(1 for cs in statuses if cs.ready),
+        "total": len(statuses),
+    }
+
+
+def _get_pod_history(namespace: str, name: str) -> list:
+    with _pod_history_lock:
+        return list(_pod_history.get(f"{namespace}/{name}", []))
+
 
 def _healer_background_loop(interval: int = 30):
     """比照 healer/pod_watcher.py 的 watch_forever()，但常駐在 web_demo.py process 裡，
@@ -5006,6 +5230,21 @@ def _healer_background_loop(interval: int = 30):
             seen &= now_keys
             with _healer_bg_lock:
                 _healer_bg_state["last_scan"] = datetime.utcnow().isoformat()
+        except Exception:
+            pass
+
+        # Pod 時間序列快照——跟上面「掃問題、修復」是獨立的邏輯，故意包在自己的
+        # try/except，避免這段（新功能，較不成熟）萬一出錯拖累上面已經穩定運作的
+        # 自動修復邏輯。查全叢集所有 Pod（不是只有問題 Pod），所有帳號都要有趨勢圖。
+        try:
+            core = k8s_client.CoreV1Api()
+            for pod in core.list_pod_for_all_namespaces().items:
+                key = f"{pod.metadata.namespace}/{pod.metadata.name}"
+                snap = _pod_light_snapshot(pod)
+                with _pod_history_lock:
+                    hist = _pod_history.setdefault(key, [])
+                    hist.append(snap)
+                    del hist[:-_POD_HISTORY_MAX_SAMPLES]
         except Exception:
             pass
 
