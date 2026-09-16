@@ -1,0 +1,58 @@
+# 2026-09-14：版本從原本的 >= 下限改成釘死 ==（值取自這台機器目前實際裝的、跑得動的版本），
+# 避免之後套件出大版本更新時默默壞掉或引入未知風險。要升級版本請刻意測過再改這裡，
+# 不要讓 pip 自動抓最新版。torch 拿掉 CUDA build tag（+cu121），一般 PyPI 沒有這個 local
+# version identifier，要裝 GPU 版請照 https://pytorch.org/get-started/locally/ 額外指定 index。
+
+# ── 核心推論 ──────────────────────────────────────────────────
+# 部署模型 Qwen2.5-3B-Instruct（4-bit GPU）、監控模型 Qwen2.5-1.5B-Instruct（CPU）
+torch==2.4.1
+transformers==4.44.2          # Qwen2.5 需要
+peft==0.17.1                  # adapter_config 相容性（本次未掛 adapter，之後重訓才用）
+bitsandbytes==0.48.2
+accelerate==0.34.2
+
+# ── 訓練（僅在要重訓 LoRA 時需要，預設走純 RAG few-shot 不訓練）────
+trl==0.9.6
+datasets==2.21.0
+
+# ── Model Server ──────────────────────────────────────────────
+fastapi==0.128.8
+uvicorn==0.39.0
+pydantic==2.12.5
+
+# ── K8s 部署 ──────────────────────────────────────────────────
+kubernetes==34.1.0
+pyyaml==6.0.3
+
+# ── 可觀測性（observability/prometheus_client.py 用，2026-09-15 起真的接上
+#    kube-prometheus-stack 之後才第一次被實際呼叫，之前這個依賴一直沒被列出來
+#    是因為程式碼從沒被執行過，不是漏寫，只是先前沒被發現的死代碼）───────
+requests==2.32.5
+
+# ── Web Demo ──────────────────────────────────────────────────
+flask==3.1.2
+
+# ── Claude API（快速推論 + AI 對話，取代本地 GPU）─────────────
+anthropic==0.125.0
+
+# ── Gemini API（翻譯層：正規化使用者輸入後交回本地模型執行）───
+google-genai==1.47.0
+
+# ── 工具 ──────────────────────────────────────────────────────
+json_repair==0.44.1
+numpy==1.26.4
+
+# ── RAG ───────────────────────────────────────────────────────
+scikit-learn==1.6.1          # TF-IDF（含部署範例 few-shot 索引 rag/deploy_index.json 的後備）
+# 散文知識庫（/chat）用 chromadb 語意向量；embedding 預設跑 CPU（RAG_EMBED_DEVICE 可改），
+# 不跟部署小模型搶 6GB 顯存。未安裝時 retriever 自動退回 TF-IDF。
+# 注意：chromadb 會把 protobuf 升到 6.x，與全域環境其他套件可能衝突，建議用 venv。
+sentence-transformers==5.1.2
+chromadb==1.5.9
+
+# ── GitOps（選用，未安裝時自動跳過）──────────────────────────
+gitpython==3.1.46
+
+# ── 語言一致性（選用）：小模型偶爾漏簡體字，用 OpenCC s2twp 轉台灣繁體 ──
+# 純 Python、無需編譯；未安裝時 /chat、/diagnose 原樣輸出。
+opencc-python-reimplemented==0.1.7

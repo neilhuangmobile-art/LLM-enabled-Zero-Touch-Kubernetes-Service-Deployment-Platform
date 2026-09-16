@@ -1,0 +1,121 @@
+api_version: apps/v1
+kind: Deployment
+metadata:
+  annotations: null
+  creation_timestamp: null
+  deletion_grace_period_seconds: null
+  deletion_timestamp: null
+  finalizers: null
+  generate_name: null
+  generation: null
+  labels: null
+  managed_fields: null
+  name: web-frontend-0260
+  namespace: null
+  owner_references: null
+  resource_version: null
+  self_link: null
+  uid: null
+spec:
+  min_ready_seconds: null
+  paused: null
+  progress_deadline_seconds: null
+  replicas: 3
+  revision_history_limit: null
+  selector:
+    match_expressions: null
+    match_labels:
+      app: web-frontend-0260
+  strategy: null
+  template:
+    metadata:
+      annotations: null
+      creation_timestamp: null
+      deletion_grace_period_seconds: null
+      deletion_timestamp: null
+      finalizers: null
+      generate_name: null
+      generation: null
+      labels:
+        app: web-frontend-0260
+      managed_fields: null
+      name: null
+      namespace: null
+      owner_references: null
+      resource_version: null
+      self_link: null
+      uid: null
+    spec:
+      active_deadline_seconds: null
+      affinity: null
+      automount_service_account_token: null
+      containers:
+      - args: null
+        command: null
+        env: null
+        env_from: null
+        image: nginx:latest
+        image_pull_policy: null
+        lifecycle: null
+        liveness_probe: null
+        name: web-frontend-0260
+        ports:
+        - container_port: 80
+          host_ip: null
+          host_port: null
+          name: null
+          protocol: null
+        readiness_probe: null
+        resize_policy: null
+        resources: null
+        restart_policy: null
+        restart_policy_rules: null
+        security_context: null
+        startup_probe: null
+        stdin: null
+        stdin_once: null
+        termination_message_path: null
+        termination_message_policy: null
+        tty: null
+        volume_devices: null
+        volume_mounts: null
+        working_dir: null
+      dns_config: null
+      dns_policy: null
+      enable_service_links: null
+      ephemeral_containers: null
+      host_aliases: null
+      host_ipc: null
+      host_network: null
+      host_pid: null
+      host_users: null
+      hostname: null
+      hostname_override: null
+      image_pull_secrets: null
+      init_containers: null
+      node_name: null
+      node_selector: null
+      os: null
+      overhead: null
+      preemption_policy: null
+      priority: null
+      priority_class_name: null
+      readiness_gates: null
+      resource_claims: null
+      resources: null
+      restart_policy: null
+      runtime_class_name: null
+      scheduler_name: null
+      scheduling_gates: null
+      security_context: null
+      service_account: null
+      service_account_name: null
+      set_hostname_as_fqdn: null
+      share_process_namespace: null
+      subdomain: null
+      termination_grace_period_seconds: null
+      tolerations: null
+      topology_spread_constraints: null
+      volumes: null
+      workload_ref: null
+status: null

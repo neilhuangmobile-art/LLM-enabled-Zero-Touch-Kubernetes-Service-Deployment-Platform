@@ -1,0 +1,3 @@
+# 只有跑測試/開發時才需要，不影響 requirements.txt 的正式依賴釘版。
+# 安裝：pip install -r requirements.txt -r requirements-dev.txt
+pytest==8.4.2

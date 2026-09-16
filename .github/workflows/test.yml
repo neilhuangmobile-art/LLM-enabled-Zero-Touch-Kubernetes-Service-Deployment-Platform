@@ -1,0 +1,32 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      # 故意不裝 torch/bitsandbytes/transformers（又大又要 GPU，CI runner 沒有 GPU、
+      # 裝了也用不到）。kubernetes 套件是純 Python 的 HTTP client、不需要 GPU，輕量、
+      # 裝了能讓 healer/remediate.py 的 mock 測試在 CI 也能真的跑（不用 skip）。
+      # model_server.py/web_demo.py 相關的整合測試（標記 @pytest.mark.integration，
+      # import 會連帶拉進 torch/flask）本來就設計成要在有真實環境的本機手動跑，
+      # 這裡會被 -m "not integration" 篩掉；用 pytest.importorskip 保護過，即使漏裝
+      # 依賴也只會優雅跳過、不會讓整個 collection 階段炸掉（2026-09-14 這次踩過的坑：
+      # @pytest.mark.integration 標記本身擋不住 collection 階段的 import 錯誤）。
+      - name: Install minimal test dependencies
+        run: pip install pytest==8.4.2 pyyaml==6.0.3 kubernetes==34.1.0
+
+      - name: Syntax check all Python files
+        run: python -m compileall -q .
+
+      - name: Run unit tests (skip integration-marked tests)
+        run: python -m pytest tests/ -m "not integration" -v

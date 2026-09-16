@@ -1,0 +1,262 @@
+# Steering Guide
+
+給 AI 助理（Claude Code 等）在此專案中工作時的指引。
+
+@AGENT_RULES.md
+
+## 專案是什麼
+
+LLM-enabled Zero-Touch Kubernetes Service Deployment Platform：使用者以自然語言描述需求，
+小模型（Qwen2.5-3B）將其轉譯為 Kubernetes 部署 spec，經多代理審核與 dry-run 驗證後，
+透過 GitOps 部署到叢集，並具備自動監控與自癒能力。詳細架構見 [docs/architecture.md](docs/architecture.md)。
+
+## 資料流（由輸入到部署）
+
+```
+使用者輸入（中/英）→ core/gemini_client（翻譯層優先，正規化成 ### DeploySpec，多 key 輪換）
+→ DeploySpec 齊全就直接解析（零 GPU）；不齊全 → llama_client + rag/deploy_index（few-shot）
+  → core/model_server /infer（Qwen2.5-3B 4-bit GPU 生成 JSON）
+→ 轉換為 YAML（Python 樣板，模型不寫 YAML）→ agents/orchestrator（security/cost/perf → approve/warn/block）
+→ guardian/dry_run + guardian/yaml_validator（驗證）
+→ gitops/manifest_writer + gitops/argocd_sync（寫入並同步）
+→ K8s 叢集 → healer/pod_watcher + diagnose（規則層 → /diagnose：Qwen2.5-1.5B CPU）+ remediate
+```
+
+## 模組地圖
+
+| 目錄 | 功能 |
+|------|------|
+| `core/` | 設定、Model Server（FastAPI 常駐，載部署 3B + 監控 1.5B 兩顆）、`gemini_client.py`（翻譯層，多 key 輪換） |
+| `llama_client.py` | 推理入口：翻譯層 → DeploySpec 快路徑 → `/infer`(3B) + RAG few-shot；`diagnose_with_llm()` 打 `/diagnose`(1.5B) |
+| `rag/` | `index.json`（k8s 散文，給 `/chat`）、`deploy_index.json`（部署範例 input→JSON，給 `/infer` few-shot）、`retriever.py` |
+| `agents/` | security / cost / perf 代理 + `orchestrator.py` 協調決策 |
+| `guardian/` | YAML 驗證、安全政策、kubectl dry-run |
+| `gitops/` | 寫入 Git、Argo CD 同步、版本回滾 |
+| `healer/` | Pod 監控、LLM 根因診斷、自動補救 |
+| `observability/` | Prometheus 指標、Grafana Dashboard、告警規則（2026-09-15 起真的部署了 kube-prometheus-stack，不再是死代碼，見下方「進行中工作」與 `observability/README.md`） |
+| `training/` | LoRA 微調資料生成、清洗、訓練、評估 |
+| `web_demo.py` | Web Dashboard（Flask），現行唯一入口 |
+| `0_touch_generate_pods.py` | 零接觸部署 CLI 入口 |
+
+## 測試
+
+`tests/`（pytest，2026-09-14 新增）覆蓋 `agents/`、`guardian/yaml_validator.py`、`healer/diagnose.py`
+（規則層）、`healer/remediate.py`（`dry_run=True`）這些純邏輯／不需要真實環境的部分——這些正是
+「部署會不會被 block/warn」「Pod 壞了會被判成什麼根因」的實際計算依據，改動這些檔案後**務必**
+先跑測試再回報完成。
+
+```bash
+pip install -r requirements-dev.txt   # 只裝 pytest，不動 requirements.txt 正式依賴
+pytest                                 # 跑全部（目前 60 個），跑在專案的 Python 3.9 環境
+pytest -m "not integration"           # CI 用這個；integration 標記的測試需要真實 K8s/model server
+```
+
+需要真實環境（K8s 連線、model server 常駐、或單純 import 就會拉進 torch/transformers 這些重依賴）
+才能跑的測試標 `@pytest.mark.integration`——目前有 `tests/test_model_server_injection.py`
+（測 `core/model_server.py` 的 `_looks_like_prompt_injection()`）跟 `tests/test_chat_grounding.py`
+（測 `web_demo.py` 的 `_verify_grounded_reply()`，用 `monkeypatch` 假造叢集狀態，不用真的連
+K8s），兩個都是 import 檔案本身就會連帶 import torch（`llama_client.py` fallback 路徑用），
+CI 沒裝這些套件跑不起來。`web_demo.py` 其餘的 K8s 呼叫路徑目前仍靠手動 curl/建測試 pod 驗證，
+還沒寫成自動化測試，是已知的覆蓋缺口。`.github/workflows/test.yml` 在 push/PR 時自動跑
+`pytest -m "not integration"`，故意不裝 `torch`/`transformers`/`bitsandbytes`（CI runner
+沒 GPU、裝了也用不到，只會拖慢又可能裝不起來），但會裝 `kubernetes==34.1.0`（純 Python
+HTTP client，不需要 GPU，讓 `healer/remediate.py` 的 mock 測試在 CI 也能真的跑，不用跳過）。
+
+**踩過的坑，別重踩**：`@pytest.mark.integration` 標記本身**擋不住 collection 階段的
+import 錯誤**——pytest 在套用 `-m` 篩選前會先 import 每個測試檔案，如果檔案頂層寫
+`import web_demo` 或 `import core.model_server`，CI 沒裝 torch/flask 時這行 import
+本身就會拋例外，讓整個 `pytest` 指令回非零 exit code（不是那個測試被跳過，是整批
+collection 直接失敗）。2026-09-14 實測過：push 上去 CI 第一次真的跑就是這樣掛的。
+正確做法是用 `pytest.importorskip("torch")`（或 `web_demo = pytest.importorskip("web_demo")`）
+取代裸的 `import`，讓缺依賴時變成優雅跳過而不是收集錯誤——`tests/test_model_server_injection.py`、
+`test_chat_grounding.py`、`test_healer_liveness.py`、`test_web_demo_routes.py` 都是這樣寫的，
+之後新增需要重依賴的測試檔要照抄這個寫法。驗證方式：本機建一個只裝
+`pytest+pyyaml+kubernetes`（跟 CI 一致）的乾淨 venv 重現，不要只在裝好全部依賴的
+開發環境裡跑過就當作沒問題。
+
+## 工作慣例
+
+- 文件與程式碼註解慣用繁體中文（見 `docs/`、既有註解），除非使用者另外指定。
+- `core/config.py` 是路徑設定的單一來源，新增路徑相關設定應加在此處而非散落各檔案。
+- 部署流程改動需同時考慮三層防護：`agents/orchestrator`（策略決策）→ `guardian`（格式/安全驗證）→ `gitops`（版本控管），不要繞過任一層。
+- 修改 `llama_client.py` 或 `core/model_server.py` 前，先確認 Model Server 是否常駐執行（`curl http://127.0.0.1:8765/health` → `deploy_loaded` / `monitor_loaded`），避免誤判為推論邏輯問題。
+- 模型設定在 `core/config.py`：`BASE_MODEL`（部署 3B）、`MONITOR_MODEL`（監控 1.5B）、`MONITOR_DEVICE`（cpu）、`DEPLOY_ADAPTER_PATH`（空=不掛 LoRA）。prompt 一律走 `tokenizer.apply_chat_template`（Qwen ChatML），不要改回 `### User` 純文字格式。
+- RAG 索引變更後重跑 `python rag/build_index.py --rebuild --deploy`；`rag/index.json`、`rag/index_meta.json`、`rag/deploy_index.json` 都是可重新產生的產出物。預設 TF-IDF，裝了 chromadb+sentence-transformers 才會用語意向量（embedding 預設跑 CPU，留顯存給 3B）。
+- `web_demo_backup*.py`、`web_demo_new.py`（純占位檔）2026-09-13 已刪除（非現行程式、沒有任何程式碼引用它們），修改功能請改動 `web_demo.py`。
+- **2026-09-15 起：每個帳號一個 K8s namespace**（`_user_namespace(username)` →
+  `user-<帳號>`），不再共用 `default`。新增任何會查/改 K8s 資源的函式或路由，都要
+  接受/傳遞 `namespace` 參數（預設值 `NS="default"` 只當 fallback，不要當作正式行為
+  依賴），不要假設所有資源都在 `default`。例外兩處刻意跨所有 namespace 查詢：
+  節點資源容量檢查（`_check_scale_risk`，實體節點是所有帳號共用的）跟 port 衝突檢查
+  （`k8s_get_services(all_namespaces=True)`，host port 綁定是共用的）。舊的 3 個
+  共用 Deployment（`auto-app`/`my-cache`/`zt-smoke`）留在 `default`，當共用/管理者
+  資源，沒有被搬動。詳見 [docs/security_review.md](docs/security_review.md) 11 節。
+
+## 環境與啟動
+
+詳見 [docs/setup.md](docs/setup.md)。快速指令：
+
+```bash
+python core/model_server.py       # 啟動常駐 Model Server
+python 0_touch_generate_pods.py   # CLI 部署
+python web_demo.py                # Web UI（localhost:5000）
+```
+
+## 後續路線圖
+
+尚待整合項目見 [docs/roadmap.md](docs/roadmap.md)。
+
+**已確認接上、不是待辦事項**（2026-08-03 追過程式碼呼叫路徑確認，之前這裡寫錯過）：
+- RAG 已接進主流程：`llama_client.py` 的 `_try_augment_with_rag(_ex)` 在呼叫 model server 前注入知識庫內容。
+- Orchestrator 已接進兩條真實部署路徑，會實際擋下部署：`0_touch_generate_pods.py`（CLI，block 中止 / warn 需手動確認）與 `web_demo.py` 的 `_review_deployment` → `_prepare_deploy`（Web，guardian → orchestrator → dry-run 三層任一 block 就擋下 `/api/deploy/parse`）。
+
+**寫程式前的提醒**：不要只看 `docs/` 底下的文件就假設某個功能還沒做，這份文件之前就是照抄 roadmap.md 的「建議後續工作」清單才寫錯——文件會過時，改動前先去追實際程式碼的呼叫路徑（例如 `grep -rn "from agents.orchestrator"`）確認現況。
+
+## 進行中工作（2026-08-03，使用者之後會接續，先記錄現況）
+
+**這次 session 做完的**：
+- **Deploy Console 法庭 UI**：`web_demo.py` 新增 `#court-panel`（三張代理卡 security/cost/perf 依序翻牌 + 判決 banner），`doDeploy()` 改走 `/api/deploy/parse` 先預覽、使用者確認才呼叫 `/api/deploy` 真的部署。後端 `agents/orchestrator.py`、`/api/deploy(/parse)` 路由邏輯完全沒動，純前端功能。`courtRequestId` 遞增比對防止重複送出/舊 setTimeout 蓋掉新畫面。
+- **`web_demo.py` 監聽 port 從 5000 改成 5050**（`app.run(..., port=5050)`）——因為使用者本機 Windows 5000 已被別的專案佔用，這是永久性的程式碼改動，不是暫時繞過；`docs/setup.md` 等文件如果還寫 5000 需要一併更新。
+- **`/chat` prompt injection 緩解**（`core/model_server.py`）：新增 `STOP_MARKERS` 清單（含 `###User`/`###Assistant` 無空格變體），生成時用 `stop_strings` 攔截 + 事後字串切割雙重防護（同一份清單，兩層有共同盲點）、`no_repeat_ngram_size=6`（原訂 4，因為「命名空間」等中文詞彙剛好 4 token 會被誤傷，改成 6）、`CHAT_SYSTEM` 補強新手友善語氣與「忽略角色重定義企圖」的軟性提醒。**明確定調為緩解不是根治**——全形井號（＃＃＃）、`System:`/`Human:` 這類其他角色標記寫法實測仍會繞過，已知限制記在 `docs/roadmap.md`。
+- **RAG 聊天路徑精準度**：`rag/retriever.py` 新增 `CHAT_MIN_SCORE = 0.3`（用 `rag/eval_retrieval.py` 24 筆標註測試集實測校準：正確命中分數 0.505~0.714，先前測到的雜訊文件分數 0.29~0.32，0.3 卡在中間），`llama_client.py` 的 `_try_augment_with_rag_ex` 已接上這個門檻。部署 JSON 路徑（`/infer`）維持原本 `min_score=0.05` 不變。
+- **診斷發現（尚未修復，只是查清楚）**：一般聊天（非部署 JSON）品質有系統性問題，跟 prompt injection 無關，乾淨輸入就會重現。用同一套 `CHAT_SYSTEM`/生成參數，只差有沒有合併 LoRA 做了 base-vs-LoRA 對照測試（同一題 RBAC 問題各跑 3 次）：
+  - **Base model（不套 LoRA）：3 次全對**，正確講到 `Role`/`ClusterRole`/`RoleBinding`/`ClusterRoleBinding`，無部署語法污染、無 `###` 殘留
+  - **LoRA 合併版（現在 Model Server 實際在跑的版本）：3 次全錯**，捏造「json-policy」等不存在概念，還混進 `--image=`/`--port=` 這種部署 JSON 的語法到一般問答裡
+  - **結論**：LoRA（為部署 JSON 生成任務微調）合併進同一個模型後，污染了跟部署無關的一般問答能力，且可重現，不是隨機失常。`###` 殘留現象也归因到 LoRA（base model 同樣的防護程式碼沒有出現殘留）。
+  - 另外獨立記錄：一般聊天偶爾會幻覈捏造不存在的參考網址（例如 K8s 官網文件連結），這是跟 LoRA 污染不同機制的另一種幻覈，不要混在一起處理。
+
+**2026-08-04 接續完成**：
+- **查了 `training/` 微調資料組成**（實際腳本在 repo 根目錄 `merge_and_train.py`，不在 `training/` 資料夾）：`dataset/finetune_samples.jsonl`（部署樣本，約 806 筆）+ `dataset/k8s_qa_samples.jsonl`（一般問答，只有 41 筆）合併成 `dataset/merged_samples.jsonl`（847 筆）餵給 LoRA。**部署樣本佔 95.2%、一般問答只佔 4.8%**，量化確認了污染根因。
+- **選了便宜修法並做完**：`core/model_server.py` 的 `/chat` 端點改用 `PeftModel.disable_adapter()`（peft 0.19.1 內建 context manager）暫時停用 LoRA，讓 `/chat` 的生成行為等同純 base model；`_model` 本來就是動態掛載 LoRA（沒呼叫 `merge_and_unload()`），所以這個做法零成本、不多佔 VRAM、不用另外載入模型。`/infer`（部署 JSON 生成）完全不動，繼續用完整 LoRA。
+- **一併補了併發鎖**：加了全域 `_generate_lock = threading.Lock()`，`/chat`、`/infer` 的 `generate()` 呼叫都套上，因為 `/chat`、`/infer` 都是同步 `def`（FastAPI 預設丟進 threadpool）、`_model` 是共用物件，沒有鎖的話併發請求有機會讓 `/infer` 被拖進「LoRA 已停用」的狀態，這個風險在改動前的計畫覆核裡被抓出來，已經修掉並用「同時發送 `/chat` + `/infer`」實測驗證過兩邊都正確、沒有互相污染。
+- **驗證結果**：RBAC 問題重跑 3 次全對（正確講 `Role`/`ClusterRole`/`RoleBinding`/`ClusterRoleBinding`）；6 題乾淨一般問答內容正確、無部署語法污染；`/infer` 部署解析不受影響；併發測試通過。
+
+**還沒做決定/待接續**：
+- 上述 LoRA 污染診斷結果、修復過程、`###` 殘留歸因、幻覈捏造網址，都還沒寫進 `docs/roadmap.md`，之後要補
+- **新發現、還沒處理**：`/chat` 有時會把 `[參考知識]` RAG context 原文洩漏進最終回覆（沒有照 `CHAT_SYSTEM` 指示「只當靜默背景，不要引用」），這次驗證測試時觀察到兩次，跟今天的 LoRA 修法無關，是獨立問題，需要另外處理
+- prompt injection 的「tokenizer 層級根治」（分段 tokenize 再串接 input_ids，讓使用者輸入不可能產生特殊 token id）已排查可行性但本次未做，記在 `docs/roadmap.md` 技術債
+
+**2026-08-07 接續完成**：
+- **翻譯層（先正規化使用者輸入再交回本地模型執行）**：原計畫用 Claude API，實測卡在帳戶額度不足；改用 Gemini API 後一度發現輸出不穩定（常把使用者明明講過的資訊搞丟/截斷，例如「兩份 nginx」正規化後變成 `web service)`）+ 免費層每分鐘只給 5 次請求。
+  - **truncation 問題已診斷並修好**：查 `response.candidates[0].finish_reason` 發現是 `MAX_TOKENS`，且 `usage_metadata.thoughts_token_count` 高達 140+——`gemini-flash-latest` 預設有「思考」模式，思考過程的 token 會算進 `max_output_tokens` 裡，原本設的 150 幾乎全被思考吃光，答案從中間被截斷。試過 `thinking_config: {"thinking_budget": 0}` 想直接關閉思考，但這個模型回傳 400 INVALID_ARGUMENT 不接受；改成單純把 `max_output_tokens` 拉高到 1024（`core/gemini_client.py` 兩個函式都改），思考 + 答案都有空間，重跑「缺欄位不能亂猜」跟「資訊完整不能搞丟」兩項關鍵測試都過關（`finish_reason` 正常變成 `STOP`）。另外加了 `_extract_text()` 共用檢查：就算之後又被截斷，直接丟棄結果回傳 `None`（呼叫端 fallback 回原始輸入），不會把破碎句子往下游傳。
+  - **免費層每分鐘 5 次請求的限流問題還沒解**，這是額度層級的限制，不是程式邏輯能修的，之後要嘛升級付費方案、要嘛在程式裡加請求間隔/佇列。
+  - **目前仍是關閉狀態**（`.env` 的 `USE_LLM_NORMALIZE=0`）——truncation bug 修好了，但限流問題還在，開下去 demo 用還是有機會撞到 429，先不預設開啟，之後要用時手動打開並注意頻率。
+  - **另外修好一個句尾標點 bug**：Gemini 正規化常在句尾加句點（"deploy 2 pods of redis."），導致本地 `_deterministic_deploy_parse` 的 image regex 抓不到，誤退回預設值 `nginx:latest`（使用者要 redis 卻被解析成 nginx）。修法：`core/gemini_client.py` 的 `_extract_text()` 去掉句尾標點（根因）+ `llama_client.py` 的 image regex lookahead 也改成對句尾標點寬容（防禦性補強，見 `llama_client.py` 的 `image_patterns`）。
+  - **新增 `_chat_needs_normalize()` 呼叫量控制**：聊天路徑原本是每則訊息都打一次 Gemini，現在只有訊息超過 60 字或含 `###`/`System:` 這類可疑格式標記才會送翻譯層，短且乾淨的訊息直接跳過，省額度。
+  - **新增 RAG 文件** `rag/k8s_docs/translation_layer_notes.md`：說明翻譯層各種 log 訊息/行為代表什麼（正規化成功/失敗、429 限流、截斷、句點 bug），已重建索引、確認可正確檢索到。
+- **修好「部署顯示成功但 Pods/Deployments 沒有實際建立」的 bug**：`web_demo.py` 的 `/api/deploy` 原本用背景執行緒呼叫 `k8s_deploy()`、回傳值完全沒人接，HTTP response 在背景執行緒跑完前就先回了，導致「顯示成功」但實際上 K8s 那端可能還沒建立、甚至已經失敗。改成同步呼叫、把 `(ok, message)` 放進回應（`k8s_deploy` 欄位），前端兩處確認送出的地方（`courtProceedDeploy()`、`confirmDeploy()`）都改成先檢查 `d.k8s_deploy.ok === false`（用 `=== false` 而不是 `!ok`，正確區分「模擬模式沒執行」跟「真的執行過但失敗」）。
+  - **改同步之前先補了 timeout，且中途發現 kubernetes python client 預設會重試 3 次**：實測指向一個會被丟包、不主動拒絕連線的位址，光是 `_request_timeout=10` 沒用，因為 `configuration.retries` 預設 `None` 會 fallback 到 urllib3 預設重試，3 次疊加起來要等 **80 秒**才失敗。修法：`k8s_deploy()` 內建一份獨立的 `Configuration`（`retries = 0`，只影響這個函式的 client，不動全域設定），`_request_timeout` 改用 `(連線5秒, 讀取10秒)` tuple，重測降到 10 秒（兩次嘗試 replace→create fallback 各 5 秒連線）。
+  - **連動記錄（已寫進 `docs/roadmap.md`）**：這個修復上線後使用者第一次能真的看到失敗訊息、會想重試，`/api/deploy` 沒有 idempotency 保證（重試可能造成重複 GitOps commit）這條舊技術債的觸發機率因此從「幾乎零」變成「使用者的第一直覺反應」，這次沒有一併修，只記錄連動關係。
+- **重大基礎設施問題排除：HF 模型快取所在的 NTFS 磁碟局部損毀**：`~/.cache/huggingface` 是符號連結指到 `/mnt/Data/capstone2025/cache/huggingface`（這台機器用 `ntfs3` 掛載一顆 NTFS 磁碟，`/etc/fstab` 裡是永久設定，這顆磁碟 Windows 那邊應該也在用，這是雙系統機器）。`models--meta-llama--Llama-3.1-8B-Instruct` 這個資料夾在 NTFS 層級壞掉，`stat`/`rm`/`umount` 全部回傳 `Invalid argument`，**Linux 的 `ntfs3` 驅動沒有修復能力**（不像 ext4 有 `fsck`），真正的修復工具是 Windows `chkdsk`，需要重開機進 Windows 才能跑，這邊沒有 sudo、也沒有 Windows 存取權限，完全碰不到。
+  - **解法：不修，直接繞開**——把 `HF_HOME` 改指到 ext4（本機系統磁碟）上的新路徑 `~/.cache/huggingface_new`，讓模型重新下載一份乾淨的，完全不碰 NTFS 那顆磁碟。
+  - **順便根治了一個 import 順序陷阱**：`core/model_server.py` 原本是先 `from transformers import ...`（會連帶 import `huggingface_hub`，這時就已經根據當下環境變數決定好快取路徑常數）才 `from core.config import ...`（這行才會觸發讀 `.env`）——所以原本只把 `HF_HOME` 寫進 `.env` 沒有用。查過 `core/config.py` 只 import `os`，沒有重依賴、也沒有其他模組反過來 import `model_server.py`，確認範圍夠小可以直接修：把 `from core.config import ...` 挪到檔案最前面、`transformers`/`peft` 之前。改完驗證過：完全不帶任何 shell 層級 `HF_HOME`、純靠 `.env`，`huggingface_hub` 的 `HF_HUB_CACHE` 常數跟實際啟動都正確指向新路徑。現在 `CLAUDE.md` 原本寫的 `python core/model_server.py` 這個啟動指令不用加任何東西就能正常運作，是真的根治，不是繞過。
+  - 已確認：`ADAPTER_PATH`（LoRA 權重）是專案內的本機路徑（`llama3_k8s_lora_results`），不在 HF 快取裡，完全不受這次事件影響。
+
+**2026-08-07 收工狀態**：Model Server（`model_loaded:true`）、Web Demo、K8s（SSH tunnel 連著）三個都跑著且驗證正常，環境是穩定的，下次可以直接接續，不用重新排查連線問題。
+
+## 進行中工作（2026-09-06：換小模型 + 翻譯層優先 + 雙模型 + 修 OOM）
+
+專案搬到本機 Windows（RTX 3060 Laptop，6GB VRAM），8B 跑不動。計畫檔：`C:\Users\neil-\.claude\plans\inherited-finding-lobster.md`。已做完：
+
+- **模型雙軌**：`core/config.py` 的 `BASE_MODEL` → `Qwen/Qwen2.5-3B-Instruct`（4-bit GPU，約 3GB VRAM），新增 `MONITOR_MODEL`=`Qwen/Qwen2.5-1.5B-Instruct`（CPU）、`DEPLOY_ADAPTER_PATH`（空=不掛 LoRA）。`core/model_server.py` 一個 process 載兩顆、各一把 lock、prompt 改 `apply_chat_template`（ChatML），新增 `/diagnose`，`/health` 回 `deploy_loaded`/`monitor_loaded`。8B LoRA 棄用。
+- **翻譯層優先**：`core/gemini_client.py` 改輸出 `### DeploySpec` 區塊 + `GEMINI_API_KEYS` 多 key 逗號分隔輪換（遇 429 換下一把）。`llama_client.ask_llama()` 重排成「Gemini 正規化 → `parse_deploy_spec()` 快路徑（零 GPU）→ deterministic → 小模型 + RAG few-shot」。`.env` 的 `USE_LLM_NORMALIZE=1` 預設開。
+- **RAG 部署範例索引**：`rag/build_index.py` 新增 `build_deploy_index()`（讀 `dataset/finetune_samples.jsonl`，1802 筆 → `rag/deploy_index.json` TF-IDF）；`rag/retriever.py` 新增 `retrieve_deploy_examples()`；`rag/vector_store.py` embedding 預設跑 CPU。重建：`python rag/build_index.py --rebuild --deploy`。
+- **監控接 healer**：`healer/diagnose.py` `_llm_analyze()` 改呼叫 `llama_client.diagnose_with_llm()`（打 `/diagnose`），規則層順序不變。
+- **UI 雙語（選項 B）**：`web_demo.py` 法庭判決 banner / 部署成功失敗訊息、`0_touch_generate_pods.py` 提示，改中英並陳。
+- **文件**：`docs/setup.md`、`docs/architecture.md`、`docs/roadmap.md`、`.env.example`、`requirements.txt` 都更新了。
+- **prompt injection `### User` 結構性風險順帶消解**（改 ChatML）。
+
+**還沒做決定/待接續**：
+- `_chat_needs_normalize()` 已不使用（保留定義未刪）；`_DEPLOY_INTENT_RE` 仍給 `_try_augment_with_rag_ex`（chat 路徑）用
+- RAG 部署索引是 TF-IDF（keyword-ish），要語意檢索得裝 chromadb+sentence-transformers
+- 舊技術債仍在：`/api/deploy` idempotency、`/chat` 洩漏 `[參考知識]`、`K8S_ENABLED` 啟動時才檢查
+
+## 進行中工作（2026-09-07：Chat 變成系統統一入口 + 多步確認部署）
+
+計畫檔：`C:\Users\neil-\.claude\plans\jolly-munching-whale.md`。使用者測試發現 Chat 分頁只會問答、
+部署要跳 Deploy Console，且本地 3B 對「給我基本例子」回了手動 kubectl 教學（違背零接觸定位）。
+目標：Chat 能執行系統上任何操作，部署走「確認規格 → 算資源+三方審查 → 再確認 → 部署 → 回報+指路」。
+
+**Gemini key 輪換改主動 round-robin**（`core/gemini_client.py`）：`.env` 已有 3 把 key。`_generate()`
+原本只在撞 429 才換，改成 `finally` 每次呼叫都 `_rotate_key()` 前進，負載平均分散（合計約 15 次/分鐘）。
+`_keys` 首次載入後快取，新增 key 要重啟 server。
+
+**已完成（Phase 1–4，全部驗證過）**：
+- **`core/model_server.py` 新增 `POST /classify`**：`INTENT_SYSTEM` + 13 組中英 few-shot + `_clean_intent()`
+  把訊息分類成固定 enum 的 `{action,args,confidence}`（照 `/diagnose` 的嚴格 JSON 範式；不用 `/infer`，
+  因為它的 `_validate` 硬性要 pods）。破壞性操作信心 <0.75 或缺 arg → 降級 `clarify`。共用 `_deploy_lock`。
+- **`llama_client.classify_intent(message)`**：POST `/classify`，server 掛掉回 `qa`。
+- **`web_demo.py`**：
+  - `_rule_intent()` + `_INTENT_RULES`（前端 `matchClientRule` 的 server 鏡像）、`POST /api/intent`
+    路由（規則優先 → `classify_intent` → `qa`）。
+  - `_resource_summary(parsed, review)`：把 `review.agents.agents.cost.cost_estimate` + `review.node_estimate`
+    深層巢狀攤平（總記憶體/CPU = 副本×每個 pod、節點數、$/月）。`/api/deploy/parse` 和 `/api/deploy`
+    回應都加這欄；`/api/deploy/parse` 也接受 `{parsed}` override（比照 `/api/deploy`，用 `_synth_input_from_spec`）。
+  - **前端對話狀態機**：`chatFlows`（記憶體物件，`seq` race guard）+ 卡片 HTML 內嵌 `data-flow-state`
+    JSON blob + `hydrateChatFlows()`（重整後非終態流程一律標 `expired`、按鈕 disable）。
+  - **卡片**：B1 規格確認卡（可編輯）→ B2 資源表+三方審查+判決 banner（approve/warn「仍要部署」/block 無路）
+    → B4 完成卡（連結跳 Pods/Deployments/GitOps）。破壞性操作走 B3 兩步確認卡（顯示 delta，取消/確認）。
+  - `sendChat()` 重寫成 `matchClientRule → /api/intent → switch(action)`；`runQA` = 舊 `/api/chat` 邏輯逐字。
+    移除舊的「打字即執行」delete/scale/update/rollback 分支。
+  - 順手修 Deploy Console 既有 bug：`renderDecisionCourt` 讀 `review.agents.security` 少一層
+    （正確 `review.agents.agents.security`），法庭翻牌動畫一直走 graceful-degrade、等於死碼；已修正。
+  - `k8sEnabled` JS 全域（`{{ k8s }}`）供 B3 判斷 scale/update 在 K8s 未連線時 disable。
+- **舊 `deployConfirmHTML`/`readDeployConfirm`/`confirmDeploy` 保留未刪**（一版緩衝，驗證後再移除）。
+
+**2026-09-07 後續修的 3 件事**（commit `c1a202e`）：
+- **GitOps Log 整頁空白**：`/api/gitops` 的 `subprocess.run(text=True)` 在 Windows 用 cp950 解碼 `git log`，
+  git 歷史一出現中文 commit message（`daabe5e`、`7afe318` 等）就解碼失敗、`result.stdout` 變 `None`、
+  `.strip()` 崩潰。改 `encoding="utf-8", errors="replace"`；`/api/dataset/run` 同 pattern 一併修。
+  **這是唯一真的壞掉的工具**，跟換模型無關（是中文 commit message 進歷史才觸發）。
+- **「工具都無法運作」的真正主因**：`app.secret_key` 沒設 `FLASK_SECRET_KEY` 時每次重啟 `web_demo.py`
+  都換一把隨機金鑰 → 已登入 session 全失效 → 每個工具頁 API 回 401 → 看起來全壞。
+  `.env` / `.env.example` 已加 `FLASK_SECRET_KEY`（`.env` 是 gitignored，值只在本機）。
+- **Chat 思考指示**：改成旋轉 spinner + 分階段文字（理解需求 / 解析部署 / 思考中 10–30 秒 / 查詢中），
+  部署流程各步驟也加 spinner，避免使用者以為當機。CSS 用既有 `@keyframes spin` + 新增 `.think-row`/`.spinner`。
+
+**2026-09-07 再加：Chat 查單一 pod/deployment 詳情**（feat/chat-unified-assistant）：
+- 新增 3 個只讀意圖 `describe_pod` / `pod_health` / `describe_deployment`（規則 + 分類器 few-shot）。
+- 後端 `web_demo.py`：`k8s_describe_pod`（容器 state/reason/重啟/事件 + 健康判定）、`k8s_describe_deployment`、
+  `_resolve_pods`（完整名/app label/前綴都解析）、`GET /api/pods/<name>`（`?diagnose=1` 不健康時打 `/diagnose` 附根因）、
+  `GET /api/deployments/<name>`。健康判定：目前 running+ready 就算健康，過去 Error 終止只當「曾重啟 N 次」註記。
+- **接地問答**：`/api/chat` 問題牽涉叢集狀態時，`_cluster_snapshot_for()` 撈 deployments 摘要 + 不健康 pod +
+  點名物件詳情，當 `[現況]` 塞給 3B；`CHAT_SYSTEM` 加「`[現況]` 是剛撈的真實狀態，據此回答、勿虛構」。
+
+**事故記錄（2026-09-07）**：清理 smoke test 時誤下 `git reset --hard HEAD~1`，把當時未 commit 的
+Phase 1–4 全部實作連同 gemini round-robin 一起清掉，且 HEAD 多退一格。已從對話記錄逐條重建所有改動、
+`git reset --soft 7afe318` 復原 HEAD、重跑全套測試確認與被清掉的版本一致。教訓：跑 `git reset --hard`
+前一定先確認工作區沒有未提交的實作。
+
+**待接續**：
+- Phase 5：中英文案潤飾、`showPage` loader 確認、E2E 手測（warn/block、破壞性取消再確認、重整失效卡、切換聊天室重繪）、
+  移除舊 deployConfirm 死碼、更新 `docs/architecture.md` 資料流圖
+- 使用者要在瀏覽器實測整條多步部署流程
+- `/api/deploy` 沒有 idempotency：多步流程讓「使用者第一次看到失敗會重試」變常態，重複 GitOps commit 風險上升（舊技術債，未修）
+
+## 進行中工作（2026-09-15：真的部署 Prometheus + 全系統誠實度稽核）
+
+Metrics 頁面「Prometheus: Online」查出來是寫死的（已修成真的探測），修完後發現更根本的
+事實：**這個叢集從來沒有真的裝過 Prometheus**，`observability/` 整個模組（查詢客戶端 +
+告警規則 + Grafana 儀表板）從寫進去那天起就是死代碼。使用者確認要做，並要求做完後
+全系統再稽核一次，細節見 [docs/security_review.md](docs/security_review.md) 12 節。
+
+**做完的**：
+- 用 Helm 裝 `kube-prometheus-stack`（release `kube-prom`，namespace `monitoring`），
+  LoadBalancer 曝露到 `127.0.0.1:9090`（Prometheus）/`127.0.0.1:3001`（Grafana，見下方
+  3000 port 衝突說明）/`127.0.0.1:9093`（Alertmanager）。
+- 修好兩個過程中發現的「套用了/寫了但沒真的生效」落差：`alert_rules.yaml` 的
+  `PrometheusRule` label 對不上 Operator 的 `ruleSelector`（補 `release: kube-prom`）；
+  `prometheus_client.py` 的 CPU/記憶體查詢 `container!=""` 過濾條件在 Docker Desktop 上
+  永遠查不到資料（該環境 cAdvisor 沒有 `container` label，已拿掉這個過濾條件）。
+- `web_demo.py` 的 `/api/metrics` 改用 `observability/prometheus_client.py` 的
+  `PrometheusClient`，拿掉重複的土砲 `prom_query()`；`/api/pods/<name>` 新增
+  `real_usage`（真實 CPU/記憶體用量），Healer Pod 詳情頁顯示，Prometheus 查不到時
+  明確顯示「無法取得」而不是留空白或顯示 0。
+- Grafana 儀表板透過 `/api/dashboards/import` 匯入成功（**發現這台機器 host 的 3000 port
+  被另一個無關專案佔用**，Grafana LoadBalancer 一直 `<pending>`，改成 3001 才是真的接到）。
+- 全系統誠實度稽核：`grep` 過 `web_demo.py` 找其他「寫死的狀態旗標」模式，`_check_docker`/
+  `_check_k8s_live`/`_healer_bg_liveness`/`api_status` 這些都確認是真的即時檢查，沒有
+  找到新的假象；`pytest`（138 個）全過；兩個新建測試帳號驗證多租戶隔離在新增
+  `monitoring` namespace 之後依然成立，驗證完已清除。
+- `requirements.txt` 補上 `requests==2.32.5`（`prometheus_client.py` 需要，之前沒被
+  列出來是因為程式碼從沒被執行過）。

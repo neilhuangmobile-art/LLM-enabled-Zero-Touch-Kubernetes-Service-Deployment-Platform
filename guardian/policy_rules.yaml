@@ -1,0 +1,82 @@
+# guardian/policy_rules.yaml
+# 零接觸部署平台 - 安全策略規則
+#
+# 研究報告依據：
+#   「策略即程式碼（PaC）- 策略應採用標準 YAML 定義，
+#    並與應用程式程式碼一起存儲在版本控制系統中，
+#    以確保透明度與可審計性」
+#
+# 對應工具：guardian/yaml_validator.py 會讀取此檔案
+# 未來擴充：可同步轉換為 Kyverno ClusterPolicy 或 OPA Rego 規則
+
+# ── 安全性規則 ───────────────────────────────────────────────────
+security:
+
+  # 禁止特權容器（securityContext.privileged: true）
+  # 特權容器可存取宿主機所有裝置，是最嚴重的安全風險
+  deny_privileged: true
+
+  # 禁止容器以 root（uid=0）執行
+  # 啟用後，runAsUser=0 會產生警告
+  deny_run_as_root: false
+
+  # 禁止使用 hostNetwork（可見宿主機完整網路介面）
+  deny_host_network: true
+
+  # 禁止使用 hostPID（可見宿主機所有 process）
+  deny_host_pid: true
+
+  # 禁止 allowPrivilegeEscalation（子 process 可提升權限）
+  # 設為 false = 只警告不阻斷
+  deny_privilege_escalation: false
+
+  # 使用 latest 或無版本 tag 時發出警告
+  warn_latest_tag: true
+
+
+# ── 資源限制規則 ─────────────────────────────────────────────────
+resources:
+
+  # Deployment replicas 最大值（超過則阻斷）
+  max_replicas: 50
+
+  # 未設定 resources.limits 時發出警告
+  warn_no_limits: true
+
+  # 記憶體建議範圍（僅用於文件說明，validator 暫未強制）
+  # min_memory: 64Mi
+  # max_memory: 8Gi
+
+
+# ── 映像檔規則 ───────────────────────────────────────────────────
+images:
+
+  # 禁止使用的映像（精確比對）
+  denied_images: []
+  # 範例：
+  # denied_images:
+  #   - "alpine:latest"     # 太舊，有已知漏洞
+  #   - "ubuntu:18.04"      # EOL
+
+  # 允許的映像倉庫前綴（空列表 = 不限制）
+  allowed_registries: []
+  # 範例：
+  # allowed_registries:
+  #   - "docker.io/library/"
+  #   - "gcr.io/your-project/"
+  #   - "your-registry.example.com/"
+
+
+# ── 命名規則 ─────────────────────────────────────────────────────
+naming:
+
+  # app_name 不允許使用的字串（防止部署到系統命名空間相關名稱）
+  denied_names:
+    - "kube-system"
+    - "kube-public"
+    - "kube-node-lease"
+    - "kubernetes"
+    - "default"   # 建議不要命名為 default
+
+  # app_name 長度限制（K8s DNS label 規範：最長 63 字元）
+  max_name_length: 63
