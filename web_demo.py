@@ -556,6 +556,29 @@ def _ban_user(username: str):
             pass
 
 
+def _sum_cluster_resource_requests(exclude_name: str = None, exclude_namespace: str = None):
+    """加總目前叢集裡「全部 namespace、全部 Deployment」目前的資源需求
+    （cpu millicores、memory bytes），用真實 replicas 數。exclude_name/exclude_namespace
+    用來排除掉呼叫端要自己另外用新數字重新計算的那個 Deployment（scale 操作要用新
+    replicas 取代舊值，不能疊加舊的）。查不到就回 (0, 0)，呼叫端要自己判斷要不要略過。"""
+    from agents.cost_agent import _parse_cpu_millicores, _parse_memory_bytes
+    apps_api = k8s_client.AppsV1Api()
+    deployments = apps_api.list_deployment_for_all_namespaces().items
+    total_cpu_mc = 0
+    total_mem_b = 0
+    for d in deployments:
+        if exclude_name and d.metadata.name == exclude_name and d.metadata.namespace == exclude_namespace:
+            continue
+        containers = d.spec.template.spec.containers if d.spec.template.spec else []
+        if not containers or not containers[0].resources or not containers[0].resources.requests:
+            continue
+        reps = d.spec.replicas or 1
+        req = containers[0].resources.requests
+        total_cpu_mc += (_parse_cpu_millicores(req.get("cpu")) or 0) * reps
+        total_mem_b += (_parse_memory_bytes(req.get("memory")) or 0) * reps
+    return total_cpu_mc, total_mem_b
+
+
 def _check_scale_risk(name: str, new_replicas: int, namespace: str = None):
     """在真的調整 replicas 前先檢查：整個叢集（所有 namespace 的所有 Deployment 加總）
     在套用這個新 replicas 之後，資源需求會不會超出最大節點的容量。跟部署時的單一 Pod
@@ -579,19 +602,18 @@ def _check_scale_risk(name: str, new_replicas: int, namespace: str = None):
         node_mem_b = _parse_memory_bytes(real_capacity.get("memory")) or 0
         if not node_cpu_mc and not node_mem_b:
             return False, None
+        base_cpu_mc, base_mem_b = _sum_cluster_resource_requests(exclude_name=name, exclude_namespace=namespace)
         apps_api = k8s_client.AppsV1Api()
-        deployments = apps_api.list_deployment_for_all_namespaces().items
-        total_cpu_mc = 0
-        total_mem_b = 0
-        for d in deployments:
-            containers = d.spec.template.spec.containers if d.spec.template.spec else []
-            if not containers or not containers[0].resources or not containers[0].resources.requests:
-                continue
-            is_target = d.metadata.name == name and d.metadata.namespace == namespace
-            reps = new_replicas if is_target else (d.spec.replicas or 1)
-            req = containers[0].resources.requests
-            total_cpu_mc += (_parse_cpu_millicores(req.get("cpu")) or 0) * reps
-            total_mem_b += (_parse_memory_bytes(req.get("memory")) or 0) * reps
+        target_req = {}
+        try:
+            target = apps_api.read_namespaced_deployment(name, namespace)
+            containers = target.spec.template.spec.containers if target.spec.template.spec else []
+            if containers and containers[0].resources and containers[0].resources.requests:
+                target_req = containers[0].resources.requests
+        except Exception:
+            pass
+        total_cpu_mc = base_cpu_mc + (_parse_cpu_millicores(target_req.get("cpu")) or 0) * new_replicas
+        total_mem_b = base_mem_b + (_parse_memory_bytes(target_req.get("memory")) or 0) * new_replicas
         over_cpu = node_cpu_mc and total_cpu_mc > node_cpu_mc
         over_mem = node_mem_b and total_mem_b > node_mem_b
         if over_cpu or over_mem:
@@ -4777,6 +4799,38 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
                     f"since a single Pod must fit on ONE node. It would stay stuck Pending forever. "
                     f"Please lower the requested memory/cpu."
                 )
+            elif K8S_ENABLED:
+                # 使用者確認要的方向：單一 pod 本身放得下，不代表「這次部署的所有副本」+
+                # 「叢集裡其他使用者已經部署的東西」疊加起來也放得下——一次要求很多副本，
+                # 或剛好撞上其他人已經吃掉大部分資源的時機，一樣會讓多出來的 Pod 卡在
+                # Pending 卻顯示部署成功。跟 _check_scale_risk 是同一種風險，差別是這個
+                # Deployment 還沒建立，查不到它，要用這次請求的 cpu/mem × pods 直接算，
+                # 不能用 read_namespaced_deployment 查舊值。
+                try:
+                    existing_cpu_mc, existing_mem_b = _sum_cluster_resource_requests()
+                    pods_requested = parsed.get("pods", 1) or 1
+                    agg_cpu_mc = existing_cpu_mc + pod_cpu_mc * pods_requested
+                    agg_mem_b = existing_mem_b + pod_mem_b * pods_requested
+                    agg_over_cpu = node_cpu_mc and agg_cpu_mc > node_cpu_mc
+                    agg_over_mem = node_mem_b and agg_mem_b > node_mem_b
+                    if agg_over_cpu or agg_over_mem:
+                        review["decision"] = "block"
+                        review["reason"] = "疊加叢集現有其他部署後，總資源需求會超出節點容量"
+                        review.setdefault("blockers", []).append(
+                            f"資源需求疊加超出叢集容量：這次要部署 {pods_requested} 個副本，加上叢集目前"
+                            f"其他部署已經用掉的資源，套用後總計約需要 {agg_cpu_mc}m CPU / "
+                            f"{agg_mem_b // (1024**2)}Mi 記憶體，但叢集最大節點只有 {node_cpu_mc}m CPU / "
+                            f"{node_mem_b // (1024**2)}Mi 可用。多出來排不進去的 Pod 會卡在 Pending 狀態，"
+                            f"畫面卻顯示部署成功，容易被忽略。請降低這次部署的副本數/資源需求，或先移除、"
+                            f"縮小其他部署。 / "
+                            f"Combined with the cluster's existing deployments, total resource demand would "
+                            f"exceed the largest node's capacity after this deploy — the extra pods would "
+                            f"get stuck Pending silently even though the deploy reports success. Please "
+                            f"lower the replica count/resources for this deployment, or scale down other "
+                            f"deployments first."
+                        )
+                except Exception:
+                    pass
     except Exception as e:
         review["node_estimate"] = None
         review.setdefault("warnings", []).append(f"node_estimate failed: {e}")
