@@ -3654,6 +3654,23 @@ function resourceTableHTML(rs){
   if(!rs) return '';
   const nb = rs.node_bound ? `\uff08\u53d7${rs.node_bound==='cpu'?'CPU':'\u8a18\u61b6\u9ad4'}\u9650\u5236 / ${rs.node_bound}-bound\uff09` : '';
   const src = rs.node_source==='llm' ? '\u6a21\u578b\u5224\u65b7 / from model' : '\u975c\u614b\u5bb9\u91cf\u4f30\u7b97 / static-capacity estimate';
+  let clusterHTML = '';
+  if(rs.cluster_capacity){
+    const cc = rs.cluster_capacity, cu = rs.cluster_used, cr = rs.cluster_remaining_after;
+    const remCpuColor = cr.cpu_cores < 0 ? 'var(--red)' : 'var(--text)';
+    const remMemColor = cr.mem_gib < 0 ? 'var(--red)' : 'var(--text)';
+    clusterHTML = `<div style="font-size:11px;font-weight:700;color:var(--text3);margin-top:6px;text-transform:uppercase;letter-spacing:.04em">\u53e2\u96c6\u7a7a\u9593 / Cluster headroom\uff08\u5305\u542b\u5176\u4ed6\u4f7f\u7528\u8005\uff09</div>
+    <table style="border-collapse:collapse;font-size:12px;margin:2px 0 10px">
+      ${resourceRow('\u7bc0\u9ede\u7e3d\u5bb9\u91cf / Node capacity', cc.cpu_cores+' cores / '+cc.mem_gib+' GiB')}
+      ${resourceRow('\u53e2\u96c6\u73fe\u6709\u7528\u91cf / Currently in use', cu.cpu_cores+' cores / '+cu.mem_gib+' GiB')}
+      ${resourceRow('\u9019\u6b21\u90e8\u7f72\u9700\u8981 / This deploy needs', (rs.total_cpu_cores!=null?rs.total_cpu_cores:'\u2014')+' cores / '+(rs.total_mem_gib!=null?rs.total_mem_gib:'\u2014')+' GiB')}
+      <tr><td style="padding:4px 10px 4px 0;color:var(--text3)">\u90e8\u7f72\u5f8c\u5269\u9918 / Remaining after</td>
+          <td style="padding:4px 0;font-family:'DM Mono',monospace;font-weight:700;color:${remCpuColor}">${cr.cpu_cores} cores</td></tr>
+      <tr><td></td><td style="padding:0 0 4px;font-family:'DM Mono',monospace;font-weight:700;color:${remMemColor}">${cr.mem_gib} GiB</td></tr>
+    </table>`;
+  } else if(k8sEnabled){
+    clusterHTML = `<div style="font-size:11px;color:var(--text3);margin:4px 0 10px">\u53e2\u96c6\u5bb9\u91cf\u76ee\u524d\u7121\u6cd5\u53d6\u5f97 / Cluster capacity unavailable right now</div>`;
+  }
   return `<table style="border-collapse:collapse;font-size:12px;margin:4px 0 10px">
     ${resourceRow('\u526f\u672c\u6578 / Replicas', rs.replicas)}
     ${resourceRow('\u6bcf\u500b Pod \u8a18\u61b6\u9ad4 / Mem per pod', rs.per_pod_mem)}
@@ -3663,7 +3680,7 @@ function resourceTableHTML(rs){
     ${resourceRow('\u9810\u4f30\u7bc0\u9ede\u6578 / Est. nodes', (rs.node_count!=null ? rs.node_count : '\u2014') + ' ' + nb)}
     ${resourceRow('\u7bc0\u9ede\u6578\u4f86\u6e90 / Node est. source', src)}
     ${resourceRow('\u9810\u4f30\u6bcf\u6708\u6210\u672c / Est. monthly', rs.monthly_usd!=null ? ('$'+rs.monthly_usd+' USD') : '\u2014')}
-  </table>`;
+  </table>${clusterHTML}`;
 }
 function agentMiniCard(title, badge, issues, summary){
   const pills = (issues||[]).map(i=>{
@@ -4867,6 +4884,38 @@ def _resource_summary(parsed: dict, review: dict) -> dict:
         node_bound = "cpu"
     elif ne.get("memory_bound"):
         node_bound = "memory"
+
+    # 2026-09-17：使用者要求「部署前就能看到叢集還剩多少空間」，不要只在真的超量
+    # 時才靠 _prepare_deploy 的 block 訊息告知——這裡把「節點總容量」「叢集現有
+    # 其他部署已經用掉多少」「套用這次部署後還剩多少」都算出來，跟這次要部署的
+    # 總量放在同一張表對照。查不到就回 None，前端要對應顯示「無法取得」而不是 0
+    # 或留空白（避免看起來像「還有很多空間」的誤導）。
+    cluster_capacity = cluster_used = cluster_remaining_after = None
+    if K8S_ENABLED:
+        try:
+            cap = k8s_get_node_capacity()
+            if cap:
+                from agents.cost_agent import _parse_cpu_millicores, _parse_memory_bytes
+                node_cpu_mc = _parse_cpu_millicores(cap.get("cpu")) or 0
+                node_mem_b = _parse_memory_bytes(cap.get("memory")) or 0
+                used_cpu_mc, used_mem_b = _sum_cluster_resource_requests()
+                this_cpu_cores = est.get("cpu_cores") or 0
+                this_mem_gib = est.get("memory_gib") or 0
+                cluster_capacity = {
+                    "cpu_cores": round(node_cpu_mc / 1000, 2),
+                    "mem_gib": round(node_mem_b / (1024 ** 3), 2),
+                }
+                cluster_used = {
+                    "cpu_cores": round(used_cpu_mc / 1000, 2),
+                    "mem_gib": round(used_mem_b / (1024 ** 3), 2),
+                }
+                cluster_remaining_after = {
+                    "cpu_cores": round(cluster_capacity["cpu_cores"] - cluster_used["cpu_cores"] - this_cpu_cores, 2),
+                    "mem_gib": round(cluster_capacity["mem_gib"] - cluster_used["mem_gib"] - this_mem_gib, 2),
+                }
+        except Exception:
+            cluster_capacity = cluster_used = cluster_remaining_after = None
+
     return {
         "replicas": parsed.get("pods"),
         "per_pod_cpu": parsed.get("cpu") or "未指定 / unset",
@@ -4879,6 +4928,9 @@ def _resource_summary(parsed: dict, review: dict) -> dict:
         "monthly_usd": est.get("estimated_usd"),
         "cost_note": est.get("note"),
         "decision": review.get("decision"),
+        "cluster_capacity": cluster_capacity,
+        "cluster_used": cluster_used,
+        "cluster_remaining_after": cluster_remaining_after,
     }
 
 
