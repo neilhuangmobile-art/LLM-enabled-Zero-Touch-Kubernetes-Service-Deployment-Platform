@@ -588,6 +588,32 @@ def _ban_user(username: str):
             pass
 
 
+def _sum_cluster_resource_requests(exclude_name: str = None, exclude_namespace: str = None):
+    """加總目前叢集裡「全部 namespace、全部 Deployment」目前的資源需求
+    （cpu millicores、memory bytes），用真實 replicas 數。exclude_name/exclude_namespace
+    用來排除掉呼叫端要自己另外用新數字重新計算的那個 Deployment（scale 操作要用新
+    replicas 取代舊值，不能疊加舊的）。查不到就回 (0, 0)，呼叫端要自己判斷要不要略過。
+    從組員的 feat/chat-unified-assistant 分支移植過來，供 _resource_summary() 的
+    「叢集空間」對照表使用；_check_scale_risk() 原本的內嵌加總邏輯已驗證過，故意
+    不改成呼叫這裡，避免無謂改動已通過測試的既有函式。"""
+    from agents.cost_agent import _parse_cpu_millicores, _parse_memory_bytes
+    apps_api = k8s_client.AppsV1Api()
+    deployments = apps_api.list_deployment_for_all_namespaces().items
+    total_cpu_mc = 0
+    total_mem_b = 0
+    for d in deployments:
+        if exclude_name and d.metadata.name == exclude_name and d.metadata.namespace == exclude_namespace:
+            continue
+        containers = d.spec.template.spec.containers if d.spec.template.spec else []
+        if not containers or not containers[0].resources or not containers[0].resources.requests:
+            continue
+        reps = d.spec.replicas or 1
+        req = containers[0].resources.requests
+        total_cpu_mc += (_parse_cpu_millicores(req.get("cpu")) or 0) * reps
+        total_mem_b += (_parse_memory_bytes(req.get("memory")) or 0) * reps
+    return total_cpu_mc, total_mem_b
+
+
 def _check_scale_risk(name: str, new_replicas: int, namespace: str = None):
     """在真的調整 replicas 前先檢查：整個叢集（所有 namespace 的所有 Deployment 加總）
     在套用這個新 replicas 之後，資源需求會不會超出最大節點的容量。跟部署時的單一 Pod
@@ -3694,6 +3720,23 @@ function resourceTableHTML(rs){
   if(!rs) return '';
   const nb = rs.node_bound ? `\uff08\u53d7${rs.node_bound==='cpu'?'CPU':'\u8a18\u61b6\u9ad4'}\u9650\u5236 / ${rs.node_bound}-bound\uff09` : '';
   const src = rs.node_source==='llm' ? '\u6a21\u578b\u5224\u65b7 / from model' : '\u975c\u614b\u5bb9\u91cf\u4f30\u7b97 / static-capacity estimate';
+  let clusterHTML = '';
+  if(rs.cluster_capacity){
+    const cc = rs.cluster_capacity, cu = rs.cluster_used, cr = rs.cluster_remaining_after;
+    const remCpuColor = cr.cpu_cores < 0 ? 'var(--red)' : 'var(--text)';
+    const remMemColor = cr.mem_gib < 0 ? 'var(--red)' : 'var(--text)';
+    clusterHTML = `<div style="font-size:11px;font-weight:700;color:var(--text3);margin-top:6px;text-transform:uppercase;letter-spacing:.04em">\u53e2\u96c6\u7a7a\u9593 / Cluster headroom\uff08\u5305\u542b\u5176\u4ed6\u4f7f\u7528\u8005\uff09</div>
+    <table style="border-collapse:collapse;font-size:12px;margin:2px 0 10px">
+      ${resourceRow('\u7bc0\u9ede\u7e3d\u5bb9\u91cf / Node capacity', cc.cpu_cores+' cores / '+cc.mem_gib+' GiB')}
+      ${resourceRow('\u53e2\u96c6\u73fe\u6709\u7528\u91cf / Currently in use', cu.cpu_cores+' cores / '+cu.mem_gib+' GiB')}
+      ${resourceRow('\u9019\u6b21\u90e8\u7f72\u9700\u8981 / This deploy needs', (rs.total_cpu_cores!=null?rs.total_cpu_cores:'\u2014')+' cores / '+(rs.total_mem_gib!=null?rs.total_mem_gib:'\u2014')+' GiB')}
+      <tr><td style="padding:4px 10px 4px 0;color:var(--text3)">\u90e8\u7f72\u5f8c\u5269\u9918 / Remaining after</td>
+          <td style="padding:4px 0;font-family:'DM Mono',monospace;font-weight:700;color:${remCpuColor}">${cr.cpu_cores} cores</td></tr>
+      <tr><td></td><td style="padding:0 0 4px;font-family:'DM Mono',monospace;font-weight:700;color:${remMemColor}">${cr.mem_gib} GiB</td></tr>
+    </table>`;
+  } else if(k8sEnabled){
+    clusterHTML = `<div style="font-size:11px;color:var(--text3);margin:4px 0 10px">\u53e2\u96c6\u5bb9\u91cf\u76ee\u524d\u7121\u6cd5\u53d6\u5f97 / Cluster capacity unavailable right now</div>`;
+  }
   return `<table style="border-collapse:collapse;font-size:12px;margin:4px 0 10px">
     ${resourceRow('\u526f\u672c\u6578 / Replicas', rs.replicas)}
     ${resourceRow('\u6bcf\u500b Pod \u8a18\u61b6\u9ad4 / Mem per pod', rs.per_pod_mem)}
@@ -3703,7 +3746,7 @@ function resourceTableHTML(rs){
     ${resourceRow('\u9810\u4f30\u7bc0\u9ede\u6578 / Est. nodes', (rs.node_count!=null ? rs.node_count : '\u2014') + ' ' + nb)}
     ${resourceRow('\u7bc0\u9ede\u6578\u4f86\u6e90 / Node est. source', src)}
     ${resourceRow('\u9810\u4f30\u6bcf\u6708\u6210\u672c / Est. monthly', rs.monthly_usd!=null ? ('$'+rs.monthly_usd+' USD') : '\u2014')}
-  </table>`;
+  </table>${clusterHTML}`;
 }
 function agentMiniCard(title, badge, issues, summary){
   const pills = (issues||[]).map(i=>{
@@ -5190,6 +5233,39 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None, namespace: st
                     f"since a single Pod must fit on ONE node. It would stay stuck Pending forever. "
                     f"Please lower the requested memory/cpu."
                 )
+            elif K8S_ENABLED:
+                # 從組員的 feat/chat-unified-assistant 分支移植：單一 pod 本身放得下，
+                # 不代表「這次部署的所有副本」+「叢集裡其他使用者已經部署的東西」疊加
+                # 起來也放得下——一次要求很多副本，或剛好撞上其他人已經吃掉大部分資源
+                # 的時機，一樣會讓多出來的 Pod 卡在 Pending 卻顯示部署成功。跟
+                # _check_scale_risk 是同一種風險，差別是這個 Deployment 還沒建立，
+                # 查不到它，要用這次請求的 cpu/mem × pods 直接算，不能用
+                # read_namespaced_deployment 查舊值。
+                try:
+                    existing_cpu_mc, existing_mem_b = _sum_cluster_resource_requests()
+                    pods_requested = parsed.get("pods", 1) or 1
+                    agg_cpu_mc = existing_cpu_mc + pod_cpu_mc * pods_requested
+                    agg_mem_b = existing_mem_b + pod_mem_b * pods_requested
+                    agg_over_cpu = node_cpu_mc and agg_cpu_mc > node_cpu_mc
+                    agg_over_mem = node_mem_b and agg_mem_b > node_mem_b
+                    if agg_over_cpu or agg_over_mem:
+                        review["decision"] = "block"
+                        review["reason"] = "疊加叢集現有其他部署後，總資源需求會超出節點容量"
+                        review.setdefault("blockers", []).append(
+                            f"資源需求疊加超出叢集容量：這次要部署 {pods_requested} 個副本，加上叢集目前"
+                            f"其他部署已經用掉的資源，套用後總計約需要 {agg_cpu_mc}m CPU / "
+                            f"{agg_mem_b // (1024**2)}Mi 記憶體，但叢集最大節點只有 {node_cpu_mc}m CPU / "
+                            f"{node_mem_b // (1024**2)}Mi 可用。多出來排不進去的 Pod 會卡在 Pending 狀態，"
+                            f"畫面卻顯示部署成功，容易被忽略。請降低這次部署的副本數/資源需求，或先移除、"
+                            f"縮小其他部署。 / "
+                            f"Combined with the cluster's existing deployments, total resource demand would "
+                            f"exceed the largest node's capacity after this deploy — the extra pods would "
+                            f"get stuck Pending silently even though the deploy reports success. Please "
+                            f"lower the replica count/resources for this deployment, or scale down other "
+                            f"deployments first."
+                        )
+                except Exception:
+                    pass
     except Exception as e:
         review["node_estimate"] = None
         review.setdefault("warnings", []).append(f"node_estimate failed: {e}")
@@ -5226,6 +5302,39 @@ def _resource_summary(parsed: dict, review: dict) -> dict:
         node_bound = "cpu"
     elif ne.get("memory_bound"):
         node_bound = "memory"
+
+    # 從組員的 feat/chat-unified-assistant 分支移植：部署前就能看到叢集還剩多少
+    # 空間，不要只在真的超量時才靠 _check_scale_risk/_prepare_deploy 的 block 訊息
+    # 告知。把「節點總容量」「叢集現有其他部署已經用掉多少」「套用這次部署後還剩
+    # 多少」都算出來，跟這次要部署的總量放在同一張表對照。查不到就回 None，前端
+    # 要對應顯示「無法取得」而不是 0 或留空白（避免看起來像「還有很多空間」的
+    # 誤導）。
+    cluster_capacity = cluster_used = cluster_remaining_after = None
+    if K8S_ENABLED:
+        try:
+            cap = k8s_get_node_capacity()
+            if cap:
+                from agents.cost_agent import _parse_cpu_millicores, _parse_memory_bytes
+                node_cpu_mc = _parse_cpu_millicores(cap.get("cpu")) or 0
+                node_mem_b = _parse_memory_bytes(cap.get("memory")) or 0
+                used_cpu_mc, used_mem_b = _sum_cluster_resource_requests()
+                this_cpu_cores = est.get("cpu_cores") or 0
+                this_mem_gib = est.get("memory_gib") or 0
+                cluster_capacity = {
+                    "cpu_cores": round(node_cpu_mc / 1000, 2),
+                    "mem_gib": round(node_mem_b / (1024 ** 3), 2),
+                }
+                cluster_used = {
+                    "cpu_cores": round(used_cpu_mc / 1000, 2),
+                    "mem_gib": round(used_mem_b / (1024 ** 3), 2),
+                }
+                cluster_remaining_after = {
+                    "cpu_cores": round(cluster_capacity["cpu_cores"] - cluster_used["cpu_cores"] - this_cpu_cores, 2),
+                    "mem_gib": round(cluster_capacity["mem_gib"] - cluster_used["mem_gib"] - this_mem_gib, 2),
+                }
+        except Exception:
+            cluster_capacity = cluster_used = cluster_remaining_after = None
+
     return {
         "replicas": parsed.get("pods"),
         "per_pod_cpu": parsed.get("cpu") or "未指定 / unset",
@@ -5238,6 +5347,9 @@ def _resource_summary(parsed: dict, review: dict) -> dict:
         "monthly_usd": est.get("estimated_usd"),
         "cost_note": est.get("note"),
         "decision": review.get("decision"),
+        "cluster_capacity": cluster_capacity,
+        "cluster_used": cluster_used,
+        "cluster_remaining_after": cluster_remaining_after,
     }
 
 
