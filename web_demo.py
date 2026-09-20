@@ -1658,7 +1658,14 @@ html,body{height:100%;overflow:hidden}
         <div class="dot {% if k8s %}green{% else %}red{% endif %}" id="k8s-dot"></div>
         <span id="k8s-status">K8s {% if k8s %}Connected{% else %}Simulation{% endif %}</span>
       </div>
-      <div class="status-pill" style="margin-left:auto;font-size:12px;color:var(--text3)" id="clock"></div>
+      <button class="icon-btn lang-btn" style="margin-left:auto" onclick="setLang(uiLang==='zh'?'en':'zh')" title="Switch language" aria-label="Switch language">
+        <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
+          <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M2 8h12M8 2c1.8 1.8 2.6 4 2.6 6s-.8 4.2-2.6 6c-1.8-1.8-2.6-4-2.6-6s.8-4.2 2.6-6z" stroke="currentColor" stroke-width="1.1"/>
+        </svg>
+        <span id="lang-btn-txt-global">EN</span>
+      </button>
+      <div class="status-pill" style="font-size:12px;color:var(--text3)" id="clock"></div>
     </div>
 
     <!-- Dashboard Page -->
@@ -1832,13 +1839,6 @@ html,body{height:100%;overflow:hidden}
             <div class="chat-subtitle" id="chat-subtitle-txt">Chat, deploy, inspect, and recover Kubernetes services</div>
           </div>
           <div style="display:flex;align-items:center;gap:10px">
-            <button class="icon-btn lang-btn" onclick="setLang(uiLang==='zh'?'en':'zh')" title="Switch language" aria-label="Switch language">
-              <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
-                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/>
-                <path d="M2 8h12M8 2c1.8 1.8 2.6 4 2.6 6s-.8 4.2-2.6 6c-1.8-1.8-2.6-4-2.6-6s.8-4.2 2.6-6z" stroke="currentColor" stroke-width="1.1"/>
-              </svg>
-              <span id="lang-btn-txt">EN</span>
-            </button>
             <button class="icon-btn guide-btn" onclick="openManual()" title="使用說明書 / User guide" aria-label="使用說明書 / User guide">
               <svg viewBox="0 0 16 16" fill="none" width="17" height="17">
                 <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/>
@@ -2019,14 +2019,14 @@ html,body{height:100%;overflow:hidden}
 
     <div class="page" id="page-dashboard">
       <div class="page-title">Dashboard</div>
-      <div class="page-sub">部署前，先看看叢集還剩多少空間 / Check available capacity before you deploy</div>
+      <div class="page-sub" id="dash-sub-txt">部署前，先看看叢集還剩多少空間</div>
       <div class="grid-3" style="margin-bottom:16px">
-        <div class="card"><div class="card-title">叢集總容量 / Cluster capacity</div><div class="stat-num" id="dash-capacity" style="font-size:20px">--</div><div class="stat-label">CPU / Memory</div></div>
-        <div class="card"><div class="card-title">已用量 / Used</div><div class="stat-num" id="dash-used" style="font-size:20px">--</div><div class="stat-label" id="dash-used-label">CPU / Memory</div></div>
-        <div class="card"><div class="card-title">剩餘空間 / Remaining</div><div class="stat-num" id="dash-remaining" style="font-size:20px">--</div><div class="stat-label">CPU / Memory</div></div>
+        <div class="card"><div class="card-title" id="dash-cap-title-txt">叢集總容量</div><div class="stat-num" id="dash-capacity" style="font-size:20px">--</div><div class="stat-label">CPU / Memory</div></div>
+        <div class="card"><div class="card-title" id="dash-used-title-txt">已用量</div><div class="stat-num" id="dash-used" style="font-size:20px">--</div><div class="stat-label" id="dash-used-label">CPU / Memory</div></div>
+        <div class="card"><div class="card-title" id="dash-rem-title-txt">剩餘空間</div><div class="stat-num" id="dash-remaining" style="font-size:20px">--</div><div class="stat-label">CPU / Memory</div></div>
       </div>
       <div class="card" style="margin-bottom:16px">
-        <div class="card-title">使用率 / Utilization</div>
+        <div class="card-title" id="dash-util-title-txt">使用率</div>
         <div style="margin-top:10px">
           <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px">
             <span>CPU</span><span id="dash-cpu-pct-label">--</span>
@@ -2044,7 +2044,7 @@ html,body{height:100%;overflow:hidden}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div class="card">
-          <div class="card-title">我的部署 / My deployments</div>
+          <div class="card-title" id="dash-my-deploy-title-txt">我的部署</div>
           <div class="table-wrap" style="margin-top:8px">
             <table>
               <thead><tr><th>Name</th><th>Replicas</th><th>CPU</th><th>Memory</th></tr></thead>
@@ -2053,13 +2053,12 @@ html,body{height:100%;overflow:hidden}
           </div>
         </div>
         <div class="card">
-          <div class="card-title">我的費用估算 / My cost estimate</div>
+          <div class="card-title" id="dash-cost-title-txt">我的費用估算</div>
           <div style="margin-top:8px;font-size:13px;color:var(--text2)" id="dash-cost">Loading...</div>
         </div>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:12px">
-        僅供參考，實際部署仍以送出當下的審查結果為準；同一時間可能有其他使用者一起部署，數字會有些微落差。 /
-        For reference only — the actual review at deploy time is authoritative, and numbers may shift slightly if others deploy at the same time.
+      <div style="font-size:11px;color:var(--text3);margin-top:12px" id="dash-disclaimer-txt">
+        僅供參考，實際部署仍以送出當下的審查結果為準；同一時間可能有其他使用者一起部署，數字會有些微落差。
       </div>
     </div>
 
@@ -2140,6 +2139,35 @@ const I18N = {
     ],
     manualTitle: '📖 使用說明書',
     manualSub: '名詞下方有虛線底線的可以點擊展開簡明定義',
+    dashSub: '部署前，先看看叢集還剩多少空間',
+    dashCapTitle: '叢集總容量',
+    dashUsedTitle: '已用量',
+    dashRemTitle: '剩餘空間',
+    dashUtilTitle: '使用率',
+    dashMyDeployTitle: '我的部署',
+    dashCostTitle: '我的費用估算',
+    dashDisclaimer: '僅供參考，實際部署仍以送出當下的審查結果為準；同一時間可能有其他使用者一起部署，數字會有些微落差。',
+    dashUnavailable: 'K8s 未連線或查不到容量',
+    dashNA: '無法取得',
+    dashNoDeployments: '目前沒有部署',
+    dashActual: '實際用量',
+    dashTotalCpu: '總 CPU',
+    dashTotalMem: '總記憶體',
+    dashEstMonthly: '預估每月成本',
+    dashRoughEstimate: '粗估值（基於 AWS On-Demand 定價，僅供參考）',
+    qRunningPods: '執行中的 Pods',
+    qNoPods: '目前沒有 Pod。',
+    qDeployments: '部署清單',
+    qNoDeployments: '目前沒有 Deployment。',
+    qGitopsLog: '部署紀錄',
+    qNoCommits: '沒有紀錄。',
+    qClusterMetrics: '叢集指標',
+    qHealerFoundIssues: (n) => `Healer 掃到 ${n} 個問題：`,
+    qNoUnhealthyPods: '沒有異常 Pod。',
+    qWhichOne: '要查哪一個？請講清楚名稱。',
+    qNotFound: (name) => `找不到 ${name}`,
+    qNotFoundPod: (name) => `找不到符合 ${name} 的 pod`,
+    qUnsupported: '（未支援的查詢）',
   },
   en: {
     langBtn: '中文',
@@ -2159,6 +2187,35 @@ const I18N = {
     ],
     manualTitle: '📖 User Guide',
     manualSub: 'Terms with a dotted underline are clickable for a concise definition.',
+    dashSub: 'Check available capacity before you deploy',
+    dashCapTitle: 'Cluster capacity',
+    dashUsedTitle: 'Used',
+    dashRemTitle: 'Remaining',
+    dashUtilTitle: 'Utilization',
+    dashMyDeployTitle: 'My deployments',
+    dashCostTitle: 'My cost estimate',
+    dashDisclaimer: 'For reference only — the actual review at deploy time is authoritative, and numbers may shift slightly if others deploy at the same time.',
+    dashUnavailable: 'K8s disconnected or capacity unavailable',
+    dashNA: 'Unavailable',
+    dashNoDeployments: 'No deployments yet',
+    dashActual: 'actual',
+    dashTotalCpu: 'Total CPU',
+    dashTotalMem: 'Total memory',
+    dashEstMonthly: 'Est. monthly',
+    dashRoughEstimate: 'Rough estimate (based on AWS On-Demand pricing)',
+    qRunningPods: 'Running Pods',
+    qNoPods: 'No pods.',
+    qDeployments: 'Deployments',
+    qNoDeployments: 'No deployments.',
+    qGitopsLog: 'GitOps log',
+    qNoCommits: 'No commits.',
+    qClusterMetrics: 'Cluster metrics',
+    qHealerFoundIssues: (n) => `Healer found ${n} issue(s):`,
+    qNoUnhealthyPods: 'No unhealthy pods.',
+    qWhichOne: 'Which one? Please give a name.',
+    qNotFound: (name) => `Not found: ${name}`,
+    qNotFoundPod: (name) => `No pod matching ${name}`,
+    qUnsupported: '(unsupported query)',
   },
 };
 
@@ -2171,7 +2228,7 @@ function setLang(l){
 function applyLang(){
   const t = I18N[uiLang];
   const set = (id, text) => { const el = document.getElementById(id); if(el) el.textContent = text; };
-  set('lang-btn-txt', t.langBtn);
+  set('lang-btn-txt-global', t.langBtn);
   set('manual-btn-txt', t.manualBtn);
   set('chat-title-txt', t.chatTitle);
   set('chat-subtitle-txt', t.chatSubtitle);
@@ -2180,10 +2237,24 @@ function applyLang(){
   set('composer-hint-txt', t.composerHint);
   set('manual-title', t.manualTitle);
   set('manual-sub', t.manualSub);
+  set('dash-sub-txt', t.dashSub);
+  set('dash-cap-title-txt', t.dashCapTitle);
+  set('dash-used-title-txt', t.dashUsedTitle);
+  set('dash-rem-title-txt', t.dashRemTitle);
+  set('dash-util-title-txt', t.dashUtilTitle);
+  set('dash-my-deploy-title-txt', t.dashMyDeployTitle);
+  set('dash-cost-title-txt', t.dashCostTitle);
+  set('dash-disclaimer-txt', t.dashDisclaimer);
   renderManualBody();
   // 只有在聊天室是空的（歡迎畫面）時才需要重繪，避免打斷正在進行的多步流程卡片
   const ch = typeof currentChat === 'function' ? currentChat() : null;
   if(ch && !ch.messages.length && typeof renderMessages === 'function') renderMessages();
+  // Dashboard 的動態內容（已用量來源標示、我的部署清單、費用估算文字）是
+  // fetch 回來後用 JS 組字串塞進去的，不是靜態 DOM，語言切換當下要重新打一次
+  // API 並用新語言重繪，不然文字停在切換前的語言，使用者會覺得「這頁沒反應」。
+  if(document.getElementById('page-dashboard')?.classList.contains('active') && typeof loadDashboard === 'function'){
+    loadDashboard();
+  }
 }
 
 // ── 使用說明書內容：中英兩份獨立寫，專有名詞一律保留英文 ──
@@ -3285,6 +3356,7 @@ function _dashPctBar(barId, labelId, usedVal, capVal){
 }
 
 async function loadDashboard(){
+  const t = I18N[uiLang];
   document.getElementById('dash-cost').textContent = 'Loading...';
   document.getElementById('dash-my-deployments').innerHTML = '<tr><td colspan="4" class="empty"><p>Loading...</p></td></tr>';
   try{
@@ -3294,9 +3366,9 @@ async function loadDashboard(){
       document.getElementById('dash-capacity').textContent = 'N/A';
       document.getElementById('dash-used').textContent = 'N/A';
       document.getElementById('dash-remaining').textContent = 'N/A';
-      document.getElementById('dash-cpu-pct-label').textContent = 'K8s 未連線或查不到容量 / unavailable';
+      document.getElementById('dash-cpu-pct-label').textContent = t.dashUnavailable;
       document.getElementById('dash-mem-pct-label').textContent = '--';
-      document.getElementById('dash-my-deployments').innerHTML = '<tr><td colspan="4" class="empty"><p>無法取得 / Unavailable</p></td></tr>';
+      document.getElementById('dash-my-deployments').innerHTML = '<tr><td colspan="4" class="empty"><p>'+escHtml(t.dashNA)+'</p></td></tr>';
       document.getElementById('dash-cost').textContent = 'N/A';
       return;
     }
@@ -3304,7 +3376,7 @@ async function loadDashboard(){
     document.getElementById('dash-capacity').textContent = cap.cpu_cores + ' cores / ' + cap.mem_gib + ' GiB';
     document.getElementById('dash-used').textContent = used.cpu_cores + ' cores / ' + used.mem_gib + ' GiB';
     document.getElementById('dash-used-label').textContent =
-      'CPU ('+(src.cpu==='usage'?'實際用量 actual':'requests')+') / Memory ('+(src.mem==='usage'?'實際用量 actual':'requests')+')';
+      'CPU ('+(src.cpu==='usage'?t.dashActual:'requests')+') / Memory ('+(src.mem==='usage'?t.dashActual:'requests')+')';
     const remEl = document.getElementById('dash-remaining');
     remEl.textContent = rem.cpu_cores + ' cores / ' + rem.mem_gib + ' GiB';
     remEl.style.color = (rem.cpu_cores < 0 || rem.mem_gib < 0) ? '#DC2626' : '';
@@ -3314,13 +3386,13 @@ async function loadDashboard(){
     const deps = d.my_deployments || [];
     document.getElementById('dash-my-deployments').innerHTML = deps.length
       ? deps.map(x => '<tr><td>'+escHtml(x.name)+'</td><td>'+x.replicas+'</td><td>'+x.cpu_cores+' cores</td><td>'+x.mem_gib+' GiB</td></tr>').join('')
-      : '<tr><td colspan="4" class="empty"><p>目前沒有部署 / No deployments yet</p></td></tr>';
+      : '<tr><td colspan="4" class="empty"><p>'+escHtml(t.dashNoDeployments)+'</p></td></tr>';
 
     document.getElementById('dash-cost').innerHTML =
-      '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>總 CPU / Total CPU</span><span>'+(d.my_total_cpu_cores!=null?d.my_total_cpu_cores+' cores':'--')+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>總記憶體 / Total memory</span><span>'+(d.my_total_mem_gib!=null?d.my_total_mem_gib+' GiB':'--')+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;padding:6px 0"><span>預估每月成本 / Est. monthly</span><span style="font-weight:600">'+(d.my_monthly_usd!=null?'$'+d.my_monthly_usd+' USD':'--')+'</span></div>'+
-      '<div style="font-size:11px;color:var(--text3);margin-top:6px">粗估值（基於 AWS On-Demand 定價，僅供參考）/ Rough estimate only</div>';
+      '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>'+escHtml(t.dashTotalCpu)+'</span><span>'+(d.my_total_cpu_cores!=null?d.my_total_cpu_cores+' cores':'--')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>'+escHtml(t.dashTotalMem)+'</span><span>'+(d.my_total_mem_gib!=null?d.my_total_mem_gib+' GiB':'--')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:6px 0"><span>'+escHtml(t.dashEstMonthly)+'</span><span style="font-weight:600">'+(d.my_monthly_usd!=null?'$'+d.my_monthly_usd+' USD':'--')+'</span></div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:6px">'+escHtml(t.dashRoughEstimate)+'</div>';
   }catch(e){
     document.getElementById('dash-cost').textContent = 'Error: ' + e;
   }
@@ -4380,32 +4452,33 @@ async function startDeployFlow(text){
 }
 
 async function runReadAction(action){
+  const t = I18N[uiLang];
   const map = {
     list_pods:['/api/pods', d=>{
-      const ps=d.pods||[]; return ps.length ? '\u57f7\u884c\u4e2d\u7684 Pods / Running Pods:\n'+ps.map(p=>`- ${p.name} [${p.phase}] ${(p.containers&&p.containers[0]&&p.containers[0].image)||''}`).join('\n') : '\u76ee\u524d\u6c92\u6709 Pod / No pods.';
+      const ps=d.pods||[]; return ps.length ? t.qRunningPods+':\n'+ps.map(p=>`- ${p.name} [${p.phase}] ${(p.containers&&p.containers[0]&&p.containers[0].image)||''}`).join('\n') : t.qNoPods;
     }],
     list_deployments:['/api/deployments', d=>{
-      const ds=d.deployments||[]; return ds.length ? 'Deployments:\n'+ds.map(x=>`- ${x.name}  ${x.ready}/${x.replicas} ready  ${x.image||''}`).join('\n') : '\u76ee\u524d\u6c92\u6709 Deployment / None.';
+      const ds=d.deployments||[]; return ds.length ? t.qDeployments+':\n'+ds.map(x=>`- ${x.name}  ${x.ready}/${x.replicas} ready  ${x.image||''}`).join('\n') : t.qNoDeployments;
     }],
     gitops_log:['/api/gitops', d=>{
-      const cs=d.commits||[]; return cs.length ? '\u90e8\u7f72\u7d00\u9304 / GitOps log:\n'+cs.map(c=>`- ${c.time}  ${c.app||''}  ${c.message}`).join('\n') : '\u6c92\u6709\u7d00\u9304 / No commits.';
+      const cs=d.commits||[]; return cs.length ? t.qGitopsLog+':\n'+cs.map(c=>`- ${c.time}  ${c.app||''}  ${c.message}`).join('\n') : t.qNoCommits;
     }],
     cluster_metrics:['/api/metrics', d=>{
-      const m=d.metrics||{}; return `\u53e2\u96c6\u6307\u6a19 / Cluster metrics:\n- Prometheus: ${d.connected?'online':'offline'}\n- Pods: ${m.pod_count!=null?m.pod_count:'?'} (running ${m.running_pods!=null?m.running_pods:'?'})`;
+      const m=d.metrics||{}; return `${t.qClusterMetrics}:\n- Prometheus: ${d.connected?'online':'offline'}\n- Pods: ${m.pod_count!=null?m.pod_count:'?'} (running ${m.running_pods!=null?m.running_pods:'?'})`;
     }],
     healer_scan:['/api/healer/scan', d=>{
-      const is=d.issues||[]; return is.length ? `Healer \u6383\u5230 ${is.length} \u500b\u554f\u984c / issues:\n`+is.map(i=>`- ${i.pod_name||i.pod} : ${i.reason||i.status}`).join('\n') : '\u6c92\u6709\u7570\u5e38 Pod / No unhealthy pods.';
+      const is=d.issues||[]; return is.length ? t.qHealerFoundIssues(is.length)+'\n'+is.map(i=>`- ${i.pod_name||i.pod} : ${i.reason||i.status}`).join('\n') : t.qNoUnhealthyPods;
     }],
   };
   // \u9700\u8981\u53c3\u6578\u7684\u55ae\u4e00\u7269\u4ef6\u67e5\u8a62
   if(action==='describe_pod' || action==='pod_health' || action==='describe_deployment'){
     const name = (window.__lastIntentArgs && window.__lastIntentArgs.name) || '';
-    if(!name){ appendMsg('assistant','\u8981\u67e5\u54ea\u4e00\u500b\uff1f\u8acb\u8b1b\u6e05\u695a\u540d\u7a31 / which one? give a name.'); return; }
+    if(!name){ appendMsg('assistant', t.qWhichOne); return; }
     try{
       if(action==='describe_deployment'){
         const r = await fetch('/api/deployments/'+encodeURIComponent(name));
         const d = await r.json();
-        if(!d.found){ appendMsg('assistant', d.message || ('\u627e\u4e0d\u5230 '+name)); return; }
+        if(!d.found){ appendMsg('assistant', d.message || t.qNotFound(name)); return; }
         // \u6307\u4ee3\u6d88\u89e3\uff1a\u67e5\u5230\u660e\u78ba\u7684\u55ae\u4e00 deployment\uff0c\u8a18\u4e0b\u4f86\u7d66\u4e4b\u5f8c\u7684\u300c\u5b83\u300d\u300c\u9019\u500b\u300d\u7528\u3002
         const ch = currentChat();
         if(ch) ch.lastResource = {name: d.deployment.name, kind:'deployment'};
@@ -4415,7 +4488,7 @@ async function runReadAction(action){
         const r = await fetch(url);
         const d = await r.json();
         if(!d.found || !(d.pods||[]).length){
-          let msg = d.message || ('\u627e\u4e0d\u5230\u7b26\u5408 '+name+' \u7684 pod');
+          let msg = d.message || t.qNotFoundPod(name);
           if(d.deployment) msg += '\n\n' + fmtDeployDetail(d.deployment);
           appendMsg('assistant', renderMarkdown(msg)); return;
         }
@@ -4431,7 +4504,7 @@ async function runReadAction(action){
     return;
   }
   const entry = map[action];
-  if(!entry){ appendMsg('assistant', '\uff08\u672a\u652f\u63f4\u7684\u67e5\u8a62 / unsupported\uff09'); return; }
+  if(!entry){ appendMsg('assistant', t.qUnsupported); return; }
   try{
     const r = await fetch(entry[0]); const d = await r.json();
     appendMsg('assistant', renderMarkdown(entry[1](d)));

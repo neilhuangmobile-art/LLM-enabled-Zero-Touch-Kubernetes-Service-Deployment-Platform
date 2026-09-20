@@ -26,3 +26,8 @@ train_local_merged.py
 reports/agent_report_*.json
 model_server.log
 *.log
+
+# Word/PowerPoint 開啟檔案時產生的暫存鎖定檔，關檔就消失，不該進版控
+~$*.pptx
+~$*.docx
+~$*.xlsx
