@@ -668,6 +668,138 @@ def _check_scale_risk(name: str, new_replicas: int, namespace: str = None):
         return False, None
 
 
+def _my_deployment_resource_breakdown(namespace: str) -> dict:
+    """列出單一 namespace 內每個 Deployment 的資源需求（cpu/mem × replicas），
+    給監控台「我的部署」明細用。故意不擴充 `k8s_get_deployments()`——那個函式的
+    回傳格式被 Pods/Deployments 頁面等既有呼叫端依賴，這裡另外寫一個只服務監控台
+    的輕量版本，避免動到已經在用的介面。"""
+    from agents.cost_agent import _parse_cpu_millicores, _parse_memory_bytes, _estimate_monthly_cost
+    deployments = []
+    total_cpu_mc = 0
+    total_mem_b = 0
+    if K8S_ENABLED:
+        try:
+            api = k8s_client.AppsV1Api()
+            for d in api.list_namespaced_deployment(namespace).items:
+                reps = d.spec.replicas or 0
+                containers = d.spec.template.spec.containers if d.spec.template.spec else []
+                cpu_mc = mem_b = 0
+                if containers and containers[0].resources and containers[0].resources.requests:
+                    req = containers[0].resources.requests
+                    cpu_mc = (_parse_cpu_millicores(req.get("cpu")) or 0) * reps
+                    mem_b = (_parse_memory_bytes(req.get("memory")) or 0) * reps
+                total_cpu_mc += cpu_mc
+                total_mem_b += mem_b
+                deployments.append({
+                    "name": d.metadata.name,
+                    "replicas": reps,
+                    "cpu_cores": round(cpu_mc / 1000, 2),
+                    "mem_gib": round(mem_b / (1024 ** 3), 3),
+                })
+        except Exception:
+            pass
+    # 重用既有的計價公式，不重新發明——包一個假 manifest 餵給 _estimate_monthly_cost()，
+    # 沿用它既有的 spec.replicas / spec.template.spec.containers[].resources.requests 介面。
+    # 注意：total_cpu_mc/total_mem_b 為 0（沒有部署，或部署都沒填資源）時不能真的把 0
+    # 傳進去——_estimate_monthly_cost() 是設計給「單一容器」用的，遇到沒填的欄位會用
+    # `or 100`/`or 128Mi` 這種預設值頂上去（假設單一 Pod 一定會吃掉一點資源），但 0 在
+    # Python 是 falsy，會被那個 `or` 誤判成「沒填」，讓「總量加總後真的是 0」的正常情況
+    # 被套用不該套用的預設值，估出一個不存在的費用。
+    if total_cpu_mc == 0 and total_mem_b == 0:
+        monthly_usd = 0.0
+    else:
+        pseudo_manifest = {"spec": {"replicas": 1, "template": {"spec": {"containers": [
+            {"resources": {"requests": {"cpu": f"{total_cpu_mc}m", "memory": str(total_mem_b)}}}
+        ]}}}}
+        monthly_usd = _estimate_monthly_cost(pseudo_manifest).get("estimated_usd")
+    return {
+        "deployments": deployments,
+        "total_cpu_cores": round(total_cpu_mc / 1000, 2),
+        "total_mem_gib": round(total_mem_b / (1024 ** 3), 2),
+        "monthly_usd": monthly_usd,
+    }
+
+
+def _dashboard_summary(namespace: str) -> dict:
+    """監控台頁面的完整資料：叢集空間總覽（K8s requests 加總跟 Prometheus 實際用量
+    取較大值，比照 Kubecost 的 allocation = max(usage, requests) 概念）+ 使用者自己
+    的部署明細 + 費用估算。任何一段查不到都優雅降級，不讓整頁掛掉（AGENT_RULES.md
+    新手友善原則）。"""
+    result = {
+        "k8s_enabled": K8S_ENABLED,
+        "prometheus_up": False,
+        "cluster_capacity": None,
+        "cluster_used": None,
+        "cluster_used_source": None,
+        "cluster_remaining": None,
+        "my_deployments": [],
+        "my_total_cpu_cores": None,
+        "my_total_mem_gib": None,
+        "my_monthly_usd": None,
+    }
+    if K8S_ENABLED:
+        try:
+            cap = k8s_get_node_capacity()
+            if cap:
+                from agents.cost_agent import _parse_cpu_millicores, _parse_memory_bytes
+                node_cpu_mc = _parse_cpu_millicores(cap.get("cpu")) or 0
+                node_mem_b = _parse_memory_bytes(cap.get("memory")) or 0
+                req_cpu_mc, req_mem_b = _sum_cluster_resource_requests()
+
+                used_cpu_mc, used_source_cpu = req_cpu_mc, "requests"
+                used_mem_b, used_source_mem = req_mem_b, "requests"
+
+                prom_url = os.environ.get("PROMETHEUS_URL", "http://127.0.0.1:9090").replace("localhost", "127.0.0.1")
+                try:
+                    from observability.prometheus_client import PrometheusClient
+                    client = PrometheusClient(prom_url, timeout=2)
+                    prometheus_up = client.is_alive()
+                    result["prometheus_up"] = prometheus_up
+                    if prometheus_up:
+                        try:
+                            actual_cpu_cores = client.cluster_cpu_usage_cores()
+                            if actual_cpu_cores is not None:
+                                actual_cpu_mc = actual_cpu_cores * 1000
+                                if actual_cpu_mc > used_cpu_mc:
+                                    used_cpu_mc, used_source_cpu = actual_cpu_mc, "usage"
+                        except Exception:
+                            pass
+                        try:
+                            actual_mem_b = client.cluster_memory_usage_bytes()
+                            if actual_mem_b is not None and actual_mem_b > used_mem_b:
+                                used_mem_b, used_source_mem = actual_mem_b, "usage"
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+                result["cluster_capacity"] = {
+                    "cpu_cores": round(node_cpu_mc / 1000, 2),
+                    "mem_gib": round(node_mem_b / (1024 ** 3), 2),
+                }
+                result["cluster_used"] = {
+                    "cpu_cores": round(used_cpu_mc / 1000, 2),
+                    "mem_gib": round(used_mem_b / (1024 ** 3), 2),
+                }
+                result["cluster_used_source"] = {"cpu": used_source_cpu, "mem": used_source_mem}
+                result["cluster_remaining"] = {
+                    "cpu_cores": round(node_cpu_mc / 1000 - used_cpu_mc / 1000, 2),
+                    "mem_gib": round(node_mem_b / (1024 ** 3) - used_mem_b / (1024 ** 3), 2),
+                }
+        except Exception:
+            pass
+
+        try:
+            my = _my_deployment_resource_breakdown(namespace)
+            result["my_deployments"] = my["deployments"]
+            result["my_total_cpu_cores"] = my["total_cpu_cores"]
+            result["my_total_mem_gib"] = my["total_mem_gib"]
+            result["my_monthly_usd"] = my["monthly_usd"]
+        except Exception:
+            pass
+    return result
+
+
 _BAD_WAITING = {"CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull",
                 "CreateContainerConfigError", "CreateContainerError", "InvalidImageName"}
 _BAD_TERMINATED = {"OOMKilled", "Error", "ContainerCannotRun", "DeadlineExceeded"}
@@ -1015,7 +1147,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .form-group label{display:block;font-size:13px;font-weight:500;margin-bottom:6px;color:var(--text)}
 .form-group input{width:100%;padding:10px 14px;border:1px solid var(--border2);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;outline:none;transition:border .15s}
 .form-group input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.1)}
-.btn-primary{width:100%;padding:11px;background:var(--green);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:background .15s}
+.btn-primary{width:100%;padding:11px;background:var(--green);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:background .15s;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-primary:disabled{opacity:.75;cursor:default}
 .btn-primary:hover{background:#15803D}
 .auth-link{text-align:center;margin-top:20px;font-size:13px;color:var(--text2)}
 .auth-link a{color:var(--green);text-decoration:none;font-weight:500}
@@ -1187,11 +1320,19 @@ tr:hover td{background:var(--bg)}
 .typing span:nth-child(3){animation-delay:.3s}
 @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
 .think-row{display:flex;align-items:center;gap:9px;padding:11px 15px;background:var(--surface);border:1px solid var(--border);border-radius:12px;width:fit-content;font-size:13px;color:var(--text2)}
-.spinner{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
 .think-dots span{animation:blink 1.4s infinite both}
 .think-dots span:nth-child(2){animation-delay:.2s}
 .think-dots span:nth-child(3){animation-delay:.4s}
 @keyframes blink{0%,80%,100%{opacity:0}40%{opacity:1}}
+/* ── 放射狀載入動畫（取代原本的圓環 spinner，畫面風格更和諧）────────── */
+.spinner-radial{position:relative;display:inline-block;flex-shrink:0}
+.spinner-radial i{position:absolute;top:0;left:50%;background:var(--green);border-radius:2px;animation:spinnerFade .8s linear infinite}
+.spinner-radial-sm{width:16px;height:16px}
+.spinner-radial-sm i{width:2px;height:5px;margin-left:-1px;transform-origin:1px 8px}
+.spinner-radial-lg{width:32px;height:32px}
+.spinner-radial-lg i{width:3px;height:9px;margin-left:-1.5px;transform-origin:1.5px 16px}
+.spinner-radial-light i{background:#fff}
+@keyframes spinnerFade{0%{opacity:1}100%{opacity:.15}}
 
 /* ── 使用說明書 / K8s 小百科：topbar 按鈕 ────────────────────── */
 .icon-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:32px;padding:0 11px;border:none;border-radius:999px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.2px;transition:background .15s,transform .1s}
@@ -1264,8 +1405,6 @@ tr:hover td{background:var(--bg)}
 
 /* ── Loading ── */
 .loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px}
-.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin 1s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
 .loading-text{font-size:14px;color:var(--text2)}
 
 /* ── Empty state ── */
@@ -1365,7 +1504,7 @@ html,body{height:100%;overflow:hidden}
     <div class="auth-title">Welcome back</div>
     <div class="auth-sub">Sign in to your account to continue</div>
     {% if error %}<div class="auth-error">{{ error }}</div>{% endif %}
-    <form method="POST" action="/auth/login">
+    <form method="POST" action="/auth/login" onsubmit="const b=this.querySelector('button[type=submit]');b.disabled=true;b.innerHTML=spinnerRadialHTML('sm',true)+'Signing in…';">
       <div class="form-group">
         <label>Username</label>
         <input type="text" name="username" placeholder="Enter your username" required autofocus>
@@ -1401,7 +1540,7 @@ html,body{height:100%;overflow:hidden}
     <div class="auth-title">Create account</div>
     <div class="auth-sub">Get started with ZeroTouch K8s</div>
     {% if error %}<div class="auth-error">{{ error }}</div>{% endif %}
-    <form method="POST" action="/auth/register">
+    <form method="POST" action="/auth/register" onsubmit="const b=this.querySelector('button[type=submit]');b.disabled=true;b.innerHTML=spinnerRadialHTML('sm',true)+'Creating account…';">
       <div class="form-group">
         <label>Username</label>
         <input type="text" name="username" placeholder="Choose a username" required autofocus>
@@ -1445,8 +1584,6 @@ html,body{height:100%;overflow:hidden}
           <span style="font-size:18px;line-height:1">+</span> New Chat
         </button>
       </div>
-      <div class="nav-section">Chats</div>
-      <div id="chat-room-list" style="flex:1;overflow-y:auto;padding:0 6px;min-height:60px;max-height:200px"></div>
       <div class="nav-section">Main</div>
       <button class="nav-item active" data-page="chat" onclick="showPage('chat')">
         <svg viewBox="0 0 16 16" fill="none"><path d="M2.5 3.5a2 2 0 012-2h7a2 2 0 012 2v5a2 2 0 01-2 2H8l-3.5 3v-3a2 2 0 01-2-2v-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
@@ -1464,6 +1601,10 @@ html,body{height:100%;overflow:hidden}
         <svg viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         Deployments
       </button>
+      <button class="nav-item" data-page="dashboard" onclick="showPage('dashboard')">
+        <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="9" y="2" width="5" height="9" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>
+        Dashboard
+      </button>
       <div class="nav-section">Tools</div>
       <button class="nav-item" data-page="gitops" onclick="showPage('gitops')">
         <svg viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 6v1a3 3 0 003 3h1M11 6v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -1477,6 +1618,10 @@ html,body{height:100%;overflow:hidden}
         <svg viewBox="0 0 16 16" fill="none"><path d="M2 12L5 8l3 2 3-4 3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Metrics
       </button>
+      <!-- 2026-09-20 依使用者要求把 Chats 區塊移到 Main/Tools 下方：原本排在最上面時，
+           「Main > Chat」按鈕點下去只是導向緊貼在正上方、已經看得到的聊天室，視覺上重複。 -->
+      <div class="nav-section">Chats</div>
+      <div id="chat-room-list" style="flex:1;overflow-y:auto;padding:0 6px;min-height:60px;max-height:200px"></div>
       <!-- Dataset / Knowledge Base 是給開發者整理訓練資料 / RAG 索引用的內部工具，
            一般使用者不需要看到，2026-09-13 依使用者要求從側邊欄移除（新手友善原則，見 AGENT_RULES.md）。
            後端 /api/dataset/*、/api/rag/* 路由與 #page-dataset、#page-kb 都刻意保留，開發者仍可直接呼叫 API。 -->
@@ -1872,6 +2017,52 @@ html,body{height:100%;overflow:hidden}
       </div>
     </div>
 
+    <div class="page" id="page-dashboard">
+      <div class="page-title">Dashboard</div>
+      <div class="page-sub">部署前，先看看叢集還剩多少空間 / Check available capacity before you deploy</div>
+      <div class="grid-3" style="margin-bottom:16px">
+        <div class="card"><div class="card-title">叢集總容量 / Cluster capacity</div><div class="stat-num" id="dash-capacity" style="font-size:20px">--</div><div class="stat-label">CPU / Memory</div></div>
+        <div class="card"><div class="card-title">已用量 / Used</div><div class="stat-num" id="dash-used" style="font-size:20px">--</div><div class="stat-label" id="dash-used-label">CPU / Memory</div></div>
+        <div class="card"><div class="card-title">剩餘空間 / Remaining</div><div class="stat-num" id="dash-remaining" style="font-size:20px">--</div><div class="stat-label">CPU / Memory</div></div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">使用率 / Utilization</div>
+        <div style="margin-top:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px">
+            <span>CPU</span><span id="dash-cpu-pct-label">--</span>
+          </div>
+          <div style="background:var(--bg);border-radius:6px;height:10px;overflow:hidden;margin-bottom:14px">
+            <div id="dash-cpu-bar" style="background:var(--green);height:100%;width:0%;transition:width .3s,background .3s"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px">
+            <span>Memory</span><span id="dash-mem-pct-label">--</span>
+          </div>
+          <div style="background:var(--bg);border-radius:6px;height:10px;overflow:hidden">
+            <div id="dash-mem-bar" style="background:var(--green);height:100%;width:0%;transition:width .3s,background .3s"></div>
+          </div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="card">
+          <div class="card-title">我的部署 / My deployments</div>
+          <div class="table-wrap" style="margin-top:8px">
+            <table>
+              <thead><tr><th>Name</th><th>Replicas</th><th>CPU</th><th>Memory</th></tr></thead>
+              <tbody id="dash-my-deployments"><tr><td colspan="4" class="empty"><p>Loading...</p></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">我的費用估算 / My cost estimate</div>
+          <div style="margin-top:8px;font-size:13px;color:var(--text2)" id="dash-cost">Loading...</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:12px">
+        僅供參考，實際部署仍以送出當下的審查結果為準；同一時間可能有其他使用者一起部署，數字會有些微落差。 /
+        For reference only — the actual review at deploy time is authoritative, and numbers may shift slightly if others deploy at the same time.
+      </div>
+    </div>
+
     <div class="page" id="page-metrics">
       <div class="page-title">Metrics</div>
       <div class="page-sub">Prometheus observability</div>
@@ -2216,6 +2407,7 @@ function showPage(name){
   if(name === 'gitops') loadGitops();
   if(name === 'healer') { loadPodList(); loadHealerBgStatus(); }
   if(name === 'metrics') loadMetrics();
+  if(name === 'dashboard') loadDashboard();
   if(name === 'kb') loadKB();
 }
 
@@ -3081,6 +3273,59 @@ async function loadMetrics(){
   }catch(e){document.getElementById('prom-status').textContent='ERR';}
 }
 
+function _dashPctBar(barId, labelId, usedVal, capVal){
+  const bar = document.getElementById(barId), label = document.getElementById(labelId);
+  if(capVal == null || usedVal == null || !capVal){
+    label.textContent = 'N/A'; bar.style.width = '0%'; return;
+  }
+  const pct = Math.max(0, Math.min(100, (usedVal / capVal) * 100));
+  bar.style.width = pct.toFixed(1) + '%';
+  bar.style.background = pct >= 100 ? '#DC2626' : (pct >= 80 ? '#D97706' : 'var(--green)');
+  label.textContent = pct.toFixed(1) + '%';
+}
+
+async function loadDashboard(){
+  document.getElementById('dash-cost').textContent = 'Loading...';
+  document.getElementById('dash-my-deployments').innerHTML = '<tr><td colspan="4" class="empty"><p>Loading...</p></td></tr>';
+  try{
+    const r = await fetch('/api/dashboard');
+    const d = await r.json();
+    if(!d.k8s_enabled || !d.cluster_capacity){
+      document.getElementById('dash-capacity').textContent = 'N/A';
+      document.getElementById('dash-used').textContent = 'N/A';
+      document.getElementById('dash-remaining').textContent = 'N/A';
+      document.getElementById('dash-cpu-pct-label').textContent = 'K8s 未連線或查不到容量 / unavailable';
+      document.getElementById('dash-mem-pct-label').textContent = '--';
+      document.getElementById('dash-my-deployments').innerHTML = '<tr><td colspan="4" class="empty"><p>無法取得 / Unavailable</p></td></tr>';
+      document.getElementById('dash-cost').textContent = 'N/A';
+      return;
+    }
+    const cap = d.cluster_capacity, used = d.cluster_used, rem = d.cluster_remaining, src = d.cluster_used_source || {};
+    document.getElementById('dash-capacity').textContent = cap.cpu_cores + ' cores / ' + cap.mem_gib + ' GiB';
+    document.getElementById('dash-used').textContent = used.cpu_cores + ' cores / ' + used.mem_gib + ' GiB';
+    document.getElementById('dash-used-label').textContent =
+      'CPU ('+(src.cpu==='usage'?'實際用量 actual':'requests')+') / Memory ('+(src.mem==='usage'?'實際用量 actual':'requests')+')';
+    const remEl = document.getElementById('dash-remaining');
+    remEl.textContent = rem.cpu_cores + ' cores / ' + rem.mem_gib + ' GiB';
+    remEl.style.color = (rem.cpu_cores < 0 || rem.mem_gib < 0) ? '#DC2626' : '';
+    _dashPctBar('dash-cpu-bar', 'dash-cpu-pct-label', used.cpu_cores, cap.cpu_cores);
+    _dashPctBar('dash-mem-bar', 'dash-mem-pct-label', used.mem_gib, cap.mem_gib);
+
+    const deps = d.my_deployments || [];
+    document.getElementById('dash-my-deployments').innerHTML = deps.length
+      ? deps.map(x => '<tr><td>'+escHtml(x.name)+'</td><td>'+x.replicas+'</td><td>'+x.cpu_cores+' cores</td><td>'+x.mem_gib+' GiB</td></tr>').join('')
+      : '<tr><td colspan="4" class="empty"><p>目前沒有部署 / No deployments yet</p></td></tr>';
+
+    document.getElementById('dash-cost').innerHTML =
+      '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>總 CPU / Total CPU</span><span>'+(d.my_total_cpu_cores!=null?d.my_total_cpu_cores+' cores':'--')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>總記憶體 / Total memory</span><span>'+(d.my_total_mem_gib!=null?d.my_total_mem_gib+' GiB':'--')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:6px 0"><span>預估每月成本 / Est. monthly</span><span style="font-weight:600">'+(d.my_monthly_usd!=null?'$'+d.my_monthly_usd+' USD':'--')+'</span></div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:6px">粗估值（基於 AWS On-Demand 定價，僅供參考）/ Rough estimate only</div>';
+  }catch(e){
+    document.getElementById('dash-cost').textContent = 'Error: ' + e;
+  }
+}
+
 async function loadDatasetStats(){
   document.getElementById('ds-total').textContent = '...';
   try {
@@ -3392,7 +3637,7 @@ function renderMessages(){
   if(!ch || !ch.messages.length){
     const t = I18N[uiLang];
     const cardsHtml = t.cards.map(c =>
-      `<div class="prompt-card" onclick="document.getElementById('chat-input').value=${JSON.stringify(c.send)};sendChat()">
+      `<div class="prompt-card" onclick="document.getElementById('chat-input').value=${JSON.stringify(c.send).replace(/"/g,'&quot;')};sendChat()">
          <strong>${escHtml(c.title)}</strong><span>${escHtml(c.example)}</span>
        </div>`).join('');
     msgs.innerHTML = `<div class="chat-empty">
@@ -3426,10 +3671,67 @@ function renderMsgHTML(role, content, sources){
   if(role==='user'){
     return `<div class="msg user" style="margin-bottom:16px"><div class="msg-avatar">U</div><div class="msg-bubble">${escHtml(content)}</div></div>`;
   }
+  // content 這裡有兩種來源：一種是流程卡片（renderFlowCard 等）自己組好、已經是可信任的
+  // HTML；另一種是模型/後端回的純文字（可能含 markdown 語法）。兩者無法在這裡可靠區分，
+  // 所以維持原樣直接輸出——需要 markdown 排版的呼叫端（見 runQA、fmtPodHealth 等）自己
+  // 先呼叫 renderMarkdown() 轉換好再傳進來，不在這裡統一處理，避免誤把卡片 HTML 當文字跳脫。
   return `<div class="msg ai" style="margin-bottom:16px"><div class="msg-avatar">K</div><div class="msg-bubble" style="white-space:pre-wrap">${content}${renderSourcesHTML(sources)}</div></div>`;
 }
 
 function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// 放射狀載入動畫（8 根刻度繞圈淡出，取代原本的圓環 spinner）。size: 'sm'（聊天思考中提示、
+// 預設 16px）或 'lg'（流程卡片處理中，32px）。負的 animation-delay 讓每根刻度一開始就分散在
+// 各自的動畫進度上，避免第一幀全部同時全亮的閃爍感。
+function spinnerRadialHTML(size, light){
+  const cls = (size === 'lg' ? 'spinner-radial-lg' : 'spinner-radial-sm') + (light ? ' spinner-radial-light' : '');
+  let ticks = '';
+  for(let i=0;i<8;i++){ ticks += `<i style="transform:rotate(${i*45}deg);animation-delay:${(-(i*0.1)).toFixed(2)}s"></i>`; }
+  return `<div class="spinner-radial ${cls}">${ticks}</div>`;
+}
+
+// 輕量 Markdown 轉 HTML，只給 AI 回覆用（使用者訊息維持純文字跳脫，不需要排版）。
+// 先跳脫 HTML 特殊字元再套用格式，避免模型輸出剛好含 <>& 被誤判成標籤。
+// 支援：**粗體**／__粗體__、*斜體*、`行內程式碼`、``` 區塊 ```、# 標題、-/* 項目清單、1. 編號清單。
+function renderMarkdown(text){
+  const raw = String(text==null?'':text);
+  const lines = raw.split('\n');
+  let html = '', inUl = false, inOl = false, inCode = false, codeBuf = [];
+  const closeLists = () => {
+    if(inUl){ html += '</ul>'; inUl = false; }
+    if(inOl){ html += '</ol>'; inOl = false; }
+  };
+  const inlineFmt = (s) => {
+    s = escHtml(s);
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+    s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+    return s;
+  };
+  for(const line of lines){
+    if(line.trim().startsWith('```')){
+      if(inCode){
+        html += `<pre style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;overflow-x:auto;margin:6px 0"><code>${escHtml(codeBuf.join('\n'))}</code></pre>`;
+        codeBuf = []; inCode = false;
+      } else { closeLists(); inCode = true; }
+      continue;
+    }
+    if(inCode){ codeBuf.push(line); continue; }
+    const h = line.match(/^(#{1,4})\s+(.*)$/);
+    if(h){ closeLists(); const lvl = h[1].length + 2; html += `<div style="font-weight:700;margin:10px 0 4px;font-size:${17-lvl}px">${inlineFmt(h[2])}</div>`; continue; }
+    const ol = line.match(/^\s*\d+\.\s+(.*)$/);
+    if(ol){ if(!inOl){ closeLists(); html += '<ol style="margin:4px 0;padding-left:22px">'; inOl = true; } html += `<li>${inlineFmt(ol[1])}</li>`; continue; }
+    const ul = line.match(/^\s*[-*]\s+(.*)$/);
+    if(ul){ if(!inUl){ closeLists(); html += '<ul style="margin:4px 0;padding-left:22px">'; inUl = true; } html += `<li>${inlineFmt(ul[1])}</li>`; continue; }
+    closeLists();
+    if(line.trim()===''){ html += '<div style="height:8px"></div>'; }
+    else { html += inlineFmt(line) + '<br>'; }
+  }
+  closeLists();
+  if(inCode){ html += `<pre style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;overflow-x:auto;margin:6px 0"><code>${escHtml(codeBuf.join('\n'))}</code></pre>`; }
+  return html;
+}
 
 function appendMsg(role, content, sources){
   const ch = currentChat();
@@ -3455,7 +3757,7 @@ function appendTyping(label){
   }
   const txt = label || 'Thinking';
   div.innerHTML = '<div class="msg-avatar">K</div><div class="think-row">'+
-    '<div class="spinner"></div><span data-role="think-label">'+escHtml(txt)+'</span>'+
+    spinnerRadialHTML('sm')+'<span data-role="think-label">'+escHtml(txt)+'</span>'+
     '<span class="think-dots"><span>.</span><span>.</span><span>.</span></span></div>';
   msgs.scrollTop = msgs.scrollHeight;
 }
@@ -3665,7 +3967,7 @@ function renderFlowCard(flow){
 function renderBusyCard(flow, label){
   return flowShell(flow, `<div class="deploy-confirm-head">
     <div style="display:flex;align-items:center;gap:10px">
-      <div class="spinner"></div>
+      ${spinnerRadialHTML('lg')}
       <div>
         <div class="deploy-confirm-title">${esc(label)}</div>
       </div>
@@ -4107,7 +4409,7 @@ async function runReadAction(action){
         // \u6307\u4ee3\u6d88\u89e3\uff1a\u67e5\u5230\u660e\u78ba\u7684\u55ae\u4e00 deployment\uff0c\u8a18\u4e0b\u4f86\u7d66\u4e4b\u5f8c\u7684\u300c\u5b83\u300d\u300c\u9019\u500b\u300d\u7528\u3002
         const ch = currentChat();
         if(ch) ch.lastResource = {name: d.deployment.name, kind:'deployment'};
-        appendMsg('assistant', fmtDeployDetail(d.deployment));
+        appendMsg('assistant', renderMarkdown(fmtDeployDetail(d.deployment)));
       } else {
         const url = '/api/pods/'+encodeURIComponent(name) + (action==='pod_health'?'?diagnose=1':'');
         const r = await fetch(url);
@@ -4115,7 +4417,7 @@ async function runReadAction(action){
         if(!d.found || !(d.pods||[]).length){
           let msg = d.message || ('\u627e\u4e0d\u5230\u7b26\u5408 '+name+' \u7684 pod');
           if(d.deployment) msg += '\n\n' + fmtDeployDetail(d.deployment);
-          appendMsg('assistant', msg); return;
+          appendMsg('assistant', renderMarkdown(msg)); return;
         }
         // \u53ea\u6709\u7cbe\u78ba\u89e3\u6790\u5230\u300c\u55ae\u4e00\u300dpod \u6642\u624d\u8a18\u2014\u2014\u540c\u540d\u591a\u500b pod\uff08\u4f8b\u5982 app label \u547d\u4e2d\u4e00\u6574\u7d44\uff09
         // \u6c92\u6709\u552f\u4e00\u76ee\u6a19\u53ef\u4ee5\u4ee3\u6307\uff0c\u4e0d\u8981\u8a18\uff0c\u907f\u514d\u4e4b\u5f8c\u300c\u5b83\u300d\u88ab\u8aa4\u4ee3\u63db\u6210\u5176\u4e2d\u96a8\u4fbf\u4e00\u500b\u3002
@@ -4123,7 +4425,7 @@ async function runReadAction(action){
           const ch = currentChat();
           if(ch) ch.lastResource = {name: d.pods[0].name, kind:'pod'};
         }
-        appendMsg('assistant', (action==='pod_health'?fmtPodHealth:fmtPodDetail)(d.pods, name));
+        appendMsg('assistant', renderMarkdown((action==='pod_health'?fmtPodHealth:fmtPodDetail)(d.pods, name)));
       }
     }catch(e){ appendMsg('assistant', 'Error: '+e); }
     return;
@@ -4132,7 +4434,7 @@ async function runReadAction(action){
   if(!entry){ appendMsg('assistant', '\uff08\u672a\u652f\u63f4\u7684\u67e5\u8a62 / unsupported\uff09'); return; }
   try{
     const r = await fetch(entry[0]); const d = await r.json();
-    appendMsg('assistant', entry[1](d));
+    appendMsg('assistant', renderMarkdown(entry[1](d)));
   }catch(e){ appendMsg('assistant', 'Error: '+e); }
 }
 
@@ -4243,7 +4545,7 @@ async function runQA(text){
     const hist = (currentChat()?.messages||[]).slice(-10).map(m=>({role:m.role==='assistant'?'assistant':'user',content:m.content}));
     const r = await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text, history:hist})});
     const d = await r.json();
-    appendMsg('assistant', d.reply||d.error||'No response', d.sources);
+    appendMsg('assistant', renderMarkdown(d.reply||d.error||'No response'), d.sources);
   }catch(e){ appendMsg('assistant','Connection error: '+e); }
 }
 
@@ -6070,6 +6372,17 @@ def api_metrics():
         return jsonify({"connected": True, "url": prom_url, "metrics": metrics})
     except Exception as e:
         return jsonify({"connected": False, "error": str(e)})
+
+
+@app.route("/api/dashboard")
+def api_dashboard():
+    """監控台頁面：叢集空間總覽（K8s requests 加總 vs Prometheus 實際用量，取較大值）
+    + 使用者自己的部署明細 + 費用估算。見 _dashboard_summary()。"""
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    user_ns = _user_namespace(session["username"])
+    return jsonify(_dashboard_summary(user_ns))
+
 
 if __name__ == "__main__":
     print("=" * 60)

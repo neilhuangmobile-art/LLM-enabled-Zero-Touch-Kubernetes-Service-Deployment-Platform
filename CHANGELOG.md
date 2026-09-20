@@ -384,3 +384,129 @@ Deployment」，沒有假裝查到健康狀態、也沒有執行任何動作，�
 `web_demo.py` 差異、手動把新增的函式與 UI 區塊搬過來，而不是用 git merge 硬套
 （歷史不相關、幾乎每個共用檔案都會整份衝突，逐一手動比對反而更準確）。移植後
 203 個測試全過，語法檢查通過。
+
+## 2026-09-19
+
+### 修復：Chat 新對話預設提示方塊點了沒反應
+使用者回報新開一個對話時畫面上的預設提示方塊（「部署服務」「檢視叢集狀態」等）點下去
+完全沒反應。查證是 `renderChatMessages()` 組出的 `onclick` 屬性本身就是壞的 HTML：
+`onclick="...value=${JSON.stringify(c.send)};..."` 裡 `JSON.stringify` 產生的字串本身
+帶雙引號，直接嵌進一個同樣用雙引號包住的 HTML 屬性，瀏覽器解析到內層的雙引號就把屬性
+提前截斷，`onclick` 實際上只剩下 `...value=` 這半句、`sendChat()` 那段被切掉在屬性外面
+變成無效內容——不是邏輯錯誤，是純粹的字串跳脫疏忽，靜態看程式碼不容易發現，要嘛實際
+點下去、要嘛檢查渲染後的 HTML 原始碼才看得出來。
+
+修法：`.replace(/"/g,'&quot;')` 把 `JSON.stringify` 輸出的雙引號轉成 HTML 實體再嵌入，
+瀏覽器解析屬性值時會自動解回雙引號，JS 字串語法維持正確。用 Playwright 實際點擊驗證：
+點下「檢視叢集狀態」卡片後輸入框正確填入 `list pods` 並送出，收到伺服器回覆。
+
+### 修復：一般問答偶爾夾雜簡體字（繁中中間穿插簡體）
+使用者回報聊天回覆的繁體中文裡偶爾會出現簡體字。查證 `core/model_server.py` 早就有
+`_to_tw()`（用 OpenCC `s2twp` 把小模型偶爾漏出的簡體字轉繁體，`/chat`、`/diagnose`
+兩個端點都有接上）而且 `opencc-python-reimplemented` 也早就列在 `requirements.txt`，
+邏輯上不該發生——但實測發現這台機器實際跑 `model_server.py` 的 Python 3.9 環境根本
+沒有真的裝這個套件（`import opencc` 失敗，`try/except` 吞掉例外讓 `_to_tw()` 悄悄變成
+無動作直接回傳原文），跟 12 節記錄過的「宣稱有但沒接上」是同一種模式，只是這次是
+「接上了但依賴沒裝」而不是「根本沒接上」。
+
+`pip install opencc-python-reimplemented` 裝好、重啟 `model_server.py` 後直接呼叫
+`/chat` 測試多輪問答，逐字元跑過 OpenCC 字元級掃描比對，確認回覆不再出現任何簡體字。
+
+### 修復：一般問答的 Markdown 語法（`**粗體**`、清單、標題）沒有轉成排版，直接顯示原始符號
+`renderMsgHTML()` 對 AI 訊息內容完全不做任何處理就塞進 `innerHTML`，模型回覆裡的
+`**文字**`、`- 項目` 這類 Markdown 語法因此原封不動顯示成一堆星號/減號，而不是真正的
+粗體/清單。新增輕量的 `renderMarkdown()`（純前端小函式，不引入外部套件）：先跳脫
+HTML 特殊字元避免注入風險，再轉換標題（`#`）、粗體/斜體（`**`/`*`）、行內程式碼
+（`` ` ``）、清單（`-`/`1.`）、程式碼區塊（``` ``` ```）。
+
+刻意**不**在 `renderMsgHTML()` 裡統一套用——`appendMsg()` 的 `content` 參數有兩種完全
+不同的來源：一種是模型/後端回的純文字（需要轉 Markdown），另一種是流程卡片
+（`renderFlowCard()` 等）自己組好、已經是可信任的 HTML（部署確認卡、資源審查卡等），
+如果統一跳脫會把卡片的 `<div>`/`<button>` 標籤整個顯示成逃脫後的文字，等於打斷整條
+部署確認流程。改成只在確定是純文字的呼叫端（`runQA()` 的 `d.reply`、
+`fmtPodHealth`/`fmtPodDetail`/`fmtDeployDetail`/`healer_scan` 等查詢結果）各自呼叫
+`renderMarkdown()`，流程卡片維持原樣直接輸出。用 Playwright 實測一則要求「用條列、
+粗體標重點」的問答，確認回覆正確渲染出真正的標題/清單/粗體，且部署流程的規格卡、
+資源審查卡、Working 忙碌卡都沒有被誤傷。
+
+### 改動：載入動畫改成放射狀刻度旋轉樣式
+使用者提供設計參考圖（放射狀刻度、旋轉淡出的風格），希望整體畫面更和諧一致。原本
+Chat「思考中」提示跟部署流程忙碌卡（Reviewing/Deploying/Working）用的是兩顆獨立定義、
+样式不一致的圓環 spinner（`border-top-color` 那種只有一段顏色的旋轉圈）。改成共用的
+`spinnerRadialHTML(size, light)`：8 根刻度以 45° 間隔排列、`opacity` 從 1 淡出到 .15、
+用負值 `animation-delay` 讓一開始就分散在動畫不同進度上（避免第一幀全部同時全亮的
+閃爍感），`size` 分 `sm`（16px，聊天思考中提示）/`lg`（32px，流程忙碌卡）兩種，
+`light` 參數給深色/彩色背景上用（白色刻度）。順手把登入/註冊按鈕也接上（見下一條）。
+
+### 新功能：登入／註冊按鈕點下去到頁面刷新之間補上載入提示
+使用者回報按登入之後要等幾秒頁面才刷新，中間畫面看起來像沒反應。這兩個表單是傳統
+HTML 表單直接 POST，沒有任何 JS 接手，使用者能看到的只有瀏覽器原生的頁面載入指示，
+不容易注意到。加上 `onsubmit` 處理：按下送出的當下立即把按鈕改成 disabled、內容換成
+（白色版）放射狀 spinner + 「Signing in…」/「Creating account…」文字，讓等待有明確的
+視覺回饋，同時防止使用者手滑連點造成重複送出。`.btn-primary` 補上
+`display:flex;align-items:center;justify-content:center;gap:8px` 讓圖示+文字排版正確。
+
+### 修復（使用者代辦）：B1228016 帳號密碼重設
+使用者在筆記中提到 B1228016 忘記密碼，且正確理解到「`users.json` 存的是單向雜湊，
+沒辦法反推回原密碼」——這是設計上刻意如此（不可逆雜湊是密碼儲存的基本要求，不是
+缺陷）。用 `web_demo.py` 自己的 `hash_password()` 邏輯（`pbkdf2_sha256`，120000 次
+迭代）產生新密碼 `qwerty123` 對應的雜湊，直接寫回 `users.json` 對應帳號的
+`password_hash` 欄位（`created_at` 等其他欄位不動），重啟服務後用該帳密實際登入
+一次確認成功。這是一次性的資料修復，不是新增「忘記密碼」自助流程——自助重設功能
+（例如綁定 Google 信箱後可用 Google 帳號登入取代忘記的密碼）使用者另外提出構想，
+屬於會修改登入流程的新功能，需要先出計畫，這次沒有動。
+
+驗證：Python 語法檢查、抽出內嵌 `<script>` 用 Node.js 語法檢查（`{{ }}`/`{% %}`
+Jinja 佔位符先替換掉再檢查）、`pytest`（203 個）全過；上述每一項都額外用 Playwright
+啟動真實瀏覽器操作驗證過（點提示卡片、送出會夾雜 Markdown 的問答、觸發部署流程看
+忙碌卡動畫、實際用重設後的密碼登入），測試帳號與對應 K8s namespace 已清除。
+
+## 2026-09-20
+
+### 改動：側邊欄「Chats」區塊移到 Main/Tools 下方
+使用者回報 MAIN 底下的「Chat」導覽按鈕點下去只是導向緊貼在正上方、已經看得到的聊天室
+（原本 Chats 區塊排在 MAIN 上面），視覺上感覺重複。把 Chats 區塊移到 Main、Tools
+兩個區塊下方，`#chat-room-list` 用 `getElementById` 存取、CSS 用 id 選擇器，跟 DOM
+位置無關，純粹搬動 HTML 順序，不影響任何既有邏輯。用 Playwright 截圖確認新順序
+（Main → Tools → Chats）正確顯示。
+
+### 新功能：監控台（Dashboard）——叢集空間總覽頁面
+使用者想做一個類似儀表板的監控台，讓自己部署前就能看到叢集還剩多少空間。討論後確定
+方向：不做 per-user 配額（維持現有「隔離可見性、共用實體資源」的多租戶設計，個人配額
+系統列入未來工作），做法採用 Kubecost 的 `allocation = max(usage, requests)` 概念——
+叢集「已用量」在 K8s requests 加總與 Prometheus 實際使用量之間取較大值，比單看
+requests 更貼近真實情況。
+
+新增 `observability/prometheus_client.py` 的 `cluster_cpu_usage_cores()`/
+`cluster_memory_usage_bytes()`（比照既有 `pod_cpu_usage()` 的寫法，不加
+`container!=""` 過濾條件，這台機器的 cAdvisor 沒有這個 label）；`web_demo.py` 新增
+`_my_deployment_resource_breakdown(namespace)`（列出使用者自己的 Deployment 資源
+明細，不擴充既有的 `k8s_get_deployments()` 避免影響 Pods/Deployments 頁面既有呼叫端）
+與 `_dashboard_summary(namespace)`（整合叢集容量、Prometheus 校正後的已用量、使用者
+明細、費用估算，任何一段查不到都優雅降級，不讓整頁掛掉）；新路由 `GET /api/dashboard`；
+側邊欄 MAIN 新增 Dashboard 導覽項；新增 `#page-dashboard`（容量/已用量/剩餘空間三張卡、
+CPU/記憶體使用率長條圖、我的部署明細表、費用估算卡）與 `loadDashboard()`。
+
+**過程中抓到一個真實 bug**：費用估算重用既有的 `_estimate_monthly_cost()`（設計給
+單一容器用，沒填 cpu/mem 時用 `or 100`/`or 128Mi` 頂上預設值），但監控台是把「使用者
+全部部署加總」餵進去，加總後真的是 0（例如剛註冊、還沒部署任何東西）時，0 在 Python
+是 falsy，會被那個 `or` 誤判成「沒填」，冒出一個不存在的月費——手動 Playwright 測試時
+發現「還沒部署任何東西」卻顯示 $4.05，之後真的部署一個 100m/64Mi 的服務後費用反而
+「下降」到 $3.78，這個不合理的方向立刻暴露問題。修法：加總結果為 0 時直接回傳 `0.0`，
+不呼叫 `_estimate_monthly_cost()`。新增迴歸測試涵蓋這個情境（`tests/test_dashboard.py`
+的 `test_zero_deployments_gives_zero_cost_not_fallback_default` 等）。
+
+**額外發現、記錄但這次沒動**：這台機器的 Prometheus（`monitoring` namespace 裡的
+`prometheus` Deployment，NodePort 30922）目前連不上（`curl` 直接逾時，跟 2026-09-15
+記錄裝上去的 `kube-prometheus-stack`/Grafana 完全對不上，很可能中間某次環境變動被
+換掉或移除了）。監控台的 Prometheus 校正邏輯已經確認在「連不上」情境下會正確優雅
+降級（退回純 requests 加總，`cluster_used_source` 標成 `"requests"`，不會卡住或報錯），
+但無法實測「Prometheus 實際用量 > requests」這個分支在真實環境的行為，只能靠
+`tests/test_dashboard.py` 的 monkeypatch 測試涵蓋。這是環境/維運層級的落差，不是這次
+改動造成的，留給使用者之後視需要重新確認 Prometheus 部署狀態。
+
+驗證：新增 `tests/test_dashboard.py`（10 案例，涵蓋 Prometheus 用量高於/低於 requests、
+連不上、K8s 未連線四種情境）；`pytest`（213 個）全過；Python 語法檢查 + Node.js 語法
+檢查內嵌 `<script>`；Playwright 實際登入、部署一個真實測試服務（100m CPU/64Mi 記憶體），
+確認部署前後「已用量」「我的部署」「費用估算」三處數字都正確反映變化（0 cores→0.1
+cores，$0→$3.78）。測試帳號、K8s namespace、測試部署已清除。

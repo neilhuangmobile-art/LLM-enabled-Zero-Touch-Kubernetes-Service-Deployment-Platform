@@ -166,6 +166,23 @@ class PrometheusClient:
         val = self.pod_memory_usage_bytes(pod_name, namespace)
         return round(val / 1024 / 1024, 1) if val is not None else None
 
+    def cluster_cpu_usage_cores(self) -> Optional[float]:
+        """查詢全叢集（不分 namespace）目前實際 CPU 使用量（核心數）。給監控台的
+        「已用量」比對用——同 `pod_cpu_usage()` 的說明，不加 `container!=""` 過濾條件。"""
+        promql = 'sum(rate(container_cpu_usage_seconds_total[5m]))'
+        results = self.query(promql)
+        if results:
+            return results[0]["value"]
+        return None
+
+    def cluster_memory_usage_bytes(self) -> Optional[float]:
+        """查詢全叢集（不分 namespace）目前實際記憶體使用量（bytes）。"""
+        promql = 'sum(container_memory_working_set_bytes)'
+        results = self.query(promql)
+        if results:
+            return results[0]["value"]
+        return None
+
     def deployment_available_replicas(
         self, deploy_name: str, namespace: str = "default"
     ) -> Optional[int]:
