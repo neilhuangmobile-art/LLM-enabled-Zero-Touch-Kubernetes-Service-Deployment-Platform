@@ -719,6 +719,50 @@ namespace 目前所有 Deployment 的真實資源需求，用真實 replicas 數
 
 ---
 
+## 14. K8s 斷線時 `--dry-run=client` 誤判成「manifest 有問題」，擋下所有部署
+
+**風險**：`guardian/dry_run.py` 的 docstring 宣稱 `mode="client"` 是「只做語法
+檢查，不需要連線叢集」，但實測發現新版 kubectl 的 `--dry-run=client` 仍會嘗試連
+到叢集下載 OpenAPI schema 做更完整驗證。K8s（或 Docker Desktop）斷線時這個請求
+會失敗（`failed to download openapi ... dial tcp ... connectex`），導致「client
+模式」名不符實地變成需要連線——系統把「不知道 manifest 對不對」誤判成「manifest
+確定有錯」，直接擋下部署，錯誤訊息是一整段對新手毫無意義的原始網路堆疊錯誤，
+不是有意義的驗證結果。
+
+**為什麼重要**：這代表**任何時候 K8s 暫時斷線（Docker Desktop 重啟、網路抖動），
+使用者會完全無法部署任何東西**——即使他們要部署的內容完全正常，也會被一個跟
+YAML 本身無關的環境問題擋下，且錯誤訊息完全沒有告訴他們真正原因（「K8s 連不上」
+vs「你的 YAML 寫錯了」是兩種需要不同處理方式的問題，混在一起會誤導使用者去改
+不需要改的東西）。這個 bug 存在於兩個獨立開發的分支共用、誰都沒動過的既有程式碼
+裡，代表這是專案一開始就帶著的問題，不是這次協作才引入的。
+
+**解決方式**：`_kubectl_dry_run` 對「kubectl 未安裝」的情況本來就設計成回傳
+`ok=None`（無法判斷），呼叫端 `_prepare_deploy` 也早就針對 `ok is None` 設計成
+「只加警告、不擋部署」——但這條正確路徑因為「kubectl 有裝、只是連不到叢集」這種
+情況一直沒被走到過，等於死代碼。修法：偵測 stderr 裡的連線失敗特徵字串
+（`failed to download openapi`、`dial tcp`、`connectex`、`connection refused`
+等），符合就回傳 `ok=None` + 友善雙語警告（講清楚「不代表 YAML 有問題」+ 該怎麼辦），
+不影響 kubectl 真的驗證出 YAML 本身有問題的正常擋下情境。
+
+**驗證**：新增 `tests/test_dry_run.py`（4 案例，monkeypatch `subprocess.run`
+模擬各種情境：連線失敗回 `ok=None` 且不擋部署、真正的 YAML/schema 錯誤仍正確
+`ok=False` 擋下、成功案例行為不變、kubectl 未安裝的既有行為不受影響）；真實在
+Docker Desktop 關閉狀態下直接呼叫 `_prepare_deploy()`，修好前確認會被誤擋
+（`rejected: true`，理由「kubectl dry-run failed」），修好後確認 `error: None`；
+全部 142 個測試（138 舊 + 4 新）全過。
+
+**發現過程值得記錄**：這個 bug 是在拉隊友（`ericsung0428`）獨立開發的分支
+（`feat/chat-unified-assistant-local`，跟這個分支是完全不同的 git 歷史，用
+`git worktree` 隔離檢視、沒有直接合併）、跑對方測試套件時發現對方有一個測試
+失敗，追查後才確定是雙方分支共用、誰都沒改過的既有程式碼裡的真實 bug——不是
+「拉別人程式碼結果別人有 bug」，而是「拉別人程式碼順便發現自己也中同一個 bug」，
+是這次協作意外抓到的收穫。這次只在自己這個分支（`feat/chat-unified-assistant`）
+套用修法；隊友分支要不要套用一樣的修法、以及兩邊分支（各自獨立做了 Dashboard/
+容量顯示等重疊功能）要怎麼整合，是需要使用者親自判斷的更大範圍決策，這次沒有
+動隊友的程式碼或嘗試自動合併。
+
+---
+
 ## 尚待排查（優先度較低，不是資源受限，只是還沒排到）
 
 - `/diagnose` 端點雖然也套用了跟 `/chat` 一樣的文字淨化，但沒有等價的

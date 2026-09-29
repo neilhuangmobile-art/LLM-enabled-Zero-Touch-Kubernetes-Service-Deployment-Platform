@@ -146,6 +146,38 @@ def _kubectl_dry_run(yaml_text: str, mode: str, namespace: str) -> dict:
         warnings = []
 
         if not ok:
+            # 2026-09-29 實測發現：`--dry-run=client` 的名稱暗示「只做語法檢查、
+            # 不需要連線叢集」（見本檔案頂端 docstring），但實際上新版 kubectl 在
+            # client dry-run 時仍會嘗試連到叢集下載 OpenAPI schema 做更完整的驗證
+            # （`failed to download openapi: ... dial tcp ... connectex`），K8s
+            # 斷線時這個請求會失敗，導致「client 模式」名不符實地變成需要連線——
+            # 這種情況下我們只是「不知道 manifest 對不對」，不是「manifest 確定有
+            # 錯」，卻被當成 ok=False 直接擋下部署，錯誤訊息還是一整段對新手毫無
+            # 意義的原始網路堆疊錯誤。跟下面 FileNotFoundError（kubectl 未安裝）
+            # 是同一個等級的「無法判斷」，理當回傳 ok=None，不是 ok=False——呼叫端
+            # （web_demo.py 的 _prepare_deploy）本來就已經设计成 ok is None 時只
+            # 加警告、不擋部署，只是 _kubectl_dry_run 這裡一直沒真的回傳過 None，
+            # 這條路徑等於死代碼直到現在才被踩中。
+            connectivity_markers = (
+                "failed to download openapi", "dial tcp", "connectex",
+                "connection refused", "no connection could be made",
+                "unable to connect to the server", "server 目前無法使用",
+            )
+            stderr_lower = stderr.lower()
+            if any(marker in stderr_lower for marker in connectivity_markers):
+                return {
+                    "ok"      : None,
+                    "mode"    : mode,
+                    "errors"  : [],
+                    "warnings": [
+                        "K8s 叢集目前連不上，無法執行 dry-run 驗證（不代表這份 YAML 有問題）。"
+                        "請確認 Docker Desktop 已啟動且 Kubernetes 功能已開啟，之後重新部署會自動重驗證。 / "
+                        "The K8s cluster is currently unreachable, so dry-run validation could not run "
+                        "(this does not mean the YAML is invalid). Please make sure Docker Desktop is "
+                        "running with Kubernetes enabled, then try deploying again."
+                    ],
+                    "stdout"  : stdout,
+                }
             # 解析 kubectl 的錯誤輸出
             for line in stderr.splitlines():
                 line = line.strip()
