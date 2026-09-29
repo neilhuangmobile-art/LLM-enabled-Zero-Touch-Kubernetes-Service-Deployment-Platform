@@ -664,6 +664,138 @@ def _check_scale_risk(name: str, new_replicas: int, namespace: str = None):
         return False, None
 
 
+def _my_deployment_resource_breakdown(namespace: str) -> dict:
+    """列出單一 namespace 內每個 Deployment 的資源需求（cpu/mem × replicas），
+    給監控台「我的部署」明細用。故意不擴充 `k8s_get_deployments()`——那個函式的
+    回傳格式被 Pods/Deployments 頁面等既有呼叫端依賴，這裡另外寫一個只服務監控台
+    的輕量版本，避免動到已經在用的介面。2026-09-29 從隊友分支移植。"""
+    from agents.cost_agent import _parse_cpu_millicores, _parse_memory_bytes, _estimate_monthly_cost
+    deployments = []
+    total_cpu_mc = 0
+    total_mem_b = 0
+    if K8S_ENABLED:
+        try:
+            api = k8s_client.AppsV1Api()
+            for d in api.list_namespaced_deployment(namespace).items:
+                reps = d.spec.replicas or 0
+                containers = d.spec.template.spec.containers if d.spec.template.spec else []
+                cpu_mc = mem_b = 0
+                if containers and containers[0].resources and containers[0].resources.requests:
+                    req = containers[0].resources.requests
+                    cpu_mc = (_parse_cpu_millicores(req.get("cpu")) or 0) * reps
+                    mem_b = (_parse_memory_bytes(req.get("memory")) or 0) * reps
+                total_cpu_mc += cpu_mc
+                total_mem_b += mem_b
+                deployments.append({
+                    "name": d.metadata.name,
+                    "replicas": reps,
+                    "cpu_cores": round(cpu_mc / 1000, 2),
+                    "mem_gib": round(mem_b / (1024 ** 3), 3),
+                })
+        except Exception:
+            pass
+    # 重用既有的計價公式，不重新發明——包一個假 manifest 餵給 _estimate_monthly_cost()，
+    # 沿用它既有的 spec.replicas / spec.template.spec.containers[].resources.requests 介面。
+    # 注意：total_cpu_mc/total_mem_b 為 0（沒有部署，或部署都沒填資源）時不能真的把 0
+    # 傳進去——_estimate_monthly_cost() 是設計給「單一容器」用的，遇到沒填的欄位會用
+    # `or 100`/`or 128Mi` 這種預設值頂上去（假設單一 Pod 一定會吃掉一點資源），但 0 在
+    # Python 是 falsy，會被那個 `or` 誤判成「沒填」，讓「總量加總後真的是 0」的正常情況
+    # 被套用不該套用的預設值，估出一個不存在的費用。
+    if total_cpu_mc == 0 and total_mem_b == 0:
+        monthly_usd = 0.0
+    else:
+        pseudo_manifest = {"spec": {"replicas": 1, "template": {"spec": {"containers": [
+            {"resources": {"requests": {"cpu": f"{total_cpu_mc}m", "memory": str(total_mem_b)}}}
+        ]}}}}
+        monthly_usd = _estimate_monthly_cost(pseudo_manifest).get("estimated_usd")
+    return {
+        "deployments": deployments,
+        "total_cpu_cores": round(total_cpu_mc / 1000, 2),
+        "total_mem_gib": round(total_mem_b / (1024 ** 3), 2),
+        "monthly_usd": monthly_usd,
+    }
+
+
+def _dashboard_summary(namespace: str) -> dict:
+    """監控台頁面的完整資料：叢集空間總覽（K8s requests 加總跟 Prometheus 實際用量
+    取較大值，比照 Kubecost 的 allocation = max(usage, requests) 概念）+ 使用者自己
+    的部署明細 + 費用估算。任何一段查不到都優雅降級，不讓整頁掛掉（AGENT_RULES.md
+    新手友善原則）。2026-09-29 從隊友分支移植。"""
+    result = {
+        "k8s_enabled": K8S_ENABLED,
+        "prometheus_up": False,
+        "cluster_capacity": None,
+        "cluster_used": None,
+        "cluster_used_source": None,
+        "cluster_remaining": None,
+        "my_deployments": [],
+        "my_total_cpu_cores": None,
+        "my_total_mem_gib": None,
+        "my_monthly_usd": None,
+    }
+    if K8S_ENABLED:
+        try:
+            cap = k8s_get_node_capacity()
+            if cap:
+                from agents.cost_agent import _parse_cpu_millicores, _parse_memory_bytes
+                node_cpu_mc = _parse_cpu_millicores(cap.get("cpu")) or 0
+                node_mem_b = _parse_memory_bytes(cap.get("memory")) or 0
+                req_cpu_mc, req_mem_b = _sum_cluster_resource_requests()
+
+                used_cpu_mc, used_source_cpu = req_cpu_mc, "requests"
+                used_mem_b, used_source_mem = req_mem_b, "requests"
+
+                prom_url = os.environ.get("PROMETHEUS_URL", "http://127.0.0.1:9090").replace("localhost", "127.0.0.1")
+                try:
+                    from observability.prometheus_client import PrometheusClient
+                    client = PrometheusClient(prom_url, timeout=2)
+                    prometheus_up = client.is_alive()
+                    result["prometheus_up"] = prometheus_up
+                    if prometheus_up:
+                        try:
+                            actual_cpu_cores = client.cluster_cpu_usage_cores()
+                            if actual_cpu_cores is not None:
+                                actual_cpu_mc = actual_cpu_cores * 1000
+                                if actual_cpu_mc > used_cpu_mc:
+                                    used_cpu_mc, used_source_cpu = actual_cpu_mc, "usage"
+                        except Exception:
+                            pass
+                        try:
+                            actual_mem_b = client.cluster_memory_usage_bytes()
+                            if actual_mem_b is not None and actual_mem_b > used_mem_b:
+                                used_mem_b, used_source_mem = actual_mem_b, "usage"
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+                result["cluster_capacity"] = {
+                    "cpu_cores": round(node_cpu_mc / 1000, 2),
+                    "mem_gib": round(node_mem_b / (1024 ** 3), 2),
+                }
+                result["cluster_used"] = {
+                    "cpu_cores": round(used_cpu_mc / 1000, 2),
+                    "mem_gib": round(used_mem_b / (1024 ** 3), 2),
+                }
+                result["cluster_used_source"] = {"cpu": used_source_cpu, "mem": used_source_mem}
+                result["cluster_remaining"] = {
+                    "cpu_cores": round(node_cpu_mc / 1000 - used_cpu_mc / 1000, 2),
+                    "mem_gib": round(node_mem_b / (1024 ** 3) - used_mem_b / (1024 ** 3), 2),
+                }
+        except Exception:
+            pass
+
+        try:
+            my = _my_deployment_resource_breakdown(namespace)
+            result["my_deployments"] = my["deployments"]
+            result["my_total_cpu_cores"] = my["total_cpu_cores"]
+            result["my_total_mem_gib"] = my["total_mem_gib"]
+            result["my_monthly_usd"] = my["monthly_usd"]
+        except Exception:
+            pass
+    return result
+
+
 _BAD_WAITING = {"CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull",
                 "CreateContainerConfigError", "CreateContainerError", "InvalidImageName"}
 _BAD_TERMINATED = {"OOMKilled", "Error", "ContainerCannotRun", "DeadlineExceeded"}
@@ -1451,6 +1583,10 @@ html,body{height:100%;overflow:hidden}
         <svg viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         Deployments
       </button>
+      <button class="nav-item" data-page="dashboard" onclick="showPage('dashboard')">
+        <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="9" y="2" width="5" height="9" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>
+        Dashboard
+      </button>
       <div class="nav-section">Tools</div>
       <button class="nav-item" data-page="gitops" onclick="showPage('gitops')">
         <svg viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 6v1a3 3 0 003 3h1M11 6v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -1859,6 +1995,53 @@ html,body{height:100%;overflow:hidden}
       </div>
     </div>
 
+    <!-- Dashboard Page（2026-09-29 從隊友分支移植）-->
+    <div class="page" id="page-dashboard">
+      <div class="page-title">Dashboard</div>
+      <div class="page-sub">部署前，先看看叢集還剩多少空間 / See how much cluster space is left before you deploy</div>
+      <div class="grid-3" style="margin-bottom:16px">
+        <div class="card"><div class="card-title">叢集總容量 / Cluster capacity</div><div class="stat-num" id="dash-capacity" style="font-size:20px">--</div><div class="stat-label">CPU / Memory</div></div>
+        <div class="card"><div class="card-title">已用量 / In use</div><div class="stat-num" id="dash-used" style="font-size:20px">--</div><div class="stat-label" id="dash-used-label">CPU / Memory</div></div>
+        <div class="card"><div class="card-title">剩餘空間 / Remaining</div><div class="stat-num" id="dash-remaining" style="font-size:20px">--</div><div class="stat-label">CPU / Memory</div></div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">使用率 / Utilization</div>
+        <div style="margin-top:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px">
+            <span>CPU</span><span id="dash-cpu-pct-label">--</span>
+          </div>
+          <div style="background:var(--bg);border-radius:6px;height:10px;overflow:hidden;margin-bottom:14px">
+            <div id="dash-cpu-bar" style="background:var(--green);height:100%;width:0%;transition:width .3s,background .3s"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px">
+            <span>Memory</span><span id="dash-mem-pct-label">--</span>
+          </div>
+          <div style="background:var(--bg);border-radius:6px;height:10px;overflow:hidden">
+            <div id="dash-mem-bar" style="background:var(--green);height:100%;width:0%;transition:width .3s,background .3s"></div>
+          </div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="card">
+          <div class="card-title">我的部署 / My deployments</div>
+          <div class="table-wrap" style="margin-top:8px">
+            <table>
+              <thead><tr><th>Name</th><th>Replicas</th><th>CPU</th><th>Memory</th></tr></thead>
+              <tbody id="dash-my-deployments"><tr><td colspan="4" class="empty"><p>Loading...</p></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">我的費用估算 / My estimated cost</div>
+          <div style="margin-top:8px;font-size:13px;color:var(--text2)" id="dash-cost">Loading...</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:12px">
+        僅供參考，實際部署仍以送出當下的審查結果為準；同一時間可能有其他使用者一起部署，數字會有些微落差。 /
+        For reference only — the actual review at submission time is authoritative; numbers may drift slightly if other users deploy at the same time.
+      </div>
+    </div>
+
     <div class="page" id="page-metrics">
       <div class="page-title">Metrics</div>
       <div class="page-sub">Prometheus observability</div>
@@ -2204,6 +2387,7 @@ function showPage(name){
   if(name === 'healer') { loadPodList(); loadHealerBgStatus(); }
   if(name === 'metrics') loadMetrics();
   if(name === 'kb') loadKB();
+  if(name === 'dashboard') loadDashboard();
 }
 
 // ── Status polling ──
@@ -3066,6 +3250,61 @@ async function loadMetrics(){
     document.getElementById('metrics-rows').innerHTML = rows
       .map(([k,v])=>'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2);font-size:12px">'+k+'</span><span style="font-size:12px;font-weight:500">'+v+'</span></div>').join('');
   }catch(e){document.getElementById('prom-status').textContent='ERR';}
+}
+
+// ── Dashboard（2026-09-29 從隊友分支移植；沿用專案既有的靜態雙語標籤慣例，
+// 不接入動態語言切換 I18N 系統——Metrics/Pods/Deployments 等頁面本來就是這樣） ──
+function _dashPctBar(barId, labelId, usedVal, capVal){
+  const bar = document.getElementById(barId), label = document.getElementById(labelId);
+  if(capVal == null || usedVal == null || !capVal){
+    label.textContent = 'N/A'; bar.style.width = '0%'; return;
+  }
+  const pct = Math.max(0, Math.min(100, (usedVal / capVal) * 100));
+  bar.style.width = pct.toFixed(1) + '%';
+  bar.style.background = pct >= 100 ? '#DC2626' : (pct >= 80 ? '#D97706' : 'var(--green)');
+  label.textContent = pct.toFixed(1) + '%';
+}
+
+async function loadDashboard(){
+  document.getElementById('dash-cost').textContent = 'Loading...';
+  document.getElementById('dash-my-deployments').innerHTML = '<tr><td colspan="4" class="empty"><p>Loading...</p></td></tr>';
+  try{
+    const r = await fetch('/api/dashboard');
+    const d = await r.json();
+    if(!d.k8s_enabled || !d.cluster_capacity){
+      document.getElementById('dash-capacity').textContent = 'N/A';
+      document.getElementById('dash-used').textContent = 'N/A';
+      document.getElementById('dash-remaining').textContent = 'N/A';
+      document.getElementById('dash-cpu-pct-label').textContent = 'K8s 未連線 / unavailable';
+      document.getElementById('dash-mem-pct-label').textContent = '--';
+      document.getElementById('dash-my-deployments').innerHTML = '<tr><td colspan="4" class="empty"><p>K8s 未連線，無法取得資料 / K8s not connected</p></td></tr>';
+      document.getElementById('dash-cost').textContent = 'N/A';
+      return;
+    }
+    const cap = d.cluster_capacity, used = d.cluster_used, rem = d.cluster_remaining, src = d.cluster_used_source || {};
+    document.getElementById('dash-capacity').textContent = cap.cpu_cores + ' cores / ' + cap.mem_gib + ' GiB';
+    document.getElementById('dash-used').textContent = used.cpu_cores + ' cores / ' + used.mem_gib + ' GiB';
+    document.getElementById('dash-used-label').textContent =
+      'CPU ('+(src.cpu==='usage'?'實際用量 actual':'requests')+') / Memory ('+(src.mem==='usage'?'實際用量 actual':'requests')+')';
+    const remEl = document.getElementById('dash-remaining');
+    remEl.textContent = rem.cpu_cores + ' cores / ' + rem.mem_gib + ' GiB';
+    remEl.style.color = (rem.cpu_cores < 0 || rem.mem_gib < 0) ? '#DC2626' : '';
+    _dashPctBar('dash-cpu-bar', 'dash-cpu-pct-label', used.cpu_cores, cap.cpu_cores);
+    _dashPctBar('dash-mem-bar', 'dash-mem-pct-label', used.mem_gib, cap.mem_gib);
+
+    const deps = d.my_deployments || [];
+    document.getElementById('dash-my-deployments').innerHTML = deps.length
+      ? deps.map(x => '<tr><td>'+escHtml(x.name)+'</td><td>'+x.replicas+'</td><td>'+x.cpu_cores+' cores</td><td>'+x.mem_gib+' GiB</td></tr>').join('')
+      : '<tr><td colspan="4" class="empty"><p>尚未部署任何東西 / No deployments yet</p></td></tr>';
+
+    document.getElementById('dash-cost').innerHTML =
+      '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>總 CPU / Total CPU</span><span>'+(d.my_total_cpu_cores!=null?d.my_total_cpu_cores+' cores':'--')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>總記憶體 / Total memory</span><span>'+(d.my_total_mem_gib!=null?d.my_total_mem_gib+' GiB':'--')+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:6px 0"><span>預估每月 / Est. monthly</span><span style="font-weight:600">'+(d.my_monthly_usd!=null?'$'+d.my_monthly_usd+' USD':'--')+'</span></div>'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:6px">粗估值，僅供參考 / Rough estimate, for reference only</div>';
+  }catch(e){
+    document.getElementById('dash-cost').textContent = 'Error: ' + e;
+  }
 }
 
 async function loadDatasetStats(){
@@ -5819,6 +6058,18 @@ def api_metrics():
         return jsonify({"connected": True, "url": prom_url, "metrics": metrics})
     except Exception as e:
         return jsonify({"connected": False, "error": str(e)})
+
+
+@app.route("/api/dashboard")
+def api_dashboard():
+    """監控台頁面：叢集空間總覽（K8s requests 加總 vs Prometheus 實際用量，取較大值）
+    + 使用者自己的部署明細 + 費用估算。見 _dashboard_summary()。2026-09-29 從隊友
+    分支移植。"""
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    user_ns = _user_namespace(session["username"])
+    return jsonify(_dashboard_summary(user_ns))
+
 
 if __name__ == "__main__":
     print("=" * 60)

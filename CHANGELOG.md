@@ -319,3 +319,40 @@ Desktop 沒開時，正常的部署請求被誤擋」的情境，修好後確認
 直接跑過全部確認通過，不是假設能用；`pytest`（160 個，142 舊 + 18 新）全過。
 詳見 `docs/security_review.md` 15 節。需要使用者自己申請 Google OAuth 憑證才能
 實測真實登入流程。
+
+### 移植：Dashboard（監控台）——叢集空間總覽頁面，從隊友分支移植過來
+使用者要求把隊友分支上已經做好的 Dashboard 移植過來。跟這個分支既有的「B2 資源卡
+叢集空間對照表」（部署當下才看得到）不同，Dashboard 是獨立頁面，任何時候都能看，
+兩者互補共存、沒有互相取代。
+
+核心概念沿用 Kubecost 的 `allocation = max(usage, requests)`：叢集「已用量」在
+K8s requests 加總（既有的 `_sum_cluster_resource_requests()`）與 Prometheus 實際
+使用量之間取較大值，比單看 requests 更貼近真實情況。`observability/prometheus_client.py`
+新增 `cluster_cpu_usage_cores()`/`cluster_memory_usage_bytes()`；`web_demo.py` 新增
+`_my_deployment_resource_breakdown()`（使用者自己的部署資源明細，不擴充既有
+`k8s_get_deployments()` 避免影響 Pods/Deployments 頁面）、`_dashboard_summary()`
+（整合叢集容量/已用量/我的明細/費用估算，任何一段查不到都優雅降級）、新路由
+`GET /api/dashboard`；側邊欄新增 Dashboard 導覽項、新增 `#page-dashboard`（容量/
+已用量/剩餘空間三張卡、CPU/記憶體使用率長條圖、我的部署明細表、費用估算卡）。
+
+**跟隊友原版的差異**：隊友的版本接了動態語言切換系統（`I18N`/`applyLang()`），
+這個分支的 Metrics/Pods/Deployments 等頁面本來就是走「中英文字直接寫在一起顯示」
+的靜態雙語慣例，沒有接動態切換——移植時照這個分支既有慣例改寫前端文字，沒有
+把隊友那邊的動態 i18n 機制也搬過來，避免引入這個分支原本沒有的新機制、擴大改動
+範圍。後端邏輯（`_dashboard_summary`/`_my_deployment_resource_breakdown`/
+`cluster_cpu_usage_cores`/`cluster_memory_usage_bytes`）完全比照原版移植，沒有改動。
+
+**過程中確認隊友原本記錄的一個真實 bug 修法沿用正確**：`_my_deployment_resource_breakdown()`
+重用既有的 `_estimate_monthly_cost()` 估價公式時，該函式對「沒填資源」的容器會用
+`or 100`/`or 128Mi` 頂上預設值，但監控台是加總後的總量，真的是 0（例如剛註冊、
+還沒部署任何東西）時，0 在 Python 是 falsy，會被誤判成「沒填」而冒出一個不存在的
+費用；移植過來的版本維持隊友已經修好的寫法（總量為 0 直接回傳 `0.0`，不呼叫
+`_estimate_monthly_cost()`）。
+
+驗證：移植 `tests/test_dashboard.py`（10 案例，涵蓋 Prometheus 用量高於/低於
+requests、連不上、K8s 未連線四種情境），對這個分支直接跑過全部確認通過；
+`pytest`（170 個，160 舊 + 10 新）全過。真實環境驗證：Docker Desktop 重新啟動、
+K8s 跟 Prometheus 都連上後，建立測試帳號實測 `/api/dashboard`，確認回傳真實數字
+（節點 20 核/15.39Gi，已用量 0.5 核 requests/1.6Gi Prometheus 實際用量——`mem`
+來源正確標成 `"usage"`，證實 Kubecost 式取較大值邏輯真的在跑，不是死代碼）；
+側邊欄 Dashboard 導覽項跟頁面元素確認存在；測試帳號與 namespace 已清除。

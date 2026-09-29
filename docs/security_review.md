@@ -814,6 +814,40 @@ API 的 `requests.post`/`requests.get`），涵蓋 state 不符拒絕、`error` 
 
 ---
 
+## 16. Dashboard（監控台）：從隊友分支移植，套用 Kubecost 式「取較大值」計價概念
+
+**背景**：使用者要求把隊友分支已經做好的 Dashboard 頁面移植過來，跟這個分支既有
+的「B2 資源卡叢集空間對照表」（見 14 節，部署當下才看得到）不同，Dashboard 是
+獨立頁面、隨時都能查看，兩者服務不同情境、互補共存。
+
+**為什麼重要**：單看 K8s `requests` 加總會低估真實資源壓力（容器實際用量可能超過
+自己宣告的 requests，尤其沒設 `limits` 時），單看 Prometheus 實際用量又會低估
+排程佔用（K8s 排程器是照 `requests` 而不是實際用量在分配節點空間，即使容器現在
+沒怎麼用資源，那塊空間也已經被它佔走，別的 Pod 排不進去）。業界標準工具 Kubecost
+的作法是兩者取較大值（`allocation = max(usage, requests)`），移植的版本沿用同一
+個概念，不是自己發明的公式。
+
+**解決方式**：`observability/prometheus_client.py` 新增 `cluster_cpu_usage_cores()`/
+`cluster_memory_usage_bytes()`；`_dashboard_summary()` 把 `_sum_cluster_resource_requests()`
+算出的 requests 總量跟 Prometheus 實際用量逐項比較，取較大值，並標記這個數字的
+來源（`"requests"` 或 `"usage"`）讓畫面上看得出來是哪一種；Prometheus 連不上時
+優雅退回純 requests 加總，不讓整頁掛掉。
+
+**沿用了隊友已經修好的一個真實 bug**：`_my_deployment_resource_breakdown()` 重用
+既有的 `_estimate_monthly_cost()` 估價公式，該函式是設計給「單一容器」用的，沒填
+`cpu`/`memory` 的容器會用 `or 100`/`or 128Mi` 頂上預設值（假設一定會吃掉一點資源）；
+但監控台餵進去的是「使用者全部部署加總」，加總後真的是 0（例如剛註冊、還沒部署
+任何東西）時，0 在 Python 是 falsy，會被那個 `or` 誤判成「沒填」，讓正常的
+「什麼都沒部署」情況冒出一個不存在的月費。移植時保留隊友已驗證過的修法：加總為
+0 時直接回傳 `0.0`，不呼叫 `_estimate_monthly_cost()`。
+
+**驗證**：移植 `tests/test_dashboard.py`（10 案例），對這個分支直接跑過全部確認
+通過；真實環境測試：`/api/dashboard` 回傳 `cluster_used_source.mem: "usage"`，
+證實 Prometheus 實際用量（1.6Gi）確實高於 requests 加總，取較大值邏輯真的在跑；
+`pytest`（170 個）全過。
+
+---
+
 ## 尚待排查（優先度較低，不是資源受限，只是還沒排到）
 
 - `/diagnose` 端點雖然也套用了跟 `/chat` 一樣的文字淨化，但沒有等價的
