@@ -763,6 +763,57 @@ Docker Desktop 關閉狀態下直接呼叫 `_prepare_deploy()`，修好前確認
 
 ---
 
+## 15. Google 登入（Sign in with Google）：新增第二種登入方式，跟既有帳密系統共存
+
+**背景**：使用者要求把隊友（`ericsung0428`）在獨立分支上做好的 Google 登入功能
+移植進這個分支（跟隊友分支的其他重疊功能不同，這一項使用者明確表示要直接採用
+隊友的實作，不是自己重做）。
+
+**風險**：新增 OAuth 登入這類功能，常見的實作陷阱是（1）沒驗證 OAuth 的 `state`
+參數，讓攻擊者能用偽造的回呼連結誘騙使用者登入攻擊者控制的帳號（CSRF 的一種
+變形）；（2）沒檢查 email 是否已驗證，讓任何人只要能操控 OAuth 流程的某個環節
+就能宣稱擁有別人的 email；（3）用「email 前綴」或「email 本身」當作跟既有帳號
+比對/合併的依據，等於只要知道對方的 username 或 email，就能用自己的 Google 帳號
+登入拿到對方的身分（含 K8s namespace 存取權）。
+
+**為什麼重要**：這個平台每個帳號對應一個獨立的 K8s namespace（見 11 節），身分
+系統的正確性直接等於資料隔離的正確性——認證機制被繞過或帳號被冒用，等於直接
+繞過整個多租戶隔離設計。
+
+**解決方式**（`web_demo.py` 新增 `_google_oauth_configured()`/
+`_derive_username_from_google()`/`google_login`/`google_callback`，用專案已有的
+`requests` 套件手動打 Google OAuth2 三個端點，沒有加新依賴）：
+- **CSRF 防護**：`/auth/google/login` 產生隨機 `state`（`secrets.token_urlsafe(24)`）
+  存進 session，`/auth/google/callback` 用 `secrets.compare_digest()` 核對，session
+  裡沒有、或跟回呼帶的 `state` 不符，一律拒絕並清掉暫存值，不繼續往下處理。
+- **Email 必須已驗證**：只信任 Google userinfo 回傳的 `email_verified === true`，
+  否則拒絕登入——`email_verified` 是 Google 自己驗證過的欄位，不是使用者能填寫的。
+- **絕不自動合併/連結帳號**：`_derive_username_from_google()` 用 email 前綴衍生
+  username，但只要跟任何既有帳號撞名（不管是密碼帳號還是別的 Google 帳號）就一律
+  加 hash 後綴變成新帳號，不會覆蓋、也不會嘗試「猜測」這是不是同一個人。查找既有
+  Google 帳號的依據是 `google_sub`（Google 的穩定內部 ID，不會變動），不是 email
+  或 username 字串比對。
+- **共存不取代**：純密碼帳號完全不受影響；`login()` 遇到「這個帳號是純 Google
+  帳號、沒有 `password_hash`」的情況，會給出「請改用 Google 登入」的明確訊息，
+  不是含糊的「帳號密碼錯誤」。
+- **新手友善的降級**：`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` 沒設定時，登入/
+  註冊頁的按鈕整個不出現；就算直接打 `/auth/google/login` 網址，也是回一個講清楚
+  原因的頁面，不是 404/500。
+- 沒有把 Google 的 `access_token` 存下來——只在 callback 那次請求裡短暫使用（換
+  使用者資訊），用完即棄。
+
+**驗證**：移植 `tests/test_google_auth.py`（18 案例，monkeypatch 掉真正打 Google
+API 的 `requests.post`/`requests.get`），涵蓋 state 不符拒絕、`error` 參數（使用者
+取消授權）拒絕、email 未驗證拒絕、新帳號建立、同一個 `google_sub` 第二次登入找到
+既有帳號不重複建立、封鎖帳號拒絕登入、username 撞到既有密碼帳號或別的 Google
+帳號時正確加後綴而非合併、按鈕在設定/未設定兩種情況下正確顯示/隱藏，直接對這個
+分支的 `web_demo.py` 跑過全部 18 案例確認通過，非只是複製貼上假設能用；跑過完整
+`pytest`（160 個，142 舊 + 18 新）全過，確認純密碼登入路徑沒有回歸。**待使用者
+接續**：需要自己申請 Google OAuth 憑證（Google Cloud Console，步驟見 `.env.example`）
+填進 `.env` 才能實際測試真實登入流程，這部分沒辦法代勞。
+
+---
+
 ## 尚待排查（優先度較低，不是資源受限，只是還沒排到）
 
 - `/diagnose` 端點雖然也套用了跟 `/chat` 一樣的文字淨化，但沒有等價的

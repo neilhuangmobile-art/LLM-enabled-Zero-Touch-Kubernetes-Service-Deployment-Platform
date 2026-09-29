@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from core.config import ensure_utf8_output
 ensure_utf8_output()
 
-import threading, json, urllib.request, hashlib, secrets, re, uuid
+import threading, json, urllib.request, hashlib, secrets, re, uuid, requests
 from datetime import datetime, timezone, timedelta
 from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
 
@@ -251,6 +251,38 @@ def verify_password(pw, stored):
         except ValueError:
             return False
     return secrets.compare_digest(hashlib.sha256(pw.encode()).hexdigest(), stored)
+
+# ── Google 登入（選用，2026-09-29 從隊友分支移植；沒設定 GOOGLE_CLIENT_ID/SECRET
+#    時整個功能不出現，不是顯示了讓使用者點下去才碰到錯誤——AGENT_RULES.md
+#    新手友善原則）。用專案已有的 requests 套件手動打 Google OAuth2 三個端點
+#    （authorize → token exchange → userinfo），沒有加新依賴。─────────────────
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
+
+
+def _google_oauth_configured() -> bool:
+    return bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
+
+
+def _derive_username_from_google(email: str) -> str:
+    """從 Google 帳號的 email 衍生一個唯一的本地 username。撞名（不管是既有密碼
+    帳號還是別的 Google 帳號）一律加短 hash 後綴變成新帳號，絕不覆蓋/合併既有
+    帳號——自動合併等於「只要知道對方 username，就能用自己的 Google 帳號取得
+    對方的 K8s namespace 存取權」，是帳號被冒用的風險。"""
+    prefix = re.sub(r"[^a-z0-9]", "-", (email.split("@")[0] or "").lower()).strip("-")[:40]
+    prefix = prefix or "google-user"
+    if prefix not in USERS:
+        return prefix
+    suffix = hashlib.sha256(email.encode()).hexdigest()[:6]
+    candidate = f"{prefix}-{suffix}"
+    n = 2
+    while candidate in USERS:
+        candidate = f"{prefix}-{suffix}-{n}"
+        n += 1
+    return candidate
 
 # ── Model status ────────────────────────────────────────────
 def _model_status():
@@ -966,6 +998,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .auth-logo{display:flex;align-items:center;gap:10px;margin-bottom:28px}
 .auth-logo svg{width:32px;height:32px}
 .auth-logo span{font-size:18px;font-weight:600;color:var(--text)}
+.auth-divider{display:flex;align-items:center;gap:10px;margin:18px 0}
+.auth-divider .line{flex:1;height:1px;background:var(--border2)}
+.auth-divider span{font-size:12px;color:var(--text3)}
+.google-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:10px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:#fff;color:#111827;font-size:14px;font-weight:500;text-decoration:none;font-family:inherit;transition:background .15s,border-color .15s}
+.google-btn:hover{background:var(--bg);border-color:var(--border)}
 .auth-title{font-size:22px;font-weight:600;margin-bottom:6px}
 .auth-sub{font-size:14px;color:var(--text2);margin-bottom:28px}
 .form-group{margin-bottom:16px}
@@ -1326,6 +1363,13 @@ html,body{height:100%;overflow:hidden}
       </div>
       <button class="btn-primary" type="submit">Sign In</button>
     </form>
+    {% if google_login_available %}
+    <div class="auth-divider"><div class="line"></div><span>or</span><div class="line"></div></div>
+    <a href="/auth/google/login" class="google-btn">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.09-1.8 2.73v2.27h2.92c1.7-1.57 2.68-3.88 2.68-6.64z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.27c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.71H.96v2.34C2.44 15.98 5.48 18 9 18z"/><path fill="#FBBC05" d="M3.97 10.7c-.18-.54-.28-1.11-.28-1.7s.1-1.16.28-1.7V4.96H.96A8.996 8.996 0 000 9c0 1.45.35 2.83.96 4.04l3.01-2.34z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.59-2.59C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l3.01 2.34C4.68 5.16 6.66 3.58 9 3.58z"/></svg>
+      使用 Google 登入 / Sign in with Google
+    </a>
+    {% endif %}
     <div class="auth-link">Don't have an account? <a href="/auth/register">Register</a></div>
   </div>
 </div>
@@ -1359,6 +1403,13 @@ html,body{height:100%;overflow:hidden}
       </div>
       <button class="btn-primary" type="submit">Create Account</button>
     </form>
+    {% if google_login_available %}
+    <div class="auth-divider"><div class="line"></div><span>or</span><div class="line"></div></div>
+    <a href="/auth/google/login" class="google-btn">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.09-1.8 2.73v2.27h2.92c1.7-1.57 2.68-3.88 2.68-6.64z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.27c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.71H.96v2.34C2.44 15.98 5.48 18 9 18z"/><path fill="#FBBC05" d="M3.97 10.7c-.18-.54-.28-1.11-.28-1.7s.1-1.16.28-1.7V4.96H.96A8.996 8.996 0 000 9c0 1.45.35 2.83.96 4.04l3.01-2.34z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.59-2.59C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l3.01 2.34C4.68 5.16 6.66 3.58 9 3.58z"/></svg>
+      使用 Google 登入 / Sign in with Google
+    </a>
+    {% endif %}
     <div class="auth-link">Already have an account? <a href="/">Sign In</a></div>
   </div>
 </div>
@@ -4153,24 +4204,24 @@ window.addEventListener('DOMContentLoaded', function(){
 @app.route("/")
 def index():
     if "username" not in session:
-        return render_template_string(HTML, logged_in=False, page='login', error=None, k8s=K8S_ENABLED, username='')
+        return render_template_string(HTML, logged_in=False, page='login', error=None, k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     return render_template_string(HTML, logged_in=True, page='app', error=None, k8s=K8S_ENABLED, username=session["username"])
 
 @app.route("/auth/register", methods=["GET","POST"])
 def register():
     if request.method == "GET":
-        return render_template_string(HTML, logged_in=False, page='register', error=None, k8s=K8S_ENABLED, username='')
+        return render_template_string(HTML, logged_in=False, page='register', error=None, k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     username = request.form.get("username","").strip()
     password = request.form.get("password","")
     confirm  = request.form.get("confirm","")
     if not username or not password:
-        return render_template_string(HTML, logged_in=False, page='register', error="Please fill in all fields", k8s=K8S_ENABLED, username='')
+        return render_template_string(HTML, logged_in=False, page='register', error="Please fill in all fields", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     if password != confirm:
-        return render_template_string(HTML, logged_in=False, page='register', error="Passwords do not match", k8s=K8S_ENABLED, username='')
+        return render_template_string(HTML, logged_in=False, page='register', error="Passwords do not match", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     if username in USERS:
-        return render_template_string(HTML, logged_in=False, page='register', error="Username already taken", k8s=K8S_ENABLED, username='')
+        return render_template_string(HTML, logged_in=False, page='register', error="Username already taken", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     if len(password) < 6:
-        return render_template_string(HTML, logged_in=False, page='register', error="Password must be at least 6 characters", k8s=K8S_ENABLED, username='')
+        return render_template_string(HTML, logged_in=False, page='register', error="Password must be at least 6 characters", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     USERS[username] = {"password_hash": hash_password(password), "created_at": datetime.now().isoformat(),
                        "violation_count": 0, "banned": False}
     with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json"), "w", encoding="utf-8") as _uf:
@@ -4184,6 +4235,14 @@ def login():
     username = request.form.get("username","").strip()
     password = request.form.get("password","")
     stored_user = USERS.get(username)
+    if isinstance(stored_user, dict) and stored_user.get("auth_provider") == "google" and "password_hash" not in stored_user:
+        # 這個帳號是純 Google 登入建立的，沒有密碼可以比對——講清楚原因跟下一步
+        # 動作，不要讓使用者以為自己打錯密碼一直重試（AGENT_RULES.md 新手友善原則）。
+        return render_template_string(
+            HTML, logged_in=False, page='login',
+            error="這個帳號是用 Google 登入建立的，沒有密碼，請改用下方的「使用 Google 登入」。 / "
+                  "This account was created via Google Sign-In and has no password — please use the Google button below.",
+            k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     stored_hash = stored_user.get("password_hash", "") if isinstance(stored_user, dict) else stored_user
     if verify_password(password, stored_hash):
         if isinstance(stored_user, dict) and stored_user.get("banned"):
@@ -4192,7 +4251,7 @@ def login():
             return render_template_string(
                 HTML, logged_in=False, page='login',
                 error="This account has been banned for repeated malicious behavior. / 此帳號因累積多次惡意行為已被封鎖。",
-                k8s=K8S_ENABLED, username='')
+                k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
         # 舊帳號可能是「純字串密碼」或「dict 但裡面存的是弱雜湊（沒加鹽的 sha256）」，
         # 登入成功那一刻密碼是明文可用的，順便升級成 pbkdf2，不用等使用者自己改密碼。
         if not isinstance(stored_user, dict) or not stored_hash.startswith("pbkdf2_sha256$"):
@@ -4205,11 +4264,121 @@ def login():
         _ensure_user_namespace(_user_namespace(username))
         session["username"] = username
         return redirect("/")
-    return render_template_string(HTML, logged_in=False, page='login', error="Invalid username or password", k8s=K8S_ENABLED, username='')
+    return render_template_string(HTML, logged_in=False, page='login', error="Invalid username or password", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
 
 @app.route("/auth/logout", methods=["POST"])
 def logout():
     session.clear()
+    return redirect("/")
+
+
+def _google_config_error_page():
+    """GOOGLE_CLIENT_ID/SECRET 沒設定時，兩個 Google 路由共用的錯誤頁——不是
+    404/500，講清楚原因（AGENT_RULES.md 新手友善原則：不能靜默失敗）。"""
+    return render_template_string(
+        HTML, logged_in=False, page='login',
+        error="Google 登入尚未設定（需要在 .env 填入 GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET）。 / "
+              "Google Sign-In is not configured yet.",
+        k8s=K8S_ENABLED, username='', google_login_available=False)
+
+
+@app.route("/auth/google/login")
+def google_login():
+    if not _google_oauth_configured():
+        return _google_config_error_page()
+    # CSRF 防護：標準 OAuth state 參數，callback 時核對，不符就拒絕。
+    state = secrets.token_urlsafe(24)
+    session["google_oauth_state"] = state
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": url_for("google_callback", _external=True),
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "prompt": "select_account",
+    }
+    return redirect(f"{GOOGLE_AUTH_URL}?{urllib.parse.urlencode(params)}")
+
+
+@app.route("/auth/google/callback")
+def google_callback():
+    if not _google_oauth_configured():
+        return _google_config_error_page()
+
+    def _login_error(msg):
+        return render_template_string(
+            HTML, logged_in=False, page='login', error=msg,
+            k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
+
+    expected_state = session.pop("google_oauth_state", None)
+    got_state = request.args.get("state")
+    if not expected_state or not got_state or not secrets.compare_digest(expected_state, got_state):
+        return _login_error(
+            "Google 登入驗證失敗（連結可能已過期或遭到竄改），請重新登入一次。 / "
+            "Google Sign-In verification failed (state mismatch) — please try signing in again.")
+
+    error_param = request.args.get("error")
+    code = request.args.get("code")
+    if error_param or not code:
+        return _login_error(
+            f"Google 登入已取消或失敗：{error_param or 'no code returned'}。 / "
+            f"Google Sign-In was cancelled or failed: {error_param or 'no code returned'}.")
+
+    try:
+        token_resp = requests.post(GOOGLE_TOKEN_URL, data={
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": url_for("google_callback", _external=True),
+        }, timeout=10)
+        token_resp.raise_for_status()
+        access_token = token_resp.json().get("access_token")
+        if not access_token:
+            raise ValueError("回應裡沒有 access_token / no access_token in response")
+        userinfo_resp = requests.get(
+            GOOGLE_USERINFO_URL, headers={"Authorization": f"Bearer {access_token}"}, timeout=10)
+        userinfo_resp.raise_for_status()
+        info = userinfo_resp.json()
+    except Exception as e:
+        return _login_error(f"連線 Google 時發生錯誤，請稍後再試。 / Error contacting Google: {e}")
+
+    google_sub = info.get("sub")
+    email = info.get("email", "")
+    email_verified = info.get("email_verified")
+    if not google_sub or not email:
+        return _login_error("無法從 Google 取得帳號資訊，請重新登入一次。 / Couldn't get account info from Google.")
+    if email_verified is not True and str(email_verified).lower() != "true":
+        # 沒驗證的 email 不能信任是本人擁有——不擋這關等於任何人都能宣稱擁有別人的 email。
+        return _login_error(
+            "這個 Google 帳號的 email 尚未驗證，無法用來登入。 / "
+            "This Google account's email is not verified and cannot be used to sign in.")
+
+    # 用 google_sub（Google 的穩定使用者 ID，不會變動）找既有帳號，不是用 email——
+    # email 理論上可能變動，sub 才是真正穩定的識別碼。
+    username = next(
+        (u for u, d in USERS.items() if isinstance(d, dict) and d.get("google_sub") == google_sub),
+        None,
+    )
+    if username is None:
+        # 第一次用這個 Google 帳號登入：建立新帳號。刻意用 _derive_username_from_google()
+        # 衍生一個獨立的 username，絕不去比對/借用既有帳號（見該函式的說明）。
+        username = _derive_username_from_google(email)
+        USERS[username] = {
+            "auth_provider": "google",
+            "google_sub": google_sub,
+            "email": email,
+            "created_at": datetime.now().isoformat(),
+            "violation_count": 0,
+            "banned": False,
+        }
+        _save_users()
+        _ensure_user_namespace(_user_namespace(username))
+    elif USERS[username].get("banned"):
+        return _login_error(
+            "This account has been banned for repeated malicious behavior. / 此帳號因累積多次惡意行為已被封鎖。")
+
+    session["username"] = username
     return redirect("/")
 
 
@@ -4227,7 +4396,7 @@ def _enforce_ban():
         return render_template_string(
             HTML, logged_in=False, page='login',
             error="This account has been banned for repeated malicious behavior. / 此帳號因累積多次惡意行為已被封鎖。",
-            k8s=K8S_ENABLED, username='')
+            k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     return None
 
 

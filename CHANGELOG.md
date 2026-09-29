@@ -302,3 +302,20 @@ Desktop 沒開時，正常的部署請求被誤擋」的情境，修好後確認
 擋）；全部 142 個測試（138 舊 + 4 新）全過。這個修法只套用在這個分支
 （`feat/chat-unified-assistant`），同學那邊的分支要不要套用一樣的修法、以及
 兩邊分支怎麼整合，是使用者要決定的更大範圍問題，這次沒有動同學的程式碼。
+
+### 移植：Google 登入（Sign in with Google），從隊友分支移植過來
+使用者明確要求把隊友（`ericsung0428`）分支上已經做好的 Google 登入功能直接移植
+到這個分支（跟其他重疊功能不同，使用者這次是要「用隊友的版本」不是「重做」）。
+
+`web_demo.py` 新增 `_google_oauth_configured()`/`_derive_username_from_google()`/
+`/auth/google/login`/`/auth/google/callback`（CSRF state 核對、email 驗證檢查、
+用 `google_sub` 而非 email 查找既有帳號、撞名一律加後綴絕不覆蓋/合併），`login()`
+補上「這個帳號是純 Google 帳號、沒有密碼」的明確訊息。用專案已有的 `requests`
+套件手動打三個 OAuth2 端點，沒有加新依賴。登入/註冊頁新增 Google 按鈕（`.env`
+沒設定 `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` 時按鈕整個不出現）。`.env.example`
+補上申請步驟說明。
+
+驗證：移植 `tests/test_google_auth.py`（18 案例），對這個分支的 `web_demo.py`
+直接跑過全部確認通過，不是假設能用；`pytest`（160 個，142 舊 + 18 新）全過。
+詳見 `docs/security_review.md` 15 節。需要使用者自己申請 Google OAuth 憑證才能
+實測真實登入流程。
