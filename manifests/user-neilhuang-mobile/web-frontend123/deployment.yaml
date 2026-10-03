@@ -1,0 +1,34 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    gitops.k8s-platform/generated-at: '2026-10-03T09:04:33.801056'
+    gitops.k8s-platform/source: llm-generated
+  labels:
+    app: web-frontend123
+  name: web-frontend123
+  namespace: user-neilhuang-mobile
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web-frontend123
+  template:
+    metadata:
+      labels:
+        app: web-frontend123
+    spec:
+      containers:
+      - env: []
+        image: nginx:latest
+        name: web-frontend123
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
