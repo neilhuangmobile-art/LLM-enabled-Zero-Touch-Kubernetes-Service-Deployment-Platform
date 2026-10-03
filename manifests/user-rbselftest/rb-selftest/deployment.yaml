@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations:
-    gitops.k8s-platform/generated-at: '2026-10-03T13:37:03.178367'
+    gitops.k8s-platform/generated-at: '2026-10-03T13:37:05.791160'
     gitops.k8s-platform/source: llm-generated
   labels:
     app: rb-selftest
@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - env: []
-        image: nginx:1.25
+        image: nginx:1.27
         name: rb-selftest
         ports:
         - containerPort: 80
