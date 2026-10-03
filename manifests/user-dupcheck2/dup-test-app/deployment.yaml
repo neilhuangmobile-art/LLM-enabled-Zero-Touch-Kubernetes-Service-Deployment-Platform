@@ -3,14 +3,14 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations:
-    gitops.k8s-platform/generated-at: '2026-10-03T08:38:58.536647'
+    gitops.k8s-platform/generated-at: '2026-10-03T08:39:09.756818'
     gitops.k8s-platform/source: llm-generated
   labels:
     app: dup-test-app
   name: dup-test-app
   namespace: user-dupcheck2
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: dup-test-app
@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
       - env: []
-        image: nginx:latest
+        image: nginx:1.25
         name: dup-test-app
         ports:
         - containerPort: 8096
