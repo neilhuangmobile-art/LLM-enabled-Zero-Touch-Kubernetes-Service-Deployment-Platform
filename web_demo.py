@@ -2481,6 +2481,15 @@ async function pollStatus(){
   } catch(e){}
 }
 if(loggedIn){ pollStatus(); setInterval(pollStatus, 4000); }
+// 2026-10-03：使用者要求趨勢折線圖「要會動」——原本只在切換到 Dashboard 頁那一刻
+// 抓一次資料，圖畫完就不會再更新，使用者留在頁面上看不到新資料點進來。改成每 30 秒
+// 自動重撈一次，但只在 Dashboard 頁真的是目前作用中的分頁時才打 API（切到別頁就不會
+// 浪費請求），跟 Prometheus 本身 60 秒一個取樣點的頻率對齊，半分鐘內一定會看到新點。
+if(loggedIn){
+  setInterval(() => {
+    if(document.getElementById('page-dashboard')?.classList.contains('active')) loadDashboard();
+  }, 30000);
+}
 
 // ── Stats ──
 async function loadStats(){
