@@ -3332,15 +3332,27 @@ async function loadMetrics(){
 
 // ── Dashboard（2026-09-29 從隊友分支移植；沿用專案既有的靜態雙語標籤慣例，
 // 不接入動態語言切換 I18N 系統——Metrics/Pods/Deployments 等頁面本來就是這樣） ──
+// 2026-10-03：使用者要求「用量快要不足時變紅色」。統一用這個函式決定警示色，
+// 長條圖、百分比文字、已用量/剩餘空間的數字都套用同一套門檻（>=80% 橘色警告、
+// >=100% 紅色已超出），不要各處各自判斷、顏色標準兜不起來。
+function _dashWarnColor(pct){
+  if(pct == null) return '';
+  if(pct >= 100) return '#DC2626';
+  if(pct >= 80) return '#D97706';
+  return '';
+}
 function _dashPctBar(barId, labelId, usedVal, capVal){
   const bar = document.getElementById(barId), label = document.getElementById(labelId);
   if(capVal == null || usedVal == null || !capVal){
-    label.textContent = 'N/A'; bar.style.width = '0%'; return;
+    label.textContent = 'N/A'; label.style.color = ''; bar.style.width = '0%'; return;
   }
-  const pct = Math.max(0, Math.min(100, (usedVal / capVal) * 100));
+  const rawPct = (usedVal / capVal) * 100;
+  const pct = Math.max(0, Math.min(100, rawPct));
+  const color = _dashWarnColor(rawPct);
   bar.style.width = pct.toFixed(1) + '%';
-  bar.style.background = pct >= 100 ? '#DC2626' : (pct >= 80 ? '#D97706' : 'var(--green)');
+  bar.style.background = color || 'var(--green)';
   label.textContent = pct.toFixed(1) + '%';
+  label.style.color = color;
 }
 
 async function loadDashboard(){
@@ -3362,13 +3374,20 @@ async function loadDashboard(){
       return;
     }
     const cap = d.cluster_capacity, used = d.cluster_used, rem = d.cluster_remaining, src = d.cluster_used_source || {};
+    // 取 CPU/Memory 兩者裡比較吃緊的那個百分比，決定「已用量」「剩餘空間」這兩張卡
+    // 數字要不要變色——只要有一項資源快不夠了，就該整體警示，不是兩個都超標才警示。
+    const cpuPct = cap.cpu_cores ? (used.cpu_cores / cap.cpu_cores) * 100 : 0;
+    const memPct = cap.mem_gib ? (used.mem_gib / cap.mem_gib) * 100 : 0;
+    const warnColor = _dashWarnColor(Math.max(cpuPct, memPct));
     document.getElementById('dash-capacity').textContent = cap.cpu_cores + ' cores / ' + cap.mem_gib + ' GiB';
-    document.getElementById('dash-used').textContent = used.cpu_cores + ' cores / ' + used.mem_gib + ' GiB';
+    const usedEl = document.getElementById('dash-used');
+    usedEl.textContent = used.cpu_cores + ' cores / ' + used.mem_gib + ' GiB';
+    usedEl.style.color = warnColor;
     document.getElementById('dash-used-label').textContent =
       'CPU ('+(src.cpu==='usage'?'實際用量 actual':'requests')+') / Memory ('+(src.mem==='usage'?'實際用量 actual':'requests')+')';
     const remEl = document.getElementById('dash-remaining');
     remEl.textContent = rem.cpu_cores + ' cores / ' + rem.mem_gib + ' GiB';
-    remEl.style.color = (rem.cpu_cores < 0 || rem.mem_gib < 0) ? '#DC2626' : '';
+    remEl.style.color = warnColor;
     _dashPctBar('dash-cpu-bar', 'dash-cpu-pct-label', used.cpu_cores, cap.cpu_cores);
     _dashPctBar('dash-mem-bar', 'dash-mem-pct-label', used.mem_gib, cap.mem_gib);
 
