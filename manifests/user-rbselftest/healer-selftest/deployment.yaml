@@ -1,0 +1,34 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    gitops.k8s-platform/generated-at: '2026-10-03T13:52:19.681617'
+    gitops.k8s-platform/source: llm-generated
+  labels:
+    app: healer-selftest
+  name: healer-selftest
+  namespace: user-rbselftest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: healer-selftest
+  template:
+    metadata:
+      labels:
+        app: healer-selftest
+    spec:
+      containers:
+      - env: []
+        image: nginx:this-tag-does-not-exist-xyz
+        name: healer-selftest
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
