@@ -233,6 +233,25 @@ def _check_naming(doc: dict, policy: dict) -> tuple:
     if max_len and len(name) > max_len:
         errors.append(f"名稱 '{name}' 長度 {len(name)} 超過上限 {max_len}（K8s DNS label 規範）")
 
+    # 2026-10-03 實測發現：使用者用純數字開頭的 app_name（例如「123」）部署，
+    # Deployment 名稱本身是合法的（DNS-1123 label，允許數字開頭），但這個系統
+    # 一定會額外建一個 "<app_name>-svc" 的 Service，Service 名稱用的是更嚴格的
+    # DNS-1035 label 規則——必須以小寫英文字母開頭。之前這裡完全沒檢查格式
+    # （只查 denied_names/max_name_length），導致這類名稱一路通過 orchestrator/
+    # guardian/dry-run 三層審核，GitOps manifest 都寫進 git 了，最後真的呼叫
+    # K8s API 才報 422 失敗——使用者看到的是一整段原始 K8s API 錯誤 JSON，
+    # 不是有意義的訊息。Service 的 DNS-1035 規則比 Deployment 的 DNS-1123 規則
+    # 嚴格（一定要字母開頭），所以用 Service 的規則檢查，可以在最早期就擋下
+    # 「Deployment 名稱合法但套用後建立的 Service 名稱不合法」這種情況。
+    dns1035 = re.compile(r"^[a-z]([-a-z0-9]*[a-z0-9])?$")
+    if not dns1035.match(name):
+        errors.append(
+            f"名稱 '{name}' 格式不符合 K8s 命名規則：必須以小寫英文字母開頭，"
+            f"只能包含小寫字母、數字、連字號（-），結尾不能是連字號"
+            f"（系統會自動建立對應的 Service，Service 名稱規則比 Deployment 更嚴格，"
+            f"一定要以字母開頭，例如「123」要改成「app-123」）"
+        )
+
     return errors, warnings
 
 

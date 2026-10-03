@@ -151,3 +151,44 @@ class TestNamingAndImagePolicy:
         custom_policy = {"images": {"allowed_registries": ["docker.io/library/"]}}
         errors, _ = _check_images(manifest, custom_policy)
         assert any("不在允許的倉庫清單內" in e for e in errors)
+
+    def test_digit_start_name_is_blocked(self):
+        """2026-10-03 實測發現：Deployment 名稱本身允許數字開頭（DNS-1123），但這個
+        系統一定會另外建一個 "<name>-svc" 的 Service，Service 名稱用更嚴格的
+        DNS-1035（一定要字母開頭）——純數字名稱（例如「123」）會在最後真的呼叫
+        K8s API 才失敗，不應該讓它通過這裡的靜態檢查。"""
+        manifest = {
+            "apiVersion": "apps/v1", "kind": "Deployment",
+            "metadata": {"name": "123"},
+            "spec": {"replicas": 1, "template": {"spec": {"containers": [
+                {"name": "app", "image": "nginx:1.25"},
+            ]}}},
+        }
+        result = validate_yaml(manifest)
+        assert result["ok"] is False
+        assert any("必須以小寫英文字母開頭" in e for e in result["errors"])
+
+    def test_name_ending_with_hyphen_is_blocked(self):
+        manifest = {
+            "apiVersion": "apps/v1", "kind": "Deployment",
+            "metadata": {"name": "app-"},
+            "spec": {"replicas": 1, "template": {"spec": {"containers": [
+                {"name": "app", "image": "nginx:1.25"},
+            ]}}},
+        }
+        result = validate_yaml(manifest)
+        assert result["ok"] is False
+        assert any("必須以小寫英文字母開頭" in e for e in result["errors"])
+
+    def test_letter_start_name_with_digits_is_allowed(self):
+        """字母開頭、中間含數字跟連字號的名稱（例如「app-123」）應該正常通過，
+        不能因為新加的格式檢查誤擋合法名稱。"""
+        manifest = {
+            "apiVersion": "apps/v1", "kind": "Deployment",
+            "metadata": {"name": "app-123"},
+            "spec": {"replicas": 1, "template": {"spec": {"containers": [
+                {"name": "app", "image": "nginx:1.25"},
+            ]}}},
+        }
+        result = validate_yaml(manifest)
+        assert result["ok"] is True

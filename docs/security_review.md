@@ -848,6 +848,42 @@ API 的 `requests.post`/`requests.get`），涵蓋 state 不符拒絕、`error` 
 
 ---
 
+## 17. app_name 數字開頭時，三層審核全部放行，最後才在真正呼叫 K8s API 時失敗
+
+**風險**：使用者用純數字開頭的 app_name（例如「123」）部署，orchestrator/guardian/
+dry-run 三層審核全部通過、GitOps manifest 都寫進 git 了，最後真的呼叫 K8s API
+建立 Service 時才報 422 失敗——因為 Deployment 名稱本身符合 K8s 規則（DNS-1123
+label，允許數字開頭），但這個系統一定會另外建一個 `<app_name>-svc` 的 Service，
+Service 名稱用的是更嚴格的 DNS-1035 規則（必須以小寫英文字母開頭）。使用者看到
+的是一整段原始 K8s API 錯誤 JSON，不是有意義的訊息。
+
+**為什麼重要**：這是這份文件第 6、12、14 節記錄過的同一種模式——系統宣稱有
+「三層安全防護」，但其中一類輸入錯誤完全沒被任何一層攔截，一路放行到最後一步
+才失敗，而且失敗訊息對新手毫無意義，違反 AGENT_RULES.md「不能有靜默失敗」、
+「講怎麼辦不是只講壞了」兩條核心原則。更麻煩的是 GitOps commit 已經發生在
+K8s 實際失敗之前，manifest 以「已提交但部署失敗」的矛盾狀態留在 git 歷史裡。
+
+**解決方式**：在三個地方補上同一條格式規則（`^[a-z]([-a-z0-9]*[a-z0-9])?$`，
+長度上限 59，含 `-svc` 後綴仍在 K8s 63 字元上限內）：
+1. `web_demo.py` 的 `_prepare_deploy()`——最早期擋下，連 GitOps commit 都不會碰到。
+2. 前端 `flowToReview()` 的 client-side 即時檢查——使用者送出前就看到錯誤，不用
+   等伺服器回應。
+3. `guardian/yaml_validator.py` 的 `_check_naming()`——防護網，防止其他呼叫路徑
+   （例如未來新增的 API）繞過前兩層。
+錯誤訊息中英雙語，講清楚原因（Service 命名規則比 Deployment 嚴格）跟具體修法
+（範例「123」→「app-123」）。順手在 App name 輸入框下方加了格式提示（規則+範例），
+讓使用者送出前就看得到，不用等失敗才知道規則是什麼。
+
+**驗證**：新增 `tests/test_yaml_validator.py` 3 案例（數字開頭擋下、結尾連字號擋下、
+字母開頭含數字的合法名稱正常放行不誤擋）；真實重現原本的失敗情境
+（`app_name="123"`），確認修好前會一路通過到最後才失敗，修好後第一步就被擋下並給出
+正確訊息；對照組（`app_name="app-123"`）確認正常部署不受影響；`pytest`
+（173 個，170 舊 + 3 新）全過。**額外清理**：使用者實測時留下的殘留物
+（Deployment「123」在 `user-demo` namespace 建立成功但沒有對應 Service）已確認
+刪除；對應的 GitOps git commit 依專案慣例（見 11 節）保留當稽核軌跡，沒有刪除歷史。
+
+---
+
 ## 尚待排查（優先度較低，不是資源受限，只是還沒排到）
 
 - `/diagnose` 端點雖然也套用了跟 `/chat` 一樣的文字淨化，但沒有等價的

@@ -1281,6 +1281,7 @@ tr:hover td{background:var(--bg)}
 .deploy-confirm-sub{font-size:12px;color:var(--text2);margin-top:2px}
 .deploy-confirm-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
 .deploy-confirm-field label{display:block;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
+.field-hint{font-size:10.5px;color:var(--text3);margin-top:3px;line-height:1.4}
 .deploy-confirm-field input{width:100%;border:1px solid var(--border2);border-radius:9px;padding:9px 10px;font-family:'DM Mono',monospace;font-size:12.5px;background:#fff;outline:none}
 .deploy-confirm-field input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(16,163,127,.12)}
 .deploy-confirm-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
@@ -3704,7 +3705,9 @@ function deployConfirmHTML(id, parsed, originalText){
       <span class="badge pending">Needs confirmation</span>
     </div>
     <div class="deploy-confirm-grid">
-      <div class="deploy-confirm-field"><label>App name</label><input data-field="app_name" value="${app}" placeholder="my-app"></div>
+      <div class="deploy-confirm-field"><label>App name</label><input data-field="app_name" value="${app}" placeholder="my-app">
+        <div class="field-hint">必須小寫英文字母開頭，只能用小寫字母/數字/連字號，例如 <code>app-123</code> / Must start with a lowercase letter, e.g. <code>app-123</code></div>
+      </div>
       <div class="deploy-confirm-field"><label>Image</label><input data-field="image" value="${image}" placeholder="nginx:latest"></div>
       <div class="deploy-confirm-field"><label>Pods</label><input data-field="pods" type="number" min="1" max="100" value="${pods}"></div>
       <div class="deploy-confirm-field"><label>Port</label><input data-field="port" type="number" min="1" max="65535" value="${port}"></div>
@@ -3910,7 +3913,9 @@ function renderSpecCard(flow){
       <div class="deploy-confirm-sub">\u6709\u932f\u5c31\u76f4\u63a5\u6539\uff0c\u7136\u5f8c\u6309\u300c\u4e0b\u4e00\u6b65\u300d\u770b\u8cc7\u6e90\u7528\u91cf\u8207\u5be9\u67e5\u3002<br>Edit anything wrong, then continue to the resource &amp; review step.</div>
     </div><span class="badge pending">Step 1 / 3</span></div>
     <div class="deploy-confirm-grid">
-      <div class="deploy-confirm-field"><label>App name</label><input data-field="app_name" value="${g('app_name')}" placeholder="my-app" ${disabled}></div>
+      <div class="deploy-confirm-field"><label>App name</label><input data-field="app_name" value="${g('app_name')}" placeholder="my-app" ${disabled}>
+        <div class="field-hint">必須小寫英文字母開頭，只能用小寫字母/數字/連字號，例如 <code>app-123</code> / Must start with a lowercase letter, e.g. <code>app-123</code></div>
+      </div>
       <div class="deploy-confirm-field"><label>Image</label><input data-field="image" value="${g('image')}" placeholder="nginx:latest" ${disabled}></div>
       <div class="deploy-confirm-field"><label>Pods</label><input data-field="pods" type="number" min="1" max="100" value="${g('pods')||1}" ${disabled}></div>
       <div class="deploy-confirm-field"><label>Port</label><input data-field="port" type="number" min="1" max="65535" value="${g('port')||80}" ${disabled}></div>
@@ -4128,6 +4133,16 @@ async function flowToReview(id){
   const {root, spec} = data;
   setFlowError(root, '');
   if(!spec.app_name || !spec.image){ setFlowError(root, 'App name \u548c image \u5fc5\u586b / required.'); return; }
+  // 2026-10-03\uff1aapp_name \u4e00\u5b9a\u8981\u5b57\u6bcd\u958b\u982d\u2014\u2014\u7cfb\u7d71\u6703\u53e6\u5916\u5efa\u4e00\u500b\u300c<app_name>-svc\u300d\u7684
+  // Service\uff0cService \u540d\u7a31\u898f\u5247\u6bd4 Deployment \u66f4\u56b4\u683c\uff08DNS-1035\uff0c\u4e00\u5b9a\u8981\u5b57\u6bcd\u958b\u982d\uff09\uff0c
+  // \u5728\u9019\u88e1\u5148\u64cb\uff0c\u4f7f\u7528\u8005\u4e0d\u7528\u7b49\u9001\u51fa\u53bb\u624d\u77e5\u9053\u3002\u8ddf\u5f8c\u7aef _prepare_deploy() \u540c\u4e00\u689d\u898f\u5247\u3002
+  if(!/^[a-z]([-a-z0-9]*[a-z0-9])?$/.test(spec.app_name) || spec.app_name.length > 59){
+    setFlowError(root,
+      `App name\u300c${spec.app_name}\u300d\u683c\u5f0f\u4e0d\u7b26\u5408 K8s \u547d\u540d\u898f\u5247\uff1a\u5fc5\u9808\u4ee5\u5c0f\u5beb\u82f1\u6587\u5b57\u6bcd\u958b\u982d\uff0c\u53ea\u80fd\u5305\u542b\u5c0f\u5beb\u5b57\u6bcd\u3001\u6578\u5b57\u3001` +
+      `\u9023\u5b57\u865f\uff08-\uff09\uff0c\u7d50\u5c3e\u4e0d\u80fd\u662f\u9023\u5b57\u865f\uff08\u7cfb\u7d71\u6703\u81ea\u52d5\u5efa\u7acb\u5c0d\u61c9\u7684 Service\uff0c\u540d\u7a31\u898f\u5247\u6bd4 Deployment \u66f4\u56b4\u683c\uff09\u3002` +
+      `\u4f8b\u5982\u300c123\u300d\u8981\u6539\u6210\u300capp-123\u300d\u3002 / App name must start with a lowercase letter.`);
+    return;
+  }
   if(!Number.isInteger(spec.pods) || spec.pods<1 || spec.pods>100){ setFlowError(root, 'Pods \u5fc5\u9808\u5728 1\u2013100 \u4e4b\u9593.'); return; }
   if(!Number.isInteger(spec.port) || spec.port<1 || spec.port>65535){ setFlowError(root, 'Port \u5fc5\u9808\u5728 1\u201365535 \u4e4b\u9593.'); return; }
   if(spec.memory && !/^\d+(Mi|Gi|Ki|M|G)$/.test(spec.memory)){ setFlowError(root, 'Memory \u683c\u5f0f\u9808\u5982 128Mi \u6216 1Gi.'); return; }
@@ -5166,6 +5181,27 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
     missing = [k for k in ("app_name", "image", "pods") if not parsed.get(k)]
     if missing:
         return parsed, enriched, None, ({"error": f"Missing required field(s): {', '.join(missing)}", "parsed": enriched}, 422)
+    # 2026-10-03：app_name 格式不合法時（例如純數字開頭的「123」），過去完全沒在這裡
+    # 擋下——Deployment 名稱本身符合 K8s 規則，但這個系統一定會另外建一個
+    # "<app_name>-svc" 的 Service，Service 名稱用的是更嚴格的 DNS-1035 規則
+    # （一定要字母開頭），導致一路通過三層審核、GitOps manifest 都寫進 git 了，
+    # 最後真的呼叫 K8s API 才失敗，使用者看到一整段原始錯誤 JSON。這裡提早擋下，
+    # 給清楚的原因跟修法，不用等到最後一步才知道（guardian/yaml_validator.py 的
+    # _check_naming 也補了同一個檢查當防護網，避免其他路徑繞過這裡）。
+    if not re.match(r"^[a-z]([-a-z0-9]*[a-z0-9])?$", str(parsed["app_name"])) or len(str(parsed["app_name"])) > 59:
+        return parsed, enriched, None, ({
+            "error": (
+                f"App name「{parsed['app_name']}」格式不符合 K8s 命名規則：必須以小寫英文字母開頭，"
+                f"只能包含小寫字母、數字、連字號（-），結尾不能是連字號，長度不超過 59 字元"
+                f"（系統會自動建立對應的 Service，名稱規則比 Deployment 更嚴格，一定要字母開頭）。"
+                f"例如「123」要改成「app-123」。 / "
+                f"App name \"{parsed['app_name']}\" doesn't meet K8s naming rules: must start with a lowercase "
+                f"letter, contain only lowercase letters/digits/hyphens, not end with a hyphen, and be at most "
+                f"59 characters (the system auto-creates a matching Service, whose naming rule is stricter than "
+                f"Deployment and requires starting with a letter)."
+            ),
+            "parsed": enriched,
+        }, 422)
     try:
         parsed["pods"] = int(parsed["pods"])
         parsed["port"] = int(parsed.get("port", 80))

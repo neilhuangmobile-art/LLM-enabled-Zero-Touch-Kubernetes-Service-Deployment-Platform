@@ -356,3 +356,33 @@ K8s 跟 Prometheus 都連上後，建立測試帳號實測 `/api/dashboard`，�
 （節點 20 核/15.39Gi，已用量 0.5 核 requests/1.6Gi Prometheus 實際用量——`mem`
 來源正確標成 `"usage"`，證實 Kubecost 式取較大值邏輯真的在跑，不是死代碼）；
 側邊欄 Dashboard 導覽項跟頁面元素確認存在；測試帳號與 namespace 已清除。
+
+## 2026-10-03
+
+### 修復：app_name 數字開頭時，部署到最後一步才失敗，且錯誤訊息是原始 K8s API JSON
+使用者實際部署時用了純數字開頭的 app_name（「123」），畫面顯示「GitOps 已提交，但
+K8s 實際部署失敗」，附一整段原始 K8s API 422 錯誤 JSON。追查發現：Deployment 名稱
+本身符合 K8s 規則（DNS-1123，允許數字開頭），但這個系統一定會另外建一個
+`<app_name>-svc` 的 Service，Service 名稱用更嚴格的 DNS-1035 規則（一定要英文字母
+開頭）。這個格式檢查之前完全沒做，一路通過 orchestrator/guardian/dry-run 三層審核、
+GitOps manifest 都寫進 git 了，最後真的呼叫 K8s API 才報錯。
+
+兩處補上格式驗證：`web_demo.py` 的 `_prepare_deploy()`（最早期擋下，連 GitOps 都不會
+碰到）+ 前端 `flowToReview()` 的 client-side 即時檢查（送出前就擋）+ `guardian/
+yaml_validator.py` 的 `_check_naming()`（防護網，防止其他路徑繞過前面兩層）。三處
+用同一條規則：`^[a-z]([-a-z0-9]*[a-z0-9])?$`，長度上限 59（含 `-svc` 後綴後仍在
+K8s 63 字元上限內）。錯誤訊息中英雙語，講清楚原因（Service 命名規則更嚴格）跟修法
+（範例「123」→「app-123」）。
+
+順手修了使用者要求的另一件事：App name 輸入框下方新增格式提示（「必須小寫英文
+字母開頭...例如 app-123」），讓使用者送出前就看得到規則跟範例，不用等失敗才知道。
+
+也清掉了使用者實測時留下的殘留物：Deployment「123」在 `user-demo` namespace
+裡建立成功但沒有對應 Service（部分失敗的殘留狀態），已確認刪除；對應的 GitOps git
+commit 依專案慣例保留當稽核軌跡，沒有刪除歷史。
+
+驗證：新增 `tests/test_yaml_validator.py` 3 案例（數字開頭擋下、結尾連字號擋下、
+字母開頭含數字正常通過不誤擋）；`pytest`（173 個，170 舊 + 3 新）全過；真實重現
+原本的失敗情境（app_name="123"）確認現在會在第一步就被擋下並給出正確訊息，對照組
+（app_name="app-123"）確認正常放行不受影響；前端格式提示文字確認正確顯示在兩個
+部署表單裡。
