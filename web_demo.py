@@ -3719,8 +3719,14 @@ function renderMessages(){
   const ch = currentChat();
   if(!ch || !ch.messages.length){
     const t = I18N[uiLang];
+    // 2026-10-03 實測發現的真實 bug：這個 onclick 屬性本身是雙引號包起來
+    // （onclick="..."），裡面卻塞進 JSON.stringify(c.send) 產生的「雙引號字串」
+    // （例如 "deploy 3 nginx:latest..."）——HTML 屬性解析到第一個雙引號就會提前
+    // 結束屬性值，後面整段變成語法錯誤的裸露文字，onclick 實際上被截斷成不完整
+    // 的 JS，點了完全沒反應。改成外層屬性用單引號、裡面的 JS 字串一律用雙引號
+    // （跟 showPodDetail 那處既有、驗證過安全的寫法一致），兩種引號不衝突。
     const cardsHtml = t.cards.map(c =>
-      `<div class="prompt-card" onclick="document.getElementById('chat-input').value=${JSON.stringify(c.send)};sendChat()">
+      `<div class="prompt-card" onclick='document.getElementById("chat-input").value=${JSON.stringify(c.send)};sendChat()'>
          <strong>${escHtml(c.title)}</strong><span>${escHtml(c.example)}</span>
        </div>`).join('');
     msgs.innerHTML = `<div class="chat-empty">
