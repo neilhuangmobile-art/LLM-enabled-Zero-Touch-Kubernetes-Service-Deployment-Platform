@@ -1,0 +1,34 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    gitops.k8s-platform/generated-at: '2026-10-03T15:29:49.625208'
+    gitops.k8s-platform/source: llm-generated
+  labels:
+    app: demo-oom-heal
+  name: demo-oom-heal
+  namespace: user-neilhuang-mobile
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-oom-heal
+  template:
+    metadata:
+      labels:
+        app: demo-oom-heal
+    spec:
+      containers:
+      - env: []
+        image: nginx:latest
+        name: demo-oom-heal
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            cpu: 100m
+            memory: 8Mi
+          requests:
+            cpu: 100m
+            memory: 8Mi
