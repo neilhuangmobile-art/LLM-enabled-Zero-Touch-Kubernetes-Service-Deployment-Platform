@@ -1141,8 +1141,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .form-group label{display:block;font-size:13px;font-weight:500;margin-bottom:6px;color:var(--text)}
 .form-group input{width:100%;padding:10px 14px;border:1px solid var(--border2);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;outline:none;transition:border .15s}
 .form-group input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.1)}
-.btn-primary{width:100%;padding:11px;background:var(--green);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:background .15s}
+.btn-primary{width:100%;padding:11px;background:var(--green);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:background .15s;display:flex;align-items:center;justify-content:center;gap:8px}
 .btn-primary:hover{background:#15803D}
+.btn-primary:disabled{opacity:.75;cursor:default}
+.btn-spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
 .auth-link{text-align:center;margin-top:20px;font-size:13px;color:var(--text2)}
 .auth-link a{color:var(--green);text-decoration:none;font-weight:500}
 .auth-error{background:var(--red-light);color:var(--red);padding:10px 14px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:16px}
@@ -1608,6 +1610,7 @@ html,body{height:100%;overflow:hidden}
       <div class="user-info">
         <div class="user-avatar">{{ username[0].upper() }}</div>
         <div class="user-name">{{ username }}</div>
+        <button class="logout-btn" type="button" onclick="openAccountModal()" title="帳號設定 / Account settings">⚙</button>
         <form method="POST" action="/auth/logout" style="margin:0">
           <button class="logout-btn" type="submit">Out</button>
         </form>
@@ -2079,6 +2082,39 @@ html,body{height:100%;overflow:hidden}
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-body" id="modal-pod-body"></div>
+  </div>
+</div>
+
+<!-- Account Settings Modal：忘記密碼無法自助救回（user.json 存的是單向雜湊，
+     沒辦法反推），目前可行的自救管道是「先綁定 Google 帳號，之後忘記密碼時
+     改用『使用 Google 登入』」，所以這裡先做帳號綁定，不是寄送重設信（專案
+     沒有接 SMTP，寄信目前做不到）。 -->
+<div class="modal-bg" id="account-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">帳號設定 / Account Settings</div>
+      <button class="modal-close" onclick="closeAccountModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:4px">使用者名稱 / Username</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:18px">{{ username }}</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:8px">Google 帳號綁定 / Google Account</div>
+      {% if google_email %}
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);font-size:13px">
+          <span style="color:var(--green)">✓</span>
+          <span>已綁定 / Linked: <strong>{{ google_email }}</strong></span>
+        </div>
+        <div style="font-size:12px;color:var(--text3);margin-top:8px">忘記密碼時，可以直接在登入頁用「使用 Google 登入」登入這個帳號。 / If you forget your password, use "Sign in with Google" on the login page instead.</div>
+      {% elif google_login_available %}
+        <a href="/auth/google/bind" class="google-btn" style="margin-top:4px">
+          <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.09-1.8 2.73v2.27h2.92c1.7-1.57 2.68-3.88 2.68-6.64z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.27c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.71H.96v2.34C2.44 15.98 5.48 18 9 18z"/><path fill="#FBBC05" d="M3.97 10.7c-.18-.54-.28-1.11-.28-1.7s.1-1.16.28-1.7V4.96H.96A8.996 8.996 0 000 9c0 1.45.35 2.83.96 4.04l3.01-2.34z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.59-2.59C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l3.01 2.34C4.68 5.16 6.66 3.58 9 3.58z"/></svg>
+          綁定 Google 帳號 / Link Google Account
+        </a>
+        <div style="font-size:12px;color:var(--text3);margin-top:8px">綁定後，萬一忘記密碼，可以改用「使用 Google 登入」救回這個帳號。 / Once linked, you can recover this account with "Sign in with Google" if you ever forget your password.</div>
+      {% else %}
+        <div style="font-size:12px;color:var(--text3)">尚未設定 Google 登入功能（需要管理員在 .env 設定 GOOGLE_CLIENT_ID/SECRET）。 / Google Sign-In isn't configured yet (admin needs to set GOOGLE_CLIENT_ID/SECRET in .env).</div>
+      {% endif %}
+    </div>
   </div>
 </div>
 
@@ -2860,6 +2896,10 @@ function showPodDetail(jsonStr){
 function closeModal(){ document.getElementById('pod-modal').classList.remove('open'); }
 document.getElementById('pod-modal')?.addEventListener('click', function(e){ if(e.target===this) closeModal(); });
 
+function openAccountModal(){ document.getElementById('account-modal')?.classList.add('open'); }
+function closeAccountModal(){ document.getElementById('account-modal')?.classList.remove('open'); }
+document.getElementById('account-modal')?.addEventListener('click', function(e){ if(e.target===this) closeAccountModal(); });
+
 // ── Deployments ──
 let _depsAll = [];
 let _depsPage = 1;
@@ -3617,8 +3657,8 @@ function renderMessages(){
   const ch = currentChat();
   if(!ch || !ch.messages.length){
     const t = I18N[uiLang];
-    const cardsHtml = t.cards.map(c =>
-      `<div class="prompt-card" onclick="document.getElementById('chat-input').value=${JSON.stringify(c.send)};sendChat()">
+    const cardsHtml = t.cards.map((c, i) =>
+      `<div class="prompt-card" onclick="usePromptCard(${i})">
          <strong>${escHtml(c.title)}</strong><span>${escHtml(c.example)}</span>
        </div>`).join('');
     msgs.innerHTML = `<div class="chat-empty">
@@ -3631,6 +3671,16 @@ function renderMessages(){
   }
   msgs.innerHTML = ch.messages.map(m=>renderMsgHTML(m.role, m.content, m.sources)).join('');
   msgs.scrollTop = msgs.scrollHeight;
+}
+
+// 用索引取卡片內容，不要把 JSON.stringify() 的結果直接塞進 onclick="..." 屬性裡——
+// 字串本身帶的雙引號會把 onclick 屬性提前截斷，之前就是這樣導致卡片點了沒反應。
+function usePromptCard(i){
+  const t = I18N[uiLang];
+  const c = t.cards && t.cards[i];
+  if(!c) return;
+  document.getElementById('chat-input').value = c.send;
+  sendChat();
 }
 
 function renderSourcesHTML(sources){
@@ -3652,10 +3702,57 @@ function renderMsgHTML(role, content, sources){
   if(role==='user'){
     return `<div class="msg user" style="margin-bottom:16px"><div class="msg-avatar">U</div><div class="msg-bubble">${escHtml(content)}</div></div>`;
   }
-  return `<div class="msg ai" style="margin-bottom:16px"><div class="msg-avatar">K</div><div class="msg-bubble" style="white-space:pre-wrap">${content}${renderSourcesHTML(sources)}</div></div>`;
+  // content 不是單純文字：大多數訊息（部署卡片、Pod 詳情、健康檢查結果……）是
+  // 前端自己組好的 HTML，只有 runQA() 的自然語言回覆會先經過 renderMarkdown()
+  // 轉成 HTML 再存進來，所以這裡統一當成已經是安全 HTML，直接插入、不要再跳脫。
+  return `<div class="msg ai" style="margin-bottom:16px"><div class="msg-avatar">K</div><div class="msg-bubble">${content}${renderSourcesHTML(sources)}</div></div>`;
 }
 
 function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// 輕量 markdown 渲染：只處理聊天室常見的語法（粗體/斜體/行內code/code block/
+// 連結/清單/標題），不接外部套件（整個頁面刻意不依賴任何 CDN）。所有文字一律先
+// escHtml 過一輪才組進 HTML，模型輸出裡若混進 <script> 之類的內容也不會被當成
+// 真的標籤執行。
+function inlineMd(text){
+  let s = escHtml(text);
+  s = s.replace(/`([^`]+)`/g, '<code style="background:var(--bg);padding:1px 5px;border-radius:4px">$1</code>');
+  s = s.replace(/\*\*([^\n]+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[^*\w])\*([^\s*][^*\n]*?)\*(?!\*)/g, '$1<em>$2</em>');
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  return s;
+}
+
+function renderMarkdown(raw){
+  if(!raw) return '';
+  const codeBlocks = [];
+  const withoutFences = String(raw).replace(/```[^\n]*\n?([\s\S]*?)```/g, (m, code) => {
+    codeBlocks.push(code.replace(/\n$/, ''));
+    return '\u0000CB' + (codeBlocks.length - 1) + '\u0000';
+  });
+
+  let html = '';
+  let inList = false;
+  for(const line of withoutFences.split('\n')){
+    const li = line.match(/^\s*[-*]\s+(.+)/);
+    if(li){
+      if(!inList){ html += '<ul style="margin:6px 0;padding-left:20px">'; inList = true; }
+      html += '<li>' + inlineMd(li[1]) + '</li>';
+      continue;
+    }
+    if(inList){ html += '</ul>'; inList = false; }
+    const h = line.match(/^(#{1,3})\s+(.+)/);
+    if(h){ html += `<div style="font-weight:700;margin:8px 0 4px">${inlineMd(h[2])}</div>`; continue; }
+    if(line.trim()===''){ html += '<br>'; continue; }
+    html += inlineMd(line) + '<br>';
+  }
+  if(inList) html += '</ul>';
+
+  html = html.replace(/\u0000CB(\d+)\u0000/g, (m, i) =>
+    '<pre style="white-space:pre-wrap;background:var(--bg);border-radius:8px;padding:10px;margin:6px 0;overflow-x:auto"><code>' +
+    escHtml(codeBlocks[Number(i)]) + '</code></pre>');
+  return html;
+}
 
 function appendMsg(role, content, sources){
   const ch = currentChat();
@@ -3812,6 +3909,13 @@ const READ_ACTIONS = ['list_pods','list_deployments','gitops_log','cluster_metri
 
 function matchClientRule(text){
   const t = text.trim();
+  // 概念性/解釋性問題（例如「Explain Deployment vs Service」）不要交給底下這些
+  // 抓資源名稱的 regex——「deployment vs」會被 describe_deployment 規則誤判成
+  // 「查一個叫 vs 的 deployment」，查不到就回「找不到 deployment 'vs'」。這類問題
+  // 一律直接回傳 null，交給後端 /api/intent 用模型判斷語意。
+  if(/^(explain|what\s+is|what'?s|describe\s+the\s+difference|compare|什麼是|解釋|比較|差異|區別|說明(?:一下)?)\b/i.test(t)){
+    return null;
+  }
   const rules = [
     ['list_pods', /^(list|show|\u67e5\u770b|\u986f\u793a|\u5217\u51fa)\s*(all\s*|\u6240\u6709|\u5168\u90e8)?\s*(pods?|\u5bb9\u5668)/i, null],
     ['list_deployments', /^(list|show|\u67e5\u770b|\u986f\u793a|\u5217\u51fa)\s*(all\s*|\u6240\u6709|\u5168\u90e8)?\s*(deploy(ment)?s?|\u90e8\u7f72)/i, null],
@@ -4389,7 +4493,7 @@ async function runQA(text){
     const hist = (currentChat()?.messages||[]).slice(-10).map(m=>({role:m.role==='assistant'?'assistant':'user',content:m.content}));
     const r = await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text, history:hist})});
     const d = await r.json();
-    appendMsg('assistant', d.reply||d.error||'No response', d.sources);
+    appendMsg('assistant', renderMarkdown(d.reply||d.error||'No response'), d.sources);
   }catch(e){ appendMsg('assistant','Connection error: '+e); }
 }
 
@@ -4428,6 +4532,28 @@ async function sendChat(){
 
 
 window.addEventListener('DOMContentLoaded', function(){
+  // 登入/註冊表單是整頁 POST（沒有用 AJAX），送出後到頁面刷新中間會有一小段空白
+  // 等待，這裡只是立刻給視覺回饋（按鈕 disable + spinner），不影響原本的送出流程。
+  document.querySelectorAll('.auth-card form').forEach(function(f){
+    f.addEventListener('submit', function(){
+      const btn = f.querySelector('button[type=submit]');
+      if(!btn) return;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="btn-spinner"></span>' + (uiLang === 'en' ? 'Please wait...' : '請稍候...');
+    });
+  });
+
+  const googleBind = new URLSearchParams(location.search).get('google_bind');
+  if(googleBind){
+    const msgs = {
+      success: uiLang === 'en' ? 'Google account linked. You can now sign in with Google if you forget your password.' : '✅ Google 帳號綁定成功！忘記密碼時可以改用「使用 Google 登入」。',
+      taken: uiLang === 'en' ? 'This Google account is already linked to a different account.' : '⚠️ 這個 Google 帳號已經綁定在另一個帳號上了。',
+      error: uiLang === 'en' ? 'Failed to link Google account — please sign in again and retry.' : '❌ Google 帳號綁定失敗，請重新登入後再試一次。',
+    };
+    alert(msgs[googleBind] || msgs.error);
+    history.replaceState(null, '', location.pathname);
+  }
+
   if(loggedIn){
     applyLang();
     initChats();
@@ -4444,7 +4570,12 @@ window.addEventListener('DOMContentLoaded', function(){
 def index():
     if "username" not in session:
         return render_template_string(HTML, logged_in=False, page='login', error=None, k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
-    return render_template_string(HTML, logged_in=True, page='app', error=None, k8s=K8S_ENABLED, username=session["username"])
+    user_rec = USERS.get(session["username"])
+    user_rec = user_rec if isinstance(user_rec, dict) else {}
+    google_email = user_rec.get("email") if user_rec.get("google_sub") else None
+    return render_template_string(
+        HTML, logged_in=True, page='app', error=None, k8s=K8S_ENABLED, username=session["username"],
+        google_login_available=_google_oauth_configured(), google_email=google_email)
 
 @app.route("/auth/register", methods=["GET","POST"])
 def register():
@@ -4521,13 +4652,14 @@ def _google_config_error_page():
         k8s=K8S_ENABLED, username='', google_login_available=False)
 
 
-@app.route("/auth/google/login")
-def google_login():
-    if not _google_oauth_configured():
-        return _google_config_error_page()
+def _start_google_oauth(intent):
+    """intent='login'（登入/註冊，查無既有帳號就新建）或'bind'（幫目前已登入的
+    帳號綁定 Google，供忘記密碼時改用 Google 登入救回帳號）。callback 用
+    session 存的 intent 決定分支，不是用 query string——避免被竄改。"""
     # CSRF 防護：標準 OAuth state 參數，callback 時核對，不符就拒絕。
     state = secrets.token_urlsafe(24)
     session["google_oauth_state"] = state
+    session["google_oauth_intent"] = intent
     params = {
         "client_id": GOOGLE_CLIENT_ID,
         "redirect_uri": url_for("google_callback", _external=True),
@@ -4539,12 +4671,35 @@ def google_login():
     return redirect(f"{GOOGLE_AUTH_URL}?{urllib.parse.urlencode(params)}")
 
 
+@app.route("/auth/google/login")
+def google_login():
+    if not _google_oauth_configured():
+        return _google_config_error_page()
+    return _start_google_oauth("login")
+
+
+@app.route("/auth/google/bind")
+def google_bind():
+    """給已登入使用者在帳號設定裡主動綁定 Google 信箱用，不是公開的登入入口。"""
+    if "username" not in session:
+        return redirect("/")
+    if not _google_oauth_configured():
+        return _google_config_error_page()
+    return _start_google_oauth("bind")
+
+
 @app.route("/auth/google/callback")
 def google_callback():
     if not _google_oauth_configured():
         return _google_config_error_page()
 
+    # intent 要在任何一條錯誤路徑 return 前先讀出來（但先別 pop，state 驗證失敗時
+    # 可能根本不是我們發起的流程，不該相信 session 裡任何東西）。綁定流程中途失敗
+    # 時，使用者其實還是登入狀態，不該把他導去看起來像「你被登出了」的登入錯誤頁。
     def _login_error(msg):
+        intent = session.pop("google_oauth_intent", "login")
+        if intent == "bind" and session.get("username"):
+            return redirect("/?google_bind=error")
         return render_template_string(
             HTML, logged_in=False, page='login', error=msg,
             k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
@@ -4595,10 +4750,27 @@ def google_callback():
 
     # 用 google_sub（Google 的穩定使用者 ID，不會變動）找既有帳號，不是用 email——
     # email 理論上可能變動，sub 才是真正穩定的識別碼。
-    username = next(
+    existing_username = next(
         (u for u, d in USERS.items() if isinstance(d, dict) and d.get("google_sub") == google_sub),
         None,
     )
+
+    intent = session.pop("google_oauth_intent", "login")
+    if intent == "bind":
+        # 綁定既有帳號：必須是「目前登入中的使用者」自己發起，不能用這個入口
+        # 去幫別人的帳號綁定/接管。一個 Google 帳號只能綁一個 username，已經
+        # 綁過別人就拒絕，不能覆蓋——否則等於讓人用自己的 Google 帳號搶別人帳號。
+        bind_username = session.get("username")
+        if not bind_username or bind_username not in USERS:
+            return _login_error("請先登入再綁定 Google 帳號。 / Please sign in before linking a Google account.")
+        if existing_username is not None and existing_username != bind_username:
+            return redirect("/?google_bind=taken")
+        USERS[bind_username]["google_sub"] = google_sub
+        USERS[bind_username]["email"] = email
+        _save_users()
+        return redirect("/?google_bind=success")
+
+    username = existing_username
     if username is None:
         # 第一次用這個 Google 帳號登入：建立新帳號。刻意用 _derive_username_from_google()
         # 衍生一個獨立的 username，絕不去比對/借用既有帳號（見該函式的說明）。
@@ -4689,11 +4861,21 @@ _INTENT_RULES = [
 ]
 _INTENT_INT_ARGS = {"replicas", "pods", "port"}
 
+# 概念性/解釋性問題（例如「Explain Deployment vs Service」）不要給下面那些抓
+# 資源名稱的規則比對——「deployment vs」會被 describe_deployment 規則誤判成
+# 「查一個叫 vs 的 deployment」。跟前端 matchClientRule 的同一道 guard 對應，
+# 兩邊都要擋，不然前端放行後還是會被這個 server 端安全網原地誤判一次。
+_EXPLAIN_QUESTION_RE = re.compile(
+    r"^(explain|what\s+is|what'?s|describe\s+the\s+difference|compare|"
+    r"什麼是|解釋|比較|差異|區別|說明(?:一下)?)\b", re.I)
+
 
 def _rule_intent(message: str):
     """規則比對一句訊息 -> {action, args} 或 None。前端 matchClientRule 的 server 端鏡像。"""
     msg = (message or "").strip()
     if not msg:
+        return None
+    if _EXPLAIN_QUESTION_RE.match(msg):
         return None
     for action, rx, groupmap in _INTENT_RULES:
         m = rx.search(msg)
@@ -4793,6 +4975,14 @@ def _verify_grounded_reply(message: str, reply: str, namespace: str = None) -> s
     已知限制：只抓「連字號命名」的候選字（例如 ghost-service-xyz999），單字不含連字號
     的假名稱（例如 ghostapp）抓不到——這是精確度／覆蓋率的取捨，寧可少擋不要把一般
     英文單字誤判成服務名稱。
+
+    2026-10-03：候選名稱只從「使用者自己的訊息」抓，不再額外抓 reply 裡才出現的名稱。
+    原本連 reply 也抓，會把模型純粹舉例用的假設情境（例如使用者只問通用的「CrashLoopBackOff
+    怎麼除錯」，模型舉例講「假設你的 api-gateway 目前正常運作，但某個 pod 出現...」）
+    誤判成對真實叢集做出的肯定健康宣稱，把整段本來正確有用的教學回答吃掉。代價是：
+    如果模型完全自己憑空捏造一個使用者從沒提過的假名稱、又講它健康，不會再被這裡攔到
+    ——但那種情況本來就極少見，而且使用者自己問過的名稱（含被 prompt injection 誘導
+    講出的名稱）仍然會被核對，核心防線沒有變弱。
     """
     namespace = namespace or NS
     if not K8S_ENABLED:
@@ -4802,7 +4992,6 @@ def _verify_grounded_reply(message: str, reply: str, namespace: str = None) -> s
     except Exception:
         return reply
     candidates = set(m.group(0) for m in _IDENTIFIER_CANDIDATE_RE.finditer(message))
-    candidates |= set(m.group(0) for m in _IDENTIFIER_CANDIDATE_RE.finditer(reply))
     ghost_names = [c for c in candidates if c.lower() not in real_names and len(c) >= 4]
     if not ghost_names:
         return reply

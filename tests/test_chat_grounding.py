@@ -67,3 +67,12 @@ class TestVerifyGroundedReply:
         reply = "Pod 是 Kubernetes 中最小的部署單位，通常運作正常且健康。"
         result = web_demo._verify_grounded_reply(message, reply)
         assert result == reply
+
+    def test_example_name_only_in_reply_is_not_flagged(self, fake_cluster):
+        """使用者沒提過的名稱，只是模型舉例教學用，不該被誤判成對真實叢集的健康宣稱。
+        2026-10-03：這是實際發生過的誤判（問通用的 CrashLoopBackOff 除錯問題，模型舉例
+        提到 api-gateway 正常運作，整段教學回答被誤攔成更正訊息）。"""
+        message = "How do I debug CrashLoopBackOff?"
+        reply = "例如，假設你的 api-gateway 目前正常運作，但某個 pod 出現 CrashLoopBackOff..."
+        result = web_demo._verify_grounded_reply(message, reply)
+        assert result == reply
