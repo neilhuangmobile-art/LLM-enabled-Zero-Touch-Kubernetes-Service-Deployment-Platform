@@ -1,0 +1,16 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: guest-demo-app
+  name: guest-demo-app
+  namespace: user-demo-guest
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: guest-demo-app
+  type: ClusterIP
