@@ -1,0 +1,34 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    gitops.k8s-platform/generated-at: '2026-10-03T08:33:24.012020'
+    gitops.k8s-platform/source: llm-generated
+  labels:
+    app: dup-test-app
+  name: dup-test-app
+  namespace: user-dupcheck1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dup-test-app
+  template:
+    metadata:
+      labels:
+        app: dup-test-app
+    spec:
+      containers:
+      - env: []
+        image: nginx:latest
+        name: dup-test-app
+        ports:
+        - containerPort: 8096
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
