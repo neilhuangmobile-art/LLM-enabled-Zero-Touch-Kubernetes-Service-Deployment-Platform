@@ -732,8 +732,40 @@ def _dashboard_summary(namespace: str) -> dict:
         "my_total_cpu_cores": None,
         "my_total_mem_gib": None,
         "my_monthly_usd": None,
+        "cpu_trend": [],
+        "mem_trend": [],
     }
+    prom_url = os.environ.get("PROMETHEUS_URL", "http://127.0.0.1:9090").replace("localhost", "127.0.0.1")
     if K8S_ENABLED:
+        # 2026-10-03：使用者看完 Prometheus 自己的折線圖介面後要求「這種折線圖也要
+        # 出現在我自己的系統裡」——用 query_range()（observability/prometheus_client.py
+        # 早就寫好、但從沒被呼叫過的函式）撈使用者自己 namespace 過去 30 分鐘的 CPU/
+        # 記憶體實際用量，給前端畫成跟 Healer 頁一樣風格的 inline SVG 折線圖。獨立一個
+        # try 區塊，查不到（Prometheus 沒連上/剛啟動資料還不夠）就是空陣列，前端會顯示
+        # 「資料不足」而不是整頁掛掉，不影響上面容量總覽那段原本的邏輯。
+        try:
+            from observability.prometheus_client import PrometheusClient
+            trend_client = PrometheusClient(prom_url, timeout=3)
+            if trend_client.is_alive():
+                cpu_range = trend_client.query_range(
+                    f'sum(rate(container_cpu_usage_seconds_total{{namespace="{namespace}"}}[5m]))',
+                    start_mins=30, step_secs=60)
+                if cpu_range and cpu_range[0].get("values"):
+                    result["cpu_trend"] = [
+                        {"t": datetime.fromtimestamp(ts).isoformat(), "v": round(v, 3)}
+                        for ts, v in cpu_range[0]["values"]
+                    ]
+                mem_range = trend_client.query_range(
+                    f'sum(container_memory_working_set_bytes{{namespace="{namespace}"}})',
+                    start_mins=30, step_secs=60)
+                if mem_range and mem_range[0].get("values"):
+                    result["mem_trend"] = [
+                        {"t": datetime.fromtimestamp(ts).isoformat(), "v": round(v / (1024 ** 2), 1)}
+                        for ts, v in mem_range[0]["values"]
+                    ]
+        except Exception:
+            pass
+
         try:
             cap = k8s_get_node_capacity()
             if cap:
@@ -745,7 +777,6 @@ def _dashboard_summary(namespace: str) -> dict:
                 used_cpu_mc, used_source_cpu = req_cpu_mc, "requests"
                 used_mem_b, used_source_mem = req_mem_b, "requests"
 
-                prom_url = os.environ.get("PROMETHEUS_URL", "http://127.0.0.1:9090").replace("localhost", "127.0.0.1")
                 try:
                     from observability.prometheus_client import PrometheusClient
                     client = PrometheusClient(prom_url, timeout=2)
@@ -2022,6 +2053,19 @@ html,body{height:100%;overflow:hidden}
           </div>
         </div>
       </div>
+      <!-- 2026-10-03：使用者在 Prometheus 自己的 Graph 介面看到折線圖，要求「這種
+      折線圖也要出現在我自己的系統內」——用 Prometheus query_range() 撈過去 30 分鐘
+      的實際用量，畫成跟 Healer 頁一樣風格的 inline SVG 折線圖，顯示在自己的 Dashboard。 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="card">
+          <div class="card-title">CPU 用量趨勢（過去 30 分鐘）/ CPU trend (last 30 min)</div>
+          <div id="dash-cpu-trend" style="margin-top:8px">Loading...</div>
+        </div>
+        <div class="card">
+          <div class="card-title">記憶體用量趨勢（過去 30 分鐘）/ Memory trend (last 30 min)</div>
+          <div id="dash-mem-trend" style="margin-top:8px">Loading...</div>
+        </div>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
         <div class="card">
           <div class="card-title">我的部署 / My deployments</div>
@@ -3135,6 +3179,30 @@ function renderRestartChart(history){
   </svg>`;
 }
 
+// 2026-10-03：通用版折線圖，給 Dashboard 的 CPU/記憶體用量趨勢用——跟
+// renderRestartChart() 同一套畫法（inline SVG，不用額外的圖表套件），只是改成
+// 接受 {t, v} 格式的點陣列跟自訂顏色/單位，不綁死在「重啟次數」這個情境。
+function renderTrendChart(points, color, unit){
+  if(!points || points.length < 2){
+    return '<div class="pod-chart-empty">資料不足，Prometheus 需要累積一段時間才有足夠的取樣點 / '+
+           'Not enough data yet — Prometheus needs a bit more time to collect samples</div>';
+  }
+  const w=560, h=110, pad=26;
+  const vals = points.map(p => p.v||0);
+  const maxV = Math.max(0.001, ...vals);
+  const stepX = (w - pad*2) / (points.length - 1);
+  const pts = vals.map((v,i) => [pad + i*stepX, h - pad - (v/maxV)*(h-pad*2)]);
+  const path = pts.map((p,i) => (i===0?'M':'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+  const last = vals[vals.length-1];
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block">
+    <path d="${path}" fill="none" stroke="${color}" stroke-width="2"/>
+    ${pts.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2" fill="${color}"/>`).join('')}
+    <text x="${pad}" y="${h-6}" font-size="10" fill="#9CA3AF">${escHtml(_fmtChartTime(points[0].t))}</text>
+    <text x="${w-pad}" y="${h-6}" font-size="10" fill="#9CA3AF" text-anchor="end">${escHtml(_fmtChartTime(points[points.length-1].t))}</text>
+    <text x="${w-pad}" y="16" font-size="11" fill="${color}" text-anchor="end">目前 / current: ${last}${unit}</text>
+  </svg>`;
+}
+
 function renderHealthTimeline(history){
   if(!history || history.length < 2){
     return '<div class="pod-chart-empty">觀察中，累積更多資料後會顯示趨勢圖（背景每 30 秒取樣一次） / '+
@@ -3280,6 +3348,8 @@ async function loadDashboard(){
       document.getElementById('dash-mem-pct-label').textContent = '--';
       document.getElementById('dash-my-deployments').innerHTML = '<tr><td colspan="4" class="empty"><p>K8s 未連線，無法取得資料 / K8s not connected</p></td></tr>';
       document.getElementById('dash-cost').textContent = 'N/A';
+      document.getElementById('dash-cpu-trend').innerHTML = '<div class="pod-chart-empty">K8s 未連線 / K8s not connected</div>';
+      document.getElementById('dash-mem-trend').innerHTML = '<div class="pod-chart-empty">K8s 未連線 / K8s not connected</div>';
       return;
     }
     const cap = d.cluster_capacity, used = d.cluster_used, rem = d.cluster_remaining, src = d.cluster_used_source || {};
@@ -3292,6 +3362,9 @@ async function loadDashboard(){
     remEl.style.color = (rem.cpu_cores < 0 || rem.mem_gib < 0) ? '#DC2626' : '';
     _dashPctBar('dash-cpu-bar', 'dash-cpu-pct-label', used.cpu_cores, cap.cpu_cores);
     _dashPctBar('dash-mem-bar', 'dash-mem-pct-label', used.mem_gib, cap.mem_gib);
+
+    document.getElementById('dash-cpu-trend').innerHTML = renderTrendChart(d.cpu_trend, '#16A34A', ' cores');
+    document.getElementById('dash-mem-trend').innerHTML = renderTrendChart(d.mem_trend, '#2563EB', ' MiB');
 
     const deps = d.my_deployments || [];
     document.getElementById('dash-my-deployments').innerHTML = deps.length

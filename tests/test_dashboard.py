@@ -49,10 +49,12 @@ class _FakeAppsV1Api:
 
 class _FakePromClient:
     """monkeypatch 掉真正連線的 PrometheusClient，模擬三種情境。"""
-    def __init__(self, alive, cpu_cores=None, mem_bytes=None):
+    def __init__(self, alive, cpu_cores=None, mem_bytes=None, cpu_range=None, mem_range=None):
         self._alive = alive
         self._cpu_cores = cpu_cores
         self._mem_bytes = mem_bytes
+        self._cpu_range = cpu_range
+        self._mem_range = mem_range
 
     def is_alive(self):
         return self._alive
@@ -62,6 +64,13 @@ class _FakePromClient:
 
     def cluster_memory_usage_bytes(self):
         return self._mem_bytes
+
+    def query_range(self, promql, start_mins=30, step_secs=60):
+        if "container_cpu_usage_seconds_total" in promql:
+            return self._cpu_range
+        if "container_memory_working_set_bytes" in promql:
+            return self._mem_range
+        return None
 
 
 class TestMyDeploymentResourceBreakdown:
@@ -156,6 +165,52 @@ class TestDashboardSummary:
         result = web_demo._dashboard_summary("user-alice")
         assert result["k8s_enabled"] is False
         assert result["cluster_capacity"] is None
+
+
+class TestDashboardTrend:
+    """2026-10-03 新增：使用者看了 Prometheus 自己的折線圖介面後要求「這種折線圖
+    也要出現在我自己的系統裡」，_dashboard_summary() 新增 cpu_trend/mem_trend
+    欄位，資料來自 observability/prometheus_client.py 早就寫好、但從沒被呼叫過的
+    query_range()。"""
+
+    def _patch_capacity_and_requests(self, monkeypatch, node_cpu="4000m", node_mem="8Gi",
+                                      req_cpu_mc=1000, req_mem_b=1024**3):
+        monkeypatch.setattr(web_demo, "K8S_ENABLED", True)
+        monkeypatch.setattr(web_demo, "k8s_get_node_capacity", lambda: {"cpu": node_cpu, "memory": node_mem})
+        monkeypatch.setattr(web_demo, "_sum_cluster_resource_requests", lambda: (req_cpu_mc, req_mem_b))
+        monkeypatch.setattr(web_demo, "_my_deployment_resource_breakdown",
+                             lambda ns: {"deployments": [], "total_cpu_cores": 0, "total_mem_gib": 0, "monthly_usd": 0})
+
+    def test_populates_trend_points_from_query_range(self, monkeypatch):
+        self._patch_capacity_and_requests(monkeypatch)
+        cpu_range = [{"metric": {}, "values": [(1000.0, 0.1), (1060.0, 0.2), (1120.0, 0.15)]}]
+        mem_range = [{"metric": {}, "values": [(1000.0, 100 * 1024**2), (1060.0, 110 * 1024**2)]}]
+        fake_client = _FakePromClient(alive=True, cpu_cores=0.1, mem_bytes=100 * 1024**2,
+                                       cpu_range=cpu_range, mem_range=mem_range)
+        monkeypatch.setattr("observability.prometheus_client.PrometheusClient", lambda *a, **kw: fake_client)
+        result = web_demo._dashboard_summary("user-alice")
+        assert len(result["cpu_trend"]) == 3
+        assert result["cpu_trend"][0]["v"] == 0.1
+        assert result["cpu_trend"][-1]["v"] == 0.15
+        assert len(result["mem_trend"]) == 2
+        assert result["mem_trend"][0]["v"] == 100.0  # bytes 轉成 MiB
+        assert all("t" in p for p in result["cpu_trend"])  # 有時間戳可以畫 X 軸
+
+    def test_prometheus_unreachable_gives_empty_trend_not_error(self, monkeypatch):
+        self._patch_capacity_and_requests(monkeypatch)
+        fake_client = _FakePromClient(alive=False)
+        monkeypatch.setattr("observability.prometheus_client.PrometheusClient", lambda *a, **kw: fake_client)
+        result = web_demo._dashboard_summary("user-alice")
+        assert result["cpu_trend"] == []
+        assert result["mem_trend"] == []
+        # 其他欄位不受影響，不是整頁掛掉
+        assert result["cluster_capacity"] is not None
+
+    def test_k8s_disabled_gives_empty_trend(self, monkeypatch):
+        monkeypatch.setattr(web_demo, "K8S_ENABLED", False)
+        result = web_demo._dashboard_summary("user-alice")
+        assert result["cpu_trend"] == []
+        assert result["mem_trend"] == []
 
 
 class TestDashboardRoute:

@@ -386,3 +386,21 @@ commit 依專案慣例保留當稽核軌跡，沒有刪除歷史。
 原本的失敗情境（app_name="123"）確認現在會在第一步就被擋下並給出正確訊息，對照組
 （app_name="app-123"）確認正常放行不受影響；前端格式提示文字確認正確顯示在兩個
 部署表單裡。
+
+### 新功能：Dashboard 新增 CPU/記憶體用量趨勢折線圖
+使用者實際打開 Prometheus 自己附的 Graph 查詢介面看到折線圖，問「這個怎麼用」，
+確認用法後要求「這種折線圖也要出現在我自己的系統內」。用
+`observability/prometheus_client.py` 早就寫好、但從沒被呼叫過的 `query_range()`，
+撈使用者自己 namespace 過去 30 分鐘的 CPU/記憶體實際用量，畫成跟 Healer 頁同一套
+inline SVG 折線圖風格（抽出通用版 `renderTrendChart()`，不綁死在重啟次數情境）。
+
+`_dashboard_summary()` 新增 `cpu_trend`/`mem_trend` 欄位（各自獨立的 try 區塊，
+查不到就是空陣列，不影響原本容量總覽那段邏輯、不會讓整頁掛掉）；Dashboard 頁面
+新增兩張趨勢圖卡片，位置在使用率長條圖下方。
+
+驗證：新增 `tests/test_dashboard.py` 的 `TestDashboardTrend`（3 案例：有資料時正確
+轉換時間戳跟單位換算、Prometheus 連不上時優雅降級成空陣列、K8s 未連線時同樣優雅
+降級）；`pytest`（176 個，173 舊 + 3 新）全過；真實環境測試：用有實際部署服務的
+`user-demo` namespace 直接呼叫 `_dashboard_summary()`，確認撈到 31 個真實取樣點
+（過去 30 分鐘、每分鐘一筆），CPU/記憶體數字都合理（idle nginx：CPU 趨近 0、
+記憶體穩定在 60 MiB 上下）；前端頁面元素跟繪圖函式確認存在；測試帳號已清除。
