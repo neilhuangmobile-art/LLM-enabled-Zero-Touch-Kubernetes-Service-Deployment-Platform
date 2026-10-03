@@ -1,0 +1,34 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    gitops.k8s-platform/generated-at: '2026-10-03T15:29:58.859835'
+    gitops.k8s-platform/source: llm-generated
+  labels:
+    app: demo-badimage-heal
+  name: demo-badimage-heal
+  namespace: user-neilhuang-mobile
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-badimage-heal
+  template:
+    metadata:
+      labels:
+        app: demo-badimage-heal
+    spec:
+      containers:
+      - env: []
+        image: nginx:latest
+        name: demo-badimage-heal
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
