@@ -1,0 +1,16 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: web-frontend1234
+  name: web-frontend1234
+  namespace: user-neilhuang-mobile
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: web-frontend1234
+  type: ClusterIP
