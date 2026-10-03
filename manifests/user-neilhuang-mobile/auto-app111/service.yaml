@@ -1,0 +1,16 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: auto-app111
+  name: auto-app111
+  namespace: user-neilhuang-mobile
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    app: auto-app111
+  type: ClusterIP
