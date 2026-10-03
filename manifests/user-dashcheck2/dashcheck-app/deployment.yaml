@@ -1,0 +1,34 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    gitops.k8s-platform/generated-at: '2026-10-03T08:10:42.662858'
+    gitops.k8s-platform/source: llm-generated
+  labels:
+    app: dashcheck-app
+  name: dashcheck-app
+  namespace: user-dashcheck2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dashcheck-app
+  template:
+    metadata:
+      labels:
+        app: dashcheck-app
+    spec:
+      containers:
+      - env: []
+        image: nginx:latest
+        name: dashcheck-app
+        ports:
+        - containerPort: 8097
+        resources:
+          limits:
+            cpu: 100m
+            memory: 64Mi
+          requests:
+            cpu: 100m
+            memory: 64Mi
