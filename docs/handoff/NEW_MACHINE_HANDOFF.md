@@ -87,6 +87,14 @@
     HTML 也在裡面（第 1149～約 4660 行），合併時注意兩點：衝突標記如果藏在 HTML 字串裡，
     Python 照樣能執行、但網頁會壞；合併後要搜尋 `<<<<<<<` 並用 playwright 看前端有沒有錯誤。
 
+- **待決定：`users.json` 要不要移出版控。** 2026-10-09 推送後，security-guidance 的背景審查
+  回報「credential-exposure in users.json」。檔案裡是密碼雜湊（使用者確認過不是明碼），
+  repo 也是私有的，所以不緊急。不過有兩點：(1) repo 萬一外流，雜湊值可以被離線暴力破解；
+  (2) 9/14 的 CHANGELOG 記錄 `admin` 原本是無鹽 SHA-256，只會在**登入時**自動升級成
+  pbkdf2，一直沒登入的舊帳號可能還是弱格式。建議做法是移出版控、改提供
+  `users.example.json`，並加進 `.gitignore`。但這會影響組員的環境，**要先跟組員協調**，
+  也應該照 AGENT_RULES 寫進 `docs/security_review.md`。
+
 ---
 
 ## 4. 換電腦後的工作優先順序
