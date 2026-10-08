@@ -244,12 +244,64 @@ def _normalize_app_name(name: str) -> str:
     return name[:50].rstrip('-') or 'auto-app'
 
 
+# 2026-10-06 QA 掃描實測發現：count_patterns 只認 ASCII `\d+`，完全看不懂中文數字詞
+# （一/二/兩/三…），「兩個副本」「三個副本」一個都抓不到，靜默退回預設值 1。只處理
+# 十以內的中文數字（大於十的交給模型，口語很少直接講「十五個」這種大數的中文數字）。
+_CN_DIGIT_MAP = {
+    '一': 1, '二': 2, '兩': 2, '两': 2, '三': 3, '四': 4, '五': 5,
+    '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
+}
+_CN_COUNT_RE = re.compile(
+    r'([一二兩两三四五六七八九十])\s*(?:個|个|副本|台|pods?|replicas?|instances?)',
+)
+# 已知服務關鍵字 + 複合服務詞——偵測「幫我部署兩個服務，一個nginx一個redis」這種
+# 一次要求多個服務的請求，不要靜默只做其中一個（image 比對只會取第一個命中的關鍵字，
+# 其餘服務跟它們各自的副本數會在沒有任何提示的情況下整個消失）。
+_KNOWN_SERVICE_KEYWORDS = ('nginx', 'redis', 'postgres', 'mysql', 'node', 'python', 'golang')
+# 2026-10-07 整理量化報告時發現的真實 bug：「起一個 nginx 跟一個 redis」沒有
+# 「兩個/多個/幾個」這類明確的複數計數詞，完全沒命中，`_looks_like_multi_service_request()`
+# 判定失敗，兩個不同服務被靜默合併成「image=nginx, pods=2」這種錯誤結果——使用者
+# 要的是各一個 nginx 跟 redis，不是兩個 nginx。補上「<數量>個...跟/和/與...<數量>個」
+# 這種用連接詞分隔兩個計數片語的結構，不要求一定要用「兩個」這種固定詞彙。
+_MULTI_SERVICE_HINT_RE = re.compile(
+    r'兩個|两个|多個|多个|幾個|几个|\d+\s*個\s*服務|\d+\s*個\s*服务|services?\b|'
+    r'(?:一個|1\s*個|\d+\s*個).{0,15}(?:跟|和|與|与).{0,15}(?:一個|1\s*個|\d+\s*個)'
+)
+
+
+def _extract_pods_count(raw: str) -> Optional[int]:
+    """依序嘗試 ASCII 數字（含負號）、中文數字詞，抓不到回傳 None（交給呼叫端決定
+    要退回預設值 1，還是視為解析失敗）。"""
+    count_patterns = [
+        r'(?:deploy|run|start|launch|spin\s+up)\s+(-?\d+)\s*(?:pods?|replicas?|instances?)?',
+        r'(-?\d+)\s*(?:pods?|replicas?|instances?|個|个|副本|台)',
+        r'(?:pods?|replicas?|instances?|副本|數量|数量)\s*(?:=|:|為|是|to)?\s*(-?\d+)',
+    ]
+    for pat in count_patterns:
+        m = re.search(pat, raw, re.IGNORECASE)
+        if m:
+            return int(m.group(1))
+    m = _CN_COUNT_RE.search(raw)
+    if m:
+        return _CN_DIGIT_MAP[m.group(1)]
+    return None
+
+
+def _looks_like_multi_service_request(raw: str, low: str) -> bool:
+    distinct_keywords = {kw for kw in _KNOWN_SERVICE_KEYWORDS if kw in low}
+    return len(distinct_keywords) >= 2 and bool(_MULTI_SERVICE_HINT_RE.search(raw))
+
+
 def _deterministic_deploy_parse(prompt_text: str) -> Optional[dict]:
     """Fast parser for common deployment requests before asking the LLM.
 
     This protects the most important production fields: replica count, image,
     app name, and port. It only returns a result when the request clearly asks to
     deploy/run/start a Kubernetes workload.
+
+    回傳值三種情況：None（不是部署請求，交給模型）、帶 `_parse_error` 的 dict
+    （明確解析出問題所在，呼叫端應直接組清楚的錯誤訊息，不要再落入模型 pipeline）、
+    或正常的部署 spec dict。
     """
     raw = (prompt_text or '').strip()
     low = raw.lower()
@@ -260,26 +312,27 @@ def _deterministic_deploy_parse(prompt_text: str) -> Optional[dict]:
     if not any(w in low for w in deploy_words):
         return None
 
-    count_patterns = [
-        r'(?:deploy|run|start|launch|spin\s+up)\s+(\d+)\s*(?:pods?|replicas?|instances?)?',
-        r'(\d+)\s*(?:pods?|replicas?|instances?|個|副本|台)',
-        r'(?:pods?|replicas?|instances?|副本)\s*(?:=|:|為|是|to)?\s*(\d+)',
-    ]
-    pods = None
-    for pat in count_patterns:
-        m = re.search(pat, raw, re.IGNORECASE)
-        if m:
-            pods = int(m.group(1))
-            break
-    if pods is None:
-        pods = 1
-    if not (1 <= pods <= 100):
-        return None
+    if _looks_like_multi_service_request(raw, low):
+        return {'_parse_error': 'multi_service_unsupported', '_parser': 'deterministic'}
+
+    explicit_pods = _extract_pods_count(raw)
+    if explicit_pods is not None and not (1 <= explicit_pods <= 100):
+        return {'_parse_error': 'replica_out_of_range', '_requested_pods': explicit_pods,
+                '_parser': 'deterministic'}
+    pods = explicit_pods if explicit_pods is not None else 1
 
     image = None
     image_patterns = [
         r'(?:image|映像|鏡像)\s*(?:=|:|為|是)?\s*([\w./:-]+)',
-        r'\b([a-z0-9][\w.-]*(?:/[\w.-]+)*(?::[\w][\w.-]*)?)\b(?=\s+(?:pods?|pod|container|容器|for|給|，|,)|[.。!！?？]*$)',
+        # 2026-10-07 量化評估腳本實測發現的真實 bug：「...node:20-alpine 作為
+        # api-gateway」這種「image 後面接『作為/當作』再接 app 名稱」的句型，
+        # image token 後面不是 pod/container/for/給/，這幾個詞，lookahead 完全
+        # 沒命中，image 就被靜默退回預設值 nginx:latest（使用者明明打了 node
+        # 卻部署出 nginx）。補上這幾個中文連接詞。2026-10-07 整理量化報告時又發現
+        # 一個同一類的真實 bug：「部署九個 redis 副本」的「redis」後面接的是
+        # 「副本」（計量單位，不在原本的 lookahead 清單裡），一樣靜默退回
+        # nginx:latest（使用者明明打了 redis 卻部署出 nginx），補上「副本/台」。
+        r'\b([a-z0-9][\w.-]*(?:/[\w.-]+)*(?::[\w][\w.-]*)?)\b(?=\s+(?:pods?|pod|container|容器|for|給|作為|當作|当作|当成|副本|台|，|,)|[.。!！?？]*$)',
     ]
     for pat in image_patterns:
         for m in re.finditer(pat, raw, re.IGNORECASE):
@@ -295,15 +348,53 @@ def _deterministic_deploy_parse(prompt_text: str) -> Optional[dict]:
         image = 'nginx:latest'
 
     app_name = None
+    # 候選名稱只抓 ASCII 字母/數字/連字號——Python 的 `\w` 預設是 Unicode-aware，
+    # 會把中文字也當成「單字字元」比對進去。2026-10-03 實測發現的真實 bug：
+    # 「...20GI記憶體的服務」這種沒給名稱、純中文敘述資源大小的句子，因為
+    # 「服務」前面緊接著一串中文字也滿足 `[\w-]`，整段「20gi記憶體的」被當成
+    # app_name 候選——正規化後就變成使用者從沒打過的「20gi」，被命名規則擋下。
+    # 2026-10-03 又實測到第二組同類 bug：
+    # ①「deploy app named 123abc」——pattern 1 原本把 "app"/"service" 也當成
+    #   前綴觸發字，但這兩個字在「deploy an app named X」這種句型裡只是泛稱
+    #   名詞、不是真的在引出名稱；"app" 後面緊接的下一個詞剛好是 "named"（也
+    #   滿足候選字元集合），於是 "named" 自己被當成候選名稱。真正明確「這裡
+    #   開始是名稱」的連接詞只有 for/named/name/叫做/名稱/給，拿掉 "app"/
+    #   "service" 這兩個泛稱名詞，交給下面 pattern 2（後綴式）去處理
+    #   「<name> app/service」這種名稱在前的寫法，兩種語序不衝突。
+    # ②「我要部屬2個nginx服務」——pattern 2 抓到緊接在「服務」前面的
+    #   "nginx"，但這就是剛剛已經抓到的 image 名稱，不是使用者另外取的名字，
+    #   新增比對：候選字串等於 image 的基底名稱就跳過，不當作 app_name。
+    # 2026-10-03 第三組同類 bug：`ask_llama()` 在 Gemini 翻譯層回傳的
+    # "### DeploySpec" 結構化區塊驗證不完整時，會把這個區塊原文（不是使用者
+    # 原始輸入）直接餵進這支函式當 fallback。區塊第一行是 markdown 標題
+    # "### DeploySpec"，後面接著 "app_name: 123abc" 這種 key:value 格式的行
+    # ——因為 `\s` 本身就包含換行字元，pattern 2 會跨行把標題裡的
+    # "DeploySpec" 跟下一行 "app_name:" 開頭的 "app" 接在一起比對成功，抓出
+    # 候選「DeploySpec」，正規化後變成使用者從沒打過的「deployspec」。這支
+    # 函式設計上只處理單行的自然語言輸入，候選字跟關鍵字之間不應該跨行，
+    # 這裡把 `\s` 限定成「同一行內的空白」（不含換行），從根本上排除這整類
+    # 「結構化區塊被誤當白話文解析」的跨行誤判。
     app_patterns = [
-        r'(?:for|named|name|app|service|給|叫做|名稱|服務)\s+([a-zA-Z0-9][\w-]{1,50})',
-        r'([a-zA-Z0-9][\w-]{1,50})\s*(?:service|app|deployment|服務)',
+        # 「作為/當作」跟剛才 image 那條同一個根因（2026-10-07 量化評估腳本
+        # 實測發現）：「node:20-alpine 作為 api-gateway」這種句型，"作為" 後面
+        # 接的才是使用者真正想取的名字，原本不在這份前綴清單裡，"api-gateway"
+        # 整段被漏接，app_name 退回用 image 基底名稱（node）頂替。
+        r'(?:for|named|name|給|叫做|名稱|作為|當作|当作|当成)[ \t]+([a-zA-Z0-9][A-Za-z0-9-]{1,50})',
+        r'([a-zA-Z0-9][A-Za-z0-9-]{1,50})[ \t]*(?:service|app|deployment|服務)',
     ]
+    _quantity_like = re.compile(r'^\d+(?:\.\d+)?(?:mi|gi|ki|m|g)?$', re.IGNORECASE)
+    _image_base = (image.split('/')[-1].split(':')[0].lower() if image else '')
     for pat in app_patterns:
         m = re.search(pat, raw, re.IGNORECASE)
         if m:
             cand = m.group(1)
-            if cand.lower() not in {'port', 'pods', 'pod', 'replicas', 'image'}:
+            # 純數字或「數字+資源單位」（20gi、500m、64mi…）一定是誤抓到容量/
+            # 副本數之類的敘述；候選字串等於 image 基底名稱，也是誤抓到剛剛
+            # 分析出來的 image 本身——兩種都不會是使用者真的想取的名字，直接
+            # 跳過讓 app_name 落回下面的預設邏輯（用 image 名稱或 auto-app）。
+            if (cand.lower() not in {'port', 'pods', 'pod', 'replicas', 'image'}
+                    and not _quantity_like.match(cand)
+                    and cand.lower() != _image_base):
                 app_name = cand
                 break
     if not app_name:
@@ -319,13 +410,33 @@ def _deterministic_deploy_parse(prompt_text: str) -> Optional[dict]:
         if not (1 <= port <= 65535):
             port = 80
 
+    # 結尾的 `\b`（word boundary）在「數字+單位」後面緊接著中文字時會失效——
+    # Python 的 `\w`／`\b` 預設是 Unicode-aware，中文字跟英數字母一樣算「單字
+    # 字元」，兩個 \w 字元中間沒有邊界，`\b` 永遠對不上，導致整個 regex 配對
+    # 失敗。2026-10-03 實測發現：「...20GI記憶體的服務」這種單位後面沒有空格、
+    # 直接接中文的句子，記憶體/CPU 完全抓不到，使用者講的容量被整段默默丟掉。
+    # 改成「後面不能緊接 ASCII 字母」的否定預查，中文字接在後面完全不受影響。
+    # K8s 的資源單位字尾是大小寫敏感的（一定要 "Gi"，不是 "GI" 或 "gi"）,但使用者
+    # 打字不會管這個——「20GI」「20gi」「20Gi」對使用者來說是同一件事。2026-10-03
+    # 實測發現：抓到數值後如果原樣保留使用者打的大小寫，會在後面的格式驗證被擋下
+    # （「memory must look like 128Mi or 1Gi」），對一個本來就該自動理解的新手輸入
+    # 來說是不必要的卡關，這裡統一正規化成 K8s 要求的大小寫，不留給驗證層去擋。
     memory = None
-    mm = re.search(r'(\d+\s*(?:Mi|Gi|Ki|M|G))\b', raw, re.IGNORECASE)
+    mm = re.search(r'(\d+)\s*(Mi|Gi|Ki|M|G)(?![a-zA-Z])', raw, re.IGNORECASE)
     if mm:
-        memory = mm.group(1).replace(' ', '')
+        unit = mm.group(2)
+        canonical_unit = {'mi': 'Mi', 'gi': 'Gi', 'ki': 'Ki', 'm': 'M', 'g': 'G'}[unit.lower()]
+        memory = f'{mm.group(1)}{canonical_unit}'
 
     cpu = None
-    cm = re.search(r'(\d+(?:\.\d+)?\s*m?)\s*(?:CPU\s*cores?|CPU|cores?|核心|顆)\b', raw, re.IGNORECASE)
+    # 負向預查只套用在英文關鍵字後面（避免誤配到 "CPUs" 這種更長單字的中段），
+    # 中文關鍵字（核／核心／顆）不需要、也不能套用同一個預查——"30核CPU" 這種
+    # 中文單位緊接著英文單位的寫法，"核" 後面就是 "CPU" 的字母 C，如果不分開寫
+    # 整段 `(?![a-zA-Z])` 會誤判成「後面接了字母、不是完整詞」而拒絕配對。
+    cm = re.search(
+        r'(\d+(?:\.\d+)?\s*m?)\s*(?:(?:CPU\s*cores?|CPU|cores?)(?![a-zA-Z])|核心|核|顆)',
+        raw, re.IGNORECASE,
+    )
     if cm:
         cpu = cm.group(1).replace(' ', '')
 
@@ -562,6 +673,53 @@ def _chat_needs_normalize(message: str) -> bool:
 # ══════════════════════════════════════════════════════════════════
 # 公開 API
 # ══════════════════════════════════════════════════════════════════
+def _predeploy_boundary_precheck(prompt_text: str) -> Optional[dict]:
+    """2026-10-07 QA 掃描發現的另一層真實 bug：原本想在 Gemini 正規化前對原始輸入
+    呼叫 `_deterministic_deploy_parse()` 做邊界值/多服務檢查，結果發現該函式本體的
+    `deploy_words` 守門太窄（例如要求「起」後面要接空白、完全沒涵蓋「我要.../
+    我想...」這種不含明確部署動詞的口語化講法）——「我要兩個 nginx 跟三個 mysql」
+    這種明顯是多服務請求的句子，連 `deploy_words` 這關都過不了，整個函式直接回
+    None，等於多服務/邊界值檢查從沒真的跑過。
+
+    這裡獨立出一個更寬鬆、但範圍只聚焦在「有沒有多服務/邊界值訊號」本身的守門：
+    `_looks_like_multi_service_request()` 本身就要求至少 2 個已知服務關鍵字
+    （nginx/redis/postgres/mysql/node/python/golang）加上明確的數量提示詞，
+    `_extract_pods_count()` 的正則也都綁定 pods/replicas/個/副本 這類數量詞彙，
+    兩者都已經是語意上夠窄的訊號，不需要再疊加 `deploy_words` 這層守門——刻意
+    不動 `_deterministic_deploy_parse()` 本體的守門（那是用來保護欄位抽取不要
+    誤觸發在無關聊天內容上，兩個函式守門的風險考量不一樣）。
+    """
+    raw = (prompt_text or '').strip()
+    low = raw.lower()
+    if _looks_like_multi_service_request(raw, low):
+        return {'_parse_error': 'multi_service_unsupported', '_parser': 'deterministic'}
+    explicit_pods = _extract_pods_count(raw)
+    if explicit_pods is not None and not (1 <= explicit_pods <= 100):
+        return {'_parse_error': 'replica_out_of_range', '_requested_pods': explicit_pods,
+                '_parser': 'deterministic'}
+    return None
+
+
+def _parse_error_response(deterministic: dict) -> Optional[dict]:
+    """把 `_deterministic_deploy_parse()` 回傳的 `_parse_error` 標記轉成具體、雙語、
+    可行動的錯誤訊息。抽成獨立函式是因為 2026-10-07 QA 掃描發現這段邏輯需要在
+    Gemini 正規化「之前」跟「之後」各跑一次（見 `ask_llama()` 的說明），不想兩處
+    各寫一份容易兜不起來的重複文案。"""
+    if not deterministic or not deterministic.get('_parse_error'):
+        return None
+    kind = deterministic['_parse_error']
+    if kind == 'replica_out_of_range':
+        n = deterministic.get('_requested_pods')
+        return {"error": f"副本數必須是 1~100 之間的正整數，你輸入的是 {n}，不合法 / "
+                          f"Replica count must be a positive integer between 1 and 100; "
+                          f"{n} is not valid."}
+    if kind == 'multi_service_unsupported':
+        return {"error": "目前一次只能部署一個服務，請把多個服務分開、一次講一個 / "
+                          "Only one service can be deployed per request right now — "
+                          "please describe each service separately."}
+    return {"error": "解析失敗", "raw": str(deterministic)}
+
+
 def ask_llama(prompt_text: str) -> dict:
     """
     呼叫 LLM 推論（優先順序）：
@@ -571,6 +729,21 @@ def ask_llama(prompt_text: str) -> dict:
     """
     try:
         _warn_if_stale_normalize_env()
+
+        # 2026-10-07 QA 掃描發現的真實 bug：副本數邊界值／多服務偵測這兩項
+        # 2026-10-06 才修好的保護，原本只套用在 Gemini 正規化「之後」的文字
+        # （`model_input`）——Gemini 把請求完整正規化成功時會在下面直接
+        # `return spec`，根本不會跑到這兩項檢查；Gemini 正規化不完整時，檢查的
+        # 又是 Gemini 改寫過的 `### DeploySpec` 文字，不是使用者原始措辭，而
+        # `### DeploySpec` 格式本身是為單一服務設計的，多服務的訊號（「兩個...
+        # 跟三個...」這種計數片語）常常在改寫過程中就已經遺失，導致同一類保護
+        # 換個講法就隨機失效（實測：「部署兩個服務，一個nginx三個副本，一個redis
+        # 一個副本」正確攔下，但「我要兩個 nginx 跟三個 mysql」只回無資訊的「解析
+        # 失敗」）。修法：先對使用者原始輸入跑一次這兩項檢查，不管 Gemini 怎麼
+        # 處理都不會被繞過；原始輸入沒有觸發任何保護時，才繼續走下面原本的流程。
+        pre_check_error = _parse_error_response(_predeploy_boundary_precheck(prompt_text))
+        if pre_check_error:
+            return pre_check_error
 
         # ── 1. 翻譯層優先：一律先用 Gemini 把中/英、模糊/口語輸入正規化成 ### DeploySpec ──
         #    Gemini 只負責「聽懂」，沒講的欄位一律留白不猜。spec 齊全就直接回傳（零 GPU），
@@ -592,6 +765,14 @@ def ask_llama(prompt_text: str) -> dict:
 
         # ── 2. 本地 deterministic 快路徑（乾淨輸入 / Gemini 掛掉時的後備）──
         deterministic = _deterministic_deploy_parse(model_input)
+        deterministic_error = _parse_error_response(deterministic)
+        if deterministic_error:
+            # 2026-10-06 QA 掃描實測發現：0/負數/超過上限的副本數、或一次要求多個服務，
+            # 原本會被這裡默默丟棄（_validate 判不過就無聲落入後面的 Gemini/小模型
+            # pipeline），最後在最外層 except 被攔截成完全沒資訊的「解析失敗」。現在
+            # deterministic parser 已經明確知道問題出在哪，直接組一句具體、雙語、
+            # 可行動的訊息回傳，不要再讓它掉進後面的模糊 pipeline。
+            return deterministic_error
         if deterministic and _validate(deterministic):
             print("[Parser] deterministic deployment parse")
             return deterministic

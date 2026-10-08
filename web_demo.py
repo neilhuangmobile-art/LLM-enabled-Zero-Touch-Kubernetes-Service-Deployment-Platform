@@ -11,7 +11,7 @@ import threading, json, urllib.request, hashlib, secrets, re, uuid, requests
 from datetime import datetime, timezone, timedelta
 from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
 
-from core.config import ROOT, YAML_DIR, MODEL_SERVER_URL
+from core.config import ROOT, YAML_DIR, MODEL_SERVER_URL, ADMIN_EMAILS
 from llama_client import ask_llama, save_gold_sample, chat_llama, classify_intent
 from core.claude_client import claude_chat, is_available as claude_available
 from rag import kb_manager
@@ -283,6 +283,18 @@ def _derive_username_from_google(email: str) -> str:
         candidate = f"{prefix}-{suffix}-{n}"
         n += 1
     return candidate
+
+
+def _is_admin_user(username: str) -> bool:
+    """真正的管理員權限只歸屬於「用 Google 登入、且 email 在 ADMIN_EMAILS 允許清單裡」
+    的帳號。絕不檢查 username 字串本身——密碼註冊帳號可以隨便取名叫 "admin"（這個
+    專案的 users.json 裡剛好就有一個舊測試帳號是這樣），聊天內容裡自稱「我是管理員」
+    更不可信，兩者都不能拿來判斷身分，否則任何人都能冒充。"""
+    u = USERS.get(username)
+    if not isinstance(u, dict) or u.get("auth_provider") != "google":
+        return False
+    email = (u.get("email") or "").strip().lower()
+    return email in ADMIN_EMAILS
 
 # ── Model status ────────────────────────────────────────────
 def _model_status():
@@ -1194,6 +1206,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .user-info{display:flex;align-items:center;gap:10px}
 .user-avatar{width:32px;height:32px;background:var(--green);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600;flex-shrink:0}
 .user-name{font-size:13px;font-weight:500;flex:1}
+.admin-badge{font-size:10px;font-weight:700;color:#fff;background:var(--green);border-radius:4px;padding:2px 6px;margin-left:4px;letter-spacing:.3px;white-space:nowrap}
 .logout-btn{font-size:12px;color:var(--text3);cursor:pointer;border:none;background:none;font-family:inherit;padding:2px 6px;border-radius:4px}
 .logout-btn:hover{color:var(--red);background:var(--red-light)}
 
@@ -1639,7 +1652,7 @@ html,body{height:100%;overflow:hidden}
     <div class="sidebar-footer">
       <div class="user-info">
         <div class="user-avatar">{{ username[0].upper() }}</div>
-        <div class="user-name">{{ username }}</div>
+        <div class="user-name">{{ username }}{% if is_admin %}<span class="admin-badge">管理員 / Admin</span>{% endif %}</div>
         <form method="POST" action="/auth/logout" style="margin:0">
           <button class="logout-btn" type="submit">Out</button>
         </form>
@@ -1990,6 +2003,7 @@ html,body{height:100%;overflow:hidden}
       <div class="page-title">Healer</div>
       <div class="page-sub">你自己的 Pod 一覽 + 自動自癒 / Your pods at a glance + auto self-healing</div>
       <div id="healer-bg-banner" style="margin-bottom:14px;padding:10px 14px;border-radius:10px;font-size:13px"></div>
+      <div id="healer-processing" style="display:none;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;border-radius:10px;font-size:13px;background:var(--surface);border:1px solid var(--border);color:var(--text2)"></div>
       <div class="grid-3" style="margin-bottom:16px">
         <div class="card"><div class="card-title">Total Pods</div><div class="stat-num" id="healer-count">--</div><div class="stat-label">你的 Pod 總數 / your pods</div></div>
         <div class="card"><div class="card-title">Last Scan</div><div class="stat-num" style="font-size:14px" id="healer-time">--</div><div class="stat-label">Scan time</div></div>
@@ -2489,6 +2503,16 @@ if(loggedIn){
   setInterval(() => {
     if(document.getElementById('page-dashboard')?.classList.contains('active')) loadDashboard();
   }, 30000);
+}
+// 2026-10-03：使用者要求「自癒系統在修復時要有轉圈動畫告訴使用者」——
+// `loadHealerBgStatus()` 以前只在切進 Healer 頁那一刻打一次，使用者留在頁面上
+// 看不到「正在修復中」狀態的變化（根因診斷打本地模型要 1-3 分鐘，使用者應該要
+// 能親眼看著它從「正在修復」變成「修好了」，不用自己手動按重新整理）。這支 API
+// 只讀記憶體內的狀態，不會連 K8s，5 秒一次的頻率不會造成負擔。
+if(loggedIn){
+  setInterval(() => {
+    if(document.getElementById('page-healer')?.classList.contains('active')) loadHealerBgStatus();
+  }, 5000);
 }
 
 // ── Stats ──
@@ -3157,14 +3181,27 @@ async function diagnosePodDetail(name){
     const r = await fetch(`/api/pods/${encodeURIComponent(name)}?diagnose=1`);
     const d = await r.json();
     const diag = ((d.pods||[])[0]||{}).diagnosis;
-    el.innerHTML = diag
-      ? `<b>根因 / Root cause：</b>${escHtml(diag.root_cause||'-')}<br><b>建議 / Suggestion：</b>${escHtml(diag.suggestion||'-')}`
-      : '無法取得診斷（可能是監控模型尚未啟動） / Diagnosis unavailable';
+    // 2026-10-07：改走 diagnose_issue()（規則層）後永遠回傳 dict，不會再是 null——
+    // 用 root_cause 存不存在判斷有沒有真的診斷出東西，比判斷 diag 本身存不存在準確。
+    if(diag && diag.root_cause){
+      let html = `<b>根因 / Root cause：</b>${escHtml(diag.root_cause)}<br><b>建議 / Suggestion：</b>${escHtml(diag.suggestion||'-')}`;
+      if(diag.llm_raw_guess){
+        // 近失事件可見化：規則層判斷證據不足、蓋掉了模型原本的猜測時，誠實呈現出來。
+        html += `<div style="margin-top:6px;color:var(--text3);font-size:12px">AI 原本以為「${escHtml(diag.llm_raw_guess)}」，但證據不足，系統沒有採用這個說法 / `+
+                `AI originally guessed "${escHtml(diag.llm_raw_guess)}", but there wasn't enough evidence, so the system did not adopt it.</div>`;
+      }
+      el.innerHTML = html;
+    } else {
+      el.textContent = '無法取得診斷（可能是監控模型尚未啟動） / Diagnosis unavailable';
+    }
   }catch(e){ el.textContent = 'Error: '+e; }
 }
 
 function _fmtChartTime(iso){
-  try{ return new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+  // 背景取樣每 30 秒一次，只顯示到分鐘的話，資料還沒累積超過 1 分鐘時左右兩個
+  // 時間標籤會顯示成一模一樣的字串（看起來像時間軸沒在動，但其實只是同一分鐘內
+  // 的兩個取樣點）——補上秒數讓標籤能反映真實的取樣間隔。
+  try{ return new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'}); }
   catch(e){ return ''; }
 }
 
@@ -3234,6 +3271,7 @@ async function fixPod(pod){
   const d=await r.json();
   let msg=d.message||d.error||'Done';
   if(d.root_cause) msg=`根因 / Root cause：${d.root_cause}\n修復動作 / Action：${d.action||'-'}\n\n${msg}`;
+  if(d.llm_raw_guess) msg+=`\n\n（AI 原本以為是：${d.llm_raw_guess}，但證據不足，系統沒有採用這個說法 / AI originally guessed "${d.llm_raw_guess}", but there wasn't enough evidence, so it wasn't used.）`;
   alert(msg);
   loadPodList();
   loadHealerBgStatus();
@@ -3246,7 +3284,8 @@ async function healerAutoFix(){
   const d=await r.json();
   let msg='Fixed: '+d.fixed+', Failed: '+d.failed;
   if(Array.isArray(d.details) && d.details.length){
-    msg+='\n\n'+d.details.map(x=>`- ${x.pod}: ${x.root_cause||x.error||'-'} → ${x.action||'-'}`).join('\n');
+    msg+='\n\n'+d.details.map(x=>`- ${x.pod}: ${x.root_cause||x.error||'-'} → ${x.action||'-'}`+
+      (x.llm_raw_guess ? `（AI 原本以為：${x.llm_raw_guess}，證據不足未採用）` : '')).join('\n');
   }
   alert(msg);
   loadPodList();
@@ -3261,15 +3300,29 @@ async function loadHealerBgStatus(){
     const r=await fetch('/api/healer/status'); const d=await r.json();
     if(d.running){
       banner.style.background='#ECFDF5'; banner.style.border='1px solid #6EE7B7'; banner.style.color='#065F46';
-      banner.textContent=`🟢 自動監控中，每 30 秒自動掃描一次${d.last_scan?'，上次掃描：'+new Date(d.last_scan).toLocaleTimeString():''} / Auto-monitoring active, scans every 30s`;
+      banner.innerHTML=`🟢 自動監控中，每 30 秒自動掃描一次${d.last_scan?'，上次掃描：'+new Date(d.last_scan).toLocaleTimeString():''} / Auto-monitoring active, scans every 30s`;
     } else if(d.message){
       // K8s 有連線，但背景執行緒死掉或卡住了——這是真正的異常，不是「K8s 沒連線」這種
       // 正常情況，用紅色橫幅+具體建議動作顯示，不能只顯示跟正常運行時一樣的灰/黃色調。
       banner.style.background='#FEF2F2'; banner.style.border='1px solid #FCA5A5'; banner.style.color='#991B1B';
-      banner.textContent='🔴 '+d.message;
+      banner.innerHTML='🔴 '+escHtml(d.message);
     } else {
       banner.style.background='#FFFBEB'; banner.style.border='1px solid #FCD34D'; banner.style.color='#92400E';
-      banner.textContent='⚠️ 未啟動自動監控（K8s 未連線），只能手動掃描 / Auto-monitoring is not running (K8s not connected) — manual scan only';
+      banner.innerHTML='⚠️ 未啟動自動監控（K8s 未連線），只能手動掃描 / Auto-monitoring is not running (K8s not connected) — manual scan only';
+    }
+    // 「正在修復中」獨立顯示一行轉圈動畫，不管上面 banner 是什麼顏色都疊加在
+    // 下面——根因診斷固定要打一次本地 LLM，實測 2-3 分鐘跑不掉，使用者點進來
+    // 不該看到「沒有任何動靜」，要讓他知道系統正在忙、不是卡住或沒反應。
+    const procEl=document.getElementById('healer-processing');
+    if(procEl){
+      if(d.processing){
+        const p=d.processing;
+        procEl.style.display='flex';
+        procEl.innerHTML=`<div class="spinner"></div><span>正在修復 ${escHtml(p.pod||'')}（${escHtml(p.reason||'')}）... 根因診斷需要跑本地模型，約 1-3 分鐘 / Healing ${escHtml(p.pod||'')} (${escHtml(p.reason||'')})... root-cause analysis runs a local model, ~1-3 min</span>`;
+      } else {
+        procEl.style.display='none';
+        procEl.innerHTML='';
+      }
     }
     const acts=d.recent_actions||[];
     list.innerHTML = acts.length ? acts.map(a=>`
@@ -3279,6 +3332,7 @@ async function loadHealerBgStatus(){
           <span style="color:var(--text3)">${a.time?new Date(a.time).toLocaleTimeString():''}</span>
         </div>
         <div style="font-size:12px;color:#6B7280;margin-top:2px">${escHtml(a.reason||'')} → ${escHtml(a.root_cause||a.error||'-')} → ${escHtml(a.action||'-')} ${a.ok===false?'❌':'✅'}</div>
+        ${a.llm_raw_guess ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">AI 原本的猜測：${escHtml(a.llm_raw_guess)}（未採用，證據不足）</div>` : ''}
       </div>`).join('') : '<div style="color:var(--text3);font-size:13px">尚未發生自動修復事件 / No auto-heal events yet</div>';
   }catch(e){}
 }
@@ -3932,7 +3986,7 @@ function matchClientRule(text){
     ['healer_scan', /^(healer|scan)\b|\u6383\u63cf.*(pod|\u58de|\u7570\u5e38)/i, null],
     ['pod_health', /([a-zA-Z0-9][\w.-]*)\s*(?:\u9019\u500b)?\s*(?:pod|deployment|\u90e8\u7f72)?\s*(?:\u6709\u6c92\u6709\u58de|\u58de\u4e86\u6c92|\u58de\u6389\u4e86\u55ce|\u58de\u4e86\u55ce|\u6b63\u5e38\u55ce|\u5065\u5eb7\u55ce|\u639b\u4e86\u55ce|\u639b\u6389\u4e86\u55ce|\u9084\u6d3b\u8457\u55ce|\u6c92\u4e8b\u5427|\u6709\u554f\u984c\u55ce|ok\s*\u55ce)/i, m=>({name:m[1]})],
     ['pod_health', /^is\s+([a-zA-Z0-9][\w.-]*)\s+(?:ok|okay|healthy|broken|down|up|crashing|running|alive)/i, m=>({name:m[1]})],
-    ['describe_deployment', /(?:deployment|\u90e8\u7f72)\s+([a-zA-Z0-9][\w.-]*)\s*(?:\u7684?\s*(?:\u72c0\u614b|\u7d30\u7bc0|\u8a73\u60c5|status))?/i, m=>({name:m[1]})],
+    ['describe_deployment', /(?:deployment|\u90e8\u7f72)\s+([a-zA-Z0-9][\w.-]*)\s*(?:\u7684?\s*(?:\u72c0\u614b|\u7d30\u7bc0|\u8a73\u60c5|status))/i, m=>({name:m[1]})],
     ['describe_deployment', /([a-zA-Z0-9][\w.-]*)\s*(?:\u9019\u500b)?\s*(?:deployment|\u90e8\u7f72)\s*(?:\u7684?\s*(?:\u72c0\u614b|\u7d30\u7bc0|\u8a73\u60c5))/i, m=>({name:m[1]})],
     ['describe_pod', /(?:\u67e5\u770b|detail(?:s)?\s*(?:of)?|describe|\u6aa2\u8996)\s*(?:pod\s+)?([a-zA-Z0-9][\w.-]*)/i, m=>({name:m[1]})],
     ['describe_pod', /([a-zA-Z0-9][\w.-]*)\s*(?:\u9019\u500b)?\s*pod\s*(?:\u7684?\s*(?:\u7d30\u7bc0|\u72c0\u614b|\u8a73\u60c5|\u8cc7\u8a0a))/i, m=>({name:m[1]})],
@@ -4454,15 +4508,20 @@ async function runReadAction(action){
 }
 
 function _contLine(c){
-  return `  \u00b7 ${c.name} [${c.state}${c.reason?'/'+c.reason:''}] ready=${c.ready?'yes':'no'} restarts=${c.restart_count}`
-    + (c.message?`\n    ${String(c.message).slice(0,160)}`:'');
+  // c.message \u662f\u5bb9\u5668\u72c0\u614b\u8a0a\u606f\uff0cK8s \u5bb9\u8a31 terminationMessagePath \u8b93\u5bb9\u5668\u81ea\u5df1\u5beb\u5165\u4efb\u610f
+  // \u6587\u5b57\u2014\u2014\u7406\u8ad6\u4e0a\u4f7f\u7528\u8005\u81ea\u5df1\u7684 Pod \u53ef\u4ee5\u585e\u9032\u60e1\u610f\u5167\u5bb9\uff0c\u9019\u6bb5\u6587\u5b57\u6700\u5f8c\u6703\u539f\u5c01\u4e0d\u52d5\u585e\u9032
+  // appendMsg('assistant', ...)\uff08renderMsgHTML \u5c0d assistant \u5167\u5bb9\u4e0d\u6703 escHtml\uff09\uff0c
+  // \u4e00\u5b9a\u8981\u904e escHtml() \u624d\u80fd\u653e\u9032\u53bb\uff0c\u4e0d\u7136\u7b49\u65bc\u81ea\u5df1\u958b\u4e00\u500b XSS \u7d66\u81ea\u5df1\uff08\u6216\u65e5\u5f8c\u6709\u7ba1\u7406\u54e1
+  // \u89d2\u8272\u770b\u5230\u5225\u4eba Pod \u7684\u8a73\u60c5\u6642\uff0c\u8b8a\u6210\u770b\u5f97\u5230\u5225\u4eba Pod \u7684\u8de8\u4f7f\u7528\u8005 XSS\uff09\u3002
+  return `  \u00b7 ${escHtml(c.name)} [${escHtml(c.state)}${c.reason?'/'+escHtml(c.reason):''}] ready=${c.ready?'yes':'no'} restarts=${c.restart_count}`
+    + (c.message?`\n    ${escHtml(String(c.message).slice(0,160))}`:'');
 }
 function fmtPodDetail(pods, name){
   return pods.map(p=>{
-    const evs = (p.events||[]).slice(0,3).map(e=>`  event ${e.reason}: ${String(e.message).slice(0,120)}`).join('\n');
-    return `Pod ${p.name}\n`
-      + `phase: ${p.phase}   node: ${p.node||'-'}   ip: ${p.ip||'-'}   age: ${p.age}   restarts: ${p.restarts}\n`
-      + `health: ${p.healthy?'\u2705 \u6b63\u5e38':'\u274c '+p.health_summary}\n`
+    const evs = (p.events||[]).slice(0,3).map(e=>`  event ${escHtml(e.reason)}: ${escHtml(String(e.message).slice(0,120))}`).join('\n');
+    return `Pod ${escHtml(p.name)}\n`
+      + `phase: ${escHtml(p.phase)}   node: ${escHtml(p.node||'-')}   ip: ${escHtml(p.ip||'-')}   age: ${escHtml(p.age)}   restarts: ${p.restarts}\n`
+      + `health: ${p.healthy?'\u2705 \u6b63\u5e38':'\u274c '+escHtml(p.health_summary)}\n`
       + `containers:\n${(p.containers||[]).map(_contLine).join('\n')}`
       + (evs?`\nrecent events:\n${evs}`:'');
   }).join('\n\n');
@@ -4470,17 +4529,22 @@ function fmtPodDetail(pods, name){
 function fmtPodHealth(pods, name){
   const bad = pods.filter(p=>!p.healthy);
   const head = bad.length
-    ? `\u274c ${name}\uff1a${bad.length}/${pods.length} \u500b pod \u6709\u554f\u984c`
-    : `\u2705 ${name}\uff1a${pods.length} \u500b pod \u90fd\u6b63\u5e38\u904b\u884c`;
+    ? `\u274c ${escHtml(name)}\uff1a${bad.length}/${pods.length} \u500b pod \u6709\u554f\u984c`
+    : `\u2705 ${escHtml(name)}\uff1a${pods.length} \u500b pod \u90fd\u6b63\u5e38\u904b\u884c`;
   const lines = pods.map(p=>{
-    let s = `  - ${p.name}: ${p.healthy?'\u6b63\u5e38':p.health_summary}\uff08\u91cd\u555f ${p.restarts} \u6b21\uff09`;
+    let s = `  - ${escHtml(p.name)}: ${p.healthy?'\u6b63\u5e38':escHtml(p.health_summary)}\uff08\u91cd\u555f ${p.restarts} \u6b21\uff09`;
     if(!p.healthy){
       const ev = (p.events||[])[0];
-      if(ev) s += `\n    \u6700\u8fd1\u4e8b\u4ef6: ${ev.reason} \u2014 ${String(ev.message).slice(0,140)}`;
+      if(ev) s += `\n    \u6700\u8fd1\u4e8b\u4ef6: ${escHtml(ev.reason)} \u2014 ${escHtml(String(ev.message).slice(0,140))}`;
       if(p.diagnosis){
         const dg = p.diagnosis;
-        s += `\n    \ud83d\udd0e \u6839\u56e0: ${dg.root_cause||'-'}`;
-        if(dg.suggestion) s += `\n    \ud83d\udca1 \u5efa\u8b70: ${dg.suggestion}`;
+        // dg.root_cause/suggestion \u662f\u76e3\u63a7\u5c0f\u6a21\u578b\u6839\u64da\u9019\u500b Pod \u7684\u65e5\u8a8c\u751f\u6210\u7684\u6587\u5b57\u2014\u2014
+        // \u65e5\u8a8c\u672c\u8eab\u53ef\u80fd\u88ab\u60e1\u610f\u5bb9\u5668\u523b\u610f\u585e\u9032\u985e\u4f3c\u63d0\u793a\u6ce8\u5165\u7684\u5167\u5bb9\uff0c\u6a21\u578b\u8f38\u51fa\u4e0d\u53ef\u4fe1\u4efb\uff0c
+        // \u4e00\u5b9a\u8981 escHtml()\uff0c\u8ddf model_server.py /diagnose \u7aef\u9ede\u5c0d pod \u65e5\u8a8c\u505a\u6587\u5b57
+        // \u6de8\u5316\u662f\u540c\u4e00\u500b\u5a01\u8105\u6a21\u578b\uff08\u898b core/model_server.py \u7684\u5c0d\u61c9\u8a3b\u89e3\uff09\u3002
+        s += `\n    \ud83d\udd0e \u6839\u56e0: ${escHtml(dg.root_cause||'-')}`;
+        if(dg.suggestion) s += `\n    \ud83d\udca1 \u5efa\u8b70: ${escHtml(dg.suggestion)}`;
+        if(dg.llm_raw_guess) s += `\n    \uff08AI \u539f\u672c\u4ee5\u70ba\uff1a${escHtml(dg.llm_raw_guess)}\uff0c\u8b49\u64da\u4e0d\u8db3\u672a\u63a1\u7528\uff09`;
       }
     }
     return s;
@@ -4488,21 +4552,55 @@ function fmtPodHealth(pods, name){
   return head + '\n' + lines;
 }
 function fmtDeployDetail(d){
-  const conds = (d.conditions||[]).map(c=>`  \u00b7 ${c.type}=${c.status}${c.reason?' ('+c.reason+')':''}`).join('\n');
-  return `Deployment ${d.name}\n`
-    + `health: ${d.healthy?'\u2705 ':'\u274c '}${d.health_summary}\n`
+  const conds = (d.conditions||[]).map(c=>`  \u00b7 ${escHtml(c.type)}=${escHtml(c.status)}${c.reason?' ('+escHtml(c.reason)+')':''}`).join('\n');
+  return `Deployment ${escHtml(d.name)}\n`
+    + `health: ${d.healthy?'\u2705 ':'\u274c '}${escHtml(d.health_summary)}\n`
     + `replicas: ${d.ready}/${d.replicas} ready, ${d.available} available, ${d.updated} updated\n`
-    + `image: ${d.image}   age: ${d.age}`
+    + `image: ${escHtml(d.image)}   age: ${escHtml(d.age)}`
     + (conds?`\nconditions:\n${conds}`:'');
+}
+
+function renderClarifyReasonHTML(intent){
+  // \u8fd1\u5931\u4e8b\u4ef6\u53ef\u898b\u5316\uff082026-10-07\uff09\uff1aAI \u539f\u672c\u60f3\u505a\u4ec0\u9ebc\u3001\u7cfb\u7d71\u70ba\u4ec0\u9ebc\u6c92\u6709\u63a1\u4fe1\uff0c\u6524\u958b\u7d66\u4f7f\u7528\u8005\u770b\uff0c
+  // \u4e0d\u662f\u53ea\u6709\u4e00\u53e5\u901a\u7528\u7684\u300c\u6211\u4e0d\u78ba\u5b9a\u300d\u3002\u6240\u6709\u52d5\u614b\u5b57\u4e32\u90fd\u904e escHtml()\u2014\u2014ungrounded_values \u88e1\u7684
+  // value \u662f\u6a21\u578b\u8f38\u51fa\uff0c\u4e0d\u80fd\u76f4\u63a5\u585e\u9032 innerHTML\u3002
+  const reasons = intent.clarify_reasons || [];
+  const ungrounded = intent.ungrounded_values || [];
+  const proposedArgs = Object.assign({}, intent.args || {});
+  delete proposedArgs.guess;
+  if(!reasons.length) return '';
+
+  const confPct = Math.round((Number(intent.confidence) || 0) * 100);
+  const reasonLabels = {
+    low_confidence: `AI \u56de\u5831\u7684\u4fe1\u5fc3\u53ea\u6709 ${confPct}%\uff0c\u4f4e\u65bc 75% \u7684\u57f7\u884c\u9580\u6abb / AI's self-reported confidence was only ${confPct}%, below the 75% execution threshold`,
+    missing_args: `\u7f3a\u5c11\u9019\u500b\u52d5\u4f5c\u9700\u8981\u7684\u5fc5\u8981\u53c3\u6578 / Missing required parameters for this action`,
+    ungrounded_args: ungrounded.length
+      ? `AI \u731c\u7684\u300c${ungrounded.map(u=>escHtml(String(u.value))).join('\u3001')}\u300d\u6c92\u6709\u51fa\u73fe\u5728\u4f60\u7684\u8a0a\u606f\u88e1\uff0c\u53ef\u80fd\u662f\u6191\u7a7a\u731c\u7684 / `+
+        `The value${ungrounded.length>1?'s':''} "${ungrounded.map(u=>escHtml(String(u.value))).join(', ')}" that AI guessed `+
+        `${ungrounded.length>1?'don\u2019t':'doesn\u2019t'} appear in your message \u2014 likely fabricated`
+      : `AI \u731c\u7684\u5167\u5bb9\u6c92\u6709\u51fa\u73fe\u5728\u4f60\u7684\u8a0a\u606f\u88e1\uff0c\u53ef\u80fd\u662f\u6191\u7a7a\u731c\u7684 / The value AI guessed doesn't appear in your message`,
+  };
+  const lines = reasons.map(r => '- ' + (reasonLabels[r] || escHtml(r))).join('<br>');
+  const argsText = Object.keys(proposedArgs).length
+    ? escHtml(JSON.stringify(proposedArgs)) : '';
+
+  return `<details style="margin-top:10px;font-size:12px;border-top:1px solid var(--border);padding-top:8px">
+    <summary style="cursor:pointer;color:var(--text3)">\u70ba\u4ec0\u9ebc\u7cfb\u7d71\u6c92\u6709\u76f4\u63a5\u57f7\u884c / Why this wasn't executed directly</summary>
+    <div style="margin-top:6px">
+      <div style="color:var(--text2)">AI \u539f\u672c\u7684\u5224\u65b7\uff1a${escHtml(intent.action||'')}${argsText ? ' ' + argsText : ''}</div>
+      <div style="margin-top:4px;color:var(--text3)">${lines}</div>
+    </div>
+  </details>`;
 }
 
 function startClarify(intent){
   const g = (intent.args && intent.args.guess) || intent.action;
   const label = {scale:'\u64f4\u7e2e\u526f\u672c',update_image:'\u66f4\u65b0\u6620\u50cf',rollback:'\u56de\u6efe',delete:'\u522a\u9664',
                  healer_fix:'\u4fee\u5fa9 Pod',healer_auto_fix:'\u81ea\u52d5\u4fee\u5fa9'}[g] || g;
-  appendMsg('assistant', `\u6211\u4e0d\u592a\u78ba\u5b9a\u4f60\u662f\u8981\u300c${label}\u300d\u9084\u662f\u53ea\u662f\u5728\u554f\u554f\u984c\u3002\u5982\u679c\u8981\u57f7\u884c\uff0c\u8acb\u8b1b\u6e05\u695a\u4e00\u9ede\uff0c\u4f8b\u5982\uff1a\n`+
+  appendMsg('assistant', `\u6211\u4e0d\u592a\u78ba\u5b9a\u4f60\u662f\u8981\u300c${escHtml(label)}\u300d\u9084\u662f\u53ea\u662f\u5728\u554f\u554f\u984c\u3002\u5982\u679c\u8981\u57f7\u884c\uff0c\u8acb\u8b1b\u6e05\u695a\u4e00\u9ede\uff0c\u4f8b\u5982\uff1a\n`+
     `- scale <deployment> to <\u6578\u91cf>\n- delete <deployment>\n- rollback <deployment>\n`+
-    `I'm not sure if you want to run "${g}" or just asking \u2014 please phrase it as an explicit command.`);
+    `I'm not sure if you want to run "${escHtml(g)}" or just asking \u2014 please phrase it as an explicit command.`+
+    renderClarifyReasonHTML(intent));
 }
 
 async function runQA(text){
@@ -4566,7 +4664,7 @@ window.addEventListener('DOMContentLoaded', function(){
 def index():
     if "username" not in session:
         return render_template_string(HTML, logged_in=False, page='login', error=None, k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
-    return render_template_string(HTML, logged_in=True, page='app', error=None, k8s=K8S_ENABLED, username=session["username"])
+    return render_template_string(HTML, logged_in=True, page='app', error=None, k8s=K8S_ENABLED, username=session["username"], is_admin=session.get("is_admin", False))
 
 @app.route("/auth/register", methods=["GET","POST"])
 def register():
@@ -4589,6 +4687,7 @@ def register():
         json.dump(USERS, _uf)
     _ensure_user_namespace(_user_namespace(username))
     session["username"] = username
+    session["is_admin"] = False  # 密碼註冊帳號永遠不可能是管理員，見 _is_admin_user()
     return redirect("/")
 
 @app.route("/auth/login", methods=["POST"])
@@ -4624,6 +4723,7 @@ def login():
                 json.dump(USERS, _uf)
         _ensure_user_namespace(_user_namespace(username))
         session["username"] = username
+        session["is_admin"] = _is_admin_user(username)  # 密碼帳號恆為 False，保持呼叫一致避免未來改動漏掉
         return redirect("/")
     return render_template_string(HTML, logged_in=False, page='login', error="Invalid username or password", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
 
@@ -4740,6 +4840,7 @@ def google_callback():
             "This account has been banned for repeated malicious behavior. / 此帳號因累積多次惡意行為已被封鎖。")
 
     session["username"] = username
+    session["is_admin"] = _is_admin_user(username)
     return redirect("/")
 
 
@@ -4750,6 +4851,10 @@ def _enforce_ban():
     清掉 session——不需要額外做 session 撤銷機制，符合「不能靜默失敗」：不是裸的
     401/403，要講清楚原因。"""
     username = session.get("username")
+    if username:
+        # 每次請求都重新算一次 is_admin（而不是只在登入當下算），讓 ADMIN_EMAILS
+        # 允許清單異動（例如之後加組員）在下一次請求就生效，不用使用者重新登入。
+        session["is_admin"] = _is_admin_user(username)
     if username and USERS.get(username, {}).get("banned"):
         session.clear()
         if request.path.startswith("/api/"):
@@ -4791,8 +4896,13 @@ _INTENT_RULES = [
     # 單一 pod 健康：名字 + 健康疑問句
     ("pod_health", re.compile(r"([a-zA-Z0-9][\w.-]*)\s*(?:這個)?\s*(?:pod|deployment|部署)?\s*(?:有沒有壞|壞了沒|壞掉了嗎|壞了嗎|正常嗎|健康嗎|掛了嗎|掛掉了嗎|還活著嗎|沒事吧|有問題嗎|ok\s*嗎)", re.I), {1: "name"}),
     ("pod_health", re.compile(r"^is\s+([a-zA-Z0-9][\w.-]*)\s+(?:ok|okay|healthy|broken|down|up|crashing|running|alive)", re.I), {1: "name"}),
-    # 單一 deployment 狀態
-    ("describe_deployment", re.compile(r"(?:deployment|部署)\s+([a-zA-Z0-9][\w.-]*)\s*(?:的?\s*(?:狀態|細節|詳情|status)|status)?", re.I), {1: "name"}),
+    # 單一 deployment 狀態——結尾的「狀態/細節/詳情/status」關鍵字一定要有，不能
+    # 省略：2026-10-03 實測發現原本寫成 `(?:...)?`（整段可省略），導致「幫我部署
+    # 2 個 nginx」這種部署指令，因為含有「部署」+空白+「2」（數字符合
+    # `[a-zA-Z0-9]`），在完全沒有查詢狀態意圖的情況下也會配對成功，把「2」誤判成
+    # 使用者要查的 deployment 名稱，排在下面真正的 deploy 規則之前被攔截，整句話
+    # 變成查一個叫「2」的 deployment（查不到，顯示「找不到 deployment '2'」）。
+    ("describe_deployment", re.compile(r"(?:deployment|部署)\s+([a-zA-Z0-9][\w.-]*)\s*(?:的?\s*(?:狀態|細節|詳情|status)|status)", re.I), {1: "name"}),
     ("describe_deployment", re.compile(r"([a-zA-Z0-9][\w.-]*)\s*(?:這個)?\s*(?:deployment|部署)\s*(?:的?\s*(?:狀態|細節|詳情))", re.I), {1: "name"}),
     # 單一 pod 細節
     ("describe_pod", re.compile(r"(?:查看|detail(?:s)?\s*(?:of)?|describe|檢視)\s*(?:pod\s+)?([a-zA-Z0-9][\w.-]*)", re.I), {1: "name"}),
@@ -4810,6 +4920,53 @@ _INTENT_RULES = [
     ("deploy", re.compile(r"(?:幫我|請).{0,6}(?:deploy|部署|佈署|部屬|跑|起).{0,8}(?:\d+\s*(?:個|pods?|副本)|nginx|redis|postgres|mysql|node|python|image|映像|鏡像)", re.I), {}),
 ]
 _INTENT_INT_ARGS = {"replicas", "pods", "port"}
+_INTENT_NAME_ARGS = {"name", "pod_name"}
+_PLAUSIBLE_RESOURCE_NAME_RE = re.compile(r"^[a-zA-Z0-9][\w.-]{0,62}$")
+# image 跟 name 的格式不一樣（image 可以有 / 跟 :，例如 nginx:latest、
+# registry.example.com/team/app:v1），但一樣可能被同一類垃圾字串污染，另外開
+# 一條寬度略有不同的規則。
+_PLAUSIBLE_IMAGE_RE = re.compile(r"^[a-zA-Z0-9][\w./:-]{0,127}$")
+# 2026-10-07 大規模掃描（206 題）實測發現：_PLAUSIBLE_RESOURCE_NAME_RE 只檢查
+# 字串「長得像不像合法識別碼」，不檢查語意——常見英文虛詞/泛稱詞剛好都是純小寫
+# ASCII 字母，一樣會通過。實測到的真實案例：「delete everything in this
+# cluster」被規則層當成要刪除一個叫 "everything" 的資源、信心 1.0 直接執行；
+# 「remove the deployment named test-app」名稱被抓成 "the"，真正的目標
+# test-app 完全沒抓到；「update the image of cache-server to redis:7」名稱
+# "the"、映像 "of" 兩個欄位都是虛詞。這些詞在 K8s 裡幾乎不可能是真的資源名稱，
+# 即使字面格式合法也要擋下來，讓請求 fall through 到有事實查核能力的
+# classify_intent()，而不是用規則層的假 100% 信心直接放行垃圾值。
+_IMPLAUSIBLE_NAME_WORDS = {
+    "the", "a", "an", "of", "to", "for", "and", "or", "with", "from",
+    "this", "that", "these", "those", "it", "its", "everything", "anything",
+    "nothing", "something", "all", "any", "some", "none", "them", "they",
+    "my", "your", "our", "his", "her", "their", "container", "service",
+    "deployment", "pod", "image", "name", "cluster", "namespace", "resource", "app",
+}
+
+
+def _looks_like_resource_name(s: str) -> bool:
+    """K8s 資源名稱只會是 ASCII 英數字/連字號/底線/點，長度上限 63。2026-10-06
+    QA 掃描實測發現 `(\\S+)` 這種寬鬆比對會把整段中文句子都吃進去當名稱（例如
+    「幫我把剛剛部署的東西回滾」的 name 被塞成「幫我把剛剛部署的東西」）——用這個
+    檢查擋掉明顯不是識別碼的候選字串，讓請求 fall through 到後面有事實查核能力
+    的 classify_intent()，而不是用規則層的假 100% 信心直接放行垃圾值。"""
+    if s.lower() in _IMPLAUSIBLE_NAME_WORDS:
+        return False
+    return bool(_PLAUSIBLE_RESOURCE_NAME_RE.match(s))
+
+
+def _looks_like_image_value(s: str) -> bool:
+    """同上，但給 image 欄位用（格式容許 / 跟 :）。"""
+    if s.lower() in _IMPLAUSIBLE_NAME_WORDS:
+        return False
+    return bool(_PLAUSIBLE_IMAGE_RE.match(s))
+
+
+_QUESTION_MARKERS_RE = re.compile(
+    r"是什麼|做什麼|是幹嘛|是幹什麼|怎麼用|有什麼用|用來做什麼|的意思|是不是|"
+    r"[？?]$|\bwhat\s+(is|does|are)\b|\bhow\s+(do|does|is)\b",
+    re.IGNORECASE,
+)
 
 
 def _rule_intent(message: str):
@@ -4821,7 +4978,16 @@ def _rule_intent(message: str):
         m = rx.search(msg)
         if not m:
             continue
+        # 2026-10-07 大規模掃描實測發現：gitops_log/healer_scan 這類「只看開頭
+        # 關鍵字、不需要任何參數」的規則，會把「GitOps 是什麼」「Healer 這個功能
+        # 是做什麼用的」這種明顯在問概念的句子，直接當成指令執行（真的去撈 git log
+        # /真的去掃描 pod），答非所問。這類規則（groupmap 是空字典，代表沒有要求
+        # 抽取任何具體目標）如果訊息本身帶有疑問句標記，視為沒命中，讓它 fall
+        # through 到後面能正確分類成 qa 的 classify_intent()。
+        if not groupmap and _QUESTION_MARKERS_RE.search(msg):
+            continue
         args = {}
+        implausible = False
         for gi, key in groupmap.items():
             try:
                 val = m.group(gi)
@@ -4835,7 +5001,15 @@ def _rule_intent(message: str):
                     val = int(val)
                 except ValueError:
                     continue
+            elif key in _INTENT_NAME_ARGS and not _looks_like_resource_name(val):
+                implausible = True
+                break
+            elif key == "image" and not _looks_like_image_value(val):
+                implausible = True
+                break
             args[key] = val
+        if implausible:
+            continue
         # 有 group 需求卻沒抓到 -> 視為未命中，交給模型
         if groupmap and len(args) < len(groupmap):
             continue
@@ -5519,7 +5693,7 @@ def api_deploy_parse():
     if not user_input and parsed_override:
         user_input = _synth_input_from_spec(parsed_override)
     if not user_input or len(user_input) < 3:
-        return jsonify({"error": "Input too short"}), 400
+        return jsonify({"error": "輸入內容太短，請描述清楚要部署什麼 / Input too short — please describe what you want to deploy"}), 400
     parsed, enriched, review, error = _prepare_deploy(user_input, parsed_override)
     if error:
         payload, status = error
@@ -5542,7 +5716,7 @@ def api_deploy():
     if not user_input and parsed_override:
         user_input = _synth_input_from_spec(parsed_override)
     if not user_input or len(user_input) < 3:
-        return jsonify({"error": "Input too short"}), 400
+        return jsonify({"error": "輸入內容太短，請描述清楚要部署什麼 / Input too short — please describe what you want to deploy"}), 400
 
     parsed, enriched, review, error = _prepare_deploy(user_input, parsed_override)
     if error:
@@ -5626,8 +5800,13 @@ def api_pod_detail(name):
                 "events": [{"reason": e["reason"], "message": e["message"]} for e in pd["events"]],
             }
             try:
-                from llama_client import diagnose_with_llm
-                pd["diagnosis"] = diagnose_with_llm(ctx)
+                # 2026-10-07 修 bug：原本直接打 diagnose_with_llm()，完全繞過
+                # healer/diagnose.py 的規則層——背景自癒迴圈跟「Fix」按鈕都有
+                # _has_concrete_signal() 幻覈防護，使用者手動點「Diagnose」看到的
+                # 結果卻完全沒有，可能顯示幻覈出來的根因。改走同一個函式，順便
+                # 自動帶上 llm_raw_guess（近失事件可見化）。
+                from healer.diagnose import diagnose_issue
+                pd["diagnosis"] = diagnose_issue(ctx)
             except Exception as e:
                 pd["diagnosis"] = None
     return jsonify({"pods": pods, "found": True})
@@ -5704,7 +5883,7 @@ def api_update():
         old_image = dep.spec.template.spec.containers[0].image
         annotations = dep.spec.template.metadata.annotations or {}
         annotations["zerotouch.k8s/previous-image"] = old_image
-        annotations["zerotouch.k8s/updated-at"] = datetime.utcnow().isoformat()
+        annotations["zerotouch.k8s/updated-at"] = _utc_now_iso()
         dep.spec.template.metadata.annotations = annotations
         dep.spec.template.spec.containers[0].image = image
         api.patch_namespaced_deployment(name, user_ns, dep)
@@ -5752,7 +5931,7 @@ def api_rollback():
             }), 500
         current = dep.spec.template.spec.containers[0].image
         annotations["zerotouch.k8s/previous-image"] = current
-        annotations["zerotouch.k8s/rolled-back-at"] = datetime.utcnow().isoformat()
+        annotations["zerotouch.k8s/rolled-back-at"] = _utc_now_iso()
         dep.spec.template.metadata.annotations = annotations
         dep.spec.template.spec.containers[0].image = previous
         api.patch_namespaced_deployment(app_name, user_ns, dep)
@@ -5934,6 +6113,7 @@ def _real_heal_pod(pod_name: str, namespace: str = "default") -> dict:
     result = remediate(issue, diagnosis)
     result["root_cause"] = diagnosis.get("root_cause")
     result["severity"] = diagnosis.get("severity")
+    result["llm_raw_guess"] = diagnosis.get("llm_raw_guess")  # 近失事件可見化，見 healer/diagnose.py
     return result
 
 
@@ -5943,7 +6123,31 @@ def _real_heal_pod(pod_name: str, namespace: str = "default") -> dict:
 # 核心原則「判斷即時、不用舊值唬弄」。現在改成即時查真正的執行緒物件是否還活著，
 # 並且額外比對 last_scan 有沒有久到不正常（執行緒卡住/掛住不會被 is_alive() 抓到，
 # 因為卡住的執行緒技術上還「活著」，只是沒有在前進，只能靠比對時間戳才能發現）。
-_healer_bg_state = {"last_scan": None, "recent_actions": [], "started_at": None, "interval": 30}
+def _utc_now_iso() -> str:
+    """統一的 UTC 時間字串產生器。2026-10-03 實測發現：這個檔案原本到處直接呼叫
+    `datetime.utcnow().isoformat()`，產生的字串沒有時區標記（例如
+    `2026-10-03T14:43:18`）。前端 JS 的 `new Date(...)` 看到沒有時區標記的
+    ISO 字串，會把它當成「當地時間」解析，不是 UTC——這台機器在 UTC+8，畫面上
+    顯示的 Healer 時間因此比實際晚了整整 8 小時。結尾加 "Z" 讓 JS 正確辨識成
+    UTC 再轉當地時間顯示。"""
+    return datetime.utcnow().isoformat() + "Z"
+
+
+def _parse_utc_iso(s: str) -> datetime:
+    """`_utc_now_iso()` 的反向轉換。Python 3.9 的 `datetime.fromisoformat()`
+    不吃結尾 "Z"（Python 3.11 才支援），呼叫前先去掉；舊資料／沒有 "Z" 的字串
+    也要能正常解析，所以用 `endswith` 判斷而不是直接硬切。"""
+    return datetime.fromisoformat(s[:-1] if s.endswith("Z") else s)
+
+
+_healer_bg_state = {
+    "last_scan": None, "recent_actions": [], "started_at": None, "interval": 30,
+    # 目前正在處理哪個 pod（不是「掃描完一輪」才更新，而是「開始處理這一個」就
+    # 更新）——給前端畫「正在修復中」的轉圈動畫用，也用來跟 liveness 判斷區分
+    # 「卡住」跟「正在忙，只是忙很久」（根因診斷固定會打一次本地 LLM，實測一次
+    # 2-3 分鐘跑不掉，不能因為處理時間長就誤判成卡住）。
+    "processing": None,
+}
 _healer_bg_lock = threading.Lock()
 _healer_bg_thread = None  # 全域保存 Thread 物件本身，供 /api/healer/status 查 is_alive()
 _HEALER_BG_MAX_HISTORY = 50
@@ -5951,19 +6155,39 @@ _HEALER_BG_MAX_HISTORY = 50
 # 2026-09-15：Pod 時間序列記錄（Healer 視覺化的趨勢圖用），跟 _healer_bg_state
 # 是不同的東西——那個只記「有問題、被修復過」的 Pod，這裡記「每一個 Pod 每一刻的
 # 輕量快照」，不管有沒有問題都記，才能畫出「這段時間大部分健康還是一直在壞」的圖。
-# key 是 pod 名稱（不是 Deployment 名稱）——K8s 裡 Pod 名稱不是永久的，如果 Healer
-# 真的刪掉壞 Pod 讓它重建，新 Pod 會有新名稱、歷史自然斷掉重新開始，這是已知、
-# 可接受的限制（沒有跨 Pod 名稱拼接歷史，那是要比對 app label 的更大工程）。
-_pod_history = {}  # key: f"{namespace}/{pod_name}" -> list[sample dict]
+#
+# 2026-10-03 改成用「推斷出來的 Deployment／app 名稱」當 key，不是用 Pod 名稱
+# 本身——原本的設計（見下面曾經的註解）是用 Pod 名稱當 key，但 Healer 真的把壞
+# Pod 修好的手段常常是「讓 K8s 重建一個新 Pod」（改 memory limit、rollout undo
+# 都會觸發新的 ReplicaSet），新 Pod 一定會有新名稱，歷史因此每次都從空的重新
+# 開始，使用者點進去只看得到「現在這個 Pod」的一小段平直綠線，完全看不出「這個
+# 服務曾經壞過、後來被修好」的過程——這正是這個功能的核心賣點，卻被資料模型本身
+# 擋住了。改成用 `_app_key_for_pod()` 推斷出的穩定名稱（這個專案建的 Deployment
+# 一律 `metadata.name` = app_name = `labels.app`，格式固定是
+# `<app_name>-<replicaset hash>-<pod hash>`），同一個服務不管重建幾次 Pod，
+# 歷史都累積在同一個 key 底下，時間軸才看得出完整的壞掉→修復過程。
+_pod_history = {}  # key: f"{namespace}/{app_name}" -> list[sample dict]
 _pod_history_lock = threading.Lock()
 _POD_HISTORY_MAX_SAMPLES = 120  # 30 秒一次，120 筆 ≈ 1 小時
+
+
+def _app_key_for_pod_name(pod_name: str) -> str:
+    """從 Pod 名稱推斷出穩定的 app／Deployment 名稱，拿掉最後兩段隨機後綴
+    （ReplicaSet hash + Pod hash）。跟 healer/remediate.py 的
+    `_infer_deployment_name()` 是同一套邏輯，這裡獨立一份是因為那邊回傳
+    `Optional[str]`（找不到回 None），這裡需要一個保證有值的版本（找不到就
+    退回原始 Pod 名稱，至少還是能用，只是退化回舊行為，不是整個失敗）。"""
+    parts = pod_name.rsplit("-", 2)
+    if len(parts) >= 2:
+        return parts[0]
+    return pod_name
 
 
 def _pod_light_snapshot(pod) -> dict:
     """給時間序列用的輕量快照，不像 _pod_detail() 那麼重（不查 events，那個較貴）。"""
     statuses = pod.status.container_statuses or []
     return {
-        "t": datetime.utcnow().isoformat(),
+        "t": _utc_now_iso(),
         "phase": (pod.status.phase if pod.status else "") or "Unknown",
         "restarts": sum(cs.restart_count for cs in statuses),
         "ready": sum(1 for cs in statuses if cs.ready),
@@ -5972,8 +6196,13 @@ def _pod_light_snapshot(pod) -> dict:
 
 
 def _get_pod_history(namespace: str, name: str) -> list:
+    """`name` 是使用者點進去那個「現在這個 Pod」的名稱，但儲存時是用推斷出來的
+    app 名稱當 key（見上面 `_app_key_for_pod_name()` 的說明）——查的時候要做
+    同樣的推斷，才能拿到「這個服務」的完整歷史，不是只有這一個 Pod incarnation
+    的片段。"""
     with _pod_history_lock:
-        return list(_pod_history.get(f"{namespace}/{name}", []))
+        app_key = _app_key_for_pod_name(name)
+        return list(_pod_history.get(f"{namespace}/{app_key}", []))
 
 
 def _healer_background_loop(interval: int = 30):
@@ -6002,28 +6231,40 @@ def _healer_background_loop(interval: int = 30):
                 if key in seen:
                     continue
                 seen.add(key)
+                # 開始處理這一個 issue 就先登記「正在處理中」，不是等整批都處理完
+                # 才更新狀態——根因診斷固定會打一次本地 LLM，實測一次 2-3 分鐘跑
+                # 不掉，前端要能顯示「正在修復 X」的進度，liveness 判斷也要能用
+                # 這個欄位分辨「卡住」跟「正在忙、只是忙很久」。
+                with _healer_bg_lock:
+                    _healer_bg_state["processing"] = {
+                        "pod": issue["pod_name"], "namespace": issue["namespace"],
+                        "reason": issue["reason"], "since": _utc_now_iso(),
+                    }
                 try:
                     result = _real_heal_pod(issue["pod_name"], issue["namespace"])
                     entry = {
-                        "time": datetime.utcnow().isoformat(), "pod": issue["pod_name"],
+                        "time": _utc_now_iso(), "pod": issue["pod_name"],
                         "namespace": issue["namespace"], "reason": issue["reason"],
                         "root_cause": result.get("root_cause"), "action": result.get("action"),
                         "ok": result.get("ok"), "message": result.get("message"),
+                        "llm_raw_guess": result.get("llm_raw_guess"),
                     }
                 except Exception as e:
                     entry = {
-                        "time": datetime.utcnow().isoformat(), "pod": issue["pod_name"],
+                        "time": _utc_now_iso(), "pod": issue["pod_name"],
                         "namespace": issue["namespace"], "reason": issue["reason"],
                         "ok": False, "error": str(e),
                     }
                 with _healer_bg_lock:
+                    _healer_bg_state["processing"] = None
                     _healer_bg_state["recent_actions"].insert(0, entry)
                     _healer_bg_state["recent_actions"] = _healer_bg_state["recent_actions"][:_HEALER_BG_MAX_HISTORY]
             seen &= now_keys
             with _healer_bg_lock:
-                _healer_bg_state["last_scan"] = datetime.utcnow().isoformat()
+                _healer_bg_state["last_scan"] = _utc_now_iso()
         except Exception:
-            pass
+            with _healer_bg_lock:
+                _healer_bg_state["processing"] = None
 
         # Pod 時間序列快照——跟上面「掃問題、修復」是獨立的邏輯，故意包在自己的
         # try/except，避免這段（新功能，較不成熟）萬一出錯拖累上面已經穩定運作的
@@ -6031,7 +6272,8 @@ def _healer_background_loop(interval: int = 30):
         try:
             core = k8s_client.CoreV1Api()
             for pod in core.list_pod_for_all_namespaces().items:
-                key = f"{pod.metadata.namespace}/{pod.metadata.name}"
+                app_key = pod.metadata.labels.get("app") if pod.metadata.labels else None
+                key = f"{pod.metadata.namespace}/{app_key or _app_key_for_pod_name(pod.metadata.name)}"
                 snap = _pod_light_snapshot(pod)
                 with _pod_history_lock:
                     hist = _pod_history.setdefault(key, [])
@@ -6042,27 +6284,47 @@ def _healer_background_loop(interval: int = 30):
 
 
 def _healer_bg_liveness() -> dict:
-    """即時算出背景自動修復迴圈的真實狀態，不用啟動時設過一次就不再檢查的舊旗標。"""
+    """即時算出背景自動修復迴圈的真實狀態，不用啟動時設過一次就不再檢查的舊旗標。
+
+    2026-10-03 修復：原本只看「多久沒更新 last_scan」（> interval*3 = 90 秒）就
+    判定卡住，但根因診斷固定會打一次本地 LLM，實測一次就要 2-3 分鐘，`last_scan`
+    本來就要等整批 issue 都處理完才會更新——每次 Healer 正在認真修東西的時候，
+    這個檢查反而會跳出「卡住了」的假警報，剛好是最不該報假警報的時刻。現在改成
+    優先看 `processing`（正在處理中，見 `_healer_background_loop` 的說明）：
+    只要有正在處理的紀錄、而且開始時間還在合理範圍內（給到 interval*20=10 分鐘，
+    涵蓋多個 issue 要排隊處理的情況），就不算卡住，不管 `last_scan` 多舊。
+    """
     with _healer_bg_lock:
         last_scan = _healer_bg_state["last_scan"]
         interval = _healer_bg_state.get("interval", 30)
         started_at = _healer_bg_state.get("started_at")
         recent = list(_healer_bg_state["recent_actions"])
+        processing = _healer_bg_state.get("processing")
 
     thread_alive = bool(_healer_bg_thread is not None and _healer_bg_thread.is_alive())
     now = datetime.utcnow()
     stale = False
     if K8S_ENABLED and thread_alive:
-        if last_scan is None:
+        processing_recent = False
+        if processing:
+            try:
+                since_dt = _parse_utc_iso(processing["since"])
+                processing_recent = (now - since_dt).total_seconds() < interval * 20
+            except Exception:
+                processing_recent = False
+
+        if processing_recent:
+            stale = False
+        elif last_scan is None:
             # 剛啟動、第一次掃描還沒發生前，給一次 interval 的寬限期，不要誤判成卡住。
             try:
-                grace_until = datetime.fromisoformat(started_at) + timedelta(seconds=interval * 1.5)
+                grace_until = _parse_utc_iso(started_at) + timedelta(seconds=interval * 1.5)
                 stale = now > grace_until
             except Exception:
                 stale = False
         else:
             try:
-                last_dt = datetime.fromisoformat(last_scan)
+                last_dt = _parse_utc_iso(last_scan)
                 stale = (now - last_dt).total_seconds() > interval * 3
             except Exception:
                 stale = False
@@ -6086,7 +6348,7 @@ def _healer_bg_liveness() -> dict:
 
     return {
         "running": running, "thread_alive": thread_alive, "last_scan": last_scan,
-        "recent_actions": recent, "message": message,
+        "recent_actions": recent, "message": message, "processing": processing,
     }
 
 
@@ -6110,6 +6372,10 @@ def api_healer_fix():
             "message": result.get("message"),
             "root_cause": result.get("root_cause"),
             "action": result.get("action"),
+            # 2026-10-07 近失事件可見化實測時發現：這個路由原本白名單式只挑 4 個欄位
+            # jsonify，_real_heal_pod() 其實有回傳 llm_raw_guess，但這裡從沒被包含
+            # 進回應，前端 fixPod() 讀 d.llm_raw_guess 永遠是 undefined——補上。
+            "llm_raw_guess": result.get("llm_raw_guess"),
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
@@ -6133,6 +6399,7 @@ def api_healer_auto_fix():
                     "pod": issue["pod_name"], "action": result.get("action"),
                     "root_cause": result.get("root_cause"), "ok": result.get("ok"),
                     "message": result.get("message"),
+                    "llm_raw_guess": result.get("llm_raw_guess"),
                 })
             except Exception as e:
                 failed += 1
@@ -6225,7 +6492,7 @@ if __name__ == "__main__":
         _healer_bg_thread = threading.Thread(
             target=_healer_background_loop, daemon=True, kwargs={"interval": _HEALER_BG_INTERVAL})
         _healer_bg_thread.start()
-        _healer_bg_state["started_at"] = datetime.utcnow().isoformat()
+        _healer_bg_state["started_at"] = _utc_now_iso()
         _healer_bg_state["interval"] = _HEALER_BG_INTERVAL
         print("  Healer: background auto-heal loop started (scan every 30s)")
     else:

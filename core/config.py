@@ -63,6 +63,17 @@ EVAL_BASELINE_REPORT = os.path.join(REPORTS_DIR, "eval_baseline_report.json")
 EVAL_HARD_REPORT     = os.path.join(REPORTS_DIR, "eval_hard_report.json")
 EVAL_SPEED_REPORT    = os.path.join(REPORTS_DIR, "eval_speed_report.json")
 
+# ── 管理員身分 ───────────────────────────────────────────────────
+# 2026-10-07：真實管理員權限只能歸屬於驗證過的 Google 帳號 email，絕不能靠
+# username 字串（密碼註冊帳號可以隨便取名叫 "admin"，不代表真的是管理員）判斷。
+# 預設值就包含使用者本人 email，之後要加組員，在 .env 填
+# ADMIN_EMAILS=neilhuang.mobile@gmail.com,teammate@example.com 覆寫即可，不用改程式碼。
+ADMIN_EMAILS = {
+    e.strip().lower()
+    for e in os.environ.get("ADMIN_EMAILS", "neilhuang.mobile@gmail.com").split(",")
+    if e.strip()
+}
+
 # ── Model Server ─────────────────────────────────────────────────
 MODEL_SERVER_HOST = os.environ.get("MODEL_SERVER_HOST", "127.0.0.1")
 MODEL_SERVER_PORT = int(os.environ.get("MODEL_SERVER_PORT", "8765"))

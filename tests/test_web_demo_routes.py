@@ -171,3 +171,106 @@ class TestScaleValidation:
         monkeypatch.setattr(web_demo, "K8S_ENABLED", True)
         resp = client.post("/api/scale", json={"name": "web", "replicas": "not-a-number"})
         assert resp.status_code == 400
+
+
+class TestRuleIntentDeployVsDescribeDeployment:
+    """2026-10-03 使用者錄 demo 時實測發現的真實 bug：Chat 打「幫我部署 2 個
+    nginx，開 80 port」被誤判成查詢一個叫「2」的 deployment（回「找不到
+    deployment '2'」），使用者看不懂為什麼。根因是 `_INTENT_RULES` 裡
+    describe_deployment 規則結尾的「狀態/細節/詳情/status」關鍵字整段可省略
+    （`(?:...)?`），導致任何「部署 <數字>」開頭的句子都會被這條規則搶先攔截，
+    排在真正的 deploy 規則前面。"""
+
+    def test_deploy_sentence_with_count_is_not_misrouted_to_describe_deployment(self):
+        result = web_demo._rule_intent("幫我部署 2 個 nginx，開 80 port")
+        assert result is not None
+        assert result["action"] == "deploy"
+
+    def test_deploy_sentence_in_english_is_not_misrouted(self):
+        result = web_demo._rule_intent("deploy 3 nginx pods for web-frontend")
+        assert result is not None
+        assert result["action"] != "describe_deployment"
+
+    def test_genuine_describe_deployment_query_still_works(self):
+        """對照組：真的在問某個 deployment 狀態的句子，行為不能被連帶改壞。"""
+        result = web_demo._rule_intent("deployment web-frontend 的狀態")
+        assert result is not None
+        assert result["action"] == "describe_deployment"
+        assert result["args"]["name"] == "web-frontend"
+
+    def test_genuine_describe_deployment_query_english_status_keyword(self):
+        result = web_demo._rule_intent("deployment web-frontend status")
+        assert result is not None
+        assert result["action"] == "describe_deployment"
+        assert result["args"]["name"] == "web-frontend"
+
+
+class TestRuleIntentImplausibleNameStopwords:
+    """2026-10-07 大規模掃描（206 題）實測發現的真實 P0：規則層命中就用假 100%
+    信心直接執行，完全不經過 classify_intent() 的事實查核。`_looks_like_resource_name()`
+    原本只檢查字串格式合不合法（純 ASCII 字母數字），常見英文虛詞剛好都符合格式，
+    會被當成真的資源名稱：「delete everything in this cluster」被解析成要刪除
+    一個叫 "everything" 的資源、「remove the deployment named test-app」名稱被
+    抓成 "the"（真正目標 test-app 完全沒抓到）、「update the image of
+    cache-server to redis:7」名稱 "the"、映像 "of" 兩個欄位都是虛詞。"""
+
+    def test_delete_everything_does_not_match_rule_layer(self):
+        """規則層必須放棄這句話（回 None），讓它 fall through 到有事實查核能力
+        的 classify_intent()，不能用假信心直接執行。"""
+        result = web_demo._rule_intent("delete everything in this cluster")
+        assert result is None
+
+    def test_remove_the_deployment_named_x_does_not_match_rule_layer(self):
+        result = web_demo._rule_intent("remove the deployment named test-app")
+        assert result is None
+
+    def test_update_image_with_filler_words_does_not_match_rule_layer(self):
+        result = web_demo._rule_intent("update the image of cache-server to redis:7")
+        assert result is None
+
+    def test_chinese_garbage_image_value_does_not_match_rule_layer(self):
+        result = web_demo._rule_intent("把 billing-api 的映像檔換新版")
+        assert result is None
+
+    def test_genuine_delete_request_still_works(self):
+        """對照組：乾淨的刪除請求行為不能被連帶改壞。"""
+        result = web_demo._rule_intent("delete web-frontend")
+        assert result is not None
+        assert result["action"] == "delete"
+        assert result["args"]["name"] == "web-frontend"
+
+    def test_genuine_update_image_request_still_works(self):
+        result = web_demo._rule_intent("幫我把 worker 的 image 換成 python:3.12")
+        assert result is not None
+        assert result["action"] == "update_image"
+        assert result["args"]["name"] == "worker"
+        assert result["args"]["image"] == "python:3.12"
+
+
+class TestRuleIntentQuestionFormNotMisroutedToAction:
+    """2026-10-07 大規模掃描實測發現：gitops_log/healer_scan 這類只看開頭關鍵字、
+    不要求任何參數的規則，會把「GitOps 是什麼」這種明顯在問概念的句子，直接當成
+    指令執行（真的去撈 git log／真的去掃描 pod），答非所問。"""
+
+    def test_gitops_concept_question_not_misrouted(self):
+        result = web_demo._rule_intent("GitOps 是什麼")
+        assert result is None
+
+    def test_healer_concept_question_not_misrouted(self):
+        result = web_demo._rule_intent("Healer 這個功能是做什麼用的")
+        assert result is None
+
+    def test_english_what_is_question_not_misrouted(self):
+        result = web_demo._rule_intent("what is gitops")
+        assert result is None
+
+    def test_genuine_gitops_command_still_works(self):
+        """對照組：真的在下指令的句子行為不能被連帶改壞。"""
+        result = web_demo._rule_intent("看一下部署歷史")
+        assert result is not None
+        assert result["action"] == "gitops_log"
+
+    def test_genuine_healer_scan_command_still_works(self):
+        result = web_demo._rule_intent("掃描壞掉的 pod")
+        assert result is not None
+        assert result["action"] == "healer_scan"
