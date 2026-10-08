@@ -92,6 +92,15 @@ MODEL_SERVER_URL  = f"http://{MODEL_SERVER_HOST}:{MODEL_SERVER_PORT}"
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").strip().rstrip("/")
 WEB_PORT        = int(os.environ.get("WEB_PORT", "5050"))
 
+# ── 客戶自帶叢集：平台替每位客戶開的 GitHub 私有 repo（gitops/tenant_repo.py）──────
+# 建議用專門的 GitHub Organization；token 用 fine-grained，只授權給這個 org，
+# 權限 Administration + Contents 讀寫（建立 repo、設定唯讀 deploy key、推送設定）。
+TENANT_GITHUB_TOKEN = os.environ.get("TENANT_GITHUB_TOKEN", "")
+TENANT_GITHUB_ORG   = os.environ.get("TENANT_GITHUB_ORG", "")
+# 平台、客戶狀態等執行期資料（不進版控）
+DATA_DIR         = os.path.join(ROOT, "data")
+TENANT_REPOS_DIR = os.path.join(DATA_DIR, "tenant_repos")
+
 # ── 系統 Prompt（唯一定義來源）───────────────────────────────────
 SYSTEM_PROMPT = (
     "You are an AI that converts Kubernetes deployment requests into JSON.\n"

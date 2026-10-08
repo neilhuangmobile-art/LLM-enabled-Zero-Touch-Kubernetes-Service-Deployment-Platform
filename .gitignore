@@ -36,3 +36,6 @@ model_server.log
 reports/*.pptx
 # skill-creator 的評估輸出（暫存，不進 git）
 .claude/skills/*-workspace/
+
+# 執行期資料：客戶 repo 本機工作副本、連線紀錄（2026-10-09，客戶自帶叢集）
+data/
