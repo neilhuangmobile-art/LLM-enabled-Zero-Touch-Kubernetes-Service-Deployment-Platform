@@ -609,14 +609,24 @@ def _user_namespace(username: str) -> str:
     return f"user-{safe}-{hashlib.sha256(raw.encode('utf-8')).hexdigest()[:16]}"
 
 
+def _legacy_user_namespace(username: str) -> str:
+    """2026-10-09 之前的舊規則（只為了保留舊名稱用，不要拿來決定實際 namespace）。"""
+    safe = re.sub(r"[^a-z0-9-]", "-", (username or "").lower()).strip("-")[:50]
+    return f"user-{safe or 'unknown'}"
+
+
 def _namespace_taken(username: str) -> bool:
     """這個帳號名稱算出來的 namespace 是否已經屬於別的帳號。光靠雜湊不夠：有心人可以先算出
     `Alice` 的雜湊、搶先註冊乾淨格式的 `alice-<雜湊>` 撞到同一個 namespace。"""
     # 平台自己叢集的 namespace 與客戶端 repo/namespace（gitops.tenant_repo.tenant_slug）都要檢查：
     # 這是確定性的保證，不依賴雜湊長度。
+    # 也要保留既有帳號「舊規則」下的 namespace 名稱：某帳號改規則後 namespace 換了，舊名稱
+    # 空出來，新帳號若拿到同名 namespace 會繼承裡面殘留的 Pod 與以 namespace 為 key 的資料
+    # （Pod 歷史、manifests/<namespace>/）——2026-10-09 背景安全審查第三輪。
     from gitops.tenant_repo import tenant_slug
     ns, slug = _user_namespace(username), tenant_slug(username)
-    return any(_user_namespace(u) == ns or tenant_slug(u) == slug for u in USERS if u != username)
+    return any(ns in (_user_namespace(u), _legacy_user_namespace(u)) or tenant_slug(u) == slug
+               for u in USERS if u != username)
 
 
 def _ensure_user_namespace(namespace: str):

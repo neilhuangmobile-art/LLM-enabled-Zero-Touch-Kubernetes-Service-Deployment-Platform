@@ -77,6 +77,16 @@ class TestNamespaceCollisionAtSignup:
         assert "太相似" in resp.get_data(as_text=True)
         assert squatter not in web_demo.USERS
 
+    def test_old_namespace_of_renamed_account_cannot_be_inherited(self, client):
+        """舊規則下 `Bob_X` 用 `user-bob-x`；改規則後它換成帶雜湊的 namespace，舊名稱不能被
+        新的乾淨帳號 `bob-x` 拿走（否則會繼承殘留的 Pod 與 Pod 歷史）。"""
+        web_demo.USERS["Bob_X"] = {"password_hash": "x"}
+        assert web_demo._legacy_user_namespace("Bob_X") == "user-bob-x"
+        assert web_demo._user_namespace("Bob_X") != "user-bob-x"
+        resp = _register(client, "bob-x")
+        assert "太相似" in resp.get_data(as_text=True)
+        assert "bob-x" not in web_demo.USERS
+
     def test_registration_still_allows_distinct_names(self, client):
         _register(client, "alice")
         _register(client, "Alice")  # 不同 namespace，可以註冊
