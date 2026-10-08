@@ -274,3 +274,78 @@ class TestRuleIntentQuestionFormNotMisroutedToAction:
         result = web_demo._rule_intent("掃描壞掉的 pod")
         assert result is not None
         assert result["action"] == "healer_scan"
+
+
+class TestCrossTenantIsolation2026_10_08:
+    """2026-10-08 安全審查（docs/security_review.md 30 節）：
+    /api/rollback 路徑穿越、/api/deploy/conflicts 洩漏其他帳號的 app 名稱。"""
+
+    def _login_as(self, client, name="alice"):
+        _register(client, name, "password123")
+        _login(client, name, "password123")
+
+    @pytest.mark.parametrize("bad", ["../user-bob/secret-app", "..", "a/b", "Bad_Name"])
+    def test_rollback_rejects_traversal_names(self, client, monkeypatch, bad):
+        called = []
+        import gitops.rollback  # noqa: F401 —確保子模組已載入
+        import importlib
+        rb = importlib.import_module("gitops.rollback")
+        monkeypatch.setattr(rb, "rollback", lambda *a, **k: called.append(a) or {"ok": True})
+        self._login_as(client)
+        resp = client.post("/api/rollback", json={"app_name": bad})
+        assert resp.status_code == 400
+        assert called == []
+
+    def test_port_conflict_with_other_account_hides_its_name(self, client, monkeypatch):
+        self._login_as(client)
+        monkeypatch.setattr(web_demo, "k8s_get_deployments", lambda ns=None: [])
+        monkeypatch.setattr(web_demo, "k8s_get_services", lambda namespace=None, all_namespaces=False: [
+            {"name": "bob-secret-svc", "app": "bob-secret-app", "port": 8080, "namespace": "user-bob"},
+        ])
+        data = client.get("/api/deploy/conflicts?app_name=my-app&port=8080").get_json()
+        assert data["port_conflict"]
+        assert data["port_conflict_other_account"] is True
+        assert "bob" not in json.dumps(data)
+
+    def test_port_conflict_with_own_app_shows_name(self, client, monkeypatch):
+        self._login_as(client)
+        monkeypatch.setattr(web_demo, "k8s_get_deployments", lambda ns=None: [])
+        monkeypatch.setattr(web_demo, "k8s_get_services", lambda namespace=None, all_namespaces=False: [
+            {"name": "web-svc", "app": "web", "port": 8080, "namespace": "user-alice"},
+        ])
+        data = client.get("/api/deploy/conflicts?app_name=my-app&port=8080").get_json()
+        assert data["port_conflict"] == "web"
+        assert data["port_conflict_other_account"] is False
+
+    def test_same_app_name_in_other_account_still_counts_as_conflict(self, client, monkeypatch):
+        """舊邏輯用 app 名稱排除「自己」，別的帳號剛好同名就被誤判成不衝突。"""
+        self._login_as(client)
+        monkeypatch.setattr(web_demo, "k8s_get_deployments", lambda ns=None: [])
+        monkeypatch.setattr(web_demo, "k8s_get_services", lambda namespace=None, all_namespaces=False: [
+            {"name": "my-app", "app": "my-app", "port": 8080, "namespace": "user-bob"},
+        ])
+        data = client.get("/api/deploy/conflicts?app_name=my-app&port=8080").get_json()
+        assert data["port_conflict_other_account"] is True
+
+    def test_rollback_missing_app_returns_friendly_404_without_k8s_internals(self, client, monkeypatch):
+        """端到端實測發現：找不到 Deployment 時原本把 K8s client 例外（含 Audit-Id 等內部
+        HTTP header）整串回給前端。"""
+        import importlib
+        import types
+        rb = importlib.import_module("gitops.rollback")
+        monkeypatch.setattr(rb, "rollback", lambda *a, **k: {"ok": False, "message": "all failed", "details": {}})
+
+        class NotFound(Exception):
+            status = 404
+        class FakeApps:
+            def read_namespaced_deployment(self, name, ns):
+                raise NotFound("(404) HTTP response headers: {'Audit-Id': 'secret-internal-id'}")
+        monkeypatch.setattr(web_demo, "K8S_ENABLED", True)
+        monkeypatch.setattr(web_demo, "k8s_client", types.SimpleNamespace(AppsV1Api=FakeApps), raising=False)
+
+        self._login_as(client)
+        resp = client.post("/api/rollback", json={"app_name": "no-such-app"})
+        assert resp.status_code == 404
+        body = resp.get_data(as_text=True)
+        assert "Audit-Id" not in body and "secret-internal-id" not in body
+        assert "no-such-app" in resp.get_json()["error"]

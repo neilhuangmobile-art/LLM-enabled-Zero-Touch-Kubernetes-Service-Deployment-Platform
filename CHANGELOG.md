@@ -817,3 +817,19 @@ Recall@3 100%／MRR 0.875／5.3ms；升級後（BGE-M3+15篇知識庫）Recall@3
 含假 GitHub token 的 commit 被擋下（commit 數維持 1）。注意：`.git/hooks/` 不進版控，
 換電腦/重新 clone 要重新安裝。另把 `.playwright-mcp/`（Playwright MCP 截圖/log）
 加進 `.gitignore`。詳見 `docs/security_review.md` 29 節。
+
+### 安全：修復回滾路徑穿越 + port 衝突檢查洩漏其他帳號 app 名稱
+security-guidance 外掛背景審查回報、逐行追程式碼確認屬實的兩個跨帳號隔離破口。
+(1) `/api/rollback` 的 `app_name` 原本沒驗證，`../user-別人/app` 會讓
+`gitops/rollback.py` 的路徑指到其他帳號的 manifest 目錄（當下只是剛好被 manifest
+寫死的 namespace 擋住）；Argo CD 回滾只用 app 名稱，部署 Argo CD 後就能回滾別人的
+服務。修法：路由入口與 `rollback.py` 兩層 DNS-1123 名稱白名單、`_manifest_dir_within()`
+解析路徑確認不超出範圍、Argo CD 回滾前比對 Application 的目的地 namespace；順手修掉
+`startswith` 前綴比對讓回滾 `app` 連帶覆寫 `app123` 的 bug。(2) `/api/deploy/conflicts`
+衝突時原樣回傳別的帳號的 app 名稱，改成只回 `port_conflict_other_account: true`，
+前端顯示「已被其他帳號的服務佔用」並建議換 port。驗證：新增 22 個回歸測試，換回舊程式碼
+時 21 個失敗、新程式碼全過；pytest 294 個全過。詳見 `docs/security_review.md` 30 節。
+端到端補驗（同日）：用新程式碼啟動 Web Demo、臨時帳號打真實 API，穿越名稱全部 400、
+port 衝突不含其他帳號名稱；Playwright 確認前端 0 個 console 錯誤。過程中發現回滾不存在
+的 app 時會把 K8s 原始例外（含內部 HTTP header）回給前端，改成中英雙語的「找不到這個
+部署」訊息（404），其他錯誤只回通用訊息。

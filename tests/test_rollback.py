@@ -202,3 +202,94 @@ def test_rollback_git_skips_directory_entry_not_just_files(tmp_path):
     assert matched_files, "也應該要能列出真正的檔案"
     # _rollback_git() 現在的篩選條件 `item.type == "blob"` 必須把 matched_dirs
     # 排除在外，只處理 matched_files——這正是上面那個測試能通過的原因。
+
+
+# ══════════════════════════════════════════════════════════════════
+# 2026-10-08 安全審查：路徑穿越 / 跨帳號回滾（docs/security_review.md 30 節）
+# ══════════════════════════════════════════════════════════════════
+
+@pytest.mark.parametrize("bad_name", [
+    "../user-victim/their-app", "..", ".", "a/b", r"a\b", "App", "-app", "app-", "", "a" * 64,
+])
+def test_rollback_rejects_invalid_app_name_before_any_strategy(monkeypatch, bad_name):
+    """不合法的名稱（含路徑穿越寫法）要在任何策略執行前就被擋下。"""
+    calls = []
+    monkeypatch.setattr(rollback_mod, "_run_strategy",
+                        lambda *a, **k: calls.append(a) or {"ok": True, "message": "", "details": {}})
+    result = rollback_mod.rollback(bad_name, namespace="user-attacker", strategy="auto")
+    assert result["ok"] is False
+    assert calls == []
+
+
+def test_rollback_rejects_invalid_namespace(monkeypatch):
+    calls = []
+    monkeypatch.setattr(rollback_mod, "_run_strategy",
+                        lambda *a, **k: calls.append(a) or {"ok": True, "message": "", "details": {}})
+    result = rollback_mod.rollback("my-app", namespace="../user-victim", strategy="git")
+    assert result["ok"] is False
+    assert calls == []
+
+
+def test_get_rollback_history_rejects_traversal():
+    assert rollback_mod.get_rollback_history("../user-victim/app", namespace="user-a") == []
+
+
+def test_manifest_dir_within_blocks_escape(tmp_path):
+    assert rollback_mod._manifest_dir_within(tmp_path, "user-a", "my-app") == \
+        (tmp_path / "manifests" / "user-a" / "my-app").resolve()
+    assert rollback_mod._manifest_dir_within(tmp_path, "user-a", "../user-b/app") is None
+    assert rollback_mod._manifest_dir_within(tmp_path, "user-a", "..") is None
+
+
+def test_argocd_refuses_app_deployed_to_other_namespace(monkeypatch):
+    """Argo CD Application 名稱不分帳號：目的地 namespace 不是呼叫者自己的，就拒絕回滾，
+    而且絕對不能呼叫 rollback API。"""
+    import gitops.argocd_sync as argocd_sync
+    requests = pytest.importorskip("requests")
+
+    class FakeClient:
+        def get_status(self, app_name):
+            return {"ok": True, "message": ""}
+
+    class FakeResp:
+        status_code = 200
+        def json(self):
+            return {"spec": {"destination": {"namespace": "user-victim"}}}
+
+    posted = []
+    monkeypatch.setattr(argocd_sync, "ArgocdClient", FakeClient)
+    monkeypatch.setattr(requests, "get", lambda *a, **k: FakeResp())
+    monkeypatch.setattr(requests, "post", lambda *a, **k: posted.append(a))
+
+    result = rollback_mod._rollback_argocd("their-app", "user-attacker", ".", dry_run=False)
+    assert result["ok"] is False
+    assert posted == []
+
+
+def test_git_rollback_does_not_touch_sibling_app_with_same_prefix(tmp_path, monkeypatch):
+    """回滾 `app` 不能連帶覆寫 `app123/` 的檔案（原本用 startswith 比對前綴的 bug）。"""
+    git = pytest.importorskip("git")
+    repo = git.Repo.init(tmp_path)
+    with repo.config_writer() as cw:
+        cw.set_value("user", "name", "t")
+        cw.set_value("user", "email", "t@t")
+    app_dir = tmp_path / "manifests" / "user-a" / "app"
+    sib_dir = tmp_path / "manifests" / "user-a" / "app123"
+    for d in (app_dir, sib_dir):
+        d.mkdir(parents=True)
+    for ver in ("v1", "v2"):
+        (app_dir / "deployment.yaml").write_text(f"app {ver}\n")
+        (sib_dir / "deployment.yaml").write_text(f"sibling {ver}\n")
+        repo.index.add(["manifests/user-a/app/deployment.yaml",
+                        "manifests/user-a/app123/deployment.yaml"])
+        repo.index.commit(ver)
+
+    class Done:
+        returncode = 0
+        stdout = stderr = ""
+    monkeypatch.setattr(rollback_mod.subprocess, "run", lambda *a, **k: Done())
+
+    result = rollback_mod._rollback_git("app", "user-a", str(tmp_path), dry_run=False)
+    assert result["ok"] is True, result
+    assert (app_dir / "deployment.yaml").read_text() == "app v1\n"
+    assert (sib_dir / "deployment.yaml").read_text() == "sibling v2\n"

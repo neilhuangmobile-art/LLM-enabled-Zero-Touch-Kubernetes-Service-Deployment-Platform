@@ -1538,6 +1538,79 @@ visibility=PRIVATE、forkCount=0（公開期間沒有被 fork）。hook 在暫�
 `git commit --no-verify` 可以跳過 hook；尚未加進 CI（GitHub Actions 可以加
 `gitleaks/gitleaks-action` 做第二道防線，留待之後決定）。
 
+
+---
+
+## 30. 跨帳號隔離的兩個破口：回滾路徑穿越、port 衝突檢查洩漏其他帳號的 app 名稱
+
+2026-10-08 推送 commit 後，Claude Code 的 security-guidance 外掛在背景審查時回報；
+逐行追過程式碼呼叫路徑後確認兩個都是真的。
+
+### 30.1 `/api/rollback` 路徑穿越
+
+**風險**：`/api/rollback` 收到的 `app_name` 只做 `.strip()` 就交給
+`gitops/rollback.py`，被拼進 `manifests/<自己的 namespace>/<app_name>` 後拿去跑
+`kubectl apply`。傳 `{"app_name": "../user-別人/他的app"}`，路徑就會指到其他帳號的
+manifest 目錄。另外 `_rollback_argocd()` 只用 app 名稱呼叫 Argo CD rollback API，
+Argo CD 的 Application 名稱不分帳號——**只要之後真的部署 Argo CD，連 `../` 都不需要，
+直接填別人的 app 名稱就能回滾別人的服務**。
+
+**為什麼重要**：第 11 節的多租戶隔離是這個平台的核心承諾。實測當下打不穿，是因為
+每個 manifest 都寫死了 `namespace: user-xxx`，kubectl 在 namespace 不一致時拒絕套用；
+還原檔案那一步用的是未正規化的路徑，剛好一個檔案都比對不到；叢集上也沒有 Argo CD。
+三個都是「剛好擋住」，不是設計過的防線，任何一個前提改變就會變成真的漏洞。
+
+**解決方式**（兩層，加上 Argo CD 的 namespace 檢查）：
+1. `web_demo.py` 的 `/api/rollback` 入口，以及 `gitops/rollback.py` 的 `rollback()` /
+   `get_rollback_history()`，都用 K8s DNS-1123 名稱白名單（`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`）
+   驗證 app_name 和 namespace。合法的 K8s 名稱本來就不可能包含 `/`、`.`、`\`，
+   所以一條規則就擋掉所有穿越寫法。
+2. `_rollback_git()` 另外用 `_manifest_dir_within()` 解析實際路徑，確認一定落在
+   `manifests/<namespace>/` 底下（縱深防禦，不只依賴名稱驗證）。
+3. `_rollback_argocd()` 先查 Application 的 `spec.destination.namespace`，不是呼叫者
+   自己的 namespace（或查不到）就拒絕，不呼叫 rollback API。
+4. 順手修掉一個同區域的 bug：還原檔案時用 `startswith(目錄)` 比對，回滾 `app` 會連帶
+   覆寫 `app123/` 的檔案。改成以目錄為單位比對（`startswith(目錄 + "/")`）。
+
+### 30.2 port 衝突檢查洩漏其他帳號的 app 名稱
+
+**風險**：`/api/deploy/conflicts` 為了檢查 port 衝突，刻意跨**所有 namespace** 查詢 Service
+（host port 是所有帳號共用的實體限制，這個設計本身是對的）。但衝突時會把對方的 app/Service
+名稱原樣回傳，逐一試不同 port 就能列出其他帳號部署了哪些服務。另外，舊邏輯用「app 名稱相同」
+排除自己，如果別的帳號剛好有同名 app，衝突會被誤判成不存在。
+
+**為什麼重要**：洩漏的只有名稱、不是內容，嚴重度低；但「看不到別人有什麼」本身就是
+多租戶隔離的一部分，評審問「帳號之間真的完全隔離嗎」時這是一個具體破口。
+
+**解決方式**：`k8s_get_services()` 多回傳 `namespace` 欄位。衝突來自自己的 namespace 時，
+照舊顯示 app 名稱；來自別的帳號時，只回傳 `port_conflict_other_account: true`，前端顯示
+「已被其他帳號的服務佔用」，並建議換一個 port。排除「自己正在更新的服務」改成同時比對
+namespace 和 app 名稱。
+
+### 驗證
+
+- 新增 22 個回歸測試（`tests/test_rollback.py` 15 個、`tests/test_web_demo_routes.py` 7 個）：
+  10 種不合法名稱（`../user-victim/their-app`、`..`、`a/b`、`a`、大寫、開頭或結尾是
+  連字號、超過 63 字元等）在任何回滾策略執行前就被擋下；Argo CD 目的地是別人的 namespace
+  時不呼叫 rollback API；用真的 git repo 驗證回滾 `app` 不會動到 `app123`；port 衝突來自
+  別的帳號時，回應裡完全不含對方名稱；同名 app 在別的帳號也會被判成衝突。
+- **反向驗證**：把兩個原始碼檔暫時換回修改前的版本，用同一批新測試去跑，22 個裡 21 個
+  失敗（唯一沒失敗的是 `get_rollback_history` 的穿越測試：舊版走到 git 查不到資料、
+  退回 kubectl 也查不到，剛好回傳空清單——結果正確但不是因為有防線），確認測試真的抓得到這些漏洞，
+  不是寫了一定會過的測試。
+- 完整 pytest 294 個全過；CI 子集（`-m "not integration"`）131 個全過。
+- **真實 HTTP 端到端**：用新程式碼啟動 `web_demo.py`，建立臨時帳號後用 curl 打真的 API
+  （叢集裡有其他帳號的真實服務：`default` 的 `my-cache` 佔用 6379、多個帳號的服務佔用 80）：
+  `../user-neilhuang-mobile/auto-app111`、`..`、`a/b`、`Auto_App` 全部回 400；port 6379 / 80
+  回 `port_conflict_other_account: true`，回應裡沒有任何對方的名稱；沒人用的 port 回 null。
+  另用 Playwright 登入網頁，確認修改後的前端 JS 載入時 0 個 console 錯誤。測完還原
+  `users.json`（跟備份逐位元比對相同）、刪除臨時帳號的 namespace。
+- **端到端測試時新發現並一併修掉**：回滾一個不存在的 app 時，`/api/rollback` 把 K8s client
+  的原始例外字串整串回給前端，裡面夾帶 HTTP header（`Audit-Id`、flowschema UID 等內部資訊），
+  新手也看不懂。改成 404 時回中英雙語的「找不到名為 X 的部署，請到 Deployments 頁面確認名稱」，
+  其他錯誤只回通用訊息、細節留在 server log。重啟後實測確認，並補 1 個回歸測試
+  （確認回應不含 `Audit-Id` 等內部字串），完整 pytest 共 295 個全過。
+
 ---
 
 ## 尚待排查（優先度較低，不是資源受限，只是還沒排到）

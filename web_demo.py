@@ -514,7 +514,8 @@ def k8s_get_services(namespace=None, all_namespaces=False):
                 continue
             app = (s.spec.selector or {}).get("app", "")
             for p in (s.spec.ports or []):
-                result.append({"name": s.metadata.name, "app": app, "port": p.port})
+                result.append({"name": s.metadata.name, "app": app, "port": p.port,
+                               "namespace": s.metadata.namespace})
         return result
     except Exception:
         return []
@@ -4324,11 +4325,13 @@ async function flowToReview(id){
       if(!ok) return;
     }
     if(cd.port_conflict){
+      const ownerEn = cd.port_conflict_other_account ? 'a service in another account' : `<b>${escHtml(cd.port_conflict)}</b>`;
+      const ownerZh = cd.port_conflict_other_account ? '其他帳號的服務' : `「<b>${escHtml(cd.port_conflict)}</b>」`;
       const ok = await askConfirm(
         uiLang==='en' ? 'Port already in use' : 'Port 已被佔用',
         uiLang==='en'
-          ? `Port <b>${escHtml(spec.port)}</b> is already used by <b>${escHtml(cd.port_conflict)}</b>. Only one service can be externally reachable on this port, so this one may not be reachable from your browser. Continue anyway?`
-          : `Port <b>${escHtml(spec.port)}</b> 已經被「<b>${escHtml(cd.port_conflict)}</b>」佔用，同一個 port 只有一個服務能真的對外連線，這次部署可能連不到。是否仍要繼續？`
+          ? `Port <b>${escHtml(spec.port)}</b> is already used by ${ownerEn}. Only one service can be externally reachable on this port, so this one may not be reachable from your browser. Try a different port, or continue anyway?`
+          : `Port <b>${escHtml(spec.port)}</b> 已經被${ownerZh}佔用，同一個 port 只有一個服務能真的對外連線，這次部署可能連不到。建議換一個 port；仍要繼續嗎？`
       );
       if(!flowAlive(flow)) return;
       if(!ok) return;
@@ -5671,16 +5674,28 @@ def api_deploy_conflicts():
     port_raw = (request.args.get("port") or "").strip()
     name_exists = bool(app_name) and app_name in {d["name"] for d in k8s_get_deployments(user_ns)}
     port_conflict = None
+    port_conflict_other_account = False
     if port_raw:
         try:
             port = int(port_raw)
             for s in k8s_get_services(all_namespaces=True):
-                if s["port"] == port and s["app"] != app_name:
+                if s["port"] != port:
+                    continue
+                if s.get("namespace") == user_ns:
+                    if s["app"] == app_name:
+                        continue  # 就是這次要更新的同一個服務，不算衝突
                     port_conflict = s["app"] or s["name"]
-                    break
+                else:
+                    # 被別的帳號佔用：port 是 host 共用的，衝突一定要講，但不能把
+                    # 對方的 app/service 名稱回傳出去——否則逐一試 port 就能列出其他
+                    # 帳號部署了什麼（2026-10-08 安全審查，security_review.md 30 節）
+                    port_conflict = "another account"
+                    port_conflict_other_account = True
+                break
         except ValueError:
             pass
-    return jsonify({"name_exists": name_exists, "port_conflict": port_conflict})
+    return jsonify({"name_exists": name_exists, "port_conflict": port_conflict,
+                    "port_conflict_other_account": port_conflict_other_account})
 
 
 @app.route("/api/deploy/parse", methods=["POST"])
@@ -5901,6 +5916,14 @@ def api_rollback():
     app_name = (data.get("app_name") or data.get("name") or "").strip()
     if not app_name:
         return jsonify({"success": False, "error": "app_name required"}), 400
+    # 名稱會被拼進 manifests/<namespace>/<app_name> 路徑並交給 kubectl，必須是合法
+    # K8s 名稱，擋掉 `../user-別人/app` 這類路徑穿越（2026-10-08 安全審查，
+    # docs/security_review.md 30 節）。gitops/rollback.py 內部也會再檢查一次。
+    from gitops.rollback import is_valid_k8s_name
+    if not is_valid_k8s_name(app_name):
+        return jsonify({"success": False,
+                        "error": "應用程式名稱不合法，只能用小寫英數字與連字號 / "
+                                 "Invalid app name — use lowercase letters, digits and hyphens only"}), 400
     try:
         from gitops.rollback import rollback
         result = rollback(app_name, namespace=user_ns, repo_path=ROOT, strategy="auto", dry_run=False)
@@ -5943,7 +5966,21 @@ def api_rollback():
             "error": None,
         })
     except Exception as e:
-        return jsonify({"success": False, "error": str(e), "details": result.get("details", {})}), 500
+        # K8s client 的例外字串會夾帶整串 HTTP header（Audit-Id、flowschema UID 等），
+        # 新手看不懂也不該外流；找不到這個 Deployment 給明確下一步（2026-10-08 端到端
+        # 實測發現）
+        if getattr(e, "status", None) == 404:
+            return jsonify({
+                "success": False,
+                "error": f"找不到名為「{app_name}」的部署，請到 Deployments 頁面確認名稱 / "
+                         f"No deployment named '{app_name}' — check the name on the Deployments page",
+                "details": result.get("details", {}),
+            }), 404
+        print(f"[rollback] fallback failed for {user_ns}/{app_name}: {e}")
+        return jsonify({"success": False,
+                        "error": "回滾失敗，請稍後再試；若持續發生請到 Healer 頁面查看狀態 / "
+                                 "Rollback failed — please retry, or check the Healer page",
+                        "details": result.get("details", {})}), 500
 
 @app.route("/api/dataset/stats")
 def api_dataset_stats():
