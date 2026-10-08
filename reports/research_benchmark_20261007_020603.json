@@ -1,0 +1,1264 @@
+{
+  "generated_at": "2026-10-06T17:52:15.433808+00:00",
+  "note": "USE_LLM_NORMALIZE=0（只在本程序環境變數生效，.env 未變動）——測的是本地模型+RAG+規則層這一段，不含 Gemini 正規化層。",
+  "deploy_accuracy": {
+    "accuracy": 0.95,
+    "n": 20,
+    "cases": [
+      {
+        "input": "deploy 3 pods of nginx:latest",
+        "expect_pods": 3,
+        "expect_keywords": [
+          "nginx"
+        ],
+        "output": {
+          "pods": 3,
+          "image": "nginx:latest",
+          "app_name": "auto-app",
+          "port": 80,
+          "_parser": "deterministic"
+        },
+        "latency_ms": 2.1,
+        "passed": true
+      },
+      {
+        "input": "start 5 replicas of redis:7-alpine for cache-server",
+        "expect_pods": 5,
+        "expect_keywords": [
+          "redis"
+        ],
+        "output": {
+          "pods": 5,
+          "image": "redis:7-alpine",
+          "app_name": "cache-server",
+          "port": 80,
+          "_parser": "deterministic"
+        },
+        "latency_ms": 0.0,
+        "passed": true
+      },
+      {
+        "input": "launch 2 postgres:15 pods named db-primary",
+        "expect_pods": 2,
+        "expect_keywords": [
+          "postgres"
+        ],
+        "output": {
+          "pods": 2,
+          "image": "postgres:15",
+          "app_name": "db-primary",
+          "port": 80,
+          "_parser": "deterministic"
+        },
+        "latency_ms": 0.0,
+        "passed": true
+      },
+      {
+        "input": "spin up 1 node:20-alpine container for api-gateway",
+        "expect_pods": 1,
+        "expect_keywords": [
+          "node"
+        ],
+        "output": {
+          "pods": 1,
+          "image": "node:20-alpine",
+          "app_name": "api-gateway",
+          "port": 80,
+          "_parser": "deterministic"
+        },
+        "latency_ms": 0.0,
+        "passed": true
+      },
+      {
+        "input": "run 4 python:3.11-slim pods for data-processor",
+        "expect_pods": 4,
+        "expect_keywords": [
+          "python"
+        ],
+        "output": {
+          "pods": 4,
+          "image": "python:3.11-slim",
+          "app_name": "data-processor",
+          "port": 80,
+          "_parser": "deterministic"
+        },
+        "latency_ms": 0.0,
+        "passed": true
+      },
+      {
+        "input": "部署 3 個 web-frontend 的 pod，使用 nginx:latest",
+        "expect_pods": 3,
+        "expect_keywords": [
+          "nginx"
+        ],
+        "output": {
+          "pods": 3,
+          "image": "nginx:latest",
+          "app_name": "auto-app",
+          "port": 80,
+          "_parser": "deterministic"
+        },
+        "latency_ms": 0.2,
+        "passed": true
+      },
+      {
+        "input": "幫我起 5 個 auth-service，映像檔是 python:3.11-slim",
+        "expect_pods": 5,
+        "expect_keywords": [
+          "python"
+        ],
+        "output": {
+          "pods": 5,
+          "image": "python:3.11-slim",
+          "app_name": "auth",
+          "port": 80,
+          "_parser": "deterministic"
+        },
+        "latency_ms": 0.0,
+        "passed": true
+      },
+      {
+        "input": "建立 2 個 redis:7-alpine 容器，命名為 cache-server",
+        "expect_pods": 2,
+        "expect_keywords": [
+          "redis"
+        ],
+        "output": {
+          "pods": 2,
+          "image": "redis:7-alpine",
+          "app_name": "redis",
+          "port": 80,
+          "_parser": "deterministic"
+        },
+        "latency_ms": 0.0,
+        "passed": true
+      },
+      {
+        "input": "我需要 1 個 db-primary pod，image 用 postgres:15",
+        "expect_pods": 1,
+        "expect_keywords": [
+          "postgres"
+        ],
+        "output": {
+          "pods": 1,
+          "image": "postgres:15",
+          "app_name": "db-primary"
+        },
+        "latency_ms": 6330.5,
+        "passed": true
+      },
+      {
+        "input": "請部署 4 個 node:20-alpine 作為 api-gateway",
+        "expect_pods": 4,
+        "expect_keywords": [
+          "node"
+        ],
+        "output": {
+          "pods": 4,
+          "image": "nginx:latest",
+          "app_name": "auto-app",
+          "port": 80,
+          "_parser": "deterministic"
+        },
+        "latency_ms": 0.3,
+        "passed": false
+      },
+      {
+        "input": "deploy 2 nginx:latest pods for web-frontend, port 80",
+        "expect_pods": 2,
+        "expect_keywords": [
+          "nginx",
+          "80"
+        ],
+        "output": {
+          "pods": 2,
+          "image": "nginx:latest",
+          "app_name": "web-frontend",
+          "port": 80,
+          "_parser": "deterministic"
+        },
+        "latency_ms": 0.1,
+        "passed": true
+      },
+      {
+        "input": "start 3 node:20-alpine for api-gateway, expose port 3000",
+        "expect_pods": 3,
+        "expect_keywords": [
+          "node",
+          "3000"
+        ],
+        "output": {
+          "pods": 3,
+          "image": "node:20-alpine",
+          "app_name": "api-gateway",
+          "port": 3000,
+          "_parser": "deterministic"
+        },
+        "latency_ms": 0.2,
+        "passed": true
+      },
+      {
+        "input": "部署 2 個 web-frontend，image nginx:latest，開放 port 80",
+        "expect_pods": 2,
+        "expect_keywords": [
+          "nginx",
+          "80"
+        ],
+        "output": {
+          "pods": 2,
+          "image": "nginx:latest",
+          "app_name": "auto-app",
+          "port": 80,
+          "_parser": "deterministic"
+        },
+        "latency_ms": 0.2,
+        "passed": true
+      },
+      {
+        "input": "幫我跑 3 個 api-gateway，用 node:20-alpine，port 3000",
+        "expect_pods": 3,
+        "expect_keywords": [
+          "node",
+          "3000"
+        ],
+        "output": {
+          "pods": 3,
+          "image": "node:20-alpine",
+          "app_name": "api-gateway",
+          "port": 3000
+        },
+        "latency_ms": 8910.4,
+        "passed": true
+      },
+      {
+        "input": "run 1 postgres:15 pod for db-primary, container port 5432",
+        "expect_pods": 1,
+        "expect_keywords": [
+          "postgres",
+          "5432"
+        ],
+        "output": {
+          "pods": 1,
+          "image": "postgres:15",
+          "app_name": "db-primary",
+          "port": 5432,
+          "_parser": "deterministic"
+        },
+        "latency_ms": 0.2,
+        "passed": true
+      },
+      {
+        "input": "deploy 2 nginx:latest for web-frontend, memory limit 256Mi",
+        "expect_pods": 2,
+        "expect_keywords": [
+          "nginx",
+          "256"
+        ],
+        "output": {
+          "pods": 2,
+          "image": "nginx:latest",
+          "app_name": "web-frontend",
+          "port": 80,
+          "memory": "256Mi",
+          "_parser": "deterministic"
+        },
+        "latency_ms": 0.1,
+        "passed": true
+      },
+      {
+        "input": "start 3 python:3.11-slim pods, memory 512Mi",
+        "expect_pods": 3,
+        "expect_keywords": [
+          "python",
+          "512"
+        ],
+        "output": {
+          "pods": 3,
+          "image": "python:3.11-slim",
+          "app_name": "python",
+          "port": 80,
+          "memory": "512Mi",
+          "_parser": "deterministic"
+        },
+        "latency_ms": 0.1,
+        "passed": true
+      },
+      {
+        "input": "部署 2 個 web-frontend，image nginx:latest，記憶體限制 256Mi",
+        "expect_pods": 2,
+        "expect_keywords": [
+          "nginx",
+          "256"
+        ],
+        "output": {
+          "pods": 2,
+          "image": "nginx:latest",
+          "app_name": "auto-app",
+          "port": 80,
+          "memory": "256Mi",
+          "_parser": "deterministic"
+        },
+        "latency_ms": 0.2,
+        "passed": true
+      },
+      {
+        "input": "幫我跑 4 個 data-processor，python:3.11-slim，記憶體 512Mi",
+        "expect_pods": 4,
+        "expect_keywords": [
+          "python",
+          "512"
+        ],
+        "output": {
+          "pods": 4,
+          "image": "python:3.11-slim",
+          "app_name": "data-processor",
+          "memory": "512Mi"
+        },
+        "latency_ms": 8229.9,
+        "passed": true
+      },
+      {
+        "input": "launch 1 elasticsearch:8.11.0 pod, memory=2Gi",
+        "expect_pods": 1,
+        "expect_keywords": [
+          "elasticsearch",
+          "2"
+        ],
+        "output": {
+          "pods": 1,
+          "image": "elasticsearch:8.11.0",
+          "app_name": "elasticsearch",
+          "port": 80,
+          "memory": "2Gi",
+          "_parser": "deterministic"
+        },
+        "latency_ms": 0.1,
+        "passed": true
+      }
+    ]
+  },
+  "intent_accuracy": {
+    "accuracy": 0.95,
+    "n": 20,
+    "cases": [
+      {
+        "input": "列出目前所有 pod",
+        "expect_action": "list_pods",
+        "output": {
+          "action": "list_pods",
+          "args": {},
+          "confidence": 0.99,
+          "raw": "{\"action\":\"list_pods\",\"args\":{},\"confidence\":0.99}",
+          "source": "llm"
+        },
+        "latency_ms": 3827.6,
+        "passed": true
+      },
+      {
+        "input": "show all deployments please",
+        "expect_action": "list_deployments",
+        "output": {
+          "action": "list_deployments",
+          "args": {},
+          "confidence": 0.99,
+          "raw": "{\"action\":\"list_deployments\",\"args\":{},\"confidence\":0.99}",
+          "source": "llm"
+        },
+        "latency_ms": 3735.0,
+        "passed": true
+      },
+      {
+        "input": "把 shop-api 擴成 6 個副本",
+        "expect_action": "scale",
+        "output": {
+          "action": "scale",
+          "args": {
+            "name": "shop-api",
+            "replicas": 6
+          },
+          "confidence": 0.98,
+          "raw": "{\"action\":\"scale\",\"args\":{\"name\":\"shop-api\",\"replicas\":6},\"confidence\":0.98}",
+          "source": "llm"
+        },
+        "latency_ms": 4869.6,
+        "passed": true
+      },
+      {
+        "input": "can you bump api-gateway up to 4 replicas",
+        "expect_action": "scale",
+        "output": {
+          "action": "scale",
+          "args": {
+            "name": "api-gateway",
+            "replicas": 4
+          },
+          "confidence": 0.94,
+          "raw": "{\"action\":\"scale\",\"args\":{\"name\":\"api-gateway\",\"replicas\":4},\"confidence\":0.94}",
+          "source": "llm"
+        },
+        "latency_ms": 4948.2,
+        "passed": true
+      },
+      {
+        "input": "幫我把 worker 的 image 換成 python:3.12",
+        "expect_action": "update_image",
+        "output": {
+          "action": "update_image",
+          "args": {
+            "name": "worker",
+            "image": "python:3.12"
+          },
+          "confidence": 0.95,
+          "raw": "{\"action\":\"update_image\",\"args\":{\"name\":\"worker\",\"image\":\"python:3.12\"},\"confidence\":0.95}",
+          "source": "llm"
+        },
+        "latency_ms": 5520.3,
+        "passed": true
+      },
+      {
+        "input": "update the image of cache-server to redis:7",
+        "expect_action": "update_image",
+        "output": {
+          "action": "update_image",
+          "args": {
+            "name": "cache-server",
+            "image": "redis:7"
+          },
+          "confidence": 0.94,
+          "raw": "{\"action\":\"update_image\",\"args\":{\"name\":\"cache-server\",\"image\":\"redis:7\"},\"confidence\":0.94}",
+          "source": "llm"
+        },
+        "latency_ms": 5378.1,
+        "passed": true
+      },
+      {
+        "input": "api 這個部署回滾到上一版",
+        "expect_action": "rollback",
+        "output": {
+          "action": "rollback",
+          "args": {
+            "name": "api"
+          },
+          "confidence": 0.9,
+          "raw": "{\"action\":\"rollback\",\"args\":{\"name\":\"api\"},\"confidence\":0.9}",
+          "source": "llm"
+        },
+        "latency_ms": 3498.7,
+        "passed": true
+      },
+      {
+        "input": "please roll back web-frontend to the previous version",
+        "expect_action": "rollback",
+        "output": {
+          "action": "rollback",
+          "args": {
+            "name": "web-frontend"
+          },
+          "confidence": 0.9,
+          "raw": "{\"action\":\"rollback\",\"args\":{\"name\":\"web-frontend\"},\"confidence\":0.9}",
+          "source": "llm"
+        },
+        "latency_ms": 3824.2,
+        "passed": true
+      },
+      {
+        "input": "把 old-service 刪掉",
+        "expect_action": "delete",
+        "output": {
+          "action": "delete",
+          "args": {
+            "name": "old-service"
+          },
+          "confidence": 0.95,
+          "raw": "{\"action\":\"delete\",\"args\":{\"name\":\"old-service\"},\"confidence\":0.95}",
+          "source": "llm"
+        },
+        "latency_ms": 3653.2,
+        "passed": true
+      },
+      {
+        "input": "remove the deployment named test-app",
+        "expect_action": "delete",
+        "output": {
+          "action": "delete",
+          "args": {
+            "name": "test-app"
+          },
+          "confidence": 0.95,
+          "raw": "{\"action\":\"delete\",\"args\":{\"name\":\"test-app\"},\"confidence\":0.95}",
+          "source": "llm"
+        },
+        "latency_ms": 3850.0,
+        "passed": true
+      },
+      {
+        "input": "幫我開 3 個 nginx 的 pod",
+        "expect_action": "deploy",
+        "output": {
+          "action": "deploy",
+          "args": {
+            "pods": 3,
+            "image": "nginx:latest",
+            "app_name": "web-frontend",
+            "port": 80
+          },
+          "confidence": 0.95,
+          "raw": "{\"action\":\"deploy\",\"args\":{\"pods\":3,\"image\":\"nginx:latest\",\"app_name\":\"web-frontend\",\"port\":80},\"confidence\":0.95}",
+          "source": "llm"
+        },
+        "latency_ms": 7513.9,
+        "passed": true
+      },
+      {
+        "input": "I need a redis instance running, 2 replicas",
+        "expect_action": "deploy",
+        "output": {
+          "action": "deploy",
+          "args": {
+            "pods": 2,
+            "image": "redis:latest",
+            "app_name": "redis-instance"
+          },
+          "confidence": 0.98,
+          "raw": "{\"action\":\"deploy\",\"args\":{\"pods\":2,\"image\":\"redis:latest\",\"app_name\":\"redis-instance\"},\"confidence\":0.98}",
+          "source": "llm"
+        },
+        "latency_ms": 6257.2,
+        "passed": true
+      },
+      {
+        "input": "checker-pod 這個 pod 狀態如何",
+        "expect_action": "describe_pod",
+        "output": {
+          "action": "pod_health",
+          "args": {
+            "name": "checker-pod"
+          },
+          "confidence": 0.9,
+          "raw": "{\"action\":\"pod_health\",\"args\":{\"name\":\"checker-pod\"},\"confidence\":0.9}",
+          "source": "llm"
+        },
+        "latency_ms": 4087.2,
+        "passed": false
+      },
+      {
+        "input": "give me the details of pod data-sync-9f8a",
+        "expect_action": "describe_pod",
+        "output": {
+          "action": "describe_pod",
+          "args": {
+            "name": "data-sync-9f8a"
+          },
+          "confidence": 0.95,
+          "raw": "{\"action\":\"describe_pod\",\"args\":{\"name\":\"data-sync-9f8a\"},\"confidence\":0.95}",
+          "source": "llm"
+        },
+        "latency_ms": 4908.7,
+        "passed": true
+      },
+      {
+        "input": "billing-service 正常嗎",
+        "expect_action": "pod_health",
+        "output": {
+          "action": "pod_health",
+          "args": {
+            "name": "billing-service"
+          },
+          "confidence": 0.0,
+          "raw": "{\"action\":\"pod_health\",\"args\":{\"name\":\"billing-service\"}},{\"confidence\":0.9}",
+          "source": "llm"
+        },
+        "latency_ms": 4128.5,
+        "passed": true
+      },
+      {
+        "input": "is auth-worker currently broken",
+        "expect_action": "pod_health",
+        "output": {
+          "action": "pod_health",
+          "args": {
+            "name": "auth-worker"
+          },
+          "confidence": 0.9,
+          "raw": "{\"action\":\"pod_health\",\"args\":{\"name\":\"auth-worker\"},\"confidence\":0.9}",
+          "source": "llm"
+        },
+        "latency_ms": 3842.5,
+        "passed": true
+      },
+      {
+        "input": "auto-app 這個部署現在狀態怎樣",
+        "expect_action": "describe_deployment",
+        "output": {
+          "action": "describe_deployment",
+          "args": {
+            "name": "auto-app"
+          },
+          "confidence": 0.0,
+          "raw": "{\"action\":\"describe_deployment\",\"args\":{\"name\":\"auto-app\"}},{\"confidence\":0.92}",
+          "source": "llm"
+        },
+        "latency_ms": 4490.4,
+        "passed": true
+      },
+      {
+        "input": "what's the status of the payments deployment",
+        "expect_action": "describe_deployment",
+        "output": {
+          "action": "describe_deployment",
+          "args": {
+            "name": "payments"
+          },
+          "confidence": 0.9,
+          "raw": "{\"action\":\"describe_deployment\",\"args\":{\"name\":\"payments\"},\"confidence\":0.9}",
+          "source": "llm"
+        },
+        "latency_ms": 3884.1,
+        "passed": true
+      },
+      {
+        "input": "Kubernetes 的 Service 跟 Deployment 差在哪裡",
+        "expect_action": "qa",
+        "output": {
+          "action": "qa",
+          "args": {},
+          "confidence": 0.9,
+          "raw": "{\"action\":\"qa\",\"args\":{},\"confidence\":0.9}",
+          "source": "llm"
+        },
+        "latency_ms": 3060.0,
+        "passed": true
+      },
+      {
+        "input": "what does CrashLoopBackOff actually mean",
+        "expect_action": "qa",
+        "output": {
+          "action": "qa",
+          "args": {},
+          "confidence": 0.9,
+          "raw": "{\"action\":\"qa\",\"args\":{},\"confidence\":0.9}",
+          "source": "llm"
+        },
+        "latency_ms": 3006.8,
+        "passed": true
+      }
+    ]
+  },
+  "latency": {
+    "infer": {
+      "n": 12,
+      "mean_ms": 0.1,
+      "median_ms": 0.1,
+      "p95_ms": 0.1,
+      "min_ms": 0.1,
+      "max_ms": 0.1,
+      "raw_ms": [
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1
+      ]
+    },
+    "classify": {
+      "n": 12,
+      "mean_ms": 5162.6,
+      "median_ms": 5118.1,
+      "p95_ms": 5598.3,
+      "min_ms": 4687.7,
+      "max_ms": 5745.5,
+      "raw_ms": [
+        5134.0,
+        5102.3,
+        5097.1,
+        4687.7,
+        4907.1,
+        5381.9,
+        5256.2,
+        4952.4,
+        4880.9,
+        5478.0,
+        5745.5,
+        5328.5
+      ]
+    },
+    "diagnose": {
+      "n": 12,
+      "mean_ms": 34723.3,
+      "median_ms": 34935.9,
+      "p95_ms": 36197.1,
+      "min_ms": 31517.3,
+      "max_ms": 36847.3,
+      "raw_ms": [
+        35584.7,
+        35665.1,
+        34866.4,
+        35341.2,
+        36847.3,
+        34492.6,
+        31517.3,
+        34973.8,
+        35260.9,
+        33163.2,
+        34898.0,
+        34068.7
+      ]
+    },
+    "chat": {
+      "n": 12,
+      "mean_ms": 15129.8,
+      "median_ms": 14785.9,
+      "p95_ms": 22178.6,
+      "min_ms": 9949.2,
+      "max_ms": 23378.1,
+      "raw_ms": [
+        15728.2,
+        12732.4,
+        9949.2,
+        12638.4,
+        21197.2,
+        14558.0,
+        23378.1,
+        15733.1,
+        12727.6,
+        15520.9,
+        12381.1,
+        15013.7
+      ]
+    }
+  },
+  "stability": {
+    "infer_temperature_0.3": {
+      "input": "deploy 2 pods of redis:7-alpine for cache-service, port 6379",
+      "n": 10,
+      "agreement_rate": 1.0,
+      "distinct_outputs": 1,
+      "samples": [
+        [
+          2,
+          "redis:7-alpine"
+        ],
+        [
+          2,
+          "redis:7-alpine"
+        ],
+        [
+          2,
+          "redis:7-alpine"
+        ],
+        [
+          2,
+          "redis:7-alpine"
+        ],
+        [
+          2,
+          "redis:7-alpine"
+        ],
+        [
+          2,
+          "redis:7-alpine"
+        ],
+        [
+          2,
+          "redis:7-alpine"
+        ],
+        [
+          2,
+          "redis:7-alpine"
+        ],
+        [
+          2,
+          "redis:7-alpine"
+        ],
+        [
+          2,
+          "redis:7-alpine"
+        ]
+      ]
+    },
+    "classify_temperature_0.0": {
+      "input": "delete web-frontend",
+      "n": 10,
+      "agreement_rate": 1.0,
+      "distinct_outputs": 1,
+      "samples": [
+        "delete",
+        "delete",
+        "delete",
+        "delete",
+        "delete",
+        "delete",
+        "delete",
+        "delete",
+        "delete",
+        "delete"
+      ]
+    }
+  },
+  "rag_retrieval": {
+    "generated_at": 1791309962.5847702,
+    "top_k": 3,
+    "num_queries": 24,
+    "results": {
+      "chroma": {
+        "method": "chroma (sentence-transformers)",
+        "recall_at_k": 1.0,
+        "mrr": 0.854,
+        "avg_latency_ms": 177.5,
+        "num_queries": 24,
+        "per_query": [
+          {
+            "query": "我的 pod 一直重啟，狀態顯示 CrashLoopBackOff，該怎麼辦？",
+            "expected": [
+              "common_errors.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "common_errors.md",
+            "top_score": 0.6984
+          },
+          {
+            "query": "Pod 被 OOMKilled，exit code 137，是什麼原因造成的？",
+            "expected": [
+              "common_errors.md"
+            ],
+            "hit_rank": 2,
+            "top_result": "zerotouch_user_guide.md",
+            "top_score": 0.5072
+          },
+          {
+            "query": "deployment 一直卡在 ImagePullBackOff，可能是什麼問題？",
+            "expected": [
+              "common_errors.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "common_errors.md",
+            "top_score": 0.5745
+          },
+          {
+            "query": "Why is my pod stuck in Pending and never getting scheduled onto a node?",
+            "expected": [
+              "common_errors.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "common_errors.md",
+            "top_score": 0.5646
+          },
+          {
+            "query": "容器狀態顯示 CreateContainerConfigError 代表什麼？",
+            "expected": [
+              "common_errors.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "common_errors.md",
+            "top_score": 0.6109
+          },
+          {
+            "query": "Pod 一直卡在 Terminating 刪不掉要怎麼處理？",
+            "expected": [
+              "common_errors.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "common_errors.md",
+            "top_score": 0.7136
+          },
+          {
+            "query": "How should I decide how many replicas a Deployment should run?",
+            "expected": [
+              "deployment_patterns.md"
+            ],
+            "hit_rank": 2,
+            "top_result": "zerotouch_user_guide.md",
+            "top_score": 0.5684
+          },
+          {
+            "query": "readiness probe 跟 liveness probe 差在哪裡？",
+            "expected": [
+              "deployment_patterns.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "deployment_patterns.md",
+            "top_score": 0.6479
+          },
+          {
+            "query": "怎麼設定 HPA 讓副本數依 CPU 使用率自動調整？",
+            "expected": [
+              "deployment_patterns.md"
+            ],
+            "hit_rank": 3,
+            "top_result": "prompt_qa_seed:k8s-00008",
+            "top_score": 0.7288
+          },
+          {
+            "query": "ConfigMap 跟 Secret 要怎麼掛載成容器的環境變數？",
+            "expected": [
+              "deployment_patterns.md"
+            ],
+            "hit_rank": 3,
+            "top_result": "prompt_qa_seed:k8s-00009",
+            "top_score": 0.6635
+          },
+          {
+            "query": "image tag 應該固定版本還是可以用 latest？",
+            "expected": [
+              "deployment_patterns.md",
+              "security_best_practices.md"
+            ],
+            "hit_rank": 2,
+            "top_result": "beginner_glossary.md",
+            "top_score": 0.6074
+          },
+          {
+            "query": "requests 跟 limits 這兩個資源設定有什麼差別？",
+            "expected": [
+              "resource_management.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "resource_management.md",
+            "top_score": 0.6597
+          },
+          {
+            "query": "跑一個 Java Spring Boot 服務，resource requests/limits 大概怎麼抓比較合理？",
+            "expected": [
+              "resource_management.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "resource_management.md",
+            "top_score": 0.6878
+          },
+          {
+            "query": "CPU 資源寫 500m 是什麼意思？",
+            "expected": [
+              "resource_management.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "resource_management.md",
+            "top_score": 0.6921
+          },
+          {
+            "query": "怎麼用 ResourceQuota 限制整個 namespace 能用的資源總量？",
+            "expected": [
+              "resource_management.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "resource_management.md",
+            "top_score": 0.6
+          },
+          {
+            "query": "Kubernetes 的 QoS 等級 Guaranteed / Burstable / BestEffort 是怎麼判斷的？",
+            "expected": [
+              "resource_management.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "resource_management.md",
+            "top_score": 0.5883
+          },
+          {
+            "query": "How do I stop containers from running as privileged or using hostNetwork?",
+            "expected": [
+              "security_best_practices.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "security_best_practices.md",
+            "top_score": 0.6097
+          },
+          {
+            "query": "怎麼設定 RBAC 讓 ServiceAccount 只有最小必要權限？",
+            "expected": [
+              "security_best_practices.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "security_best_practices.md",
+            "top_score": 0.5546
+          },
+          {
+            "query": "NetworkPolicy 要怎麼設成預設拒絕所有流量再開放特定連線？",
+            "expected": [
+              "security_best_practices.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "security_best_practices.md",
+            "top_score": 0.6287
+          },
+          {
+            "query": "Secret 用 base64 儲存是不是就等於加密了？",
+            "expected": [
+              "security_best_practices.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "security_best_practices.md",
+            "top_score": 0.7068
+          },
+          {
+            "query": "怎麼用 Trivy 掃描容器映像有沒有安全漏洞？",
+            "expected": [
+              "security_best_practices.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "security_best_practices.md",
+            "top_score": 0.6411
+          },
+          {
+            "query": "這個平台的 Healer 功能實際上是做什麼用的？",
+            "expected": [
+              "zerotouch_user_guide.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "zerotouch_user_guide.md",
+            "top_score": 0.5053
+          },
+          {
+            "query": "要怎麼在這個系統上看部署歷史並且 rollback？",
+            "expected": [
+              "zerotouch_user_guide.md"
+            ],
+            "hit_rank": 3,
+            "top_result": "resource_management.md",
+            "top_score": 0.3918
+          },
+          {
+            "query": "Dataset Manager 頁面是用來做什麼的？",
+            "expected": [
+              "zerotouch_user_guide.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "zerotouch_user_guide.md",
+            "top_score": 0.6742
+          }
+        ]
+      },
+      "tfidf": {
+        "method": "tfidf (legacy)",
+        "recall_at_k": 0.917,
+        "mrr": 0.799,
+        "avg_latency_ms": 48.6,
+        "num_queries": 24,
+        "per_query": [
+          {
+            "query": "我的 pod 一直重啟，狀態顯示 CrashLoopBackOff，該怎麼辦？",
+            "expected": [
+              "common_errors.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "common_errors.md",
+            "top_score": 0.3521
+          },
+          {
+            "query": "Pod 被 OOMKilled，exit code 137，是什麼原因造成的？",
+            "expected": [
+              "common_errors.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "common_errors.md",
+            "top_score": 0.2439
+          },
+          {
+            "query": "deployment 一直卡在 ImagePullBackOff，可能是什麼問題？",
+            "expected": [
+              "common_errors.md"
+            ],
+            "hit_rank": null,
+            "top_result": "beginner_glossary.md",
+            "top_score": 0.2908
+          },
+          {
+            "query": "Why is my pod stuck in Pending and never getting scheduled onto a node?",
+            "expected": [
+              "common_errors.md"
+            ],
+            "hit_rank": 3,
+            "top_result": "prompt_qa_seed:k8s-00007",
+            "top_score": 0.1934
+          },
+          {
+            "query": "容器狀態顯示 CreateContainerConfigError 代表什麼？",
+            "expected": [
+              "common_errors.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "common_errors.md",
+            "top_score": 0.2055
+          },
+          {
+            "query": "Pod 一直卡在 Terminating 刪不掉要怎麼處理？",
+            "expected": [
+              "common_errors.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "common_errors.md",
+            "top_score": 0.6179
+          },
+          {
+            "query": "How should I decide how many replicas a Deployment should run?",
+            "expected": [
+              "deployment_patterns.md"
+            ],
+            "hit_rank": null,
+            "top_result": "prompt_qa_seed:k8s-00003",
+            "top_score": 0.2112
+          },
+          {
+            "query": "readiness probe 跟 liveness probe 差在哪裡？",
+            "expected": [
+              "deployment_patterns.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "deployment_patterns.md",
+            "top_score": 0.366
+          },
+          {
+            "query": "怎麼設定 HPA 讓副本數依 CPU 使用率自動調整？",
+            "expected": [
+              "deployment_patterns.md"
+            ],
+            "hit_rank": 3,
+            "top_result": "prompt_qa_seed:k8s-00008",
+            "top_score": 0.5798
+          },
+          {
+            "query": "ConfigMap 跟 Secret 要怎麼掛載成容器的環境變數？",
+            "expected": [
+              "deployment_patterns.md"
+            ],
+            "hit_rank": 2,
+            "top_result": "common_errors.md",
+            "top_score": 0.4011
+          },
+          {
+            "query": "image tag 應該固定版本還是可以用 latest？",
+            "expected": [
+              "deployment_patterns.md",
+              "security_best_practices.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "security_best_practices.md",
+            "top_score": 0.5628
+          },
+          {
+            "query": "requests 跟 limits 這兩個資源設定有什麼差別？",
+            "expected": [
+              "resource_management.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "resource_management.md",
+            "top_score": 0.5076
+          },
+          {
+            "query": "跑一個 Java Spring Boot 服務，resource requests/limits 大概怎麼抓比較合理？",
+            "expected": [
+              "resource_management.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "resource_management.md",
+            "top_score": 0.5091
+          },
+          {
+            "query": "CPU 資源寫 500m 是什麼意思？",
+            "expected": [
+              "resource_management.md"
+            ],
+            "hit_rank": 2,
+            "top_result": "common_errors.md",
+            "top_score": 0.5898
+          },
+          {
+            "query": "怎麼用 ResourceQuota 限制整個 namespace 能用的資源總量？",
+            "expected": [
+              "resource_management.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "resource_management.md",
+            "top_score": 0.4366
+          },
+          {
+            "query": "Kubernetes 的 QoS 等級 Guaranteed / Burstable / BestEffort 是怎麼判斷的？",
+            "expected": [
+              "resource_management.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "resource_management.md",
+            "top_score": 0.5267
+          },
+          {
+            "query": "How do I stop containers from running as privileged or using hostNetwork?",
+            "expected": [
+              "security_best_practices.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "security_best_practices.md",
+            "top_score": 0.2814
+          },
+          {
+            "query": "怎麼設定 RBAC 讓 ServiceAccount 只有最小必要權限？",
+            "expected": [
+              "security_best_practices.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "security_best_practices.md",
+            "top_score": 0.48
+          },
+          {
+            "query": "NetworkPolicy 要怎麼設成預設拒絕所有流量再開放特定連線？",
+            "expected": [
+              "security_best_practices.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "security_best_practices.md",
+            "top_score": 0.6567
+          },
+          {
+            "query": "Secret 用 base64 儲存是不是就等於加密了？",
+            "expected": [
+              "security_best_practices.md"
+            ],
+            "hit_rank": 2,
+            "top_result": "prompt_qa_seed:k8s-00006",
+            "top_score": 0.3351
+          },
+          {
+            "query": "怎麼用 Trivy 掃描容器映像有沒有安全漏洞？",
+            "expected": [
+              "security_best_practices.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "security_best_practices.md",
+            "top_score": 0.7556
+          },
+          {
+            "query": "這個平台的 Healer 功能實際上是做什麼用的？",
+            "expected": [
+              "zerotouch_user_guide.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "zerotouch_user_guide.md",
+            "top_score": 0.4811
+          },
+          {
+            "query": "要怎麼在這個系統上看部署歷史並且 rollback？",
+            "expected": [
+              "zerotouch_user_guide.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "zerotouch_user_guide.md",
+            "top_score": 0.4848
+          },
+          {
+            "query": "Dataset Manager 頁面是用來做什麼的？",
+            "expected": [
+              "zerotouch_user_guide.md"
+            ],
+            "hit_rank": 1,
+            "top_result": "zerotouch_user_guide.md",
+            "top_score": 0.382
+          }
+        ]
+      }
+    }
+  }
+}
