@@ -34,6 +34,10 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(web_demo, "K8S_ENABLED", False)
     monkeypatch.setattr(web_demo, "USERS", {})
     monkeypatch.setattr(web_demo, "__file__", str(tmp_path / "web_demo.py"))
+    # 2026-10-09 加了頻率限制：所有測試的來源 IP 都是 127.0.0.1，共用一份 limiter 的話
+    # 註冊次數會跨測試累積，第 11 個測試起註冊就被 429 擋掉。每個測試給一份新的。
+    from core.web_security import RateLimiter
+    monkeypatch.setattr(web_demo, "_rate_limiter", RateLimiter())
     web_demo.app.config["TESTING"] = True
     with web_demo.app.test_client() as c:
         yield c
@@ -349,3 +353,30 @@ class TestCrossTenantIsolation2026_10_08:
         body = resp.get_data(as_text=True)
         assert "Audit-Id" not in body and "secret-internal-id" not in body
         assert "no-such-app" in resp.get_json()["error"]
+
+
+class TestRateLimit2026_10_09:
+    """網站上外網前加的頻率限制（core/web_security.py）在真實路由上要生效，
+    而且被擋時要給新手看得懂的訊息，不是裸的 429。"""
+
+    def test_login_bruteforce_gets_friendly_429_page(self, client):
+        codes = [_login(client, "nobody", "wrong").status_code for _ in range(10)]
+        assert 429 not in codes
+        resp = _login(client, "nobody", "wrong")
+        assert resp.status_code == 429
+        assert "操作太頻繁" in resp.get_data(as_text=True)
+        assert int(resp.headers["Retry-After"]) >= 1
+
+    def test_api_429_is_json_with_retry_after(self, client):
+        # 用便宜的 /api/pods（測試裡 K8s 關閉、立刻回應）打到「其他 API 總上限」120 次；
+        # 不要用 /api/chat，那會真的呼叫 Gemini 和模型，又慢又依賴外部服務。
+        _register(client, "ivan", "hunter22")
+        codes = [client.get("/api/pods").status_code for _ in range(120)]
+        assert 429 not in codes
+        last = client.get("/api/pods")
+        assert last.status_code == 429
+        body = last.get_json()
+        assert "Too many requests" in body["error"] and body["retry_after"]
+
+    def test_login_page_get_is_never_limited(self, client):
+        assert all(client.get("/").status_code == 200 for _ in range(30))

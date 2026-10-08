@@ -163,6 +163,33 @@ python web_demo.py
 
 ---
 
+## 7.5 網站對外開放（給客戶從外網使用）
+
+2026-10-09 起網站可以透過「通道」對外開放：家裡電腦不用開路由器 port、不用固定 IP，
+HTTPS 自動處理。`web_demo.py` 已改用正式伺服器 waitress，並有頻率限制（`core/web_security.py`）。
+
+**方法 A：Tailscale Funnel（免費、網址固定、不用網域，建議先用這個）**
+1. 安裝並登入：`winget install Tailscale.Tailscale`，開啟 Tailscale 用 Google/GitHub 帳號登入。
+2. 開啟對外分享：`tailscale funnel --bg 5050`。第一次執行會給一個網址，要你到管理後台
+   同意開啟 HTTPS 憑證和 Funnel 功能，同意後再執行一次。
+3. 終端機會顯示對外網址，例如 `https://你的電腦名.xxxx.ts.net`。把它寫進 `.env`：
+   `PUBLIC_BASE_URL=https://你的電腦名.xxxx.ts.net`
+4. 重啟 `python web_demo.py`。設定 `PUBLIC_BASE_URL` 之後，網站只接受本機通道送來的連線，
+   區網的其他電腦不能直接連到 `:5050`，這是刻意的設計。
+5. 有用 Google 登入的話，到 Google Cloud Console → 憑證 → OAuth 用戶端，把
+   `<PUBLIC_BASE_URL>/auth/google/callback` 加進「已授權的重新導向 URI」。
+6. 驗證：用手機關掉 Wi-Fi，改用行動網路開啟這個網址，應該看得到登入頁。
+
+**方法 B：自己的網域 + Cloudflare Tunnel（比較正式）**
+學生可以用 [GitHub Student Developer Pack](https://education.github.com/pack) 在 Name.com 免費領一個
+網域（第一年免費，要綁付款方式但不扣款；記得關掉自動續約）。把網域加進 Cloudflare 免費方案後，
+用 `cloudflared tunnel` 把網域指到 `http://localhost:5050`，再把 `PUBLIC_BASE_URL` 改成新網域即可，
+程式不用改。
+
+**注意**：家裡電腦關機或睡眠，網站就會停。Windows 的「睡眠」要改成「永不」。
+
+---
+
 ## 8. Kubernetes 設定
 
 確認 kubeconfig 正確：

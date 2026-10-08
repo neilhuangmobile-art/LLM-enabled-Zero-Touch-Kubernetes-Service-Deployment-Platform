@@ -219,6 +219,9 @@ class TestDashboardRoute:
         monkeypatch.setattr(web_demo, "K8S_ENABLED", False)
         monkeypatch.setattr(web_demo, "USERS", {})
         monkeypatch.setattr(web_demo, "__file__", str(tmp_path / "web_demo.py"))
+        # 每個測試一份新的頻率限制計數（2026-10-09），避免註冊次數跨測試累積被 429 擋掉
+        from core.web_security import RateLimiter
+        monkeypatch.setattr(web_demo, "_rate_limiter", RateLimiter())
         web_demo.app.config["TESTING"] = True
         with web_demo.app.test_client() as c:
             yield c

@@ -45,6 +45,9 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(web_demo, "__file__", str(tmp_path / "web_demo.py"))
     monkeypatch.setattr(web_demo, "GOOGLE_CLIENT_ID", "")
     monkeypatch.setattr(web_demo, "GOOGLE_CLIENT_SECRET", "")
+    # 每個測試一份新的頻率限制計數（2026-10-09），避免註冊次數跨測試累積被 429 擋掉
+    from core.web_security import RateLimiter
+    monkeypatch.setattr(web_demo, "_rate_limiter", RateLimiter())
     web_demo.app.config["TESTING"] = True
     with web_demo.app.test_client() as c:
         yield c

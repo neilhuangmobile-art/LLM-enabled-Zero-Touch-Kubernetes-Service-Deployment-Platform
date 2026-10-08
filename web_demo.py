@@ -227,6 +227,50 @@ NS  = "default"
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 
+# ── 上外網防護（2026-10-09，見 core/web_security.py、docs/setup.md）──────────
+from core.config import PUBLIC_BASE_URL, WEB_PORT
+from core.web_security import RateLimiter, check_request, too_many_message
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    # Lax：Google OAuth callback 是頂層 GET 導回，Lax 仍會帶 cookie，不影響登入
+    SESSION_COOKIE_SAMESITE="Lax",
+    # 對外網址是 https 時 cookie 只走 https（瀏覽器把 http://localhost 視為安全來源，本機測試不受影響）
+    SESSION_COOKIE_SECURE=PUBLIC_BASE_URL.startswith("https://"),
+)
+# 代理標頭（X-Forwarded-*）由 waitress 的 trusted_proxy 處理，見檔尾 __main__：只有
+# 「只綁 127.0.0.1、前面一定是本機通道程式」時才信任，否則區網任何人都能偽造
+# X-Forwarded-For 繞過頻率限制。（2026-10-09 實測：waitress 預設會先清掉不受信任的
+# X-Forwarded-*，所以不能靠 werkzeug ProxyFix。）
+_rate_limiter = RateLimiter()
+
+
+def _external_url(path: str) -> str:
+    """給外部用的完整網址（Google OAuth redirect_uri、客戶安裝指令、回報網址）。
+    有 PUBLIC_BASE_URL 就直接用它組，不依賴各家通道會不會、怎麼帶代理標頭。"""
+    if PUBLIC_BASE_URL:
+        return PUBLIC_BASE_URL + path
+    return request.host_url.rstrip("/") + path
+
+
+@app.before_request
+def _rate_limit():
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else None
+    allowed, retry, rule = check_request(
+        _rate_limiter, request.path, request.method, request.remote_addr or "?",
+        username=session.get("username"), token=token)
+    if allowed:
+        return None
+    msg = too_many_message(retry)
+    headers = {"Retry-After": str(max(1, int(retry + 0.999)))}
+    if rule == "auth":
+        # 登入/註冊是表單送出，回 JSON 新手看不懂，直接回登入頁並顯示原因
+        page = "register" if request.path.startswith("/auth/register") else "login"
+        return render_template_string(
+            HTML, logged_in=False, page=page, error=msg, k8s=K8S_ENABLED, username='',
+            google_login_available=_google_oauth_configured()), 429, headers
+    return jsonify({"error": msg, "retry_after": headers["Retry-After"]}), 429, headers
+
 # ── Simple in-memory user store (replace with DB for production) ──
 USERS = {}
 try:
@@ -4755,7 +4799,7 @@ def google_login():
     session["google_oauth_state"] = state
     params = {
         "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": url_for("google_callback", _external=True),
+        "redirect_uri": _external_url(url_for("google_callback")),
         "response_type": "code",
         "scope": "openid email profile",
         "state": state,
@@ -4794,7 +4838,7 @@ def google_callback():
             "client_secret": GOOGLE_CLIENT_SECRET,
             "code": code,
             "grant_type": "authorization_code",
-            "redirect_uri": url_for("google_callback", _external=True),
+            "redirect_uri": _external_url(url_for("google_callback")),
         }, timeout=10)
         token_resp.raise_for_status()
         access_token = token_resp.json().get("access_token")
@@ -6523,7 +6567,9 @@ if __name__ == "__main__":
     print("  ZeroTouch K8s Web Demo v2")
     print("=" * 60)
     print(f"  K8s   : {'Connected' if K8S_ENABLED else 'Simulation'}")
-    print(f"  Open  : http://localhost:5050")
+    print(f"  Open  : http://localhost:{WEB_PORT}")
+    if PUBLIC_BASE_URL:
+        print(f"  Public: {PUBLIC_BASE_URL}  （只綁 127.0.0.1，外部連線要經過通道）")
     if K8S_ENABLED:
         _HEALER_BG_INTERVAL = 30
         _healer_bg_thread = threading.Thread(
@@ -6534,4 +6580,19 @@ if __name__ == "__main__":
         print("  Healer: background auto-heal loop started (scan every 30s)")
     else:
         print("  Healer: background auto-heal loop NOT started (K8s not connected)")
-    app.run(host="0.0.0.0", port=5050, debug=False)
+    # 有對外網址就只綁本機：外部流量一律經過通道（Tailscale Funnel / Cloudflare Tunnel），
+    # ProxyFix 才能安全地信任 X-Forwarded-*。沒設定時維持舊行為，區網可直接連。
+    _bind = "127.0.0.1" if PUBLIC_BASE_URL else "0.0.0.0"
+    try:
+        # 正式 WSGI 伺服器；Flask 內建的開發伺服器不是設計給公開網路用的
+        from waitress import serve
+        print(f"  Server: waitress（{_bind}:{WEB_PORT}，8 threads）")
+        _proxy = {}
+        if PUBLIC_BASE_URL:
+            # 只信任本機通道程式送來的代理標頭，取得真實客戶端 IP（頻率限制用）與 https
+            _proxy = dict(trusted_proxy="127.0.0.1", trusted_proxy_count=1,
+                          trusted_proxy_headers={"x-forwarded-for", "x-forwarded-proto", "x-forwarded-host"})
+        serve(app, host=_bind, port=WEB_PORT, threads=8, **_proxy)
+    except ImportError:
+        print("  Server: Flask 開發伺服器（未安裝 waitress，不要直接對外開放）")
+        app.run(host=_bind, port=WEB_PORT, debug=False)

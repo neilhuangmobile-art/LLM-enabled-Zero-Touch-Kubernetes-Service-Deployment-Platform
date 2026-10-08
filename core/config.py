@@ -85,6 +85,13 @@ MODEL_SERVER_HOST = os.environ.get("MODEL_SERVER_HOST", "127.0.0.1")
 MODEL_SERVER_PORT = int(os.environ.get("MODEL_SERVER_PORT", "8765"))
 MODEL_SERVER_URL  = f"http://{MODEL_SERVER_HOST}:{MODEL_SERVER_PORT}"
 
+# ── 對外網址（2026-10-09：網站透過通道上外網，給客戶叢集回報狀態用）──────────
+# 例如 https://my-pc.tail1234.ts.net 或 https://zerotouch.me。結尾不要加斜線。
+# 有設定時：web_demo 只綁 127.0.0.1（只讓本機的通道程式連進來）並信任通道加的
+# X-Forwarded-* 標頭；沒設定時維持舊行為（0.0.0.0、不信任代理標頭）。
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").strip().rstrip("/")
+WEB_PORT        = int(os.environ.get("WEB_PORT", "5050"))
+
 # ── 系統 Prompt（唯一定義來源）───────────────────────────────────
 SYSTEM_PROMPT = (
     "You are an AI that converts Kubernetes deployment requests into JSON.\n"

@@ -866,3 +866,17 @@ Model Server 直接載入失敗。
 `/infer` 3.3s）；長 prompt 壓測顯存 reserved 13.27GB → 10.05GB；Model Server + embedding
 同時在 GPU 時整張卡高峰 14.0GB / 15.9GB；RAG 檢索 GPU fp16 與 CPU fp32 的 Recall@3（95.8%）、
 MRR（0.938）完全相同，查詢延遲 1970ms → 14.8ms。學校 NVIDIA 那台尚未實機驗證。
+
+### 04:20 — 安全強化：網站可以安全地上外網（客戶自帶叢集計畫第 1 階段）
+**為什麼**：要讓客戶從外網使用平台（Tailscale Funnel / Cloudflare Tunnel），原本的 Flask
+開發伺服器沒有頻率限制，任何人狂送請求就能耗光 GPU 和 Gemini 額度，也能暴力破解密碼。
+**改了什麼**：
+- 新增 `core/web_security.py`：token bucket 頻率限制（登入/註冊每 IP 每分鐘 10 次、Chat 每帳號 20 次、
+  部署 10 次、其他 API 120 次），被擋時回中英文說明 + `Retry-After`，登入表單直接回登入頁顯示原因。
+- `web_demo.py` 改用 waitress 啟動；cookie 加 HttpOnly / SameSite=Lax，https 對外網址時加 Secure。
+- 新增 `PUBLIC_BASE_URL`：有設定時只綁 127.0.0.1、只信任本機通道送來的 X-Forwarded-*；
+  Google 登入回呼網址改由它組出，不依賴通道帶不帶代理標頭。
+**驗證**：`pytest` 317 個全過（新增 10 個）；實機啟動確認 `Server: waitress`、第 11 次登入嘗試回 429
++ 中文說明；外網模式只綁 127.0.0.1、cookie 帶 Secure、Google 回呼網址是 https 對外網址、同一個通道後
+不同客戶端 IP 各自計數。過程中發現 waitress 預設會清掉不受信任的 X-Forwarded-*（所以 werkzeug
+ProxyFix 無效），改用 waitress 的 trusted_proxy。真正透過通道從外網連線待使用者設定 Tailscale 後驗證。
