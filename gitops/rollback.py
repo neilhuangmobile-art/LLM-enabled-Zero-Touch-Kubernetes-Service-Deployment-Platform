@@ -61,14 +61,18 @@ def rollback(
             "timestamp" : str,
         }
     """
-    print(f"\n⏪ 觸發回滾：{namespace}/{app_name}（策略：{strategy}）"
+    print(f"\n[rollback] 觸發回滾：{namespace}/{app_name}（策略：{strategy}）"
           + ("  [dry-run]" if dry_run else ""))
 
     if strategy == "auto":
-        # 依序嘗試，第一個成功的回傳
+        # 依序嘗試，第一個「真的成功」的回傳；ok=None（策略不可用，例如 Argo CD
+        # 沒部署）或 ok=False（該策略執行但失敗）都要繼續試下一個，不能提早停下
+        # ——這裡曾經寫成 `is not False`，把 None 也當「停下來」，導致 Argo CD
+        # 回報「不可用」時整個 auto 流程直接結束，git/kubectl 兩個實際上會成功
+        # 的策略永遠輪不到。
         for s in ("argocd", "git", "kubectl"):
             result = _run_strategy(s, app_name, namespace, repo_path, dry_run)
-            if result["ok"] is not False:
+            if result["ok"] is True:
                 result["strategy"] = s
                 result["timestamp"] = datetime.utcnow().isoformat()
                 _print_result(result)
@@ -121,7 +125,7 @@ def get_rollback_history(
             for c in commits
         ]
     except Exception as e:
-        print(f"⚠️  無法取得 Git 歷史：{e}")
+        print(f"[warn] 無法取得 Git 歷史：{e}")
         return _kubectl_rollout_history(app_name, namespace)
 
 
@@ -240,12 +244,35 @@ def _rollback_git(
                 "details": {"from": current_sha, "to": previous_sha},
             }
 
-        # 從上一個 commit 取出檔案
+        # 從上一個 commit 取出檔案——git 物件內部的路徑永遠是用 `/` 分隔（跟
+        # 平台無關），但 `rel` 是從 Path.relative_to() 轉成字串，Windows 上會是
+        # `manifests\user-rbselftest\rb-selftest` 這種反斜線形式，兩者直接拿去
+        # `startswith()` 比對在 Windows 上永遠對不上、迴圈一次都不會進去，實測
+        # 發現這台機器上「還原檔案」這一步從沒真的動過任何一個檔案——比對前先
+        # 統一轉成 `/` 分隔。
+        # `.traverse()` 連目錄本身（Tree 物件）也會一併列出，不只是檔案
+        # （Blob）——`rel_posix` 剛好等於目錄路徑本身，`startswith()` 連目錄
+        # 那筆也會比對到，試圖把它當檔案寫入就會撞到「路徑其實是目錄」的
+        # Permission denied，所以要額外濾掉非 blob 的項目。
+        rel_posix = rel.replace("\\", "/")
         for item in previous_commit.tree.traverse():
-            if hasattr(item, "path") and item.path.startswith(rel):
+            if hasattr(item, "path") and item.path.startswith(rel_posix) and item.type == "blob":
                 blob_path = Path(repo.working_dir) / item.path
                 blob_path.parent.mkdir(parents=True, exist_ok=True)
                 blob_path.write_bytes(item.data_stream.read())
+
+        # 把還原後的 manifest 真的套用到叢集——只改 git 歷史不會讓任何一個
+        # Pod 真的換版本，這一步才是「回滾」真正發生的地方
+        apply_proc = subprocess.run(
+            ["kubectl", "apply", "-f", str(Path(repo.working_dir) / rel), "-n", namespace],
+            capture_output=True, text=True, timeout=30,
+        )
+        if apply_proc.returncode != 0:
+            return {
+                "ok"     : False,
+                "message": f"manifest 已還原但套用到叢集失敗：{apply_proc.stderr.strip()[:300]}",
+                "details": {"from": current_sha, "to": previous_sha},
+            }
 
         # 提交還原
         repo.index.add([rel])
@@ -325,7 +352,7 @@ def _kubectl_rollout_history(app_name: str, namespace: str) -> list:
 # ══════════════════════════════════════════════════════════════════
 
 def _print_result(result: dict):
-    icon = "✅" if result["ok"] else ("⚠️ " if result["ok"] is None else "❌")
+    icon = "[OK]" if result["ok"] else ("[WARN]" if result["ok"] is None else "[FAIL]")
     print(f"   {icon} [{result['strategy']}] {result['message']}")
 
 

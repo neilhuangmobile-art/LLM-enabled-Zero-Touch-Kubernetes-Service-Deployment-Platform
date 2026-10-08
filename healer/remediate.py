@@ -150,32 +150,68 @@ def _handle_fix_image(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
         deploy = apps_v1.read_namespaced_deployment(deploy_name, namespace)
         current_rev = deploy.metadata.annotations.get(
             "deployment.kubernetes.io/revision", "?")
+        current_image = ""
+        try:
+            current_image = deploy.spec.template.spec.containers[0].image
+        except Exception:
+            pass
 
-        # 觸發回滾（設定 rollbackTo revision=0 = 回到上一個）
-        patch = {
-            "spec": {
-                "template": {
-                    "metadata": {
-                        "annotations": {
-                            "kubectl.kubernetes.io/restartedAt":
-                                datetime.utcnow().isoformat()
-                        }
-                    }
-                }
-            }
-        }
-        # 直接 patch template annotation 觸發滾動更新（若映像已修正）
-        # 正確回滾需要使用 kubectl rollout undo，這裡用 subprocess 呼叫
+        # 2026-10-03 實測發現的真實 bug：單純 `kubectl rollout undo`（不指定
+        # --to-revision）永遠只回退「上一個」revision。如果使用者在 Healer
+        # 還沒來得及處理第一次壞掉的部署之前，又手動改了第二次壞的 image，
+        # 「上一個」revision 剛好也是壞的——kubectl 指令本身執行成功（回傳碼
+        # 0），Healer 因此回報「已回滾」，但 Pod 其實還是同一個壞 image，
+        # 下一輪又偵測到同一個問題、再 undo 一次，在兩個壞 revision 之間無限
+        # 乒乓，每次都誤報修好了。改成主動往回找「image 真的跟現在不一樣」的
+        # 最近一個 revision，不是盲目退一步；真的找不到才退回原本的行為。
+        target_revision = None
+        try:
+            selector = (deploy.spec.selector.match_labels
+                        if deploy.spec.selector else None) or {}
+            label_selector = ",".join(f"{k}={v}" for k, v in selector.items())
+            rs_list = apps_v1.list_namespaced_replica_set(
+                namespace, label_selector=label_selector)
+            candidates = []
+            for rs in rs_list.items:
+                rev_str = (rs.metadata.annotations or {}).get(
+                    "deployment.kubernetes.io/revision")
+                if not rev_str:
+                    continue
+                try:
+                    rev_num = int(rev_str)
+                except ValueError:
+                    continue
+                try:
+                    rs_image = rs.spec.template.spec.containers[0].image
+                except Exception:
+                    continue
+                candidates.append((rev_num, rs_image))
+            # 由新到舊排序，找第一個 image 跟目前壞掉的不一樣的 revision
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            for rev_num, rs_image in candidates:
+                if str(rev_num) == str(current_rev):
+                    continue
+                if rs_image != current_image:
+                    target_revision = rev_num
+                    break
+        except Exception:
+            target_revision = None  # 查不到候選名單就退回原本「盲目回退一步」的行為
+
         import subprocess
         cmd = ["kubectl", "rollout", "undo",
                f"deployment/{deploy_name}", "-n", namespace]
+        if target_revision is not None:
+            cmd.append(f"--to-revision={target_revision}")
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
         if proc.returncode == 0:
+            detail = (f"（指定回滾到 revision {target_revision}，確認過 image 跟目前壞掉的不同）"
+                       if target_revision is not None
+                       else "（回滾到上一個 revision）")
             return {
                 "ok"     : True,
-                "message": f"已回滾 Deployment {deploy_name}（從 revision {current_rev}）",
-                "details": {"stdout": proc.stdout.strip()},
+                "message": f"已回滾 Deployment {deploy_name}{detail}",
+                "details": {"stdout": proc.stdout.strip(), "target_revision": target_revision},
             }
         stderr = proc.stderr.strip()
         if "no rollout history" in stderr.lower():

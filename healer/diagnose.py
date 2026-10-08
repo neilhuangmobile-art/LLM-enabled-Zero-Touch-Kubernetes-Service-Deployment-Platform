@@ -29,7 +29,14 @@ _RULE_PATTERNS = [
      "映像拉取失敗，tag 不存在或倉庫無法存取",
      "fix_image",
      "high"),
-    (r"CrashLoopBackOff",
+    # 2026-10-07 近失事件可見化實測時發現的真實 bug：K8s 事件的 reason 欄位是
+    # "BackOff"、message 是「Back-off restarting failed container」，不是這裡原本
+    # 只比對的 "CrashLoopBackOff" 字面字串——Pod 被抓到的那一瞬間如果容器狀態剛好
+    # 不是 waiting（例如正好在兩次重啟中間、terminated.reason 只是 "Completed"），
+    # reason 欄位就不會是 "CrashLoopBackOff"，完全靠事件文字撐住比對，原本的正則
+    # 抓不到，導致規則層判定 confidence 不是 "rule"，連帶讓 _has_concrete_signal()
+    # 那一整道幻覈防護被繞過（這道防護只在 confidence=="rule" 時才會跑）。
+    (r"crashloopbackoff|back-off restarting|back off restarting",
      "容器反覆崩潰，需分析應用程式日誌",
      "analyze_logs",
      "high"),
@@ -54,6 +61,29 @@ _RULE_PATTERNS = [
      "fix_port_conflict",
      "medium"),
 ]
+
+
+# 2026-10-06 kubectl exec 真實故障測試實測發現：純 CrashLoopBackOff（例如反覆
+# `nginx -s stop` 讓 process 自己正常退出，日誌是空的、事件只有通用的
+# "Back-off restarting failed container"）這種情境下，監控小模型（1.5B）仍會
+# 自己編出一個聽起來具體但完全沒有證據支持的根因（實測案例：編出「容器資源不足
+# 導致 OOM Killed」）。DIAGNOSE_SYSTEM 裡已經有「證據不足要老實說」的規則，但
+# 1.5B 這個尺寸的指令遵循度不夠可靠（同一類問題見 docs/security_review.md 第 9
+# 節）。這裡加一道不依賴模型是否遵守規則的保險：合併文字裡要真的含有具體錯誤
+# 關鍵字家族之一，才信任模型給的 root_cause，否則一律蓋成老實版本。
+_CONCRETE_SIGNAL_RE = re.compile(
+    r"oom|out of memory|image.*not found|manifest.*unknown|errimagepull|"
+    r"permission denied|unauthorized|403|"
+    r"econnrefused|connection refused|dial tcp.*refused|"
+    r"configmap.*not found|secret.*not found|no such file|"
+    r"liveness.*probe|readiness.*probe|probe failed|"
+    r"port.*already in use|address already in use",
+    re.IGNORECASE,
+)
+
+
+def _has_concrete_signal(combined_text: str) -> bool:
+    return bool(_CONCRETE_SIGNAL_RE.search(combined_text))
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -91,9 +121,13 @@ def diagnose_issue(context: dict, use_llm: bool = True) -> dict:
     events   = context.get("events",   [])
     message  = context.get("message",  "")
 
-    # 合併所有文字供分析
+    # 合併所有文字供分析。2026-10-07 修 bug：原本只合併 events 的 message，沒有
+    # 合併 reason（K8s 事件的 reason 欄位是獨立的簡短代碼，例如 "BackOff"、
+    # "OOMKilling"，跟 message 是分開的兩個欄位，只看 message 會漏掉只出現在
+    # reason 裡的訊號）。
     combined_text = "\n".join([
         reason, message, logs,
+        " ".join(e.get("reason", "") for e in events),
         " ".join(e.get("message", "") for e in events),
     ]).lower()
 
@@ -110,10 +144,25 @@ def diagnose_issue(context: dict, use_llm: bool = True) -> dict:
             llm_result["pod_name"] = pod_name
             if rule_result["confidence"] == "rule":
                 # 規則層已經比中已知錯誤模式：補救動作(action)/嚴重度以規則為準（比較可靠，
-                # 且 remediate.py 靠 action 分派），只採用小模型的 root_cause / suggestion 敘述。
+                # 且 remediate.py 靠 action 分派）。root_cause/suggestion 預設採用小模型的敘述
+                # （通常比規則層的制式文字更具體），但只有在合併文字裡真的有具體證據時才信任——
+                # 規則層命中的可能只是像 CrashLoopBackOff 這種泛用模式本身不含根因，這時若模型
+                # 自己編出一個更具體但毫無根據的原因，寧可老實說證據不足，不要讓幻覈的文字騙到
+                # 使用者（2026-10-06 kubectl exec 實測案例）。
                 llm_result["action"]   = rule_result["action"]
                 llm_result["severity"] = rule_result["severity"]
-                if not llm_result.get("suggestion"):
+                if not _has_concrete_signal(combined_text):
+                    # 2026-10-07：蓋掉之前先把模型原本的版本存進 llm_raw_guess，不要整個
+                    # 丟棄——近失事件可見化需要讓使用者看得到「模型原本想講什麼、被系統
+                    # 攔下來了」，不是只呈現最終安全版本（見 docs/security_review.md）。
+                    llm_result["llm_raw_guess"] = llm_result.get("root_cause")
+                    llm_result["root_cause"] = (
+                        "證據不足，只能確定是重複重啟/異常終止，實際原因需要人工查看完整日誌 / "
+                        "Insufficient evidence for a specific root cause — only repeated restarts "
+                        "are confirmed; manual log review is needed."
+                    )
+                    llm_result["suggestion"] = rule_result["suggestion"]
+                elif not llm_result.get("suggestion"):
                     llm_result["suggestion"] = rule_result["suggestion"]
             elif rule_result["severity"] != "unknown":
                 llm_result.setdefault("severity", rule_result["severity"])

@@ -103,6 +103,56 @@ class TestRemediateDryRun:
         # 不應該再出現原本那種容易誤導的「回滾失敗：」開頭訊息
         assert not result["message"].startswith("回滾失敗")
 
+    @patch.object(remediate_module, "k8s_client")
+    @patch.object(remediate_module, "_load_k8s_config")
+    @patch("subprocess.run")
+    def test_fix_image_skips_consecutive_bad_revisions_to_find_working_one(
+        self, mock_subprocess_run, mock_load_config, mock_k8s_client,
+    ):
+        """2026-10-03 使用者錄 demo 時實測到的真實 bug：使用者連續兩次把 image
+        改成不存在的 tag（第二次是 Healer 還沒來得及處理第一次之前手動又改的），
+        「上一個」revision 剛好也是壞的。原本單純 `kubectl rollout undo`（不指定
+        --to-revision）只會退一步，在兩個壞 revision 之間無限乒乓，kubectl 指令
+        本身執行成功所以每次都回報「已回滾」，但 Pod 其實還是同一個壞 image。
+        修好後要主動往回找「image 真的跟現在不一樣」的最近一個 revision
+        （這裡是 revision 5，nginx:latest），不是盲目退一步到 revision 30（一樣
+        是壞的 nginx:not-a-real-tag）。"""
+        mock_deploy = MagicMock()
+        mock_deploy.metadata.annotations = {"deployment.kubernetes.io/revision": "31"}
+        mock_deploy.spec.template.spec.containers = [MagicMock(image="nginx:not-a-real-tag")]
+        mock_deploy.spec.selector.match_labels = {"app": "healer-demo"}
+
+        def _rs(revision, image):
+            rs = MagicMock()
+            rs.metadata.annotations = {"deployment.kubernetes.io/revision": str(revision)}
+            rs.spec.template.spec.containers = [MagicMock(image=image)]
+            return rs
+
+        mock_rs_list = MagicMock()
+        mock_rs_list.items = [
+            _rs(31, "nginx:not-a-real-tag"),   # 目前（壞）
+            _rs(30, "nginx:not-a-real-tag"),   # 上一個，也是壞的——不能選這個
+            _rs(5,  "nginx:latest"),           # 最近一個真的不同、能用的版本
+            _rs(2,  "nginx:latest"),
+            _rs(1,  "nginx:latest"),
+        ]
+
+        mock_apps_v1 = MagicMock()
+        mock_apps_v1.read_namespaced_deployment.return_value = mock_deploy
+        mock_apps_v1.list_namespaced_replica_set.return_value = mock_rs_list
+        mock_k8s_client.AppsV1Api.return_value = mock_apps_v1
+        mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="rolled back", stderr="")
+
+        result = _handle_fix_image(
+            {"pod_name": "healer-demo-85d8ffbd74-592mr", "namespace": "default"},
+            {"action": "fix_image"}, dry_run=False,
+        )
+
+        assert result["ok"] is True
+        assert result["details"]["target_revision"] == 5
+        called_cmd = mock_subprocess_run.call_args[0][0]
+        assert "--to-revision=5" in called_cmd
+
     def test_fix_port_conflict_and_manual_inspect_never_touch_k8s_even_without_dry_run(self):
         # 這兩個動作本身設計上就是「只給建議、不操作」，不需要 dry_run 保護，
         # 確認即使 dry_run=False 也不會嘗試連線（不會丟出跟 K8s client 相關的例外）。
