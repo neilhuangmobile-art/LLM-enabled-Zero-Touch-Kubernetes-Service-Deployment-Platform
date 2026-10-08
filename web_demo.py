@@ -678,6 +678,12 @@ def _ban_user(username: str):
             k8s_client.CoreV1Api().delete_namespace(_user_namespace(username))
         except Exception:
             pass
+    # 客戶自帶叢集：撤銷安裝與回報 token（回報器會開始收到 401）。客戶叢集裡的服務跑在
+    # 客戶自己的電腦上，平台沒有權限、也不該去刪除。
+    try:
+        CLUSTERS.forget(username)
+    except NameError:
+        pass
 
 
 def _sum_cluster_resource_requests(exclude_name: str = None, exclude_namespace: str = None):
@@ -4952,6 +4958,115 @@ def _enforce_ban():
             error="This account has been banned for repeated malicious behavior. / 此帳號因累積多次惡意行為已被封鎖。",
             k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     return None
+
+
+# ══════════════════════════════════════════════════════════════════
+# 客戶自帶叢集（GitOps 模式 C）：安裝腳本、安裝包、進度、回報器回報
+# 2026-10-09 新增，設計見 cluster/onboarding.py、cluster/remote_state.py、gitops/tenant_repo.py
+# ══════════════════════════════════════════════════════════════════
+from core.config import TENANT_GITHUB_TOKEN, TENANT_GITHUB_ORG, DATA_DIR, TENANT_REPOS_DIR
+from cluster.remote_state import ClusterRegistry, clean_report, ReportError, MAX_REPORT_BYTES
+from cluster import onboarding as _onboarding
+
+CLUSTERS = ClusterRegistry(os.path.join(DATA_DIR, "clusters.json"))
+
+
+def _tenant_github_ready() -> bool:
+    return bool(TENANT_GITHUB_TOKEN and TENANT_GITHUB_ORG)
+
+
+def _tenant_repo_for(username: str):
+    """這位客戶的 GitHub repo（沒有就建立）+ 本機工作副本。回傳 (TenantRepo, GitHubTenantHost, repo_info)。"""
+    from gitops.tenant_repo import GitHubTenantHost, TenantRepo, tenant_slug
+    host = GitHubTenantHost(TENANT_GITHUB_TOKEN, TENANT_GITHUB_ORG)
+    slug = tenant_slug(username)
+    info = host.ensure_repo(slug)
+    repo = TenantRepo(username, info["https_url"], os.path.join(TENANT_REPOS_DIR, slug),
+                      auth_header=host.auth_header(), branch=info["default_branch"])
+    return repo, host, info
+
+
+def _script_base_url() -> str:
+    """給客戶電腦上的 PowerShell 用的網址。"""
+    return _external_url("")
+
+
+def _cluster_base_url() -> str:
+    """給客戶叢集裡回報器用的網址。沒有對外網址（本機開發）時，Pod 裡的 localhost 指的是 Pod
+    自己，要改成 Docker Desktop 提供的 host.docker.internal 才連得回這台電腦。"""
+    base = _external_url("")
+    if PUBLIC_BASE_URL:
+        return base
+    return re.sub(r"//(localhost|127\.0\.0\.1)(?=[:/]|$)", "//host.docker.internal", base)
+
+
+_EXPIRED_SCRIPT = (
+    "Write-Host '這個安裝指令已經失效或過期（有效 30 分鐘）。請回到 ZeroTouch 網頁，按「返回」再按「同意並繼續」"
+    "取得新的指令。 / This install command has expired. Go back to the ZeroTouch page to get a new one.' "
+    "-ForegroundColor Yellow\n")
+
+
+@app.route("/onboard/<token>.ps1")
+def onboard_script(token):
+    username = CLUSTERS.user_for_onboard_token(token)
+    if not username:
+        # 這段會被 `irm | iex` 直接執行：回一段只會印出說明的腳本，不要回 HTML/404
+        return _EXPIRED_SCRIPT, 200, {"Content-Type": "text/plain; charset=utf-8"}
+    from gitops.tenant_repo import tenant_slug
+    script = _onboarding.build_install_script(_script_base_url(), token, tenant_slug(username))
+    return script, 200, {"Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store"}
+
+
+@app.route("/onboard/<token>/bundle.yaml")
+def onboard_bundle(token):
+    username = CLUSTERS.user_for_onboard_token(token)
+    if not username:
+        return "# 安裝指令已過期，請回到 ZeroTouch 網頁取得新的指令 / expired\n", 410, {"Content-Type": "text/plain; charset=utf-8"}
+    try:
+        repo, host, info = _tenant_repo_for(username)
+        repo.ensure_initialized()
+        key = host.rotate_deploy_key(info["full_name"].split("/", 1)[1])
+    except Exception as e:
+        print(f"[onboard] bundle for {username} failed: {e}")
+        return ("# 平台建立你的部署設定 repo 時失敗，請稍後再試；持續失敗請聯絡管理員。\n"
+                "# The platform failed to prepare your config repo. Please retry later.\n"), 503, \
+               {"Content-Type": "text/plain; charset=utf-8"}
+    report_token = CLUSTERS.issue_report_token(username)  # 每次產生安裝包就輪換，舊回報器失效
+    bundle = _onboarding.build_bundle(repo.namespace, username, _cluster_base_url(),
+                                      info["ssh_url"], key, report_token)
+    return bundle, 200, {"Content-Type": "application/yaml; charset=utf-8", "Cache-Control": "no-store"}
+
+
+@app.route("/onboard/<token>/progress", methods=["POST"])
+def onboard_progress(token):
+    username = CLUSTERS.user_for_onboard_token(token)
+    if not username:
+        return jsonify({"error": "expired"}), 410
+    data = request.get_json(silent=True) or {}
+    CLUSTERS.record_progress(username, str(data.get("step", ""))[:20], bool(data.get("ok")),
+                             str(data.get("detail", ""))[:500])
+    return "", 204
+
+
+@app.route("/agent/report", methods=["POST"])
+def agent_report():
+    auth = request.headers.get("Authorization", "")
+    username = CLUSTERS.user_for_report_token(auth[7:] if auth.startswith("Bearer ") else "")
+    if not username:
+        return jsonify({"error": "invalid token"}), 401
+    if USERS.get(username, {}).get("banned"):
+        return jsonify({"error": "account disabled"}), 403
+    if (request.content_length or 0) > MAX_REPORT_BYTES:
+        return jsonify({"error": "report too large"}), 413
+    raw = request.get_data(cache=False)
+    if len(raw) > MAX_REPORT_BYTES:
+        return jsonify({"error": "report too large"}), 413
+    try:
+        report = clean_report(json.loads(raw.decode("utf-8")))
+    except (ValueError, ReportError, UnicodeDecodeError):
+        return jsonify({"error": "invalid report"}), 400
+    CLUSTERS.store_report(username, report)
+    return "", 204
 
 
 def _rag_fallback_context(message: str, history: list = None) -> tuple:

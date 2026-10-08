@@ -1,0 +1,320 @@
+"""
+cluster/remote_state.py
+客戶叢集的連線狀態：同意紀錄、一次性安裝 token、安裝進度、回報器 token、最新回報、
+以及「連線檢查頁該顯示哪一種狀況」的判斷。
+
+2026-10-09 新增（客戶自帶叢集第 3 階段）。設計重點：
+- token 只存 SHA-256 雜湊，原文只在產生當下回傳一次（資料檔外洩也拿不到可用 token）
+- 回報器送來的內容一律當成不可信輸入：限制大小、筆數、字串長度，只留白名單欄位
+- connection_status() 是純函式，連線檢查頁的六種狀況都能單元測試
+- 持久化到 data/clusters.json（原子寫入）；最新一份回報只放記憶體（量大、重啟後等下一次回報即可）
+"""
+import hashlib
+import json
+import os
+import secrets
+import threading
+import time
+from typing import Any, Dict, List, Optional, Tuple
+
+ONBOARD_TOKEN_TTL = 30 * 60      # 安裝指令有效 30 分鐘
+REPORT_FRESH_SEC = 60            # 60 秒內有回報 = 線上（回報器每 15 秒一次）
+REPORT_OFFLINE_SEC = 120         # 超過 2 分鐘沒回報 = 離線
+NO_REPORT_GRACE_SEC = 90         # 安裝完成後等回報器第一次回報的寬限
+MAX_REPORT_BYTES = 256 * 1024
+CONSENT_VERSION = "2026-10-09.1"
+
+# 安裝腳本回報的步驟名稱（install.ps1 與這裡要一致）
+STEPS = ("start", "kubectl", "cluster", "flux", "crds", "bundle", "reporter", "done")
+
+
+def _h(raw: str) -> str:
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _clip(v: Any, n: int) -> str:
+    s = "" if v is None else str(v)
+    return s if len(s) <= n else s[:n] + "…"
+
+
+# ══════════════════════════════════════════════════════════════════
+# 回報內容驗證（回報器 → 平台）
+# ══════════════════════════════════════════════════════════════════
+
+class ReportError(ValueError):
+    pass
+
+
+def _cond(obj: Any) -> Dict[str, Any]:
+    """Flux 物件的 Ready condition → {ready, reason, message}；格式不對就視為未就緒。"""
+    if not isinstance(obj, dict):
+        return {"ready": False, "reason": "Missing", "message": ""}
+    return {"ready": obj.get("ready") is True, "reason": _clip(obj.get("reason"), 80),
+            "message": _clip(obj.get("message"), 500), "revision": _clip(obj.get("revision"), 80)}
+
+
+def clean_report(raw: Any) -> Dict[str, Any]:
+    """只保留白名單欄位、截斷字串、限制筆數。格式錯誤丟 ReportError。"""
+    if not isinstance(raw, dict):
+        raise ReportError("report must be an object")
+    out: Dict[str, Any] = {
+        "agent_version": _clip(raw.get("agent_version"), 20),
+        "namespace": _clip(raw.get("namespace"), 63),
+        "errors": [_clip(e, 300) for e in (raw.get("errors") or [])[:20]],
+        "flux": {"source": _cond((raw.get("flux") or {}).get("source")),
+                 "kustomization": _cond((raw.get("flux") or {}).get("kustomization"))},
+        "deployments": [], "pods": [], "events": [], "nodes": [], "metrics": None,
+        "platform_configmap": bool(raw.get("platform_configmap")),
+    }
+    for d in (raw.get("deployments") or [])[:200]:
+        if isinstance(d, dict):
+            out["deployments"].append({
+                "name": _clip(d.get("name"), 63), "replicas": int(d.get("replicas") or 0),
+                "ready": int(d.get("ready") or 0), "available": int(d.get("available") or 0),
+                "image": _clip(d.get("image"), 200),
+                "memory_limit": _clip(d.get("memory_limit"), 20),
+                "conditions": [_clip(c, 200) for c in (d.get("conditions") or [])[:5]]})
+    for p in (raw.get("pods") or [])[:300]:
+        if not isinstance(p, dict):
+            continue
+        containers = []
+        for c in (p.get("containers") or [])[:10]:
+            if isinstance(c, dict):
+                containers.append({
+                    "name": _clip(c.get("name"), 63), "ready": bool(c.get("ready")),
+                    "restart_count": int(c.get("restart_count") or 0),
+                    "state": _clip(c.get("state"), 20), "reason": _clip(c.get("reason"), 60),
+                    "last_reason": _clip(c.get("last_reason"), 60),
+                    "message": _clip(c.get("message"), 300), "image": _clip(c.get("image"), 200)})
+        logs = p.get("logs")
+        out["pods"].append({
+            "name": _clip(p.get("name"), 253), "app": _clip(p.get("app"), 63),
+            "phase": _clip(p.get("phase"), 20), "node": _clip(p.get("node"), 63),
+            "created": _clip(p.get("created"), 40), "containers": containers,
+            # log 是容器自己印的，最不可信：只留最後 50 行、8KB
+            "logs": _clip("\n".join(str(logs).splitlines()[-50:]), 8000) if logs else ""})
+    for e in (raw.get("events") or [])[:200]:
+        if isinstance(e, dict):
+            out["events"].append({
+                "object": _clip(e.get("object"), 253), "type": _clip(e.get("type"), 20),
+                "reason": _clip(e.get("reason"), 60), "message": _clip(e.get("message"), 300),
+                "count": int(e.get("count") or 1), "last": _clip(e.get("last"), 40)})
+    for n in (raw.get("nodes") or [])[:50]:
+        if isinstance(n, dict):
+            out["nodes"].append({"name": _clip(n.get("name"), 63), "cpu": _clip(n.get("cpu"), 20),
+                                 "memory": _clip(n.get("memory"), 20)})
+    m = raw.get("metrics")
+    if isinstance(m, dict):
+        out["metrics"] = {_clip(k, 253): {"cpu": _clip(v.get("cpu"), 20), "memory": _clip(v.get("memory"), 20)}
+                          for k, v in list(m.items())[:300] if isinstance(v, dict)}
+    return out
+
+
+# ══════════════════════════════════════════════════════════════════
+# 連線檢查頁的狀況判斷（純函式）
+# ══════════════════════════════════════════════════════════════════
+
+# 狀態代碼 → 給使用者看的標題與下一步（{ns} 會換成客戶的 namespace）
+STATUS_TEXT = {
+    "not_started": ("還沒收到安裝腳本的任何訊息 / The install command hasn't run yet",
+                    "請回到上一頁複製指令，貼到 PowerShell 執行（不是「命令提示字元」）。開啟方式：按 Windows 鍵，"
+                    "輸入 PowerShell，按 Enter。 / Go back, copy the command, and run it in PowerShell."),
+    "no_kubectl": ("你的電腦找不到 kubectl / kubectl was not found",
+                   "請安裝並開啟 Docker Desktop（它內建 kubectl），開啟後重新執行同一行指令。 / "
+                   "Install and open Docker Desktop (it includes kubectl), then run the same command again."),
+    "cluster_unreachable": ("連不上你的 Kubernetes 叢集 / Can't reach your Kubernetes cluster",
+                            "開啟 Docker Desktop → 齒輪（Settings）→ Kubernetes → 勾選 Enable Kubernetes → "
+                            "Apply & restart，等左下角變綠燈後重新執行指令。 / Enable Kubernetes in Docker Desktop "
+                            "settings, wait until it's green, then rerun the command."),
+    "flux_failed": ("安裝 Flux 時失敗 / Installing Flux failed",
+                    "通常是網路暫時不穩，重新執行同一行指令即可（重複執行是安全的）。 / Usually a temporary "
+                    "network issue — just rerun the same command (safe to repeat)."),
+    "bundle_failed": ("套用平台設定時失敗 / Applying the platform config failed",
+                      "安裝指令可能已過期（30 分鐘），請按「返回」再「同意並繼續」取得新指令後重跑。 / "
+                      "The command may have expired — go back and get a new one."),
+    "reporter_not_ready": ("狀態回報程式還沒啟動 / The status reporter hasn't started",
+                           "第一次要下載映像檔，可能要 1~3 分鐘，請稍候再按「重新檢查」。仍然不行請在 PowerShell "
+                           "執行 kubectl get pods -n {ns} 看狀態。 / First start downloads an image; wait a "
+                           "minute and re-check."),
+    "no_report": ("安裝完成，但還沒收到你的叢集回報 / Installed, but no report received yet",
+                  "你的叢集可能連不到外網。請確認電腦能上網，並在 PowerShell 執行 kubectl logs -n {ns} "
+                  "deploy/zt-reporter 查看錯誤。 / Your cluster may not reach the internet; check the "
+                  "reporter logs."),
+    "git_not_ready": ("你的叢集拉不到部署設定 / Your cluster can't pull its config",
+                      "這通常是平台這端的 GitHub 設定問題，請按「返回」重新產生指令再執行一次；仍失敗請聯絡管理員。 / "
+                      "Usually a platform-side GitHub issue — regenerate the command and retry."),
+    "sync_pending": ("連線成功，正在第一次同步 / Connected, first sync in progress",
+                     "大約 30 秒，請稍候再按「重新檢查」。 / About 30 seconds — re-check shortly."),
+    "offline": ("你的叢集目前離線 / Your cluster is offline",
+                "請確認電腦開著、Docker Desktop 正在執行。 / Make sure your computer is on and Docker Desktop is running."),
+    "connected": ("連線成功！ / Connected!", "可以開始使用了。 / You're all set."),
+}
+
+_STEP_FAIL_STATUS = {"start": "not_started", "kubectl": "no_kubectl", "cluster": "cluster_unreachable",
+                     "flux": "flux_failed", "crds": "flux_failed", "bundle": "bundle_failed",
+                     "reporter": "reporter_not_ready"}
+
+
+def connection_status(progress: List[dict], report: Optional[dict], report_at: Optional[float],
+                      now: float, ever_connected: bool = False) -> Dict[str, Any]:
+    """依安裝進度與最新回報判斷狀況。回傳 {code, ok, detail}。"""
+    fresh = report is not None and report_at is not None and now - report_at <= REPORT_FRESH_SEC
+    if report is not None and report_at is not None:
+        if now - report_at > REPORT_OFFLINE_SEC:
+            return {"code": "offline", "ok": False, "detail": ""}
+        if fresh:
+            src, ks = report["flux"]["source"], report["flux"]["kustomization"]
+            if not src["ready"]:
+                return {"code": "git_not_ready", "ok": False, "detail": src["message"]}
+            if not ks["ready"] or not report.get("platform_configmap"):
+                return {"code": "sync_pending", "ok": False, "detail": ks["message"]}
+            return {"code": "connected", "ok": True, "detail": ""}
+    if ever_connected and report is None:
+        # 平台重啟後還沒收到第一份回報：不要叫已經裝好的人重裝
+        return {"code": "offline", "ok": False, "detail": ""}
+    if not progress:
+        return {"code": "not_started", "ok": False, "detail": ""}
+    last = progress[-1]
+    if not last.get("ok"):
+        return {"code": _STEP_FAIL_STATUS.get(str(last.get("step")), "flux_failed"), "ok": False,
+                "detail": _clip(last.get("detail"), 300)}
+    if last.get("step") == "done":
+        waited = now - float(last.get("at") or now)
+        return {"code": "no_report" if waited > NO_REPORT_GRACE_SEC else "reporter_not_ready",
+                "ok": False, "detail": ""}
+    return {"code": "reporter_not_ready", "ok": False, "detail": ""}
+
+
+def status_text(code: str, namespace: str) -> Tuple[str, str]:
+    title, howto = STATUS_TEXT.get(code, STATUS_TEXT["not_started"])
+    return title, howto.replace("{ns}", namespace)
+
+
+# ══════════════════════════════════════════════════════════════════
+# 狀態儲存
+# ══════════════════════════════════════════════════════════════════
+
+class ClusterRegistry:
+    def __init__(self, path: Optional[str] = None, clock=time.time):
+        self.path = path
+        self.clock = clock
+        self._lock = threading.RLock()
+        self._data: Dict[str, dict] = {}
+        self._reports: Dict[str, Tuple[float, dict]] = {}
+        if path and os.path.exists(path):
+            try:
+                with open(path, encoding="utf-8") as f:
+                    self._data = json.load(f)
+            except Exception:
+                self._data = {}
+
+    def _save(self):
+        if not self.path:
+            return
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        tmp = self.path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(self._data, f, ensure_ascii=False, indent=1)
+        os.replace(tmp, self.path)
+
+    def _user(self, username: str) -> dict:
+        return self._data.setdefault(username, {"onboard_tokens": [], "progress": []})
+
+    # ── 同意書 ──
+    def record_consent(self, username: str, version: str = CONSENT_VERSION):
+        with self._lock:
+            self._user(username)["consent"] = {"version": version, "at": self.clock()}
+            self._save()
+
+    def has_consent(self, username: str, version: str = CONSENT_VERSION) -> bool:
+        c = self._data.get(username, {}).get("consent")
+        return bool(c and c.get("version") == version)
+
+    # ── 一次性安裝 token ──
+    def issue_onboard_token(self, username: str) -> str:
+        """作廢舊的，產生新的。原文只回傳這一次。"""
+        raw = secrets.token_urlsafe(24)
+        with self._lock:
+            u = self._user(username)
+            u["onboard_tokens"] = [{"hash": _h(raw), "expires": self.clock() + ONBOARD_TOKEN_TTL}]
+            u["progress"] = []
+            self._save()
+        return raw
+
+    def revoke_onboard_tokens(self, username: str):
+        with self._lock:
+            self._user(username)["onboard_tokens"] = []
+            self._save()
+
+    def user_for_onboard_token(self, raw: str) -> Optional[str]:
+        if not raw:
+            return None
+        hv, now = _h(raw), self.clock()
+        with self._lock:
+            for name, u in self._data.items():
+                for t in u.get("onboard_tokens", []):
+                    if secrets.compare_digest(t["hash"], hv) and t["expires"] > now:
+                        return name
+        return None
+
+    # ── 安裝進度 ──
+    def record_progress(self, username: str, step: str, ok: bool, detail: str = ""):
+        if step not in STEPS:
+            return
+        with self._lock:
+            u = self._user(username)
+            u["progress"] = (u.get("progress") or [])[-30:] + [
+                {"step": step, "ok": bool(ok), "detail": _clip(detail, 500), "at": self.clock()}]
+            self._save()
+
+    # ── 回報器 token ──
+    def issue_report_token(self, username: str) -> str:
+        raw = secrets.token_urlsafe(32)
+        with self._lock:
+            self._user(username)["report_token"] = _h(raw)
+            self._save()
+        return raw
+
+    def user_for_report_token(self, raw: str) -> Optional[str]:
+        if not raw:
+            return None
+        hv = _h(raw)
+        with self._lock:
+            for name, u in self._data.items():
+                t = u.get("report_token")
+                if t and secrets.compare_digest(t, hv):
+                    return name
+        return None
+
+    # ── 回報 ──
+    def store_report(self, username: str, report: dict):
+        now = self.clock()
+        with self._lock:
+            self._reports[username] = (now, report)
+            st = connection_status([], report, now, now)
+            u = self._user(username)
+            if st["ok"] and not u.get("connected_at"):
+                u["connected_at"] = now
+                self._save()
+
+    def latest_report(self, username: str) -> Tuple[Optional[float], Optional[dict]]:
+        at, rep = self._reports.get(username, (None, None))
+        return at, rep
+
+    def ever_connected(self, username: str) -> bool:
+        return bool(self._data.get(username, {}).get("connected_at"))
+
+    def status(self, username: str) -> Dict[str, Any]:
+        at, rep = self.latest_report(username)
+        prog = self._data.get(username, {}).get("progress") or []
+        st = connection_status(prog, rep, at, self.clock(), self.ever_connected(username))
+        st["ever_connected"] = self.ever_connected(username)
+        st["last_report_at"] = at
+        return st
+
+    def forget(self, username: str):
+        """帳號被封鎖/刪除時清掉所有連線資料（token 立即失效）。"""
+        with self._lock:
+            self._data.pop(username, None)
+            self._reports.pop(username, None)
+            self._save()

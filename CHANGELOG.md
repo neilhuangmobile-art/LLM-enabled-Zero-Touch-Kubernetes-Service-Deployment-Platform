@@ -891,3 +891,22 @@ ProxyFix 無效），改用 waitress 的 trusted_proxy。真正透過通道從�
 **驗證**：`pytest` 338 個全過（新增撞名、搶註、Google 名稱、token 不在指令列等回歸測試）；
 現有 10 個帳號只有 1 個的 namespace 會變，且沒有任何既有資料需要搬移。
 詳見 `docs/security_review.md` 32 節。
+
+### 05:50 — 新功能：客戶叢集安裝包、唯讀回報器、連線狀態（客戶自帶叢集第 3 階段）
+**為什麼**：客戶要貼一行 PowerShell 指令就把自己的叢集接上平台；平台不能連進客戶叢集，
+所以需要一個只往外送狀態的回報器，連線檢查與之後的 Healer 都靠它。
+**改了什麼**：
+- `cluster/onboarding.py`：PowerShell 安裝腳本（檢查 kubectl/叢集 → 安裝 Flux v2.9.6，已有就略過 →
+  套用安裝包 → 等回報器，每步回報進度；失敗用 return 不會關掉使用者視窗）與安裝包
+  （namespace 加 Pod Security baseline、Flux 用只限該 namespace 的 SA 套用、唯讀 deploy key、
+  唯讀回報器）。用 dict → yaml.safe_dump 產生，私鑰/token 不可能破壞 YAML 結構。
+- `cluster/agent/reporter.py`：只用標準函式庫、只有 get/list 權限、完全不讀平台回應。
+- `cluster/remote_state.py`：token 只存雜湊（安裝 token 30 分鐘、重新產生即作廢）、回報白名單與
+  大小限制、連線檢查頁的 11 種狀況判斷與中英文說明。
+- `web_demo.py`：`/onboard/<token>.ps1`（過期回一段只印說明的腳本）、`/onboard/<token>/bundle.yaml`、
+  `/onboard/<token>/progress`、`/agent/report`；封鎖帳號時撤銷 token。本機開發時回報網址自動改用
+  `host.docker.internal`（Pod 裡的 localhost 是 Pod 自己）。
+**驗證**：`pytest` 372 個全過（新增 remote_state 22、onboarding 11）；安裝包 `kubectl apply --dry-run`
+通過、PowerShell 腳本語法解析 0 錯誤；在本機叢集實際跑回報器：Pod Security baseline 放行、
+權限沒有任何被拒絕、透過 host.docker.internal 回報成功（HTTP 204）、故意部署的 CrashLoop Pod
+被抓到錯誤原因與 log。完整安裝流程（含 Flux 拉 GitHub repo）待使用者設定 GitHub org/token 後驗證。
