@@ -24,6 +24,24 @@ Alertmanager `127.0.0.1:9093`。`web_demo.py` 的 `/api/metrics`、
    kubeadm/雲端叢集通常會有逐容器明細。`pod_cpu_usage()`/`pod_memory_usage_bytes()`
    已經拿掉原本寫的 `container!=""` 過濾條件來配合這個環境限制，見函式內註解。
 
+**完整安裝指令**（2026-10-09 換電腦時重裝實測可用，新機器照抄即可；port 沿用 3001，
+也避開使用者自己部署的 app 常用的 3000）：
+```powershell
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+helm install kube-prom prometheus-community/kube-prometheus-stack -n monitoring --create-namespace `
+  --set prometheus.service.type=LoadBalancer `
+  --set grafana.service.type=LoadBalancer --set grafana.service.port=3001 `
+  --set alertmanager.service.type=LoadBalancer `
+  --set prometheus-node-exporter.hostRootFsMount.enabled=false
+kubectl apply -f observability/alert_rules.yaml
+kubectl wait --for=condition=Ready pods --all -n monitoring --timeout=420s
+```
+Grafana 帳號 `admin`，密碼：`kubectl get secret kube-prom-grafana -n monitoring -o jsonpath='{.data.admin-password}'`
+（base64 解碼），儀表板 `grafana_dashboard.json` 用 `POST /api/dashboards/db` 匯入。
+注意 Alertmanager 的 LoadBalancer 也會佔用 host `8080`，跟 `.env` 的 `ARGOCD_SERVER=localhost:8080`
+衝突——之後真的要裝 Argo CD 要換 port。
+
 ## 模組說明
 
 | 檔案 | 功能 |

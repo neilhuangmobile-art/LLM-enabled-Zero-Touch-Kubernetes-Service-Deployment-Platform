@@ -843,3 +843,26 @@ gitleaks pre-commit hook（`scripts/git-hooks/pre-commit`）、3 個手動抽出
 `CLAUDE.md` 開頭加交接提示。同時納入 2026-10-08 兩份市場調查（`docs/market_research_20261008.md`
 企業報告版、`docs/market_research_voc_20261008.md` 使用者原話版，原始資料在 `docs/research/`）。
 依使用者指示，`feat/chat-unified-assistant` 整份快轉合併到 `main`。
+
+### 03:07 — 架構調整：模型載入支援 AMD / NVIDIA 兩台機器，同一套設定
+**為什麼**：專案搬到兩台 16GB 顯存的機器（家裡 AMD RX 9060 XT、學校 RTX 5080 Laptop）。
+舊版只要偵測到 GPU 就一律 bitsandbytes 4-bit，bitsandbytes 只支援 NVIDIA，在 AMD 上
+Model Server 直接載入失敗。
+**改了什麼**：
+- 新增 `core/hardware.py`：偵測 GPU 廠牌/顯存，`plan_loading()` 依顯存決定精度與裝置
+  （>= 10GB 兩顆模型都 bf16 上 GPU；小顯存 NVIDIA 才 4-bit；沒 GPU 跑 CPU）。兩台 auto 結果完全相同。
+- `core/model_server.py` 改用這個決策，bitsandbytes 改成只在 4-bit 時才 import；
+  `/health` 多回報 `gpu`、`deploy_precision`、`vram_allocated_gb` 等欄位，兩台可直接對照。
+- `rag/vector_store.py`：BGE-M3 embedding 顯存夠就上 GPU 並用 fp16（約 1.1GB）。
+- `requirements.txt` 拿掉 torch / bitsandbytes，新增 `requirements-amd.txt`（ROCm 7.2.1）、
+  `requirements-nvidia.txt`（cu128，Blackwell 必需），torch 兩台都釘 2.9.1；Python 統一 3.12。
+- transformers 4.44.2 → 4.45.2：4.44 生成時替整段 prompt 每個位置算完整詞彙表 logits，
+  長 prompt 瞬間多吃約 3GB 顯存，4.45 只算最後一個位置。
+- 新增 `scripts/download_models.py`（單線下載 + SHA256 驗證，避開家裡網路遇平行連線就卡死的問題）。
+- `docs/setup.md` 改寫成兩台機器的安裝流程（含 WSL「未啟用虛擬化」的 bcdedit 修法）；
+  `observability/README.md` 補完整 helm 安裝指令。
+**驗證**（RX 9060 XT 實測）：`pytest` 307 個全過（新增 `tests/test_hardware.py` 12 個，
+含「兩台機器載入方式必須相同」）；四個端點實際生成都正確（`/classify` 1.5s、`/diagnose` 1.5s、
+`/infer` 3.3s）；長 prompt 壓測顯存 reserved 13.27GB → 10.05GB；Model Server + embedding
+同時在 GPU 時整張卡高峰 14.0GB / 15.9GB；RAG 檢索 GPU fp16 與 CPU fp32 的 Recall@3（95.8%）、
+MRR（0.938）完全相同，查詢延遲 1970ms → 14.8ms。學校 NVIDIA 那台尚未實機驗證。

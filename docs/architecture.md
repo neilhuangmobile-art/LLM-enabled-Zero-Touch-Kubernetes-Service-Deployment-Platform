@@ -13,7 +13,7 @@
            │ DeploySpec 齊全 → 直接解析（零 GPU）
            │ 不齊全 ↓
 ┌──────────────────────────┐
-│  llama_client            │  部署小模型 Qwen2.5-3B（4-bit GPU）
+│  llama_client            │  部署小模型 Qwen2.5-3B（GPU，精度依顯存自動決定）
 │  + rag deploy_index      │  RAG 撈相似「input→JSON」範例當 few-shot
 └──────────┬───────────────┘
            │ JSON（pods, image, app_name, port, memory）
@@ -47,7 +47,7 @@
            ▼
 ┌─────────────────────────────┐
 │  healer/pod_watcher          │  監聽 CrashLoopBackOff 等
-│  healer/diagnose             │  規則層 → 監控小模型 Qwen2.5-1.5B（CPU，/diagnose）
+│  healer/diagnose             │  規則層 → 監控小模型 Qwen2.5-1.5B（16GB 機器 GPU，/diagnose）
 │  healer/remediate            │  自動補救
 │  observability/prometheus    │  Prometheus 指標
 └─────────────────────────────┘
@@ -81,8 +81,8 @@
 
 | 組件 | 技術 |
 |------|------|
-| 部署模型 | Qwen2.5-3B-Instruct（4-bit GPU，`/infer`、`/chat`） |
-| 監控模型 | Qwen2.5-1.5B-Instruct（CPU，`/diagnose`） |
+| 部署模型 | Qwen2.5-3B-Instruct（16GB 機器 bf16 GPU；小顯存 NVIDIA 4-bit，`/infer`、`/chat`） |
+| 監控模型 | Qwen2.5-1.5B-Instruct（16GB 機器 bf16 GPU、小顯存 CPU，`/diagnose`） |
 | 翻譯層 | Gemini API（`gemini-flash-latest`，多 key 輪換） |
 | 部署引導 | RAG few-shot（`rag/deploy_index.json`，TF-IDF）＋ system prompt，不微調 |
 | K8s 叢集 | Docker Desktop K8s / K3s |

@@ -48,13 +48,16 @@ def get_device() -> str:
     global _device
     if _device is not None:
         return _device
-    # 2026-09-06：本機只有 6GB VRAM，要留給部署小模型（Qwen2.5-3B）。embedding 模型
-    # 預設改跑 CPU，避免跟 LLM 搶顯存。真的想用 GPU 再設 RAG_EMBED_DEVICE=cuda。
+    # 2026-09-06：當時只有 6GB VRAM，embedding 固定跑 CPU 避免跟部署模型搶顯存。
+    # 2026-10-09：改成依顯存自動決定（core/hardware.embed_device）——16GB 機器
+    # （AMD ROCm / NVIDIA 都是 "cuda" 裝置名）上 GPU，小顯存照舊 CPU。
+    # RAG_EMBED_DEVICE=cpu|cuda 仍可強制指定。
     forced = os.environ.get("RAG_EMBED_DEVICE")
     if forced:
         _device = forced
         return _device
-    _device = "cpu"
+    from core.hardware import embed_device
+    _device = embed_device()
     return _device
 
 
@@ -63,10 +66,16 @@ def _get_embedding_function():
     if _embed_fn is not None:
         return _embed_fn
     from chromadb.utils import embedding_functions
+    device = get_device()
+    # GPU 上用 fp16：顯存從約 2.2GB 降到約 1.1GB，跟 Model Server 共用 16GB 才放得下。
+    # 2026-10-09 實測跟 CPU fp32 的向量餘弦相似度 ≈ 1.000，既有索引不用重建。
+    # chromadb 只接受基本型別的 kwargs，所以 dtype 用字串。
+    extra = {"model_kwargs": {"torch_dtype": "float16"}} if device.startswith("cuda") else {}
     _embed_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
         model_name=EMBED_MODEL_NAME,
-        device=get_device(),
+        device=device,
         normalize_embeddings=True,
+        **extra,
     )
     return _embed_fn
 

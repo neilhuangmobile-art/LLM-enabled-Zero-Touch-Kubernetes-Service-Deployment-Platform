@@ -20,11 +20,11 @@ LLM-enabled Zero-Touch Kubernetes Service Deployment Platform：使用者以自�
 ```
 使用者輸入（中/英）→ core/gemini_client（翻譯層優先，正規化成 ### DeploySpec，多 key 輪換）
 → DeploySpec 齊全就直接解析（零 GPU）；不齊全 → llama_client + rag/deploy_index（few-shot）
-  → core/model_server /infer（Qwen2.5-3B 4-bit GPU 生成 JSON）
+  → core/model_server /infer（Qwen2.5-3B GPU 生成 JSON；精度依顯存自動決定，16GB 機器 bf16）
 → 轉換為 YAML（Python 樣板，模型不寫 YAML）→ agents/orchestrator（security/cost/perf → approve/warn/block）
 → guardian/dry_run + guardian/yaml_validator（驗證）
 → gitops/manifest_writer + gitops/argocd_sync（寫入並同步）
-→ K8s 叢集 → healer/pod_watcher + diagnose（規則層 → /diagnose：Qwen2.5-1.5B CPU）+ remediate
+→ K8s 叢集 → healer/pod_watcher + diagnose（規則層 → /diagnose：Qwen2.5-1.5B，16GB 機器上 GPU）+ remediate
 ```
 
 ## 模組地圖
@@ -85,7 +85,7 @@ collection 直接失敗）。2026-09-14 實測過：push 上去 CI 第一次真�
 - `core/config.py` 是路徑設定的單一來源，新增路徑相關設定應加在此處而非散落各檔案。
 - 部署流程改動需同時考慮三層防護：`agents/orchestrator`（策略決策）→ `guardian`（格式/安全驗證）→ `gitops`（版本控管），不要繞過任一層。
 - 修改 `llama_client.py` 或 `core/model_server.py` 前，先確認 Model Server 是否常駐執行（`curl http://127.0.0.1:8765/health` → `deploy_loaded` / `monitor_loaded`），避免誤判為推論邏輯問題。
-- 模型設定在 `core/config.py`：`BASE_MODEL`（部署 3B）、`MONITOR_MODEL`（監控 1.5B）、`MONITOR_DEVICE`（cpu）、`DEPLOY_ADAPTER_PATH`（空=不掛 LoRA）。prompt 一律走 `tokenizer.apply_chat_template`（Qwen ChatML），不要改回 `### User` 純文字格式。
+- 模型設定在 `core/config.py`：`BASE_MODEL`（部署 3B）、`MONITOR_MODEL`（監控 1.5B）、`MODEL_PRECISION`/`MONITOR_DEVICE`（預設 auto，由 `core/hardware.py` 依顯存決定）、`DEPLOY_ADAPTER_PATH`（空=不掛 LoRA）。prompt 一律走 `tokenizer.apply_chat_template`（Qwen ChatML），不要改回 `### User` 純文字格式。
 - RAG 索引變更後重跑 `python rag/build_index.py --rebuild --deploy`；`rag/index.json`、`rag/index_meta.json`、`rag/deploy_index.json` 都是可重新產生的產出物。預設 TF-IDF，裝了 chromadb+sentence-transformers 才會用語意向量（embedding 預設跑 CPU，留顯存給 3B）。
 - `web_demo_backup*.py`、`web_demo_new.py`（純占位檔）2026-09-13 已刪除（非現行程式、沒有任何程式碼引用它們），修改功能請改動 `web_demo.py`。
 - **2026-09-15 起：每個帳號一個 K8s namespace**（`_user_namespace(username)` →

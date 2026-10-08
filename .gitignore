@@ -7,6 +7,8 @@ __pycache__/
 *.safetensors
 *.bin
 .env
+# Python 虛擬環境（2026-10-09 新電腦：uv 建的 Python 3.12 venv，給 AMD ROCm 版 PyTorch 用）
+.venv/
 
 # RAG 索引：可用 python rag/build_index.py --rebuild --deploy 重新產生，不需要進版控
 rag/index.json

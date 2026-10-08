@@ -1,0 +1,11 @@
+# AMD 顯卡（ROCm）用：pip install --timeout 20 --retries 10 -r requirements-amd.txt
+# 2026-10-09 在 RX 9060 XT 16GB + Windows 11 + Python 3.12.10 實測可用。
+# 來源是 AMD 官方 Windows ROCm wheel（只有 cp312，所以 Python 必須 3.12）。
+# 不裝 bitsandbytes：它只支援 NVIDIA，AMD 上 16GB 顯存直接用 bf16（core/hardware.py 自動判斷）。
+-r requirements.txt
+
+rocm @ https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/rocm-7.2.1.tar.gz
+rocm-sdk-core @ https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/rocm_sdk_core-7.2.1-py3-none-win_amd64.whl
+rocm-sdk-devel @ https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/rocm_sdk_devel-7.2.1-py3-none-win_amd64.whl
+rocm-sdk-libraries-custom @ https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/rocm_sdk_libraries_custom-7.2.1-py3-none-win_amd64.whl
+torch @ https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/torch-2.9.1%2Brocm7.2.1-cp312-cp312-win_amd64.whl

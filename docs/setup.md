@@ -2,87 +2,72 @@
 
 ## 系統需求
 
-| 項目 | 最低需求 |
-|------|---------|
-| Python | **3.9.x（實測跑在 3.9.13，不是「3.9 以上皆可」，見下方警告）** |
-| CUDA | 11.8+（部署模型 4-bit GPU 推論用） |
-| VRAM | 4GB+（部署模型 Qwen2.5-3B 4-bit 約佔 2.2GB） |
-| RAM | 16GB+（監控模型 Qwen2.5-1.5B 跑 CPU，約佔 6GB） |
-| 磁碟 | 15GB+（Qwen2.5-3B ≈ 6GB + 1.5B ≈ 3GB） |
-| OS | Windows 10/11、Ubuntu 20.04+ |
+2026-10-09 起專案在兩台 16GB 顯存的機器上跑，**兩台用同一套設定**（QA 數據要拿去口試，
+設定不同結果會對不上）：
 
-> 2026-09-06 起改用小模型雙軌（部署 Qwen2.5-3B GPU、監控 Qwen2.5-1.5B CPU），
-> 不再需要 8GB+ VRAM 跑 Llama-3.1-8B。
+| 項目 | 家裡（AMD） | 學校（NVIDIA） |
+|------|------------|---------------|
+| 顯卡 | RX 9060 XT 16GB | RTX 5080 Laptop 16GB（Blackwell） |
+| torch | 2.9.1 + ROCm 7.2.1 | 2.9.1 + CUDA 12.8（**Blackwell 一定要 cu128**） |
+| 安裝檔 | `requirements-amd.txt` | `requirements-nvidia.txt` |
+| Python | **3.12**（全域安裝，不用 venv） | **3.12**（同左） |
+| 模型載入 | 3B + 1.5B 都 bf16 上 GPU | 同左 |
+| RAG embedding | BGE-M3 fp16 上 GPU | 同左 |
 
-> **⚠️ 2026-10-07 新增警告，換機器/重灌環境前一定要看**：`requirements.txt`
-> 裡的套件版本是**釘死的舊版**（例如 `torch==2.4.1`，當下 PyPI 最新已經到
-> 2.8.0），這些舊版在新的 Python 版本上**不保證有預編譯的 wheel**——已知
-> PyTorch 在 Windows 上對 Python 3.13 目前還沒有官方 wheel，`bitsandbytes`
-> 這類有編譯後端的套件也有同樣風險。最安全的做法是裝跟這台機器一樣的
-> Python 3.9.x（見下方「安裝正確的 Python 版本」）。**使用者決定新機器直接
-> 裝最新版 Python**，接受「先裝裝看，卡住再修」——如果套件裝到一半報
-> `ERROR: Could not find a version that satisfies the requirement`，代表
-> 新版 Python 沒有對應的舊版 wheel，這時要把 `requirements.txt` 裡卡住的
-> 那個套件（通常是 torch／bitsandbytes 這類有編譯後端的）**升級成新版 Python
-> 有支援的版本**，不是回頭硬裝 3.9——升級之後要重新確認整組依賴能不能一起
-> 跑（尤其 transformers/peft/bitsandbytes 彼此的版本相容性），不要只改壞掉
-> 的那一個就當作沒事。
+其他：RAM 32GB+、磁碟 25GB+（三個模型約 13GB）、Windows 11、Docker Desktop（開 Kubernetes）。
+
+**精度/裝置是自動決定的**（`core/hardware.py`），不用手動切換：顯存 >= 10GB 全部 bf16 上 GPU；
+小顯存 NVIDIA（例如舊的 6GB 筆電）部署模型 4-bit、監控模型 CPU；沒有 GPU 全部跑 CPU。
+要強制指定用 `.env` 的 `MODEL_PRECISION` / `MONITOR_DEVICE` / `RAG_EMBED_DEVICE`。
+啟動後 `curl http://127.0.0.1:8765/health` 會回報實際的 `gpu`、`deploy_precision`、
+`vram_allocated_gb`，兩台可以直接對照。
+
+2026-10-09 在 RX 9060 XT 實測顯存（Model Server + RAG embedding 同時在 GPU）：
+載入後 8.7GB，長 prompt 壓測高峰整張卡 14.0GB / 15.9GB。
 
 ---
 
-## 1. 安裝 Python（新機器第一步，順序在裝套件之前）
+## 1. 安裝 Python 3.12
 
-最穩妥的做法是裝跟這台機器一樣的 3.9.x（下面方法 A/B）。**如果決定直接裝最新版
-Python**（2026-10-07 的決定：先裝裝看，卡住再升級卡住的套件版本），可以跳過這節，
-但遇到 `pip install -r requirements.txt` 裝不起來時回頭看上面的警告框。
+**為什麼是 3.12**：AMD 官方 Windows 版 ROCm torch 只有 Python 3.12 的安裝包（cp312），
+為了兩台一致，NVIDIA 那台也用 3.12。
 
-**方法 A（建議，之後也方便管理多個版本）：用 [pyenv-win](https://github.com/pyenv-win/pyenv-win)**
-```powershell
-# 安裝 pyenv-win 後：
-pyenv install 3.9.13
-pyenv local 3.9.13   # 在這個專案目錄下固定用 3.9.13
-python --version     # 確認是 3.9.13
-```
+1. 到 python.org 下載 3.12.x 的 Windows 安裝檔（例如 `python-3.12.10-amd64.exe`），
+   安裝時勾選「Add python.exe to PATH」。
+2. 電腦上如果還有別的 Python（例如 3.14），要讓 3.12 排在 PATH 最前面，並讓 `py` 預設用 3.12：
+   ```powershell
+   $py="$env:LOCALAPPDATA\Programs\Python\Python312"
+   $u=[Environment]::GetEnvironmentVariable('Path','User')
+   [Environment]::SetEnvironmentVariable('Path',"$py\Scripts;$py;$u",'User')
+   [Environment]::SetEnvironmentVariable('PY_PYTHON','3.12','User')
+   ```
+3. **完全關掉 VS Code（或重開機）再開**，不然終端機還是舊的 PATH。確認：`python --version` 要是 3.12.x。
 
-**方法 B（簡單，但以後想裝別的版本要手動管理）：直接從官網裝 3.9.13**
-官網首頁只會給最新版下載連結，要裝 3.9.13 得到這個固定網址：
-`https://www.python.org/downloads/release/python-3913/`，下載對應作業系統的
-安裝檔。安裝時記得勾選「Add python.exe to PATH」，裝完後如果系統還有其他
-Python 版本，用 `py -3.9` 或建立 venv 時明確指定路徑，確保這個專案用的是
-3.9.13，不是跟系統預設版本混在一起（這台機器本身就同時裝了
-`Python39`/`anaconda3`/`WindowsApps` 三個 Python，是真實會發生的問題）。
-
-**建議在專案目錄建立 venv，不要裝進系統全域環境**：
-```bash
-python -m venv venv
-# Windows: venv\Scripts\activate
-# Linux/macOS: source venv/bin/activate
-```
+> ⚠️ 踩過的坑：改完 PATH 沒重開 VS Code，`python` 還是指到 3.14，pip 裝 cp312 的
+> torch 會報 `is not a supported wheel on this platform`。
 
 ---
 
 ## 2. 安裝 Python 套件
 
-確認 venv 裡的 `python --version` 是 3.9.13 之後：
+依顯卡**擇一**（兩份都會先裝共用的 `requirements.txt`）：
 
-```bash
-pip install -r requirements.txt
+```powershell
+# AMD 顯卡
+python -m pip install --timeout 20 --retries 10 -r requirements-amd.txt
+# NVIDIA 顯卡
+python -m pip install --timeout 20 --retries 10 -r requirements-nvidia.txt
 ```
 
-GPU 環境需另外安裝對應 CUDA 版本的 PyTorch：
+`--timeout 20 --retries 10` 是故意加的：家裡那台的網路遇到下載大檔會卡住，加了才會自動重試。
+**不要用 uv 或其他會同時開很多條連線的下載工具**——2026-10-09 實測這台網路遇到大量平行連線
+就整個卡在 0 bytes（uv、`huggingface_hub` 都中），單一連線的 pip / curl 才正常。
 
-```bash
-# CUDA 11.8
-pip install torch==2.1.0+cu118 --index-url https://download.pytorch.org/whl/cu118
-
-# CUDA 12.1
-pip install torch==2.1.0+cu121 --index-url https://download.pytorch.org/whl/cu121
+裝完驗證 GPU：
+```powershell
+python -c "import torch;print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ```
-
-如果裝到一半某個套件報 `ERROR: Could not find a version that satisfies the
-requirement`，九成是 Python 版本不對（不是 3.9.x）導致沒有對應 wheel，回頭檢查
-第 1 步，不要急著把 `requirements.txt` 的版本號改鬆（改鬆版本等於放棄這台機器
-已經驗證過能動的組合，之後任何壞掉都很難判斷是不是版本升級造成的）。
+要看到 `True` 和你的顯卡名稱（AMD 的 ROCm 版 torch 一樣是用 `torch.cuda` 介面）。
 
 ---
 
@@ -99,14 +84,15 @@ cp .env.example .env
 
 ## 4. 下載模型（首次執行）
 
-Qwen2.5 系列**不需要**登入或接受授權：
+三個模型都**不需要**登入或接受授權，下載到 `.env` 的 `HF_HOME`：
 
-```bash
-hf download Qwen/Qwen2.5-3B-Instruct     # 部署模型，約 6GB
-hf download Qwen/Qwen2.5-1.5B-Instruct   # 監控模型，約 3GB
+```powershell
+python scripts/download_models.py
+# Qwen2.5-3B-Instruct（部署，約 6GB）、Qwen2.5-1.5B-Instruct（監控，約 3GB）、BAAI/bge-m3（RAG，約 2.2GB）
 ```
 
-不下載也可以，`core/model_server.py` 首次啟動時 transformers 會自動抓。
+這支腳本單一連線下載、逐檔驗 SHA256，中斷重跑會跳過已下載的檔案。**不用 `hf download`**：
+它一次開幾十條連線，家裡那台網路遇到這種下載會卡在 0 bytes（2026-10-09 實測）。
 
 ---
 
@@ -145,10 +131,20 @@ python core/model_server.py
 
 ```bash
 curl http://127.0.0.1:8765/health
-# {"status":"ok","deploy_loaded":true,"monitor_loaded":true}
+# {"status":"ok","deploy_loaded":true,"monitor_loaded":true,
+#  "gpu":"AMD Radeon RX 9060 XT","gpu_backend":"rocm",
+#  "deploy_precision":"gpu-bf16","monitor_precision":"gpu-bf16",
+#  "vram_allocated_gb":8.73,"vram_reserved_gb":9.06}
 ```
 
-端點：`/infer`（部署 JSON）、`/chat`（一般問答，共用部署模型）、`/diagnose`（healer 根因分析，監控模型 CPU）。
+兩台機器的 `deploy_precision`/`monitor_precision` 應該一樣（都是 `gpu-bf16`），不一樣代表
+有一台的 torch 沒抓到 GPU，回頭看第 2 步的驗證指令。
+
+端點：`/infer`（部署 JSON）、`/chat`（一般問答，共用部署模型）、`/classify`（意圖分類）、
+`/diagnose`（healer 根因分析，監控模型）。
+
+2026-10-09 RX 9060 XT 實測延遲：`/classify` 1.5s、`/diagnose` 1.5s、`/infer` 3.3s、`/chat` 2s（短答）～
+15s（512 token 長答）。
 
 ---
 
@@ -177,6 +173,21 @@ kubectl get nodes
 
 若使用 Docker Desktop 或 minikube，預設 kubeconfig 路徑為 `~/.kube/config`。
 
+Docker Desktop：Settings → Kubernetes → 勾 **Enable Kubernetes** → Apply & restart。
+
+**Docker Desktop 顯示「Virtual Machine Platform not enabled」/ `wsl --status` 說「此機未啟用虛擬化」**
+（2026-10-09 新電腦實際遇到）：先別急著進 BIOS。查 `Win32_Processor.VirtualizationFirmwareEnabled`
+如果是 True（BIOS 已開）、「虛擬機器平台」功能也已開，根因多半是開機設定少了 hypervisor 啟動項。
+用**系統管理員** PowerShell：
+
+```powershell
+bcdedit /enum "{current}" | findstr -i hypervisorlaunchtype   # 沒輸出或 Off 就是這個問題
+bcdedit /set hypervisorlaunchtype auto
+wsl.exe --install --no-distribution
+```
+
+重開機後 Docker Desktop 就能啟動。WSL 說「沒有已安裝的發佈」不用理，Docker 會自己建 `docker-desktop`。
+
 ---
 
 ## 9. 選用功能
@@ -197,7 +208,7 @@ python rag/build_index.py --rebuild --deploy
 - `rag/deploy_index.json`：部署範例 `input → JSON`（給 `/infer` 當 few-shot）
 
 預設用 TF-IDF；裝了 chromadb+sentence-transformers（已經在 `requirements.txt`
-裡）才會用語意向量，embedding 預設跑 CPU，`RAG_EMBED_DEVICE=cuda` 可改。
+裡）才會用語意向量，embedding 顯存 >= 10GB 自動用 GPU fp16（否則 CPU），`RAG_EMBED_DEVICE=cpu|cuda` 可強制。
 
 ### GitOps
 

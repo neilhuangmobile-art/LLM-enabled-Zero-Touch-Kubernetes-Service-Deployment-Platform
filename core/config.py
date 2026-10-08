@@ -34,13 +34,19 @@ if HF_TOKEN:
 
 # ── 模型路徑 ────────────────────────────────────────────────────
 # 2026-09-06：本機只有 6GB VRAM，跑不動 Llama-3.1-8B。改用小模型雙軌：
-#   - 部署（/infer、/chat）：Qwen2.5-3B-Instruct，4-bit 量化跑 GPU（約 2.2GB）
-#   - 監控（/diagnose）：Qwen2.5-1.5B-Instruct，跑 CPU，顯卡全留給部署模型
+#   - 部署（/infer、/chat）：Qwen2.5-3B-Instruct
+#   - 監控（/diagnose）：Qwen2.5-1.5B-Instruct
+# （當時 6GB 筆電是 3B 4-bit GPU + 1.5B CPU；2026-10-09 起依顯存自動決定，見下方 MODEL_PRECISION）
 # 8B LoRA（llama3_k8s_lora_results）架構維度對不上 Qwen，直接棄用；部署改走
 # 「Gemini 正規化 → RAG few-shot 範例 → 3B 生成」，不再微調。
 BASE_MODEL     = os.environ.get("BASE_MODEL", "Qwen/Qwen2.5-3B-Instruct")
 MONITOR_MODEL  = os.environ.get("MONITOR_MODEL", "Qwen/Qwen2.5-1.5B-Instruct")
-MONITOR_DEVICE = os.environ.get("MONITOR_DEVICE", "cpu")
+# 2026-10-09：改成依硬體自動決定（見 core/hardware.py 的 plan_loading）。兩台 16GB 機器
+# （家裡 AMD RX 9060 XT、學校 RTX 5080 Laptop）auto 結果都是：部署 + 監控都 bf16 上 GPU。
+#   MODEL_PRECISION: auto | bf16 | fp16 | 4bit（僅 NVIDIA + bitsandbytes）| cpu
+#   MONITOR_DEVICE : auto | gpu | cpu（舊值 cuda 視同 gpu）
+MODEL_PRECISION = os.environ.get("MODEL_PRECISION", "auto")
+MONITOR_DEVICE  = os.environ.get("MONITOR_DEVICE", "auto")
 
 # 部署模型的 LoRA adapter；預設空字串 = 不掛 adapter（純 base + RAG few-shot）。
 # 之後若要在 Qwen2.5-3B 上重訓小 LoRA，把權重路徑填進 DEPLOY_ADAPTER_PATH 即可。

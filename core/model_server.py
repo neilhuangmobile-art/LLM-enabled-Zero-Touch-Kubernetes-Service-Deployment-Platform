@@ -4,8 +4,10 @@ core/model_server.py
 其他腳本透過 HTTP API 呼叫，不需要每次重新載入模型。
 
 2026-09-06 起採「小模型雙軌」：
-    - 部署模型（/infer、/chat）：Qwen2.5-3B-Instruct，4-bit 量化跑 GPU（約 2.2GB）
-    - 監控模型（/diagnose）    ：Qwen2.5-1.5B-Instruct，跑 CPU，顯卡全留給部署模型
+    - 部署模型（/infer、/chat）：Qwen2.5-3B-Instruct
+    - 監控模型（/diagnose）    ：Qwen2.5-1.5B-Instruct
+    2026-10-09 起精度/裝置依硬體自動決定（core/hardware.py）：16GB 顯存（AMD/NVIDIA 皆可）
+    兩顆都 bf16 上 GPU；小顯存 NVIDIA 才 4-bit；沒 GPU 跑 CPU。
     兩顆各一把 lock 序列化自己的 generate()；prompt 一律走 tokenizer 的 chat template
     （Qwen ChatML），不再手寫 "### User" 角色標記（那個寫法會被使用者輸入偽造）。
 
@@ -28,9 +30,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # 不會生效。2026-08-07：HF_HOME 之前指到的 NTFS 磁碟局部損毀過，教訓是快取路徑相關的
 # 環境變數必須在這裡最先載入，不能只依賴後面才 import 的 core.config 順便觸發。
 from core.config import (
-    BASE_MODEL, DEPLOY_ADAPTER_PATH, MONITOR_MODEL, MONITOR_DEVICE,
+    BASE_MODEL, DEPLOY_ADAPTER_PATH, MONITOR_MODEL, MONITOR_DEVICE, MODEL_PRECISION,
     SYSTEM_PROMPT, MODEL_SERVER_HOST, MODEL_SERVER_PORT, HF_TOKEN,
 )
+from core.hardware import detect_gpu, plan_loading
 
 # Force UTF-8 stdout/stderr so Chinese/emoji print won't crash on cp950 terminals
 if hasattr(sys.stdout, "reconfigure"):
@@ -47,7 +50,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 # 選用：把小模型偶爾漏出的簡體字轉成繁體（台灣用語）。未安裝 opencc 時原樣輸出。
 try:
@@ -83,6 +86,9 @@ _deploy_tok    = None
 _monitor_model = None
 _monitor_tok   = None
 _gpu_available = torch.cuda.is_available()
+_gpu_info  = detect_gpu()
+_load_plan = plan_loading(_gpu_info, MODEL_PRECISION, MONITOR_DEVICE)
+_DTYPES = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}
 
 # 部署模型 /infer、/chat 共用一個物件；監控模型獨立。各自一把鎖序列化自己的 generate()。
 _deploy_lock  = threading.Lock()
@@ -430,14 +436,24 @@ def _load():
     if _deploy_model is not None and _monitor_model is not None:
         return
 
+    plan = _load_plan
+    if _gpu_info["available"]:
+        print(f"[Model Server] GPU：{_gpu_info['name']}（{_gpu_info['backend']}，{_gpu_info['vram_gb']}GB）")
+    for note in plan["notes"]:
+        print(f"[Model Server] {note}")
+
     if _deploy_model is None:
-        print(f"[Model Server] 載入部署模型：{BASE_MODEL}（{'GPU 4-bit' if _gpu_available else 'CPU'}）")
+        prec, dev = plan["deploy_precision"], plan["deploy_device"]
+        print(f"[Model Server] 載入部署模型：{BASE_MODEL}（{dev.upper()} {prec}）")
         torch.cuda.empty_cache() if _gpu_available else None
         _deploy_tok = AutoTokenizer.from_pretrained(BASE_MODEL, token=HF_TOKEN)
         if _deploy_tok.pad_token is None:
             _deploy_tok.pad_token = _deploy_tok.eos_token
 
-        if _gpu_available:
+        if prec == "4bit":
+            # 只有 NVIDIA + bitsandbytes 會走到這裡（plan_loading 已把關），所以延後 import，
+            # AMD 機器沒裝 bitsandbytes 也不受影響。
+            from transformers import BitsAndBytesConfig
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_quant_type="nf4",
@@ -449,8 +465,8 @@ def _load():
             )
         else:
             _deploy_model = AutoModelForCausalLM.from_pretrained(
-                BASE_MODEL, token=HF_TOKEN, torch_dtype=torch.float32,
-                device_map="cpu", low_cpu_mem_usage=True,
+                BASE_MODEL, token=HF_TOKEN, torch_dtype=_DTYPES[prec],
+                device_map={"": 0} if dev == "gpu" else "cpu", low_cpu_mem_usage=True,
             )
 
         if DEPLOY_ADAPTER_PATH and os.path.isdir(DEPLOY_ADAPTER_PATH):
@@ -462,15 +478,15 @@ def _load():
         _deploy_model.eval()
 
     if _monitor_model is None:
-        print(f"[Model Server] 載入監控模型：{MONITOR_MODEL}（{MONITOR_DEVICE}）")
+        mprec, mdev = plan["monitor_precision"], plan["monitor_device"]
+        print(f"[Model Server] 載入監控模型：{MONITOR_MODEL}（{mdev.upper()} {mprec}）")
         _monitor_tok = AutoTokenizer.from_pretrained(MONITOR_MODEL, token=HF_TOKEN)
         if _monitor_tok.pad_token is None:
             _monitor_tok.pad_token = _monitor_tok.eos_token
         _monitor_model = AutoModelForCausalLM.from_pretrained(
-            MONITOR_MODEL, token=HF_TOKEN,
-            torch_dtype=torch.float32 if MONITOR_DEVICE == "cpu" else torch.float16,
+            MONITOR_MODEL, token=HF_TOKEN, torch_dtype=_DTYPES[mprec],
             low_cpu_mem_usage=True,
-        ).to(MONITOR_DEVICE)
+        ).to("cuda:0" if mdev == "gpu" else "cpu")
         _monitor_model.config.use_cache = True
         _monitor_model.eval()
 
@@ -614,6 +630,14 @@ def health():
         "monitor_loaded": _monitor_model is not None,
         # 向後相容舊呼叫端（web_demo / llama_client 早期只看 model_loaded）
         "model_loaded": _deploy_model is not None,
+        # 2026-10-09：兩台機器（AMD/NVIDIA）設定要一致，health 直接回報實際載入方式方便核對
+        "gpu": _gpu_info.get("name"),
+        "gpu_backend": _gpu_info.get("backend"),
+        "deploy_precision": f"{_load_plan['deploy_device']}-{_load_plan['deploy_precision']}",
+        "monitor_precision": f"{_load_plan['monitor_device']}-{_load_plan['monitor_precision']}",
+        # allocated = 模型權重 + 當下張量；reserved = PyTorch 快取池（含已釋放但沒還給驅動的）
+        "vram_allocated_gb": round(torch.cuda.memory_allocated() / 2**30, 2) if _gpu_available else None,
+        "vram_reserved_gb": round(torch.cuda.memory_reserved() / 2**30, 2) if _gpu_available else None,
     }
 
 

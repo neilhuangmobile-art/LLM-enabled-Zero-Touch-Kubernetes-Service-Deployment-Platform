@@ -1613,6 +1613,48 @@ namespace 和 app 名稱。
 
 ---
 
+## 31. 兩台不同廠牌顯卡（AMD / NVIDIA）跑出來的結果一致嗎？顯存夠不夠？
+
+2026-10-09 專案搬到兩台機器：家裡 AMD RX 9060 XT 16GB（ROCm）、學校 NVIDIA RTX 5080
+Laptop 16GB（CUDA）。
+
+**風險**：
+1. 舊版 Model Server 只要偵測到 GPU 就用 bitsandbytes 4-bit，但 bitsandbytes 只支援
+   NVIDIA——AMD 那台根本啟動不了。
+2. 就算兩台都跑得起來，如果一台 4-bit、一台 bf16，同一題的輸出可能不同，
+   **在家裡量的 QA 數據跟口試現場 demo 對不上**。
+3. 16GB 要同時放部署模型、監控模型、RAG embedding，可能爆顯存，而且是「長 prompt 才爆」
+   這種平常測不到的情況。
+
+**為什麼重要**：評審可能問「換一台電腦結果還一樣嗎」「為什麼不用更大的模型」
+「為什麼要 GPU、CPU 不行嗎」。
+
+**解決方式**：
+- `core/hardware.py` 的 `plan_loading()` 依顯存決定精度：>= 10GB 一律 bf16、不量化。
+  兩台都是 16GB，所以**載入方式完全相同**；4-bit 只留給小顯存的 NVIDIA 機器。
+  torch 兩台都釘 2.9.1（只差 ROCm / CUDA 後端）。
+- 顯存高峰的根因是 transformers 4.44 生成時替整段 prompt 每個位置都算完整詞彙表
+  機率（Qwen 15 萬詞 × fp32），升到 4.45.2 改成只算最後一個位置。
+- BGE-M3 在 GPU 上用 fp16，顯存減半。
+- **為什麼不用 7B**：Qwen2.5-7B bf16 約 15GB，16GB 放不下；要放得下就得量化，
+  但 AMD 在 Windows 上沒有可用的 4-bit 方案，兩台設定就會不一致，違反第 2 點。
+- **為什麼要 GPU**：生成速度主要看記憶體頻寬。9950X 雙通道 DDR5 約 80GB/s，
+  RX 9060 XT 約 320GB/s，RTX 5080 Laptop 約 900GB/s。
+
+**驗證**（RX 9060 XT 實測）：
+| 項目 | 結果 |
+|---|---|
+| `tests/test_hardware.py` | 12 個，含「AMD 16GB 與 NVIDIA 16GB 載入方式必須相同」 |
+| 長 prompt 壓測，Model Server 顯存 reserved | transformers 4.44.2：13.27GB → 4.45.2：10.05GB |
+| Model Server + embedding 同時在 GPU，整張卡高峰 | 14.0GB / 15.9GB |
+| RAG 檢索（24 題標註集）GPU fp16 vs CPU fp32 | Recall@3 都是 95.8%、MRR 都是 0.938 |
+| RAG 查詢延遲 | CPU 1970ms → GPU 14.8ms |
+| 端點延遲 | `/classify` 1.5s、`/diagnose` 1.5s、`/infer` 3.3s |
+
+**尚未驗證**：學校 RTX 5080 那台還沒實機跑過；要在那台跑同一組 QA，確認輸出跟家裡一致，
+這一項才算真的成立。bf16 在不同廠牌 GPU 上的浮點運算順序不同，溫度 > 0 的取樣本來就
+會有隨機差異，比較時要看「通過率」而不是逐字比對。
+
 ## 尚待排查（優先度較低，不是資源受限，只是還沒排到）
 
 - **2026-10-06 擴充 prompt injection 測試（OWASP AITG-APP-01 範例改寫 + 自行設計，
