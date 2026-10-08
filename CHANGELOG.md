@@ -440,3 +440,380 @@ inline SVG 折線圖風格（抽出通用版 `renderTrendChart()`，不綁死在
 屬性字串，確認語法合法、沒有引號衝突，也確認 4 段卡片文字都不含單引號字元（不會
 反過來破壞新的單引號屬性）；`pytest`（176 個）全過（純前端改動）；真實環境確認
 修好後的屬性字串正確送到瀏覽器。
+
+### 文件：補寫 docs/security_review.md 第 18 節（Chat 引導卡片 onclick 失效）
+上面那條 onclick 修復屬於評審會追問的等級（新手第一次使用就卡住的靜默失敗、現有
+176 個 pytest 測試完全涵蓋不到的純前端 DOM 事件錯誤），依 AGENT_RULES.md 慣例補寫
+進 `docs/security_review.md` 第 18 節（風險／為什麼重要／解決方式／驗證四段式），
+並在「尚待排查」清單補一條「沒有自動化 UI／E2E 測試」的已知缺口（指向 18 節案例）。
+
+### 工具：安裝 LibreOffice（D 槽）+ Poppler（D:\tools），補齊簡報視覺排版 QA 能力
+這台機器先前完全沒有 LibreOffice／poppler，簡報只能靠結構驗證（`validate.py`）跟
+文字內容比對（`markitdown`），沒辦法真的看畫面有沒有重疊/跑版。LibreOffice 的 MSI
+安裝程式需要寫入 `HKEY_LOCAL_MACHINE`，一定要系統管理員權限（這個自動化環境沒有，
+也沒辦法幫使用者點 UAC），改由使用者本人手動雙擊安裝程式完成（裝到
+`C:\Program Files\LibreOffice`，自訂路徑欄位當下沒有生效，非 D 槽，但不影響使用）；
+Poppler（`pdftoppm`）是免安裝的 zip，直接解壓縮到 `D:\tools\poppler-24.08.0`。
+
+### 修復：簡報容量檢查頁圖表文字重疊 + 說明文字數字跟圖表對不起來
+裝好 LibreOffice 後第一次對整份簡報做真正的截圖視覺 QA（之前 15 張投影片從沒被
+「看過」，只做過結構驗證跟座標數學推算），抓到 `部署容量智慧檢查` 頁的堆疊長條圖
+——分類軸標籤「節點 CPU 容量」跟一個太窄區塊（0.5/20 核）的置中資料標籤擠在一起
+重疊糊成一團；旁邊的說明文字寫「19.3 核剩餘」，但圖表實際畫的是 19.5 核，兩者對
+不上（文字多算了一個圖上沒畫出來的「0.2 核本次需求」假設情境）。改成拿掉冗餘的
+分類軸、該區塊不顯示資料標籤（避免過窄溢出），說明文字改成跟圖表數字完全一致
+（20 核容量－0.5 核現有用量＝19.5 核剩餘），不再引用圖表沒有呈現的數字。
+
+### 新增：簡報補兩張量化比較頁（部署步驟數長條圖、功能覆蓋度雷達圖）
+使用者要求把系統跟「一般用一個模型做部署」做比較，並畫圖表放進簡報。在既有的
+「我們的平台 vs. 一般 AI 輔助部署」文字比較表後面，新增兩張圖表頁：1) 長條圖比較
+「使用者需親自操作的步驟數」（一般 AI 輔助部署 6 步 vs. 我們的平台 1 步，右側列出
+每一步具體內容）；2) 雷達圖比較 6 個維度的相對評分（部署前安全審核、容量/資源風險
+攔截、版本控管與回滾、自我修復、多租戶隔離、新手友善度，依系統實際功能盤點給分，
+不是效能測試數字）。兩張都在標題或內文明確標註「估算依據」/「非正式效能測試」，
+避免被誤認成真的碼表測速或 benchmark 數據。
+
+### 修復：簡報「170 個測試案例」是舊數字，實際已經是 176 個
+簡報裡測試數量（首頁晶片、測試頁大數字跟長條圖分布、結尾頁晶片，共 4 處）還停在
+170，是先前某次快照的數字；這次 session 中途又新增了 dashboard 趨勢圖測試、
+app_name 命名驗證測試，實際重跑 `pytest` 確認現在是 176 個全過。重新依現有測試檔案
+分類統計（代理決策邏輯 37／Healer 自癒 31／安全與審核 40／Web 路由與帳號 55／
+監控 Dashboard 13，合計 176），4 處全部更新成正確數字，並重新驗證渲染正確。
+
+### 修復：GitOps Log 的 Rollback 按鈕從沒成功回滾過（五個獨立 bug 疊加）
+使用者點 Rollback 得到「no previous image annotation」這種看起來像正常限制的
+錯誤，實際上是五個 bug 疊加：①`gitops/rollback.py` 的 `rollback(strategy="auto")`
+判斷式寫成 `if result["ok"] is not False:`，把 `ok=None`（Argo CD 不可用，這專案
+從沒真的部署過 Argo CD）跟 `ok=True`（真的成功）當同一回事，導致 auto 迴圈每次
+都在第一輪就提早停下，後面真正會成功的 `git`／`kubectl` 策略永遠輪不到；
+②`rollback()`／`_print_result()` 用 emoji（⏪✅⚠️❌）當 `print()` 前綴，這台
+Windows 機器主控台預設 `cp950` 編碼印不出 emoji，直接丟 `UnicodeEncodeError`，
+例外被外層 `try/except` 吃掉才掉進幾乎必然失敗的備援分支；③`_rollback_git()`
+原本只把 manifest 檔案還原、建 revert commit，從沒呼叫 `kubectl apply` 把還原
+後的設定真的套到叢集，就算「回滾成功」正在跑的 Pod 也不會變。
+
+①②③修好、第一輪拿 `web-frontend123`（兩次部署內容剛好相同）驗證通過後，
+原本以為修完了，直到拿一個「兩次部署內容真的不同」的 app 重新驗證才又抓到兩個：
+④`rel = str(manifest_dir.relative_to(...))` 在 Windows 上是反斜線路徑，但
+GitPython tree 物件的 `item.path` 永遠用 `/` 分隔，`startswith()` 比對在
+Windows 上永遠對不上，「把上一版內容寫回磁碟」這個迴圈實測一次都沒跑過；
+⑤修好④讓迴圈真的跑起來後，發現 `tree.traverse()` 連目錄節點本身都會列出來，
+`rel` 剛好完全符合 `startswith()`，目錄被誤判成檔案寫入，撞上 `PermissionError`。
+五處都修好：提前返回條件改成 `is True`、emoji 換成 ASCII 安全的
+`[OK]`/`[WARN]`/`[FAIL]` 文字標籤、`_rollback_git()` 補上 `kubectl apply` 並在
+套用失敗時誠實回報 `ok=False`、路徑比對前統一轉成 `/` 分隔、比對條件加上
+`item.type == "blob"` 排除目錄節點。詳見 `docs/security_review.md` 第 19 節
+（含「第一輪驗證剛好挑到會巧合通過的案例」這個教訓的完整記錄）。
+
+驗證：新增 `tests/test_rollback.py` 6 案例（4 個鎖死 auto 迴圈的策略選擇邏輯與
+`_print_result()` 輸出不含非 ASCII 字元，2 個用真的 GitPython repo 直接測④⑤：
+確認回滾後磁碟上的檔案內容真的換成上一版、diff 不是空的）；`pytest`
+（182 個，176 舊 + 6 新）全過；真實環境端到端驗證分兩輪：第一輪用
+`web-frontend123` 驗證①②③（巧合通過，沒測到④⑤）；第二輪用全新測試帳號透過
+**真正的 HTTP API** 連續部署三個內容不同的版本（`nginx:1.25→1.27→1.28`，
+再追加 `1.29`），每次呼叫真正的 `POST /api/rollback`，確認 `kubectl get
+deployment` 查到的 image 真的從 `1.28`／`1.29` 變回 `1.27`（不是巧合維持原狀），
+revert commit 的 diff 也是真的兩行變更，不是空 commit；修復後重啟 `web_demo.py`
+讓常駐程序載入修好的模組；測試帳號與 namespace 已清除。
+
+### 修復：純中文、沒給名字的資源需求句子被誤判成有指定 app_name，記憶體/CPU 數值整段消失
+使用者錄 demo 時實測「幫我部屬一個30核CPU，20GI記憶體的服務」，結果被 app_name
+格式驗證擋下，錯誤訊息顯示 app_name 是從沒打過的「20gi」。追查發現
+`llama_client.py` 的 `_deterministic_deploy_parse()` 大量用到 Python 預設
+Unicode-aware 的 `\w`／`\b`：① app_name 候選正則 `[\w-]` 把中文字也當成「單字
+字元」，「...記憶體的服務」整段被誤判成「某個東西+服務」的命名樣式，抓出
+「20gi記憶體的」當候選，正規化後變成「20gi」；② 記憶體/CPU 數值正則結尾的
+`\b`，在「數字+單位」後面緊接著中文字、中間沒有空格時，因為中文字跟英數字母
+一樣算 `\w`，兩個 `\w` 字元之間沒有邊界，`\b` 永遠對不上，整個配對失敗，
+30 核／20Gi 這兩個數值完全被默默丟掉，使用者講的容量需求根本沒被系統看到。
+修好這兩點後又在即時驗證時發現第三個：使用者打的「20GI」（全大寫）被原樣保留，
+後面 `web_demo.py` 的格式驗證對大小寫敏感（一定要 "Gi"），又把它擋下——改成
+抓到數值後統一正規化成 K8s 要求的大小寫，不管使用者打 GI／gi／Gi 都一視同仁。
+
+三處都修好：app_name 候選正則改成只吃 ASCII（`[A-Za-z0-9-]`，不吃中文字）＋
+新增「候選字串本身是純數字/資源單位（如 20gi、500m）就跳過」的防呆；記憶體/CPU
+正則結尾的 `\b` 改成「後面不能緊接 ASCII 字母」的否定預查（中文字接在後面完全
+不受影響）；記憶體單位抓到後統一正規化大小寫。詳見
+`docs/security_review.md` 第 20 節。
+
+驗證：新增 `tests/test_deterministic_parse.py` 6 案例（純中文資源句子
+app_name 正確落回 auto-app、記憶體/CPU 數值正確抓到、純 ASCII 的「數字+單位」
+候選也不會被誤判成名字、中文單位緊接英文關鍵字不受新防呆誤傷、既有明確指定
+名稱的句子行為不變、記憶體單位大小寫正規化）；`pytest`（188 個，182 舊 + 6
+新）全過；真實環境端到端驗證：用使用者原句透過真正的
+`POST /api/deploy/parse`，確認 HTTP 200、app_name 正確為 `auto-app`、
+`cpu: "30"`、`memory: "20Gi"`（不再是 "20GI"）、容量超出正確觸發
+`decision: "block"`，整段流程走完不再卡在格式驗證；修復後重啟 `web_demo.py`。
+
+### 修復：Chat 打「幫我部署 2 個 nginx」被誤判成查詢一個叫「2」的 deployment
+使用者錄 demo 時實測在 Chat 打「幫我部署 2 個 nginx，開 80 port」，結果回「找不到
+deployment '2'」，不是走部署流程。追查發現 `_INTENT_RULES`（前端 `matchClientRule`
+與後端 `_rule_intent` 都有一份鏡像）裡 `describe_deployment` 規則結尾的
+「狀態/細節/詳情/status」關鍵字整段可省略（`(?:...)?`），導致任何「部署 <數字>」
+開頭的句子——哪怕完全沒有查詢狀態的意圖——都會被這條規則搶先配對成功，把數字
+「2」誤判成使用者要查的 deployment 名稱，排在清單後面真正的 `deploy` 規則前面
+被攔截掉。前端 JS 跟後端 Python 兩份鏡像都把結尾的 `?` 拿掉，改成必須真的出現
+狀態關鍵字才會判定成查詢意圖；拿掉之後「幫我部署 2 個 nginx」正確落到下面的
+`deploy` 規則。
+
+驗證：新增 `tests/test_web_demo_routes.py` 的 `TestRuleIntentDeployVsDescribeDeployment`
+4 案例（部署句子不再被誤判成 describe_deployment、英文部署句子同樣不受影響、
+真的在查狀態的句子──中英文關鍵字各一──行為不變）；`pytest`（192 個，188 舊 + 4
+新）全過；真實環境端到端驗證：用使用者原句打真正的 `POST /api/intent`，確認
+`action: "deploy"`（不再是 `describe_deployment`）；修復後重啟 `web_demo.py`
+讓前端新版 HTML（含修好的 JS 規則）跟後端新版規則同時生效。
+
+### 修復：app_name 候選正則又連續抓到三種誤判（同一輪 demo 連續實測發現）
+使用者在同一次 demo 連續打出三句話，各自踩到 `_deterministic_deploy_parse()`
+app_name 候選正則的不同誤判：
+①「我要部屬2個nginx服務」——pattern 2（「候選+service/app/deployment/服務」）
+把緊接在「服務」前面的 image 名稱「nginx」當成使用者另外取的名字；
+②「deploy app named 123abc」——pattern 1 把「app」這個泛稱名詞也當成前綴觸發
+字，後面緊接的下一個詞剛好是真正的連接詞「named」，導致「named」自己被當成
+候選名稱；③（追查時另外發現）`ask_llama()` 在 Gemini 翻譯層回傳的
+"### DeploySpec" 結構化區塊驗證不完整時，會把區塊原文直接丟給這支函式當
+fallback，因為 `\s` 包含換行字元，pattern 2 跨行把標題「DeploySpec」跟下一行
+「app_name:」的「app」接在一起誤判成候選，抓出使用者從沒打過的「deployspec」。
+
+三處都修好：①新增「候選字串等於剛剛抓到的 image 基底名稱就跳過」的防呆；
+②pattern 1 拿掉「app」/「service」這兩個泛稱名詞，只留真正明確的連接詞
+（for/named/name/叫做/名稱/給），順便修好一個既有已知限制（「a service named
+my-app」現在也正確抓到 my-app，不再被「service」搶先攔截）；③兩個 pattern
+的候選字跟關鍵字之間的空白都限定成「同一行內」（`[ \t]` 取代 `\s`），從根本
+排除結構化區塊被跨行誤判成白話文的整類問題。
+
+驗證：新增 3 個測試（image 名稱不會被誤判成另外取的名字、named 連接詞不再被
+app/service 吃掉、連帶修好的 service-named-X 既有限制、結構化 DeploySpec 區塊
+不再誤判成 app_name "deployspec"）；`pytest`（196 個，192 舊 + 4 新）全過；
+真實環境端到端驗證：用使用者這輪實測的兩句原話打真正的
+`POST /api/deploy/parse`，確認 `app_name` 分別正確為 `auto-app`、`123abc`；
+修復後重啟 `web_demo.py`。
+
+### 修復：Healer 一次改了四個問題（使用者實測＋明確要求）
+使用者錄 demo 時看到 Healer 頁面跳出「自動監控似乎卡住了」的紅色警報，另外
+指出 Pod 詳情彈窗的時間軸時間不對、Pod 重建後歷史就斷掉看不出「曾經壞過又修好」
+的過程、而且要求修復進行中要有明確的進度提示，不然看起來像畫大餅：
+
+1. **時間顯示錯誤（晚 8 小時）**：這個檔案到處直接呼叫
+   `datetime.utcnow().isoformat()`，產生的字串沒有時區標記。前端 JS 的
+   `new Date(...)` 看到沒有時區標記的字串會當成「當地時間」解析，不是 UTC，
+   這台機器在 UTC+8，Healer 時間軸因此顯示得比實際晚 8 小時。新增
+   `_utc_now_iso()`／`_parse_utc_iso()` 這對 helper（結尾統一加 "Z"，Python
+   3.9 的 `fromisoformat()` 不支援 "Z" 所以讀回來要先去掉），取代所有舊的
+   直接呼叫。
+2. **「自動監控似乎卡住了」假警報**：原本只看「多久沒更新 last_scan」
+   （> interval×3 = 90 秒）判定卡住，但根因診斷固定要打一次本地 LLM，實測
+   一次 2-3 分鐘跑不掉，Healer 認真修東西的時候 `last_scan` 本來就該是舊的，
+   這個檢查反而在最不該報假警報的時刻跳出來。新增 `_healer_bg_state
+   ["processing"]`（開始處理一個 issue 就登記，不是等整批處理完才更新），
+   liveness 判斷優先看這個欄位：只要有正在處理、而且開始時間還在合理範圍內
+   （interval×20=10 分鐘，涵蓋多個 issue 排隊），就不算卡住。
+3. **Pod 重建後歷史斷掉，看不出「曾經壞過又修好」**：`_pod_history` 原本用
+   Pod 名稱本身當 key，但 Healer 真正的修復手段常常是讓 K8s 重建一個新 Pod
+   （改 memory limit、rollout undo 都會觸發新 ReplicaSet），新 Pod 一定有
+   新名稱，歷史每次都從空的重新開始，使用者點進去只看得到一小段平直綠線。
+   改成用推斷出來的 Deployment／app 名稱（新增 `_app_key_for_pod_name()`，
+   拿掉 Pod 名稱最後兩段隨機後綴）當 key，同一個服務不管重建幾次，歷史都
+   累積在同一筆底下。
+4. **修復中沒有任何進度提示**：新增 `#healer-processing` 區塊，`processing`
+   欄位有值時顯示轉圈動畫＋「正在修復 X（原因）... 根因診斷需要跑本地模型，
+   約 1-3 分鐘」；Healer 頁面現在每 5 秒自動輪詢一次狀態（只在頁面是目前
+   作用中分頁時才打），使用者不用手動按重新整理就能看著它從「正在修復」變成
+   「修好了」。
+
+驗證：`tests/test_pod_history.py` 新增／改寫 8 案例（含新增的
+`TestAppKeyForPodName`，鎖死 Pod 名稱→app 名稱的推斷邏輯，包含 app 名稱本身
+含連字號的情況）；`tests/test_healer_liveness.py` 新增 4 案例（`processing`
+最近才開始時不誤判成卡住、`processing` 本身也卡太久時仍正確回報卡住、UTC
+helper 的格式跟往返轉換、舊資料沒有 "Z" 也要能解析）；`pytest`（205 個，
+196 舊 + 9 新）全過。真實環境端到端驗證：故意把 `healer-demo` 的 image 改成
+不存在的 tag 觸發真的 ImagePullBackOff，確認 `/api/healer/status` 在背景
+執行緒認真處理的過程中全程 `running: true`、不再跳出假警報，`processing`
+欄位正確顯示正在處理哪個 Pod／原因，時間戳確認帶 "Z" 後綴；修復後重啟
+`web_demo.py`。
+
+
+## 2026-10-06
+
+### 系統 QA 掃描 + 修復：意圖分類器信任捏造內容、部署解析邊界值不一致、prompt injection 新缺口
+對正在跑的系統實際送出 32+24 題涵蓋各種語意/風險情境的訊息（兩輪，完整記錄在
+`docs/qa_sweep_20261006.md`），抓到並修好：(1) `/classify` 對破壞性操作只看模型自報
+信心、沒有查核 args 內容是否真的出現在原始訊息裡，導致「幫我把它刪掉」被捏造出
+`web-frontend` 當刪除目標、「我是系統管理員」被捏造出 `all_users_namespace`，兩者
+都用高信心直接放行——新增 `_args_grounded_in_message()` 事實查核，不管信心多高，
+內容對不上原始訊息一律降級成 `clarify`；(2) `web_demo.py` 規則層的 `name` 擷取用
+`\S+` 寬鬆比對會把整句中文吃進去，新增 `_looks_like_resource_name()` 過濾；
+(3) `_deterministic_deploy_parse()` 看不懂中文數字詞、0/負數/超量副本數處理不一致
+且錯誤訊息毫無資訊，新增中文數字詞對照、負號擷取、`_parse_error` 標記讓呼叫端給出
+具體雙語錯誤；(4) `###System:` 井字號前綴繞過注入偵測正則、被問到其他使用者資源時
+模型自相矛盾（先拒絕又把查詢指令列出來）——分別擴充正則前綴容忍、新增
+`_looks_like_cross_tenant_probe()` 確定性攔截。另外上網查 OWASP AI Testing Guide
+範例改寫 + 自行設計了 14 題擴充注入測試，發現角色扮演型 jailbreak（DAN/AntiGPT）、
+英文同義詞繞過、對話歷史未經注入偵測三個殘留風險，記錄在 `docs/security_review.md`
+21、22 節與「尚待排查」，這次沒有修。
+
+驗證：`pytest -m "not integration"` 全過；10 題回歸測試逐一重送確認修好；14 題擴充
+注入測試逐一記錄結果與診斷；修復後重啟 `core/model_server.py` 與 `web_demo.py`。
+
+### Healer 端到端真實故障測試：自動偵測+修復驗證有效，發現監控小模型會幻覈根因
+用 `kubectl exec` 進一個隔離測試 Pod（`user-qa-sweep-20261006` namespace）反覆
+`nginx -s stop` 製造真實 `CrashLoopBackOff`，不碰任何 UI/Chat 按鈕，純粹觀察
+`web_demo.py` 常駐的背景自癒迴圈（每 30 秒全叢集掃描）。結果：78 秒內自動偵測、
+正確判斷 `action=analyze_logs`、刪除壞 Pod 讓 Deployment controller 重建，修復後
+確認服務恢復正常——自動偵測跟修復機制本身驗證有效。但發現監控小模型（1.5B，
+`/diagnose`）在日誌/事件都沒有具體訊號時，仍幻覈出「容器資源不足導致 OOM
+Killed」這個完全沒有證據支持的根因（真實事件只有通用的 Back-off 重啟訊息），
+`DIAGNOSE_SYSTEM` 裡「證據不足要老實說」的規則對 1.5B 這個尺寸不夠可靠。因為
+規則層已經蓋過模型的 action/severity，這次沒有導致錯誤的修復動作，只有根因說明
+文字是錯的。完整時間軸、修法建議見 `docs/healer_exec_test_20261006.md`、
+`docs/security_review.md` 23 節。這次只排查記錄，沒有動手修，留給下次。
+
+## 2026-10-07
+
+### 新增真實管理員身分：只歸屬於驗證過的 Google 帳號 email，密碼帳號/聊天自稱一律不算
+系統原本沒有管理員概念，`users.json` 裡剛好有一個密碼帳號字面上叫 `"admin"`容易被誤認。
+新增 `core/config.py` 的 `ADMIN_EMAILS`（預設含使用者本人 email，`.env` 可覆寫以後加組員）
+與 `web_demo.py` 的 `_is_admin_user()`：只有 `auth_provider == "google"` 且 email 落在
+允許清單才算管理員，完全不看 username 字串本身。`session["is_admin"]` 在 `_enforce_ban()`
+（每個請求都跑）即時重算，前端 `#user-info` 多顯示「管理員 / Admin」標籤。另外
+`core/model_server.py` 新增 `_looks_like_authority_claim()` 確定性攔截，`/chat` 收到
+「我是系統管理員」之類的自稱時直接回固定拒絕文案，不進模型判斷。
+
+### 修復 2026-10-06 QA 測試留下的 3 個殘留 prompt injection 風險
+`_INJECTION_PATTERNS` 擴充角色扮演型 jailbreak（DAN/AntiGPT/STAN/DUDE 人格扮演模板）
+與 `ignore` 的英文同義詞（disregard/forget/bypass/override）；`/chat` 組訊息時對
+`history` 裡的每一則內容也跑注入/跨租戶/身分冒充檢查，命中的歷史訊息直接跳過不放進
+模型 context（原本只檢查當次 `req.message`）。
+
+### 修復 Healer 監控小模型（1.5B）幻覈根因
+`healer/diagnose.py` 新增 `_has_concrete_signal()`：規則層命中已知模式但合併文字裡
+沒有具體錯誤關鍵字（OOM/image pull/permission/connrefused/configmap/probe/port 等）時，
+不再信任模型自己編出的 `root_cause`，一律蓋成「證據不足，只能確定是重複重啟，實際原因
+需要人工查看完整日誌」。重現 2026-10-06 kubectl exec 實測案例（純 CrashLoopBackOff，
+模型幻覈出「OOM Killed」）確認修復有效，`action`/`severity` 不受影響（一直由規則層決定）。
+
+驗證：`pytest -m "not integration"` 全過（新增 `tests/test_healer_diagnose_grounding.py`）；
+`pytest -m integration tests/test_model_server_injection.py`（新增 DAN/同義詞/
+authority-claim 案例）全過；手動確認 `neilhuang-mobile` 顯示管理員標籤，`admin`/`test`
+密碼帳號不顯示。詳見 `docs/security_review.md` 23、24 節。
+
+### 修復部署解析器：「作為/當作」連接詞句型會讓 image 被靜默換成 nginx:latest
+`research_benchmark.py` 量化評估腳本實測時發現：「請部署 4 個 node:20-alpine 作為
+api-gateway」這種「image 作為/當作 app_name」的句型，`_deterministic_deploy_parse()`
+的 image/app_name 擷取正則都沒有把「作為/當作/当作/当成」列進連接詞清單，image
+擷取失敗後靜默退回預設值 `nginx:latest`（使用者明明打了 node 卻部署出 nginx），
+app_name 也沒接到真正的名字、退回用 image 基底名稱頂替。`llama_client.py` 的
+`image_patterns`／`app_patterns` 都補上這幾個連接詞。新增 2 個回歸測試
+（`tests/test_deterministic_parse.py`）。
+
+### 新增近失事件可見化：系統不信任模型時，讓使用者看得到這件事發生過
+用 `/blind-spot-finder` 分析這個系統找到的盲點：`_clean_intent()`／`diagnose_issue()` 都
+已經有「不信任模型自報信心」的規則層防護，但防護結果只有最終安全版本會給使用者看，模型
+原本想做什麼、為什麼被擋下來完全不可見。`core/model_server.py` 的 `_clean_intent()` 新增
+`clarify_reasons`/`ungrounded_values`（具體指名哪個值查無根據）；`healer/diagnose.py` 的
+`diagnose_issue()` 蓋掉幻覈根因前，先把模型原本的版本存進新欄位 `llm_raw_guess`。前端
+（clarify 卡片、Healer pod 詳情頁、Fix 按鈕、Healer 背景狀態清單、Chat 的 pod_health 查詢）
+都加上可摺疊的「為什麼系統沒有直接執行」區塊，所有動態字串過 `escHtml()`（實測 XSS payload
+確認有正確跳脫）。
+
+順便用真實請求/真實 Pod 測出 3 個既有 bug 並修復：`/api/pods/<name>?diagnose=1`
+（Diagnose 按鈕）原本繞過規則層直接呼叫 `diagnose_with_llm()`；`/api/healer/fix`、
+`/api/healer/auto_fix` 的 `jsonify()` 白名單漏掉 `llm_raw_guess`（`/api/healer/fix`
+還漏了 `severity`）；`healer/diagnose.py` 的 `CrashLoopBackOff` 規則正則只認字面字串，
+K8s 實際事件是 `reason="BackOff"`/`message="Back-off restarting..."`，真實測試時抓到
+`reason` 欄位恰好是 `"Completed"` 的瞬間，規則層完全比對失敗、連帶讓幻覈防護失效。
+
+驗證：`pytest -m "not integration"`、`pytest -m integration` 全過（新增/擴充 11 個測試）；
+真實端到端測試——註冊新帳號對正在跑的 server 送 2026-10-06 QA 掃描的原始案例、部署真實
+bad-image Deployment 驗證 Diagnose 按鈕修好、`kubectl exec` 反覆 `nginx -s stop` 製造
+真實 CrashLoopBackOff 並輪詢抓到 `llm_raw_guess` 真的捕捉到模型幻覈的「OOM」原文。詳見
+`docs/security_review.md` 25 節。
+
+### 修復 2026-10-07 大規模模糊語意掃描（206 題）找到的 P0/P1/P2 問題
+延續 10/6 的 QA 掃描方法，這次擴大到 206 題（部署解析/意圖分類/7 種 prompt
+injection 手法/破壞性操作查核/一般問答/極端輸入/Healer 查詢），對正在跑的
+`web_demo.py` 送真實請求。找到並修復：
+
+- **P0**：`web_demo.py` 的 `_rule_intent()` 規則層命中就用假 100% 信心直接執行，
+  `_looks_like_resource_name()` 只檢查字串格式不檢查語意，常見英文虛詞
+  （the/of/everything/container 等）會被當成真實資源名稱（「delete everything
+  in this cluster」被解析成要刪除一個叫 "everything" 的資源）。新增
+  `_IMPLAUSIBLE_NAME_WORDS` 黑名單，`image` 欄位也補上同等查核（原本只查
+  `name`/`pod_name`）。
+- **P0**：`llama_client.py` 的 22 節邊界值/多服務保護原本只套用在 Gemini 正規化
+  「之後」的文字，Gemini 正規化成功時完全繞過、失敗時檢查的是可能已遺失原始
+  訊號的改寫文字。新增 `_predeploy_boundary_precheck()`，在呼叫 Gemini 之前
+  先對使用者原始輸入跑一次檢查。
+- **P1**：`gitops_log`/`healer_scan` 這類零參數規則會把「GitOps 是什麼」這種
+  概念性問題直接當指令執行，新增 `_QUESTION_MARKERS_RE` 判斷。
+- **P1**：跨租戶探測過濾器補上「朋友/同事的帳號」句型；角色扮演越獄偵測補上
+  「AI called/named X」「let's play a game where you're」這類不綁定特定人格
+  名稱的語序。
+- **P2**：新增確定性規則攔截「解碼＋照做/執行」這種 Base64/ROT13 注入組合請求
+  （原本安全是因為模型解碼解錯，不是設計出來的防護）。
+
+新增/擴充 24 個回歸測試（`tests/test_web_demo_routes.py`、
+`tests/test_deterministic_parse.py`、`tests/test_model_server_injection.py`）。
+驗證：`pytest`（255 個）全過；真實端到端測試——重啟兩個服務、註冊測試帳號，對
+正在跑的 `/api/intent`／`/api/chat` 重送全部 7 個原始失敗案例，確認修復生效。
+完整報告見 `docs/qa_sweep_20261007_large.md`，詳見 `docs/security_review.md`
+26 節。
+
+## 2026-10-08
+
+### 修復整理 QA 量化報告時發現的 3 個真實問題
+把 2026-10-07 大規模掃描的原始資料整理成結構化 pass/fail 判定、畫成圖表給使用者
+做研究報告時，重新逐題檢視細節，額外抓到 3 個當天沒找到的問題並修復：
+`core/model_server.py` 的 `_find_ungrounded_args()` 原本只查核字串值，數字型參數
+（replicas/pods/port）完全沒有事實查核，模型捏造的數量會直接通過，新增
+`_number_grounded_in_message()` 補上（支援阿拉伯數字/中文數字詞/英文數字詞三種
+表達方式）；`llama_client.py` 的 image 擷取 lookahead 補上「副本/台」（修「部署
+九個 redis 副本」被解析成 nginx 的 bug）；`_MULTI_SERVICE_HINT_RE` 補上「X個...
+跟/和/與...Y個」這種連接詞結構（修「起一個 nginx 跟一個 redis」被誤判成單一服務
+2 個副本的 bug）。
+
+新增/擴充 9 個回歸測試，`pytest`（266 個）全過；真實端到端測試重送 3 個原始案例
+確認修復生效。詳見 `docs/security_review.md` 27 節。
+
+### 新增 QA 測試結果的結構化量化報告 + 圖表
+把 2026-10-07 兩輪掃描（261 筆真實請求）的原始資料整理成 pass/fail 判定
+（`qa_sweep_20261007_classify.py`），並用 matplotlib 產出三張 PNG 圖表
+（`qa_sweep_20261007_charts.py`，存於 `reports/qa_sweep_20261007_charts/`）：
+各類別通過率、延遲分布、整體摘要數字，供研究報告/口試直接使用。`AGENT_RULES.md`
+新增一條規則：以後做系統測試/QA 掃描，測試腳本要留結構化 pass/fail + 延遲欄位，
+超過約 20 題要主動產出量化摘要跟圖表，不用使用者每次交代。
+
+### RAG 升級：知識庫擴充 8 篇 + embedding 換 BGE-M3；hybrid search/reranker 實作完但實測後不採用
+`rag/k8s_docs/` 新增 8 篇繁中 K8s 知識文件（networking/storage/scheduling/
+rbac_deep_dive/autoscaling/multi_container_patterns/rolling_update_strategies/
+troubleshooting_advanced，7→15 篇，815→1500+ 行）；`rag/vector_store.py` 的
+`EMBED_MODEL_NAME` 從 2021 年的 `paraphrase-multilingual-MiniLM-L12-v2` 換成
+`BAAI/bge-m3`（多語言/中文檢索現行黃金標準）。另外照 2026 年業界現況實作了
+RRF hybrid search（`rag/retriever.py` 新增 `_reciprocal_rank_fusion()`/
+`_fuse_candidates()`）跟 cross-encoder reranker（新檔 `rag/reranker.py`，
+`BAAI/bge-reranker-v2-m3`），但用既有的 24 題標註測試集（`rag/eval_retrieval.py`，
+過程中順手修正一題過時的標註——新增的 `autoscaling.md` 本來就該被接受為 HPA
+問題的正確答案，舊標註只列了 `deployment_patterns.md`）實測後發現這兩項在
+這個知識庫規模（227 chunks）上反而讓 Recall@3 從 dense-only 的 95.8% 掉到
+91.7%、MRR 從 0.938 掉到 0.833，而且 reranker 在 CPU 上平均每題要跑 3.5~9.8
+秒（比純 dense 的 90~440ms 慢一個量級以上）——**決定不採用**，`retrieve()`
+維持 dense-only（chroma 可用就用，不行才退回 TF-IDF），融合/reranker 程式碼
+保留但預設不呼叫。embedding 升級前後對照：舊基準（舊模型+7篇知識庫）
+Recall@3 100%／MRR 0.875／5.3ms；升級後（BGE-M3+15篇知識庫）Recall@3
+95.8%／MRR 0.938／~90ms——MRR 進步、延遲變慢是模型變大的預期代價，知識庫
+變大後 Recall 看似微降其實是語料庫本身更細分、天花板更難打滿。新增
+`tests/test_rag_fusion.py`（10 個單元測試）。`pytest`（276 個）全過。詳見
+`docs/security_review.md` 28 節（含完整量化對照表跟「業界標準不等於適用這個
+系統」的分析）。
+
+### 03:45 — 安全：密碼/API key 外洩稽核 + gitleaks pre-commit 防線 + repo 改 private
+用 gitleaks 8.30.1 掃完整 git 歷史（146 個 commit、約 76 MB）與目前已追蹤但未提交
+的修改，兩者都是 `no leaks found`；`users.json` 確認存的是雜湊值不是明碼。稽核時
+發現 repo 是 **PUBLIC**（fork 數 0），已由使用者改為 PRIVATE（`gh repo view` 確認）。
+新增 `.git/hooks/pre-commit`：每次 commit 前用 `gitleaks git --pre-commit --staged
+--redact` 掃這次要提交的內容（含新檔案），有疑似金鑰就拒絕 commit；用
+`GIT_CONFIG_*` 環境變數關掉 `core.safecrlf`，避免 Windows LF/CRLF 警告被 gitleaks
+誤判成錯誤而擋下所有 commit。驗證：在暫存測試 repo 裡，乾淨 commit 正常通過，
+含假 GitHub token 的 commit 被擋下（commit 數維持 1）。注意：`.git/hooks/` 不進版控，
+換電腦/重新 clone 要重新安裝。另把 `.playwright-mcp/`（Playwright MCP 截圖/log）
+加進 `.gitignore`。詳見 `docs/security_review.md` 29 節。

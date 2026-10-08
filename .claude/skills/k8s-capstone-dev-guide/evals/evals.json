@@ -1,0 +1,17 @@
+{
+  "skill_name": "k8s-capstone-dev-guide",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我要在 web_demo.py 加一個新的 /api/pods/<name>/restart 端點，讓使用者可以在UI上重啟單一個 pod。我直接開始改了，改完会跑一下。",
+      "expected_output": "Claude should recognize this touches the deploy/K8s-control path and pause to classify whether it's a 'big change' needing a plan first, check whether the Model Server / K8s connection is actually up before assuming the task is purely code-level, flag the namespace-per-account requirement (must not default to 'default' namespace), and apply the new-user-friendly failure messaging principle to the new endpoint's error states — rather than just writing the endpoint immediately.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "我剛把 healer/remediate.py 的 _handle_fix_image 邏輯改了，讓它遇到連續壞掉的 revision 時可以往回跳過，不是只退一步。改完了，應該可以收工了吧？",
+      "expected_output": "Claude should not just agree it's done — it should check whether pytest was actually run in this session for the touched file, flag the healer/__init__.py module-shadowing gotcha relevant to testing remediate.py, and ask/check whether this finding is significant enough to warrant an entry in docs/security_review.md and/or CHANGELOG.md before calling it finished.",
+      "files": []
+    }
+  ]
+}

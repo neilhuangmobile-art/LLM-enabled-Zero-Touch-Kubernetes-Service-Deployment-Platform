@@ -26,3 +26,11 @@ train_local_merged.py
 reports/agent_report_*.json
 model_server.log
 *.log
+
+# Playwright MCP 截圖/console log（Claude Code 外掛產生的暫存檔）
+.playwright-mcp/
+
+# 簡報 pptx（二進位檔，兩人同時改無法合併；用雲端硬碟分享，不進 git）
+reports/*.pptx
+# skill-creator 的評估輸出（暫存，不進 git）
+.claude/skills/*-workspace/
