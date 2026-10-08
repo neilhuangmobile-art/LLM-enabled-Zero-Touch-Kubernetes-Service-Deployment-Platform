@@ -1,0 +1,19 @@
+#!/bin/sh
+# gitleaks pre-commit：commit 前掃描「這次要提交的內容」（含新檔案），發現密碼/API key 就拒絕 commit。
+# 真的確定是誤報、要強制提交：git commit --no-verify（請先確認不是真的金鑰）
+GITLEAKS="$(command -v gitleaks 2>/dev/null)"
+[ -z "$GITLEAKS" ] && GITLEAKS="/c/Users/neil-/AppData/Local/Microsoft/WinGet/Packages/Gitleaks.Gitleaks_Microsoft.Winget.Source_8wekyb3d8bbwe/gitleaks.exe"
+if [ ! -x "$GITLEAKS" ]; then
+  echo "[pre-commit] 找不到 gitleaks，這次跳過密碼掃描（請執行 winget install Gitleaks.Gitleaks）" >&2
+  exit 0
+fi
+# core.safecrlf=false 讓 git 不輸出 LF/CRLF 警告，避免 gitleaks 把警告當成錯誤
+GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.safecrlf GIT_CONFIG_VALUE_0=false \
+  "$GITLEAKS" git --pre-commit --staged --redact --no-banner -v
+rc=$?
+if [ $rc -ne 0 ]; then
+  echo "" >&2
+  echo "[pre-commit] ✗ gitleaks 偵測到疑似密碼/API key，已拒絕這次 commit。" >&2
+  echo "             請把金鑰移到 .env（已被 .gitignore 排除），再重新 git add / commit。" >&2
+fi
+exit $rc

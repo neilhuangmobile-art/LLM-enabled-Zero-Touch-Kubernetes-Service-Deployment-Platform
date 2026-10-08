@@ -4,6 +4,11 @@
 
 @AGENT_RULES.md
 
+> **⚠ 2026-10-09 換電腦交接**：如果你是在**新電腦**上第一次開這個專案（記憶資料夾是空的，
+> 或找不到 `new-machine-setup-checklist` 這份記憶），**先讀
+> [docs/handoff/NEW_MACHINE_HANDOFF.md](docs/handoff/NEW_MACHINE_HANDOFF.md)**，
+> 照裡面的步驟還原記憶、安裝環境，再處理使用者的需求。交接完成後，可以把這段提示刪掉。
+
 ## 專案是什麼
 
 LLM-enabled Zero-Touch Kubernetes Service Deployment Platform：使用者以自然語言描述需求，

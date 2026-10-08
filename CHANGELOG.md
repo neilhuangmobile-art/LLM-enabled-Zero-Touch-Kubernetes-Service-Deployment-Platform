@@ -833,3 +833,13 @@ security-guidance 外掛背景審查回報、逐行追程式碼確認屬實的�
 port 衝突不含其他帳號名稱；Playwright 確認前端 0 個 console 錯誤。過程中發現回滾不存在
 的 app 時會把 K8s 原始例外（含內部 HTTP header）回給前端，改成中英雙語的「找不到這個
 部署」訊息（404），其他錯誤只回通用訊息。
+
+## 2026-10-09
+
+### 換電腦交接 + 市場調查報告 + 整份推上 main
+新增 `docs/handoff/NEW_MACHINE_HANDOFF.md`（給新電腦 Claude 的交接指示：還原記憶、安裝順序、
+`.env` 要手動搬、組員未合併的分支、工作優先順序），並把 auto-memory 快照（16 檔）、
+gitleaks pre-commit hook（`scripts/git-hooks/pre-commit`）、3 個手動抽出的 skill 備份進 repo；
+`CLAUDE.md` 開頭加交接提示。同時納入 2026-10-08 兩份市場調查（`docs/market_research_20261008.md`
+企業報告版、`docs/market_research_voc_20261008.md` 使用者原話版，原始資料在 `docs/research/`）。
+依使用者指示，`feat/chat-unified-assistant` 整份快轉合併到 `main`。

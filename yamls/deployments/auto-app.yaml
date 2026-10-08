@@ -20,7 +20,7 @@ spec:
   min_ready_seconds: null
   paused: null
   progress_deadline_seconds: null
-  replicas: 3
+  replicas: 2
   revision_history_limit: null
   selector:
     match_expressions: null

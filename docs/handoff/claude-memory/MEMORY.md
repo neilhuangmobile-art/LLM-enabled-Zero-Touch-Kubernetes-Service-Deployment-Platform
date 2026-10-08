@@ -1,0 +1,15 @@
+- [安全審查進度](next-session-security-audit.md) — 多租戶隔離+Gemini封鎖+雙層injection防線+114測試+CI都已做完並驗證；剩RBAC/換模型/負載測試待資源
+- [驗證後才能說做完](feedback_verify_before_claiming_done.md) — 使用者常用簡短追問挖出沒真正驗證過的落差，回答前要真的去查
+- [主動維護 CHANGELOG.md](feedback_maintain_changelog.md) — 每次有實質分量的改動要主動記進去，不用等使用者交代（也已寫進 AGENT_RULES.md）
+- [下次：市場研究+使用者角度評判](next-session-market-research.md) — 市場調查10/8已完成(見下一條)；剩「再次以使用者角度嚴厲評判系統」還沒做
+- [2026-10-08 市場調查結果](2026-10-08-market-research-result.md) — 診斷是紅海；主打改「部署前替新手決策+有人把關」；最大風險是QA自己出題自己考，要補外部基準
+- [2026-10-06 QA掃描+修復+Healer實測](2026-10-06-qa-fixes-and-healer-test.md) — P0/P1/P2問題已全部修復驗證；Healer exec測試確認自動偵測修復有效
+- [2026-10-07 管理員身分+殘留風險修復](2026-10-07-admin-identity-and-residual-fixes.md) — 真實管理員身分僅限neilhuang.mobile的Google帳號；3個殘留injection風險+Healer幻覈根因全部修復驗證；程式碼尚未重啟套用
+- [2026-10-07 個人化功能決策](2026-10-07-personalization-decision.md) — 不新增模型，用統計分群+既有RAG+3B few-shot注入；重新定位成續訂留存機制：Chat變成使用者基礎設施累積記憶庫；使用者準備組新電腦
+- [2026-10-07 下次功能待辦](2026-10-07-next-session-feature-backlog.md) — 動態UI/動畫(目標是精緻)+一句話生成歷史分析報告(有圖有文+PDF下載)；先記錄不動工；附帶幻覈風險/權限重用/報告模型選擇等設計注意點
+- [2026-10-08 多模態/情境部署功能待辦](2026-10-08-multimodal-scenario-features-backlog.md) — 語音/情境解析/省錢/分時擴縮/檔案照片部署，含審核結論與優先序；新電腦更強(16GB待確認)可放手改
+- [新電腦安裝待辦清單](new-machine-setup-checklist.md) — 先裝requirements跑得起來，再裝8個外掛+CLI掃描工具+GitHub token+重建gitleaks hook；附完整指令
+- [2026-10-07 新電腦Python版本風險](2026-10-07-new-machine-python-version-risk.md) — requirements.txt釘死舊版套件可能在新Python裝不起來；使用者決定直接裝最新版、卡住再修，不是裝3.9.13；下次卡住先升級套件版本
+- [2026-10-07 大規模QA掃描+修復](2026-10-07-large-qa-sweep-and-fixes.md) — 206題找到2P0+3P1+1P2全部修復驗證；規則層假信心+Gemini正規化讓保護失效；10/8整理圖表時又發現3個新問題(數字參數無查核等)也已修復
+- [2026-10-08 RAG升級計畫](2026-10-08-rag-upgrade-plan.md) — 先做知識庫擴充+BGE-M3+hybrid search+reranker(地基)，Agentic深度模式放第二階段，建議落點Healer深度診斷(解決幻覈問題)+分析報告，不是泛用聊天
+- [2026-10-08 RAG升級結果](2026-10-08-rag-upgrade-result.md) — 知識庫+BGE-M3有效已採用；hybrid+reranker實測後是負面退步(準確率降+延遲x110)不採用；教訓：業界標準做法要先量測再決定
