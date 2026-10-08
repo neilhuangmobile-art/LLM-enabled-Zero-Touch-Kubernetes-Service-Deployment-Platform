@@ -880,3 +880,14 @@ MRR（0.938）完全相同，查詢延遲 1970ms → 14.8ms。學校 NVIDIA 那�
 + 中文說明；外網模式只綁 127.0.0.1、cookie 帶 Secure、Google 回呼網址是 https 對外網址、同一個通道後
 不同客戶端 IP 各自計數。過程中發現 waitress 預設會清掉不受信任的 X-Forwarded-*（所以 werkzeug
 ProxyFix 無效），改用 waitress 的 trusted_proxy。真正透過通道從外網連線待使用者設定 Tailscale 後驗證。
+
+### 05:10 — 修復：帳號名稱相似就會共用工作空間（跨帳號隔離破口）
+**為什麼**：背景安全審查連續兩輪回報客戶 repo 撞名，追查發現平台既有的 `_user_namespace()` 也有
+同樣問題：`alice`/`Alice`、`bob_1`/`bob-1` 共用 namespace，任何兩個中文帳號都變成 `user-unknown`，
+可以互相看到、刪除對方的 Pod。
+**改了什麼**：乾淨格式的帳號名稱維持原名（既有 namespace 不變），其他帳號加 SHA-256 前 16 字元
+後綴；註冊（含 Google 自動產生名稱）時確定性檢查平台 namespace 與客戶 repo 名稱都不能撞到既有帳號。
+客戶 repo 推送的 token 改走環境變數，不再出現在 git 指令列。
+**驗證**：`pytest` 338 個全過（新增撞名、搶註、Google 名稱、token 不在指令列等回歸測試）；
+現有 10 個帳號只有 1 個的 namespace 會變，且沒有任何既有資料需要搬移。
+詳見 `docs/security_review.md` 32 節。

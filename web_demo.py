@@ -318,12 +318,13 @@ def _derive_username_from_google(email: str) -> str:
     對方的 K8s namespace 存取權」，是帳號被冒用的風險。"""
     prefix = re.sub(r"[^a-z0-9]", "-", (email.split("@")[0] or "").lower()).strip("-")[:40]
     prefix = prefix or "google-user"
-    if prefix not in USERS:
+    # 2026-10-09：除了帳號名稱本身，namespace 也不能跟既有帳號撞（見 _user_namespace）
+    if prefix not in USERS and not _namespace_taken(prefix):
         return prefix
     suffix = hashlib.sha256(email.encode()).hexdigest()[:6]
     candidate = f"{prefix}-{suffix}"
     n = 2
-    while candidate in USERS:
+    while candidate in USERS or _namespace_taken(candidate):
         candidate = f"{prefix}-{suffix}-{n}"
         n += 1
     return candidate
@@ -586,12 +587,36 @@ def k8s_get_node_capacity():
         return None
 
 
+_CLEAN_USERNAME_RE = re.compile(r"[a-z0-9]([-a-z0-9]{0,48}[a-z0-9])?")
+
+
 def _user_namespace(username: str) -> str:
     """把帳號名稱轉成合法的 K8s namespace 名稱（DNS-1123 label：小寫字母數字+連字號，
     開頭結尾不能是連字號，長度上限 63）。每個帳號固定對應一個 namespace，讓
-    Pod/Deployment/Chat 等資源天然互相隔離（K8s 層級的隔離，不是 UI 濾掉而已）。"""
-    safe = re.sub(r"[^a-z0-9-]", "-", (username or "").lower()).strip("-")[:50]
-    return f"user-{safe or 'unknown'}"
+    Pod/Deployment/Chat 等資源天然互相隔離（K8s 層級的隔離，不是 UI 濾掉而已）。
+
+    2026-10-09 修正跨帳號隔離破口（docs/security_review.md 32 節）：舊規則只做轉小寫、
+    非法字元換 -，`alice` 與 `Alice`、`bob_1` 與 `bob-1` 共用同一個 namespace，**任何兩個
+    中文帳號都會變成同一個 user-unknown**，彼此看得到、刪得掉對方的 Pod。
+    現在：本來就是乾淨格式的帳號維持原名（既有帳號的 namespace 不變），其他帳號加上帳號
+    原文的雜湊後綴；註冊時再用 _namespace_taken() 擋掉刻意撞名。"""
+    raw = username or ""
+    if _CLEAN_USERNAME_RE.fullmatch(raw):
+        return f"user-{raw}"
+    safe = re.sub(r"[^a-z0-9-]", "-", raw.lower())
+    safe = re.sub(r"-+", "-", safe).strip("-")[:40].strip("-") or "u"
+    # 16 個十六進位字元：8 個（32 位元）可以被暴力碰撞（2026-10-09 背景安全審查第二輪）
+    return f"user-{safe}-{hashlib.sha256(raw.encode('utf-8')).hexdigest()[:16]}"
+
+
+def _namespace_taken(username: str) -> bool:
+    """這個帳號名稱算出來的 namespace 是否已經屬於別的帳號。光靠雜湊不夠：有心人可以先算出
+    `Alice` 的雜湊、搶先註冊乾淨格式的 `alice-<雜湊>` 撞到同一個 namespace。"""
+    # 平台自己叢集的 namespace 與客戶端 repo/namespace（gitops.tenant_repo.tenant_slug）都要檢查：
+    # 這是確定性的保證，不依賴雜湊長度。
+    from gitops.tenant_repo import tenant_slug
+    ns, slug = _user_namespace(username), tenant_slug(username)
+    return any(_user_namespace(u) == ns or tenant_slug(u) == slug for u in USERS if u != username)
 
 
 def _ensure_user_namespace(namespace: str):
@@ -4726,6 +4751,12 @@ def register():
         return render_template_string(HTML, logged_in=False, page='register', error="Passwords do not match", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     if username in USERS:
         return render_template_string(HTML, logged_in=False, page='register', error="Username already taken", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
+    if _namespace_taken(username):
+        return render_template_string(
+            HTML, logged_in=False, page='register',
+            error="這個帳號名稱跟既有帳號太相似（系統會把它們視為同一個工作空間），請換一個名稱。 / "
+                  "This username is too similar to an existing one — please choose another.",
+            k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     if len(password) < 6:
         return render_template_string(HTML, logged_in=False, page='register', error="Password must be at least 6 characters", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     USERS[username] = {"password_hash": hash_password(password), "created_at": datetime.now().isoformat(),

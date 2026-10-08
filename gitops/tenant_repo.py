@@ -51,11 +51,13 @@ def tenant_slug(username: str) -> str:
     2026-10-09 背景安全審查抓到：只做「轉小寫、非法字元換 -、截斷」的話，`Alice_Test` 和
     `alice-test` 會對到同一個 repo/namespace，兩個帳號共用部署設定，跨帳號隔離失效。
     固定加上帳號原文的雜湊後綴，保證一個帳號一個名稱、而且同一帳號永遠得到同一個名稱。
-    總長 <= 63（DNS-1123 label 上限）。"""
+    總長 <= 60（DNS-1123 label 上限 63）。"""
     raw = username or ""
     safe = re.sub(r"[^a-z0-9-]", "-", raw.lower())
     safe = re.sub(r"-+", "-", safe).strip("-")[:40].strip("-") or "user"
-    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:8]
+    # 16 個十六進位字元（64 位元）：8 個字元只有 32 位元，可以暴力找出另一個帳號名稱
+    # 撞到同一個 slug（2026-10-09 背景安全審查第二輪）。註冊時另有確定性的撞名檢查。
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
     return f"zt-{safe}-{digest}"
 
 

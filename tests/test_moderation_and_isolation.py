@@ -40,18 +40,56 @@ def _login(client, username, password="hunter22"):
 
 
 class TestUserNamespace:
-    def test_lowercases_and_prefixes(self):
-        assert web_demo._user_namespace("Alice") == "user-alice"
+    # 2026-10-09 改規則（docs/security_review.md 32 節）：舊規則下 alice/Alice、bob_1/bob-1、
+    # 以及「任何兩個中文帳號」都共用同一個 namespace，跨帳號隔離失效。
+    NS_RE = r"[a-z0-9]([-a-z0-9]*[a-z0-9])?"
 
-    def test_sanitizes_invalid_characters(self):
-        assert web_demo._user_namespace("alice_123!@#") == "user-alice-123"
+    def test_clean_usernames_keep_existing_namespace(self):
+        # 既有帳號幾乎都是乾淨格式，namespace 不能因為這次修正而改變
+        assert web_demo._user_namespace("alice") == "user-alice"
+        assert web_demo._user_namespace("bob-1") == "user-bob-1"
 
-    def test_empty_or_none_falls_back_to_unknown(self):
-        assert web_demo._user_namespace("") == "user-unknown"
-        assert web_demo._user_namespace(None) == "user-unknown"
+    def test_always_valid_dns_label(self):
+        import re
+        for u in ["Alice", "alice_123!@#", "", None, "王小明", "x" * 200, "A" * 49]:
+            ns = web_demo._user_namespace(u)
+            assert re.fullmatch(self.NS_RE, ns) and len(ns) <= 63, (u, ns)
+
+    def test_previously_colliding_usernames_now_differ(self):
+        for group in [["alice", "Alice", "ALICE"], ["bob_1", "bob-1"], ["王小明", "李大華", ""],
+                      ["a" * 60 + "x", "a" * 60 + "y"]]:
+            assert len({web_demo._user_namespace(u) for u in group}) == len(group), group
 
     def test_different_users_get_different_namespaces(self):
         assert web_demo._user_namespace("alice") != web_demo._user_namespace("bob")
+
+
+class TestNamespaceCollisionAtSignup:
+    """光靠雜湊不夠：有心人可以先算好受害者帳號的雜湊，搶先註冊一個乾淨格式、會撞到同一個
+    namespace 的名稱。註冊時要確定性地擋下來，而且要講清楚原因。"""
+
+    def test_registration_rejects_namespace_squatting(self, client):
+        victim_ns = web_demo._user_namespace("Alice")       # user-alice-<雜湊>
+        squatter = victim_ns[len("user-"):]                  # 乾淨格式、namespace 完全相同
+        assert web_demo._user_namespace(squatter) == victim_ns
+        _register(client, "Alice")
+        resp = _register(client, squatter)
+        assert "太相似" in resp.get_data(as_text=True)
+        assert squatter not in web_demo.USERS
+
+    def test_registration_still_allows_distinct_names(self, client):
+        _register(client, "alice")
+        _register(client, "Alice")  # 不同 namespace，可以註冊
+        assert {"alice", "Alice"} <= set(web_demo.USERS)
+        assert web_demo._user_namespace("alice") != web_demo._user_namespace("Alice")
+
+    def test_google_derived_username_avoids_namespace_collision(self, client):
+        web_demo.USERS["Bob"] = {"password_hash": "x"}
+        taken_ns_name = web_demo._user_namespace("Bob")[len("user-"):]
+        web_demo.USERS[taken_ns_name] = {"password_hash": "x"}
+        derived = web_demo._derive_username_from_google("bob@example.com")
+        others = [u for u in web_demo.USERS]
+        assert all(web_demo._user_namespace(derived) != web_demo._user_namespace(u) for u in others)
 
 
 class TestViolationTracking:
