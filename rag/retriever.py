@@ -64,9 +64,18 @@ def _chroma_ready() -> bool:
     return _chroma_usable
 
 
-def _retrieve_chroma(query_text: str, top_k: int, min_score: float) -> List[Dict]:
+def _raw_chroma_candidates(query_text: str, n: int) -> List[Dict]:
+    """回傳 ChromaDB 的原始候選（已依分數排序，但還沒套用多樣性過濾/門檻）——
+    2026-10-08 改成 hybrid search 之後，這份原始候選要跟 TF-IDF 的原始候選一起
+    送進 RRF 融合，不能先各自截斷成 top_k 才融合，會漏掉融合後排名變動的候選。"""
     from rag import vector_store
-    results = vector_store.query(query_text, top_k=top_k * 2)  # 多取一些，過濾後再截斷
+    return vector_store.query(query_text, top_k=n)
+
+
+def _retrieve_chroma(query_text: str, top_k: int, min_score: float) -> List[Dict]:
+    """單純向量搜尋（不融合 TF-IDF），保留給需要單一方法比對的場景用
+    （例如 rag/eval_retrieval.py 要分別評測 chroma 跟 tfidf 各自的品質）。"""
+    results = _raw_chroma_candidates(query_text, top_k * 2)  # 多取一些，過濾後再截斷
     return _apply_diversity_filter(results, top_k, min_score)
 
 
@@ -135,7 +144,10 @@ def _embed_query_tfidf(query: str, vocab: List[str]) -> List[float]:
     return [x / norm for x in vec]
 
 
-def _retrieve_tfidf(query_text: str, top_k: int, min_score: float) -> List[Dict]:
+def _raw_tfidf_candidates(query_text: str, n: int) -> List[Dict]:
+    """回傳 TF-IDF 的原始候選（已排序，未套用多樣性過濾/門檻），同上面
+    `_raw_chroma_candidates()` 的理由——hybrid search 融合前兩邊都要用原始候選。
+    分數完全算不出來（`any(scores)` 為 False）時退回關鍵字比對當最後防線。"""
     idx = _ensure_tfidf_index()
     if idx is None:
         return []
@@ -150,13 +162,20 @@ def _retrieve_tfidf(query_text: str, top_k: int, min_score: float) -> List[Dict]
     scores = [_cosine_similarity(q_vec, vec) for vec in vectors]
 
     if not any(scores):
-        return _keyword_fallback(query_text, chunks, top_k)
+        return _keyword_fallback(query_text, chunks, n)
 
     ranked = [
         {"score": round(s, 4), "source": c["source"], "text": c["text"], "chunk_id": c["chunk_id"]}
         for c, s in zip(chunks, scores)
     ]
     ranked.sort(key=lambda x: -x["score"])
+    return ranked[:n]
+
+
+def _retrieve_tfidf(query_text: str, top_k: int, min_score: float) -> List[Dict]:
+    """單純 TF-IDF 搜尋（不融合向量），保留給 ChromaDB 不可用時的完整 fallback
+    路徑，跟 rag/eval_retrieval.py 的單一方法比對用。"""
+    ranked = _raw_tfidf_candidates(query_text, top_k * 2)
     return _apply_diversity_filter(ranked, top_k, min_score)
 
 
@@ -250,9 +269,56 @@ def _build_context_query(message: str, history: Optional[List[Dict]] = None,
 # 主要查詢函數
 # ════════════════════════════════════════════════════════════════
 
+# ════════════════════════════════════════════════════════════════
+# Hybrid Search：RRF 融合 dense（ChromaDB/BGE-M3）+ sparse（TF-IDF）
+# ════════════════════════════════════════════════════════════════
+
+def _reciprocal_rank_fusion(rank_lists: List[List[Dict]], k: int = 60) -> Dict[str, float]:
+    """標準 RRF 公式：每份已排序清單裡，第 i 名（0-indexed）貢獻 1/(k+i+1) 分，
+    同一個 chunk_id 在不同清單都出現時分數加總。k=60 是業界常用的預設常數
+    （不太需要調參數，是 RRF 的主要優點之一）。"""
+    scores: Dict[str, float] = {}
+    for rank_list in rank_lists:
+        for i, item in enumerate(rank_list):
+            cid = item["chunk_id"]
+            scores[cid] = scores.get(cid, 0.0) + 1.0 / (k + i + 1)
+    return scores
+
+
+def _fuse_candidates(dense: List[Dict], sparse: List[Dict], pool_size: int) -> List[Dict]:
+    """RRF 融合，回傳正規化過 0~1 分數、依分數排序、但還沒套用多樣性過濾跟
+    min_score 門檻的候選池（交給呼叫端決定要不要先送進 reranker 再做最後過濾）。"""
+    by_id = {}
+    for item in dense + sparse:
+        by_id.setdefault(item["chunk_id"], item)
+    rrf_scores = _reciprocal_rank_fusion([dense, sparse])
+    if not rrf_scores:
+        return []
+    max_score = max(rrf_scores.values()) or 1.0
+    fused = [
+        {**by_id[cid], "score": round(s / max_score, 4)}
+        for cid, s in rrf_scores.items()
+    ]
+    fused.sort(key=lambda x: -x["score"])
+    return fused[:pool_size]
+
+
 def retrieve(query: str, top_k: int = 3, min_score: float = 0.05) -> List[Dict]:
     """
     給定查詢字串，回傳 top_k 個最相關的文件片段。
+
+    2026-10-08 實測記錄（見 docs/security_review.md）：原本計畫在這裡接上
+    RRF hybrid 融合 + cross-encoder reranker，但用 `rag/eval_retrieval.py`
+    的 24 題標註測試集實測後發現，在這個知識庫（227 chunks，BGE-M3 dense
+    檢索已經做到 91.7% Recall@3）上，疊加 TF-IDF 的 RRF 融合反而把分數拉低到
+    87.5%（弱訊號稀釋了已經很準的 dense 排序），再疊加 reranker 更進一步退步
+    到 MRR 0.792，而且 cross-encoder 在 CPU 上單題要跑快 10 秒（平均
+    9818.6ms，比純 dense 的 88.3ms 慢了約 110 倍）——這組合在這個資料規模上
+    是淨負面，所以**沒有採用**，維持「chroma 可用就用 dense-only，不行才退回
+    TF-IDF」的原始邏輯。`_reciprocal_rank_fusion()`/`_fuse_candidates()` 跟
+    `rag/reranker.py` 保留著（邏輯本身有測試覆蓋、沒有 bug），只是不在這裡
+    預設呼叫，之後知識庫規模變大、或遇到 dense 本身就查不準的情境，可以再評估
+    要不要重新接上。
 
     回傳格式：
     [{"score": float, "source": str, "text": str, "chunk_id": str}, ...]

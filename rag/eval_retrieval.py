@@ -39,7 +39,7 @@ EVAL_SET = [
     {"query": "Pod 一直卡在 Terminating 刪不掉要怎麼處理？", "expected_sources": ["common_errors.md"]},
     {"query": "How should I decide how many replicas a Deployment should run?", "expected_sources": ["deployment_patterns.md"]},
     {"query": "readiness probe 跟 liveness probe 差在哪裡？", "expected_sources": ["deployment_patterns.md"]},
-    {"query": "怎麼設定 HPA 讓副本數依 CPU 使用率自動調整？", "expected_sources": ["deployment_patterns.md"]},
+    {"query": "怎麼設定 HPA 讓副本數依 CPU 使用率自動調整？", "expected_sources": ["deployment_patterns.md", "autoscaling.md"]},
     {"query": "ConfigMap 跟 Secret 要怎麼掛載成容器的環境變數？", "expected_sources": ["deployment_patterns.md"]},
     {"query": "image tag 應該固定版本還是可以用 latest？", "expected_sources": ["deployment_patterns.md", "security_best_practices.md"]},
     {"query": "requests 跟 limits 這兩個資源設定有什麼差別？", "expected_sources": ["resource_management.md"]},
@@ -134,6 +134,20 @@ def run(top_k: int = 3) -> Dict:
     except Exception as e:
         results["tfidf"] = {"method": "tfidf", "error": str(e)}
 
+    # hybrid：實際生產會用到的路徑（retrieve()，dense+sparse 用 RRF 融合 +
+    # reranker 精排），跟上面兩個單一方法分開測，才知道融合/精排有沒有真的更好。
+    try:
+        if vector_store.is_available() and vector_store.count() > 0:
+            results["hybrid"] = evaluate_method(
+                "hybrid (RRF + reranker)",
+                lambda q, k: retriever.retrieve(q, k, 0.0),
+                top_k,
+            )
+        else:
+            results["hybrid"] = {"method": "hybrid", "error": "ChromaDB 未安裝或索引是空的"}
+    except Exception as e:
+        results["hybrid"] = {"method": "hybrid", "error": str(e)}
+
     report = {
         "generated_at": time.time(),
         "top_k":        top_k,
@@ -152,7 +166,7 @@ def print_report(report: Dict) -> None:
     print("=" * 60)
     print(f"RAG 檢索品質評估報告（top_k={report['top_k']}，{report['num_queries']} 條測試查詢）")
     print("=" * 60)
-    for key in ("chroma", "tfidf"):
+    for key in ("chroma", "tfidf", "hybrid"):
         r = report["results"].get(key)
         if not r:
             continue

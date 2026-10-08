@@ -10,7 +10,11 @@ import os
 from typing import Dict, List
 
 COLLECTION_NAME = "k8s_knowledge"
-EMBED_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
+# 2026-10-08：從 paraphrase-multilingual-MiniLM-L12-v2（2021 年的輕量模型，1.18 億
+# 參數）升級成 BGE-M3——查證過 2026 年業界現況，這是多語言/中文檢索的現行黃金標準，
+# 100+ 語言、8192 token 上下文，中文效果明顯更好。換模型後舊的 collection 向量空間
+# 不相容，第一次用新模型要整個 rebuild（見 rag/build_index.py --rebuild）。
+EMBED_MODEL_NAME = "BAAI/bge-m3"
 
 
 def _default_chroma_dir() -> str:
