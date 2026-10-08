@@ -173,7 +173,8 @@ function Install-ZeroTouch {
         Send-ZtProgress $Step $false $Detail
         Write-Host "請回到 ZeroTouch 網頁按「繼續」，會告訴你怎麼處理。 / Go back to the web page and press Continue." -ForegroundColor Yellow
     }
-    function Invoke-Kubectl { $out = & kubectl @args 2>&1 | Out-String; return @{ code = $LASTEXITCODE; out = $out.Trim() } }
+    # PowerShell 5.1 會把 kubectl 的錯誤輸出包成 NativeCommandError（一堆紅字 At line…），用 "$_" 只取訊息本身
+    function Invoke-Kubectl { $out = & kubectl @args 2>&1 | ForEach-Object { "$_" } | Out-String; return @{ code = $LASTEXITCODE; out = $out.Trim() } }
 
     Write-Host "== ZeroTouch 叢集連線 / cluster setup ==" -ForegroundColor Cyan
     Send-ZtProgress 'start' $true ''
@@ -205,10 +206,15 @@ function Install-ZeroTouch {
         if ($r.code -ne 0) { Show-ZtFail 'flux' '安裝 Flux 失敗，請重新執行同一行指令。 / Flux install failed.' $r.out; return }
         Send-ZtProgress 'flux' $true ''
     }
+    Write-Host "    等待 Flux 啟動：要下載映像檔，網路慢時最多可能要 10 分鐘，請不要關閉視窗…"
     $r = Invoke-Kubectl wait --for=condition=established --timeout=120s crd/gitrepositories.source.toolkit.fluxcd.io crd/kustomizations.kustomize.toolkit.fluxcd.io
-    if ($r.code -eq 0) { $r = Invoke-Kubectl -n flux-system rollout status deployment/source-controller --timeout=240s }
-    if ($r.code -eq 0) { $r = Invoke-Kubectl -n flux-system rollout status deployment/kustomize-controller --timeout=240s }
-    if ($r.code -ne 0) { Show-ZtFail 'crds' 'Flux 沒有在時間內啟動，請重新執行同一行指令。 / Flux did not become ready.' $r.out; return }
+    if ($r.code -eq 0) { $r = Invoke-Kubectl -n flux-system rollout status deployment/source-controller --timeout=600s }
+    if ($r.code -eq 0) { $r = Invoke-Kubectl -n flux-system rollout status deployment/kustomize-controller --timeout=600s }
+    if ($r.code -ne 0) {
+        $pods = (Invoke-Kubectl -n flux-system get pods --no-headers).out
+        Show-ZtFail 'crds' 'Flux 沒有在 10 分鐘內啟動，多半是映像檔下載太慢。請重新啟動 Docker Desktop 後重新執行同一行指令。 / Flux did not become ready (slow image download?).' "$($r.out)`n$pods"
+        return
+    }
     Send-ZtProgress 'crds' $true ''
 
     Write-Host "[4/5] 套用 ZeroTouch 設定到 namespace $ZtNs ..."
@@ -217,7 +223,7 @@ function Install-ZeroTouch {
     Send-ZtProgress 'bundle' $true ''
 
     Write-Host "[5/5] 等待狀態回報程式啟動（第一次要下載映像檔，約 1~3 分鐘）..."
-    $r = Invoke-Kubectl -n $ZtNs rollout status deployment/zt-reporter --timeout=300s
+    $r = Invoke-Kubectl -n $ZtNs rollout status deployment/zt-reporter --timeout=600s
     if ($r.code -ne 0) { Show-ZtFail 'reporter' '回報程式還沒啟動完成。 / Reporter not ready yet.' $r.out; return }
     Send-ZtProgress 'done' $true ''
 

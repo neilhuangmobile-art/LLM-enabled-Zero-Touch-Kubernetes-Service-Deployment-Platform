@@ -108,6 +108,8 @@ NOW = 2_000_000.0
     ([{"step": "bundle", "ok": False}], "bundle_failed"),
     ([{"step": "reporter", "ok": False}], "reporter_not_ready"),
     ([{"step": "done", "ok": True, "at": NOW - 10}], "reporter_not_ready"),
+    # 腳本還在跑（例如剛裝完 Flux、在等它啟動）：顯示安裝中，不要說回報程式壞了
+    ([{"step": "kubectl", "ok": True}, {"step": "flux", "ok": True}], "installing"),
     ([{"step": "done", "ok": True, "at": NOW - 300}], "no_report"),
 ])
 def test_status_from_install_progress(progress, code):
@@ -140,7 +142,7 @@ def test_registry_marks_connected_once(tmp_path):
 
 
 def test_every_status_has_bilingual_text_with_namespace():
-    for code in ["not_started", "no_kubectl", "cluster_unreachable", "flux_failed", "bundle_failed",
+    for code in ["installing", "not_started", "no_kubectl", "cluster_unreachable", "flux_failed", "bundle_failed",
                  "reporter_not_ready", "no_report", "git_not_ready", "sync_pending", "offline", "connected"]:
         title, howto = status_text(code, "zt-alice-1234")
         assert " / " in title and howto
@@ -153,3 +155,14 @@ def test_forget_invalidates_everything(tmp_path):
     reg.store_report("eve", _good_report())
     reg.forget("eve")
     assert reg.user_for_report_token(rt) is None and reg.latest_report("eve") == (None, None)
+
+
+def test_bundle_can_be_claimed_only_once(tmp_path):
+    """安裝包含 deploy key 與回報 token，只能下載一次（2026-10-09 背景安全審查：token replay）。"""
+    reg = ClusterRegistry(str(tmp_path / "c.json"), clock=Clock())
+    t = reg.issue_onboard_token("alice")
+    assert reg.claim_bundle(t) == "alice"
+    assert reg.claim_bundle(t) is None, "第二次領取要被拒絕"
+    assert reg.user_for_onboard_token(t) == "alice", "token 仍可用來回報安裝進度"
+    t2 = reg.issue_onboard_token("alice")
+    assert reg.claim_bundle(t2) == "alice", "新指令可以再領一次"

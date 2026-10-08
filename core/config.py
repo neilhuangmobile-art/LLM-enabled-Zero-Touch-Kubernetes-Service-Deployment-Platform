@@ -97,6 +97,9 @@ WEB_PORT        = int(os.environ.get("WEB_PORT", "5050"))
 # 權限 Administration + Contents 讀寫（建立 repo、設定唯讀 deploy key、推送設定）。
 TENANT_GITHUB_TOKEN = os.environ.get("TENANT_GITHUB_TOKEN", "")
 TENANT_GITHUB_ORG   = os.environ.get("TENANT_GITHUB_ORG", "")
+# 1 = 非管理員帳號登入後必須先完成「同意書 → 執行指令 → 連線檢查」才能使用網站，部署走客戶叢集。
+# 預設 0（維持本機叢集模式），讓本機開發、既有測試與 QA 腳本不受影響；對外開放時在 .env 設 1。
+CUSTOMER_CLUSTER_MODE = os.environ.get("CUSTOMER_CLUSTER_MODE", "0").strip() == "1"
 # 平台、客戶狀態等執行期資料（不進版控）
 DATA_DIR         = os.path.join(ROOT, "data")
 TENANT_REPOS_DIR = os.path.join(DATA_DIR, "tenant_repos")

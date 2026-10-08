@@ -5019,9 +5019,13 @@ def onboard_script(token):
 
 @app.route("/onboard/<token>/bundle.yaml")
 def onboard_bundle(token):
-    username = CLUSTERS.user_for_onboard_token(token)
+    # 安裝包含唯讀 deploy key 與回報 token，只能下載一次（2026-10-09 背景安全審查：token replay）。
+    # 安裝失敗要重跑時，網頁的「返回 → 同意並繼續」會給一個新的指令。
+    username = CLUSTERS.claim_bundle(token)
     if not username:
-        return "# 安裝指令已過期，請回到 ZeroTouch 網頁取得新的指令 / expired\n", 410, {"Content-Type": "text/plain; charset=utf-8"}
+        return ("# 這個安裝指令已經用過或已過期。請回到 ZeroTouch 網頁按「返回」再按「同意並繼續」取得新的指令。\n"
+                "# This install command was already used or has expired. Get a new one from the ZeroTouch page.\n"), \
+            410, {"Content-Type": "text/plain; charset=utf-8"}
     try:
         repo, host, info = _tenant_repo_for(username)
         repo.ensure_initialized()
@@ -5058,7 +5062,9 @@ def agent_report():
         return jsonify({"error": "account disabled"}), 403
     if (request.content_length or 0) > MAX_REPORT_BYTES:
         return jsonify({"error": "report too large"}), 413
-    raw = request.get_data(cache=False)
+    # chunked 傳輸沒有 Content-Length，get_data() 會把整個 body 讀進記憶體——改成從串流最多讀
+    # 上限 + 1 byte（2026-10-09 背景安全審查：resource exhaustion）
+    raw = request.stream.read(MAX_REPORT_BYTES + 1)
     if len(raw) > MAX_REPORT_BYTES:
         return jsonify({"error": "report too large"}), 413
     try:
@@ -5067,6 +5073,105 @@ def agent_report():
         return jsonify({"error": "invalid report"}), 400
     CLUSTERS.store_report(username, report)
     return "", 204
+
+
+# ── 引導流程：同意書 → 執行指令 → 連線檢查（第 4 階段）────────────────
+from core.config import CUSTOMER_CLUSTER_MODE
+from cluster.remote_state import CONSENT_VERSION, ONBOARD_TOKEN_TTL, status_text
+from cluster.pages import ONBOARD_HTML
+import time as _time
+
+# 還沒連線的帳號也可以使用的路徑（登入/登出、引導流程本身、回報器）
+_ONBOARD_OPEN_PATHS = ("/onboarding", "/onboard/", "/auth/", "/agent/report", "/api/onboard/status")
+
+
+def _needs_onboarding(username) -> bool:
+    """客戶自帶叢集模式下，非管理員帳號第一次連線成功前，只能使用引導流程。
+    連線成功過的帳號之後就算叢集離線也可以進站（看自己的狀態），由主頁面顯示離線橫幅。"""
+    return bool(CUSTOMER_CLUSTER_MODE and username and not session.get("is_admin")
+                and not CLUSTERS.ever_connected(username))
+
+
+@app.before_request
+def _require_cluster_connection():
+    if not _needs_onboarding(session.get("username")):
+        return None
+    if request.path.startswith(_ONBOARD_OPEN_PATHS):
+        return None
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "請先完成叢集連線（同意書 → 執行指令 → 連線檢查）。 / "
+                                 "Please connect your cluster first.", "onboarding": "/onboarding"}), 403
+    return redirect("/onboarding")
+
+
+@app.route("/onboarding")
+def onboarding_page():
+    username = session.get("username")
+    if not username:
+        return redirect("/")
+    if not _needs_onboarding(username) and request.args.get("step") is None:
+        return redirect("/")
+    from gitops.tenant_repo import tenant_slug
+    ns = tenant_slug(username)
+    step = request.args.get("step", "")
+    if not CLUSTERS.has_consent(username) or step == "consent":
+        step = "consent"
+    elif step != "check":
+        step = "install"
+    ctx = dict(step=step, username=username, namespace=ns, consent_version=CONSENT_VERSION,
+               uninstall=_onboarding.uninstall_commands(ns), github_ready=_tenant_github_ready())
+    if step == "install" and ctx["github_ready"]:
+        # 同一個 token 在有效期內重新整理頁面要沿用（不然安裝進度會被清掉）；原文只存在使用者
+        # 自己的 session（簽章 cookie），伺服器端只存雜湊
+        tok = session.get("onboard_token")
+        if not tok or CLUSTERS.user_for_onboard_token(tok) != username:
+            tok = CLUSTERS.issue_onboard_token(username)
+            session["onboard_token"] = tok
+            session["onboard_token_exp"] = _time.time() + ONBOARD_TOKEN_TTL
+        script_url = f"{_script_base_url()}/onboard/{tok}.ps1"
+        ctx.update(command=f'irm "{script_url}" | iex', script_url=script_url,
+                   expires_at=datetime.fromtimestamp(session.get("onboard_token_exp", _time.time())).strftime("%H:%M"))
+    return render_template_string(ONBOARD_HTML, **ctx)
+
+
+@app.route("/onboard/consent", methods=["POST"])
+def onboard_consent():
+    username = session.get("username")
+    if not username:
+        return redirect("/")
+    CLUSTERS.record_consent(username)
+    return redirect("/onboarding?step=install")
+
+
+@app.route("/onboard/decline", methods=["POST"])
+def onboard_decline():
+    session.clear()
+    return redirect("/")
+
+
+@app.route("/onboard/back", methods=["POST"])
+def onboard_back():
+    username = session.get("username")
+    if not username:
+        return redirect("/")
+    CLUSTERS.revoke_onboard_tokens(username)  # 返回 = 作廢目前的指令，下次產生新的
+    session.pop("onboard_token", None)
+    session.pop("onboard_token_exp", None)
+    return redirect("/onboarding?step=consent")
+
+
+@app.route("/api/onboard/status")
+def api_onboard_status():
+    username = session.get("username")
+    if not username:
+        return jsonify({"error": "Not authenticated"}), 401
+    from gitops.tenant_repo import tenant_slug
+    st = CLUSTERS.status(username)
+    title, howto = status_text(st["code"], tenant_slug(username))
+    prog = [{"step": p["step"], "ok": p["ok"]}
+            for p in (CLUSTERS._data.get(username, {}).get("progress") or [])]
+    return jsonify({**st, "title": title, "howto": howto, "progress": prog,
+                    "mode": "customer" if CUSTOMER_CLUSTER_MODE else "local"})
 
 
 def _rag_fallback_context(message: str, history: list = None) -> tuple:

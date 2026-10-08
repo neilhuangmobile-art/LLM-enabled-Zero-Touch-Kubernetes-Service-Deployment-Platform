@@ -126,12 +126,16 @@ STATUS_TEXT = {
                             "開啟 Docker Desktop → 齒輪（Settings）→ Kubernetes → 勾選 Enable Kubernetes → "
                             "Apply & restart，等左下角變綠燈後重新執行指令。 / Enable Kubernetes in Docker Desktop "
                             "settings, wait until it's green, then rerun the command."),
-    "flux_failed": ("安裝 Flux 時失敗 / Installing Flux failed",
-                    "通常是網路暫時不穩，重新執行同一行指令即可（重複執行是安全的）。 / Usually a temporary "
-                    "network issue — just rerun the same command (safe to repeat)."),
+    "flux_failed": ("安裝或啟動 Flux 時失敗 / Installing Flux failed",
+                    "通常是網路慢、映像檔下載卡住。請在 Docker Desktop 右下角圖示按右鍵選 Restart，等它變綠燈後，"
+                    "按「返回」取得新的指令再執行一次（重複執行是安全的）。下方灰色區塊是詳細狀態。 / Usually a slow "
+                    "or stuck image download — restart Docker Desktop, then get a new command and rerun it."),
     "bundle_failed": ("套用平台設定時失敗 / Applying the platform config failed",
                       "安裝指令可能已過期（30 分鐘），請按「返回」再「同意並繼續」取得新指令後重跑。 / "
                       "The command may have expired — go back and get a new one."),
+    "installing": ("安裝進行中… / Installing…",
+                   "請等 PowerShell 視窗跑完（第一次大約 2~5 分鐘，會下載 Flux 與回報程式）。這個頁面會自動更新。 / "
+                   "Wait for the PowerShell window to finish; this page updates automatically."),
     "reporter_not_ready": ("狀態回報程式還沒啟動 / The status reporter hasn't started",
                            "第一次要下載映像檔，可能要 1~3 分鐘，請稍候再按「重新檢查」。仍然不行請在 PowerShell "
                            "執行 kubectl get pods -n {ns} 看狀態。 / First start downloads an image; wait a "
@@ -182,7 +186,8 @@ def connection_status(progress: List[dict], report: Optional[dict], report_at: O
         waited = now - float(last.get("at") or now)
         return {"code": "no_report" if waited > NO_REPORT_GRACE_SEC else "reporter_not_ready",
                 "ok": False, "detail": ""}
-    return {"code": "reporter_not_ready", "ok": False, "detail": ""}
+    # 最後一步成功但還沒到 done：腳本還在跑（例如等 Flux 啟動），不是回報程式有問題
+    return {"code": "installing", "ok": False, "detail": ""}
 
 
 def status_text(code: str, namespace: str) -> Tuple[str, str]:
@@ -240,6 +245,23 @@ class ClusterRegistry:
             u["progress"] = []
             self._save()
         return raw
+
+    def claim_bundle(self, raw: str) -> Optional[str]:
+        """安裝包（含 deploy key 與回報 token）只能下載一次：第一次成功領取就標記，之後同一個
+        token 再來一律拒絕，避免指令外流後被重放取得金鑰。token 本身仍可用來回報安裝進度。"""
+        if not raw:
+            return None
+        hv, now = _h(raw), self.clock()
+        with self._lock:
+            for name, u in self._data.items():
+                for t in u.get("onboard_tokens", []):
+                    if secrets.compare_digest(t["hash"], hv) and t["expires"] > now:
+                        if t.get("bundle_claimed"):
+                            return None
+                        t["bundle_claimed"] = now
+                        self._save()
+                        return name
+        return None
 
     def revoke_onboard_tokens(self, username: str):
         with self._lock:

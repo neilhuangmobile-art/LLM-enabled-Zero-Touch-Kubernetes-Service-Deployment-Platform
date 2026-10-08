@@ -910,3 +910,19 @@ ProxyFix 無效），改用 waitress 的 trusted_proxy。真正透過通道從�
 通過、PowerShell 腳本語法解析 0 錯誤；在本機叢集實際跑回報器：Pod Security baseline 放行、
 權限沒有任何被拒絕、透過 host.docker.internal 回報成功（HTTP 204）、故意部署的 CrashLoop Pod
 被抓到錯誤原因與 log。完整安裝流程（含 Flux 拉 GitHub repo）待使用者設定 GitHub org/token 後驗證。
+
+### 06:40 — 新功能：客戶叢集引導流程（同意書 → 執行指令 → 連線檢查）（第 4 階段）
+**為什麼**：客戶要先清楚知道會裝什麼、平台能做什麼，同意後貼一行指令，確認連上才能使用網站。
+**改了什麼**：
+- `cluster/pages.py`：三個引導頁面，跟主網站共用 CSS。同意書寫明要準備什麼、會安裝什麼、平台能/不能做什麼、
+  會傳回哪些資料、風險、如何解除安裝；按鈕「不同意並離開 / 同意並繼續」。指令頁有步驟教學、一鍵複製、
+  到期時間、「檢視腳本內容」；按鈕「返回 / 繼續」。檢查頁每 5 秒自動檢查，依 12 種狀況給說明與進度清單。
+- `web_demo.py`：`/onboarding`、`/onboard/consent|decline|back`、`/api/onboard/status`；新增
+  `CUSTOMER_CLUSTER_MODE`（預設關，維持本機叢集模式），開啟後非管理員帳號第一次連線成功前只能使用引導流程。
+- 安全修正（背景安全審查）：安裝包只能下載一次（防止指令外流被重放取得 deploy key）、回報大小改從串流讀取
+  （chunked 傳輸沒有 Content-Length，原本可繞過上限）。
+- 安裝腳本：新增「安裝進行中」狀態（原本顯示成「回報程式沒啟動」會誤導）、等待 Flux 延長到 10 分鐘並提示、
+  kubectl 錯誤不再被 PowerShell 5.1 包成紅色 NativeCommandError。
+**驗證**：`pytest` 383 個全過；用 playwright 實際註冊 → 自動導向同意書 → 同意 → 指令頁，截圖確認；
+**在 PowerShell 實際貼上指令執行**，檢查頁即時顯示進度。實測抓到 3 個問題（上述狀態誤導、錯誤訊息難讀、
+這台電腦的網路下 Flux 映像檔平行下載卡住）都已處理；完整流程待 Docker 重啟與 GitHub 設定後驗證。

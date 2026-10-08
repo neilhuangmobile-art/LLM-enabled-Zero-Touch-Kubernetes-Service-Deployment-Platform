@@ -136,3 +136,100 @@ def test_cluster_base_url_rewrites_localhost_for_pods(monkeypatch):
     with web_demo.app.test_request_context("/", base_url="http://localhost:5050"):
         assert web_demo._cluster_base_url() == "http://host.docker.internal:5050"
         assert web_demo._script_base_url() == "http://localhost:5050"
+
+
+def test_bundle_second_download_is_rejected(client, monkeypatch):
+    monkeypatch.setattr(web_demo, "TENANT_GITHUB_TOKEN", "")
+    tok = web_demo.CLUSTERS.issue_onboard_token("alice")
+    client.get(f"/onboard/{tok}/bundle.yaml")
+    r = client.get(f"/onboard/{tok}/bundle.yaml")
+    assert r.status_code == 410 and "已經用過" in r.get_data(as_text=True)
+
+
+def test_report_size_limit_holds_without_content_length(client):
+    """chunked 傳輸沒有 Content-Length，不能因此繞過大小上限（背景安全審查：resource exhaustion）。"""
+    import io
+    rt = web_demo.CLUSTERS.issue_report_token("alice")
+    big = json.dumps({**_report(), "pad": "x" * (400 * 1024)}).encode()
+    r = client.post("/agent/report", input_stream=io.BytesIO(big),
+                    headers={"Authorization": "Bearer " + rt, "Content-Type": "application/json",
+                             "Transfer-Encoding": "chunked"})
+    assert r.status_code in (400, 413)
+    assert web_demo.CLUSTERS.latest_report("alice") == (None, None)
+
+
+# ── 第 4 階段：引導流程與擋關 ──
+@pytest.fixture
+def customer_mode(client, monkeypatch):
+    monkeypatch.setattr(web_demo, "CUSTOMER_CLUSTER_MODE", True)
+    client.post("/auth/register", data={"username": "carol", "password": "hunter22", "confirm": "hunter22"})
+    return client
+
+
+def test_local_mode_has_no_gate(client):
+    client.post("/auth/register", data={"username": "dave", "password": "hunter22", "confirm": "hunter22"})
+    assert client.get("/").status_code == 200
+    assert client.get("/api/pods").status_code == 200
+
+
+def test_unconnected_user_is_sent_to_onboarding(customer_mode):
+    c = customer_mode
+    r = c.get("/")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/onboarding")
+    r = c.get("/api/pods")
+    assert r.status_code == 403 and "叢集連線" in r.get_json()["error"]
+    assert c.get("/api/onboard/status").status_code == 200, "引導流程自己的 API 不能被擋"
+
+
+def test_consent_page_then_decline_logs_out(customer_mode):
+    c = customer_mode
+    body = c.get("/onboarding").get_data(as_text=True)
+    assert "授權同意書" in body and "不同意並離開" in body and "同意並繼續" in body
+    from gitops.tenant_repo import tenant_slug
+    assert tenant_slug("carol") in body, "同意書要寫出客戶專屬 namespace"
+    c.post("/onboard/decline")
+    assert c.get("/api/onboard/status").status_code == 401
+
+
+def test_agree_then_install_page_shows_command_and_back_revokes(customer_mode, monkeypatch):
+    monkeypatch.setattr(web_demo, "TENANT_GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(web_demo, "TENANT_GITHUB_ORG", "org")
+    c = customer_mode
+    r = c.post("/onboard/consent")
+    assert r.headers["Location"].endswith("step=install")
+    import html
+    # Jinja 自動把引號轉成 &#34;（XSS 防護）；瀏覽器顯示與「複製」拿到的都是還原後的文字
+    body = html.unescape(c.get("/onboarding?step=install").get_data(as_text=True))
+    assert 'irm "' in body and "| iex" in body and "返回" in body and "繼續" in body
+    with c.session_transaction() as s:
+        tok = s["onboard_token"]
+    assert web_demo.CLUSTERS.user_for_onboard_token(tok) == "carol"
+    again = c.get("/onboarding?step=install").get_data(as_text=True)
+    assert tok in again, "重新整理頁面沿用同一個指令，不能清掉安裝進度"
+    c.post("/onboard/back")
+    assert web_demo.CLUSTERS.user_for_onboard_token(tok) is None, "返回要作廢指令"
+
+
+def test_install_page_without_github_explains_instead_of_command(customer_mode, monkeypatch):
+    monkeypatch.setattr(web_demo, "TENANT_GITHUB_TOKEN", "")
+    c = customer_mode
+    c.post("/onboard/consent")
+    body = c.get("/onboarding?step=install").get_data(as_text=True)
+    assert "還沒設定完成" in body and "| iex" not in body
+
+
+def test_check_status_json_and_unlock_after_connected(customer_mode):
+    c = customer_mode
+    c.post("/onboard/consent")
+    d = c.get("/api/onboard/status").get_json()
+    assert d["code"] == "not_started" and d["title"] and d["howto"] and d["ok"] is False
+    web_demo.CLUSTERS.store_report("carol", __import__("cluster.remote_state", fromlist=["x"]).clean_report(_report()))
+    d = c.get("/api/onboard/status").get_json()
+    assert d["ok"] is True and d["code"] == "connected"
+    assert c.get("/").status_code == 200, "連線成功後可以進網站"
+    assert c.get("/api/pods").status_code == 200
+
+
+def test_admin_is_never_gated(customer_mode, monkeypatch):
+    monkeypatch.setattr(web_demo, "_is_admin_user", lambda u: True)
+    assert customer_mode.get("/").status_code == 200
