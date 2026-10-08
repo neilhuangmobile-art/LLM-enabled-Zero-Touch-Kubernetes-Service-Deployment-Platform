@@ -18,6 +18,7 @@ repo 結構：
     TenantRepo      ：本機工作副本上的各種操作（commit + push）；測試時 remote 可以是本機 bare repo
 """
 import base64
+import hashlib
 import os
 import re
 import subprocess
@@ -45,10 +46,17 @@ class TenantRepoError(Exception):
 
 
 def tenant_slug(username: str) -> str:
-    """帳號 → 客戶端 repo 名稱與 namespace（同一個字串）。規則同 web_demo._user_namespace，
-    只是前綴改 zt-，跟平台自己叢集的 user-<帳號> 區分開。"""
-    safe = re.sub(r"[^a-z0-9-]", "-", (username or "").lower()).strip("-")[:50].strip("-")
-    return f"zt-{safe or 'unknown'}"
+    """帳號 → 客戶端 repo 名稱與 namespace（同一個字串），例如 zt-alice-test-3f2a1b9c。
+
+    2026-10-09 背景安全審查抓到：只做「轉小寫、非法字元換 -、截斷」的話，`Alice_Test` 和
+    `alice-test` 會對到同一個 repo/namespace，兩個帳號共用部署設定，跨帳號隔離失效。
+    固定加上帳號原文的雜湊後綴，保證一個帳號一個名稱、而且同一帳號永遠得到同一個名稱。
+    總長 <= 63（DNS-1123 label 上限）。"""
+    raw = username or ""
+    safe = re.sub(r"[^a-z0-9-]", "-", raw.lower())
+    safe = re.sub(r"-+", "-", safe).strip("-")[:40].strip("-") or "user"
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:8]
+    return f"zt-{safe}-{digest}"
 
 
 def _now() -> str:
@@ -158,19 +166,28 @@ class TenantRepo:
 
     # ── git 底層 ──
     def _git(self, *args, cwd: Optional[Path] = None, check: bool = True) -> str:
-        cmd = ["git"]
-        if self._auth:
-            # 用 -c 帶認證標頭，token 不會寫進 .git/config
-            cmd += ["-c", f"http.extraHeader={self._auth}"]
-        cmd += ["-c", "core.autocrlf=false", "-c", "core.safecrlf=false", *args]
+        cmd = ["git", "-c", "core.autocrlf=false", "-c", "core.safecrlf=false", *args]
         env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+        if self._auth:
+            # 認證標頭走 GIT_CONFIG_* 環境變數（git >= 2.31），不放在指令列參數——
+            # 指令列在本機行程清單裡任何程式都看得到（2026-10-09 背景安全審查）。
+            # 也不寫進 .git/config。
+            env.update(GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="http.extraHeader",
+                       GIT_CONFIG_VALUE_0=self._auth)
         p = subprocess.run(cmd, cwd=str(cwd or self.workdir), capture_output=True, text=True,
                            encoding="utf-8", errors="replace", timeout=60, env=env)
         if check and p.returncode != 0:
             raise TenantRepoError(
                 "同步部署設定到 Git 失敗，請稍後再試。 / Failed to sync deployment config to Git. "
-                f"(git {args[0]}: {p.stderr.strip()[:200]})")
+                f"(git {args[0]}: {self._redact(p.stderr.strip())[:200]})")
         return p.stdout
+
+    def _redact(self, text: str) -> str:
+        """錯誤訊息會顯示給使用者，萬一 git 把認證資訊印出來要遮掉。"""
+        if self._auth:
+            secret = self._auth.split(" ")[-1]
+            text = text.replace(self._auth, "***").replace(secret, "***")
+        return re.sub(r"(x-access-token:)[^@\s]+", r"\1***", text)
 
     def _sync(self):
         """確保本機副本存在且等於遠端最新狀態（平台是唯一寫入者，直接 reset 到遠端）。"""

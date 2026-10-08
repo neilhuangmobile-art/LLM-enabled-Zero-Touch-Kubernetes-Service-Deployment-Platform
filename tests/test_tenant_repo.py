@@ -34,23 +34,34 @@ PARSED = {"app_name": "web", "image": "nginx:1.27", "pods": 2, "port": 80,
           "cpu": "100m", "memory": "128Mi"}
 
 
-def test_slug_is_valid_namespace():
-    assert tenant_slug("Alice_Test") == "zt-alice-test"
-    assert tenant_slug("") == "zt-unknown"
-    assert len(tenant_slug("x" * 200)) <= 53
+def test_slug_is_valid_namespace_and_stable():
+    import re
+    for name in ["Alice_Test", "", "x" * 200, "中文帳號", "a--b"]:
+        slug = tenant_slug(name)
+        assert re.fullmatch(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?", slug) and len(slug) <= 63, slug
+    assert tenant_slug("Alice_Test") == tenant_slug("Alice_Test"), "同一帳號永遠同一個名稱"
+    assert tenant_slug("Alice_Test").startswith("zt-alice-test-")
+
+
+def test_similar_usernames_never_share_repo_or_namespace():
+    """2026-10-09 背景安全審查回報的跨帳號隔離破口：舊規則下這些帳號會對到同一個 repo。"""
+    groups = [["Alice_Test", "alice-test", "alice.test", "ALICE TEST"],
+              ["alice", "Alice"], ["x" * 60 + "a", "x" * 60 + "b"], ["中文一", "中文二"]]
+    for g in groups:
+        assert len({tenant_slug(u) for u in g}) == len(g), g
 
 
 def test_init_creates_platform_configmap_in_tenant_namespace(repo):
     info = yaml.safe_load(_remote_file(repo, "apps/_platform/zerotouch-info.yaml"))
-    assert info["kind"] == "ConfigMap" and info["metadata"]["namespace"] == "zt-alice-test"
+    assert info["kind"] == "ConfigMap" and info["metadata"]["namespace"] == repo.namespace
     assert repo.ensure_initialized() is None, "重複初始化不應產生新 commit"
 
 
 def test_write_app_pushes_hardened_deployment_and_service(repo):
     res = repo.write_app(PARSED)
-    assert res["commit"] and res["namespace"] == "zt-alice-test"
+    assert res["commit"] and res["namespace"] == repo.namespace
     dep = yaml.safe_load(_remote_file(repo, "apps/web/deployment.yaml"))
-    assert dep["metadata"]["namespace"] == "zt-alice-test"
+    assert dep["metadata"]["namespace"] == repo.namespace
     assert dep["spec"]["replicas"] == 2
     c = dep["spec"]["template"]["spec"]["containers"][0]
     assert c["image"] == "nginx:1.27"
@@ -177,3 +188,29 @@ def test_github_host_creates_private_repo_and_read_only_key():
 def test_github_host_requires_config():
     with pytest.raises(TenantRepoError, match="TENANT_GITHUB_TOKEN"):
         GitHubTenantHost("", "org")
+
+
+def test_token_never_on_command_line_and_redacted_in_errors(tmp_path, monkeypatch):
+    """2026-10-09 背景安全審查：認證標頭不能出現在 git 指令列（本機行程清單看得到），
+    錯誤訊息（會顯示給使用者）裡也不能出現 token。"""
+    import gitops.tenant_repo as tr
+    secret = "ghp_SUPERSECRET123"
+    auth = "Authorization: Basic " + secret
+    seen = []
+
+    class P:
+        returncode, stdout = 1, ""
+        stderr = "fatal: could not read from https://x-access-token:" + secret + "@github.com/o/r " + secret
+
+    def fake_run(cmd, **kw):
+        seen.append((cmd, kw.get("env", {})))
+        return P()
+
+    monkeypatch.setattr(tr.subprocess, "run", fake_run)
+    r = TenantRepo("u", "https://github.com/o/r.git", str(tmp_path / "w"), auth_header=auth)
+    with pytest.raises(TenantRepoError) as ei:
+        r._git("fetch", "origin")
+    cmd, env = seen[0]
+    assert all(secret not in part for part in cmd), "token 不能出現在指令列"
+    assert env.get("GIT_CONFIG_VALUE_0") == auth
+    assert secret not in str(ei.value)
