@@ -4689,6 +4689,29 @@ _POSITIVE_STATUS_WORDS = (
 _IDENTIFIER_CANDIDATE_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9]*(?:-[a-zA-Z0-9]+)+\b")
 
 
+_SHELL_WORDS = re.compile(r"\b(?:kubectl|docker|helm|kubeadm|minikube)\b", re.I)
+
+
+def _strip_shell_commands(message: str, reply: str) -> str:
+    """零接觸：拿掉回覆裡叫使用者自己打的終端機指令（2026-10-09 展示時發現）。
+
+    提示詞已經要求模型不要給指令，但 3B 模型沒有每次都聽話，知識庫文件裡也寫著
+    「診斷指令：kubectl logs」，所以送出前再用確定性規則過濾：含指令的程式碼區塊、
+    行內程式碼與整行都拿掉。使用者本來就在問這些工具時（例如「kubectl 是什麼」）不過濾。
+    """
+    if not reply or _SHELL_WORDS.search(message or ""):
+        return reply
+    out = re.sub(r"```[^\n]*\n.*?```", lambda m: "" if _SHELL_WORDS.search(m.group(0)) else m.group(0),
+                 reply, flags=re.S)
+    out = re.sub(r"`[^`\n]*`", lambda m: "" if _SHELL_WORDS.search(m.group(0)) else m.group(0), out)
+    lines = [ln for ln in out.split("\n") if not _SHELL_WORDS.search(ln)]
+    out = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+    if not out:
+        return ("這個問題通常要看服務的 log 才能判斷。請在對話裡說「服務名稱 有沒有壞」，"
+                "或到「我的服務」點開有狀況的 Pod，看詳情裡的「最近的 log」。")
+    return out
+
+
 def _verify_grounded_reply(message: str, reply: str, namespace: str = None) -> str:
     """
     2026-09-14：輸出端事實核對（跟輸入端擋 prompt injection 是完全獨立的第二道防線，
@@ -4905,6 +4928,7 @@ def api_chat():
         reply, sources = _fallback_chat_reply(message, history, user_ns)
     else:
         reply = _verify_grounded_reply(message, reply, user_ns)
+        reply = _strip_shell_commands(message, reply)
     resp = {"reply": reply}
     if sources:
         from rag.retriever import confidence_label
@@ -5401,6 +5425,24 @@ def api_pod_history(name):
     return jsonify({"history": _get_pod_history(user_ns, name)})
 
 
+def _pod_log_tail(pod_name: str, namespace: str, container: str, lines: int = 40) -> str:
+    """有狀況的 Pod 最近的 log，給畫面直接顯示。先抓崩潰前那一次（最能看出為什麼當掉），
+    剛被重建、還沒有上一次的 Pod 就改抓目前的；都抓不到回空字串。
+    2026-10-09：healer 的 _get_pod_logs 失敗時會回傳整段 HTTP 錯誤原文，不能直接給使用者看。"""
+    if not K8S_ENABLED:
+        return ""
+    v1 = k8s_client.CoreV1Api()
+    for previous in (True, False):
+        try:
+            text = v1.read_namespaced_pod_log(name=pod_name, namespace=namespace, container=container or None,
+                                              tail_lines=lines, previous=previous, _request_timeout=5)
+            if text and text.strip():
+                return text[-4000:]
+        except Exception:
+            continue
+    return ""
+
+
 @app.route("/api/pods/<name>")
 def api_pod_detail(name):
     """單一 pod（或某 app 的一組 pod）的詳細狀態 + 健康判定。
@@ -5422,12 +5464,8 @@ def api_pod_detail(name):
         # 2026-10-09：有狀況的 Pod 直接附上最近的 log，客戶不用自己打 kubectl logs（零接觸）。
         # 客戶叢集的回報器已經帶了 log；本機叢集這裡現抓（取崩潰前那一次，抓不到就是空字串）。
         if not pd["healthy"] and not pd.get("logs") and not _is_remote_ns(user_ns):
-            try:
-                from healer.pod_watcher import _get_pod_logs
-                first = (pd.get("containers") or [{}])[0].get("name", "")
-                pd["logs"] = (_get_pod_logs(pd["name"], user_ns, first, 40) or "")[-4000:]
-            except Exception:
-                pd["logs"] = ""
+            first = (pd.get("containers") or [{}])[0].get("name", "")
+            pd["logs"] = _pod_log_tail(pd["name"], user_ns, first, 40)
     if request.args.get("diagnose") == "1":
         for pd in pods:
             if pd["healthy"]:

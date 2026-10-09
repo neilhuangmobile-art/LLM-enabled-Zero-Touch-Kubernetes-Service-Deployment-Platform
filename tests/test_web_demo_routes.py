@@ -399,3 +399,17 @@ def test_question_starting_with_deployment_is_not_a_deploy_command():
     assert r is None or r["action"] != "deploy"
     assert web_demo._rule_intent("deploy 3 nginx pods for web-frontend")["action"] == "deploy"
     assert web_demo._rule_intent("run nginx with 2 replicas")["action"] == "deploy"
+
+
+def test_shell_commands_are_stripped_from_chat_replies():
+    """2026-10-09 展示時發現：問 CrashLoopBackOff 怎麼辦，回覆教使用者打 kubectl。零接觸平台不該叫新手開終端機。"""
+    reply = ("CrashLoopBackOff 代表容器一直重啟。\n"
+             "1. 到 Pod 詳情看最近的 log\n"
+             "2. 使用 kubectl exec 進容器測試\n"
+             "```bash\nkubectl logs orders-api --previous\n```\n"
+             "也可以讓 Healer 自動修復，或執行 `docker ps` 看看。")
+    out = web_demo._strip_shell_commands("CrashLoopBackOff 怎麼辦", reply)
+    assert "kubectl" not in out and "docker" not in out
+    assert "到 Pod 詳情看最近的 log" in out and "CrashLoopBackOff 代表容器一直重啟" in out
+    # 使用者本來就在問 kubectl 時不過濾
+    assert web_demo._strip_shell_commands("kubectl 是什麼？", "kubectl 是命令列工具") == "kubectl 是命令列工具"
