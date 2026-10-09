@@ -1518,6 +1518,57 @@ tbody tr:hover td{background:var(--signal-soft)}
 .chat-input:focus{box-shadow:none}
 .chat-send{flex:none;height:40px;padding:0 18px;border:0;border-radius:7px;background:var(--signal);color:var(--on-signal);font-weight:500;transition:filter .15s}
 .chat-send:hover{filter:brightness(1.08)}
+/* 語音輸入：聆聽時按鈕外圈擴散、旁邊的音量條跳動 */
+.chat-mic{flex:none;position:relative;width:40px;height:40px;border:1px solid var(--grid-2);border-radius:7px;background:var(--panel-2);color:var(--text-2);display:grid;place-items:center;transition:color .15s,border-color .15s,background .15s}
+.chat-mic svg{width:18px;height:18px}
+.chat-mic:hover{color:var(--signal);border-color:var(--signal-line)}
+.chat-mic.listening{color:#fff;background:var(--stop);border-color:var(--stop)}
+.chat-mic.listening::before,.chat-mic.listening::after{content:"";position:absolute;inset:-1px;border-radius:8px;border:2px solid var(--stop);animation:micRing 1.6s ease-out infinite;pointer-events:none}
+.chat-mic.listening::after{animation-delay:.8s}
+@keyframes micRing{from{opacity:.7;transform:scale(1)}to{opacity:0;transform:scale(1.55)}}
+.mic-meter{display:none;align-items:center;gap:3px;height:40px;flex:none}
+.mic-meter.on{display:flex}
+.mic-meter i{width:3px;height:8px;border-radius:2px;background:var(--stop);animation:micBar .9s ease-in-out infinite}
+.mic-meter i:nth-child(2){animation-delay:.15s}.mic-meter i:nth-child(3){animation-delay:.3s}.mic-meter i:nth-child(4){animation-delay:.45s}
+@keyframes micBar{50%{height:22px}}
+.composer-hint.voice{color:var(--text-2)}
+.composer-hint.voice-err{color:var(--caution)}
+@media (prefers-reduced-motion:reduce){.chat-mic.listening::before,.chat-mic.listening::after,.mic-meter i{animation:none}}
+
+/* 情境推算：部署單上說明副本數怎麼算出來、能省多少 */
+.scn{position:relative;margin:2px 0 16px;border:1px solid var(--signal-line);border-radius:6px;background:linear-gradient(180deg,var(--signal-soft),transparent 70%);padding:14px 16px;overflow:hidden}
+.scn::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--signal)}
+.scn-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.scn-tag{font-family:var(--f-id);font-size:11.5px;letter-spacing:.12em;color:var(--signal)}
+.scn-head h3{margin:0;font-size:16px;font-weight:600;color:var(--text)}
+.scn-head h3 b{font-family:var(--f-id);font-size:20px;color:var(--signal);margin:0 2px}
+.scn-facts{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.scn-fact{display:flex;flex-direction:column;gap:1px;padding:6px 10px;border:1px solid var(--grid-2);border-radius:5px;background:var(--panel);min-width:84px;animation:popIn .35s both;animation-delay:calc(var(--i,0)*70ms)}
+.scn-fact span{font-size:12px;color:var(--text-3)}
+.scn-fact b{font-family:var(--f-id);font-size:15px;font-weight:600;color:var(--text)}
+.scn-fact em{font-style:normal;font-size:11.5px;color:var(--caution)}
+.scn-steps{list-style:none;margin:0 0 4px;padding:0;counter-reset:scn;display:flex;flex-direction:column;gap:6px}
+.scn-steps li{counter-increment:scn;position:relative;padding-left:28px;font-size:14px;line-height:1.6;color:var(--text-2);animation:rowIn .4s both;animation-delay:calc(200ms + var(--i,0)*140ms)}
+.scn-steps li::before{content:counter(scn);position:absolute;left:0;top:2px;width:19px;height:19px;border-radius:50%;border:1px solid var(--signal-line);color:var(--signal);font-family:var(--f-id);font-size:11.5px;display:grid;place-items:center}
+.scn-notes{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.scn-notes li{position:relative;padding:7px 10px 7px 26px;font-size:13.5px;line-height:1.55;color:var(--text-2);background:color-mix(in srgb,var(--caution) 9%,transparent);border-radius:5px}
+.scn-notes li::before{content:"";position:absolute;left:11px;top:14px;width:6px;height:6px;border-radius:50%;background:var(--caution)}
+.scn-save{margin-top:14px;padding-top:12px;border-top:1px dashed var(--grid-2)}
+.scn-save-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.scn-save-top span{font-size:13.5px;color:var(--text-2)}
+.scn-save-top b{font-family:var(--f-id);font-size:22px;color:var(--pass)}
+.scn-bars{display:flex;flex-direction:column;gap:7px;margin:10px 0}
+.scn-bar{display:grid;grid-template-columns:120px 1fr 74px;align-items:center;gap:10px;font-size:13px;color:var(--text-3)}
+.scn-bar .track{height:8px;border-radius:4px;background:var(--panel-3);overflow:hidden}
+.scn-bar .fill{height:100%;border-radius:4px;background:var(--text-3);transform-origin:left;animation:barGrow .9s cubic-bezier(.2,.7,.2,1) both;animation-delay:.5s}
+.scn-bar.mine .fill{background:var(--pass)}
+.scn-bar b{font-family:var(--f-id);font-weight:500;color:var(--text-2);text-align:right}
+@keyframes barGrow{from{transform:scaleX(0)}}
+.scn-save ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.scn-save li{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;color:var(--text-2)}
+.scn-save li b{font-family:var(--f-id);font-weight:500;color:var(--pass);white-space:nowrap}
+.scn-basis{margin:8px 0 0;font-size:12.5px;color:var(--text-3)}
+@media (max-width:640px){.scn-bar{grid-template-columns:88px 1fr 64px}}
 .composer-hint{max-width:1160px;margin:6px auto 0;font-size:13px;color:var(--text-3)}
 .chat-sources{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;font-size:13px;color:var(--text-3)}
 
@@ -1980,6 +2031,8 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
           <div class="composer-box">
             <label for="chat-input" style="position:absolute;left:-9999px">輸入訊息</label>
             <textarea class="chat-input" id="chat-input" placeholder="說說你想部署什麼，或問服務的狀況" rows="1" oninput="autoGrowChatInput(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
+            <span class="mic-meter" id="mic-meter" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            <button class="chat-mic" type="button" id="chat-mic" onclick="toggleVoice()" aria-label="語音輸入" title="語音輸入"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
             <button class="chat-send" type="button" onclick="sendChat()" id="chat-send-txt">送出</button>
           </div>
           <div class="composer-hint" id="composer-hint-txt">部署、擴縮、刪除之前都會先讓你確認。</div>
@@ -2227,6 +2280,63 @@ updateClock();
 function autoGrowChatInput(el){
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 180) + 'px';
+}
+
+// ── 語音輸入（瀏覽器內建的語音辨識，不用另外裝東西）──
+// 辨識完只把文字放進輸入框，不自動送出，讓使用者先看過再按送出。
+const HINT_DEFAULT = '部署、擴縮、刪除之前都會先讓你確認。';
+let voiceRec = null, voiceBase = '', voiceHeard = false;
+function setComposerHint(msg, cls){
+  const h = document.getElementById('composer-hint-txt');
+  if(!h) return;
+  h.textContent = msg || HINT_DEFAULT;
+  h.className = 'composer-hint' + (cls ? ' ' + cls : '');
+}
+function voiceUI(on){
+  const b = document.getElementById('chat-mic'), m = document.getElementById('mic-meter');
+  if(b){ b.classList.toggle('listening', on); b.setAttribute('aria-label', on ? '停止語音輸入' : '語音輸入'); b.title = on ? '停止語音輸入' : '語音輸入'; }
+  if(m) m.classList.toggle('on', on);
+}
+const VOICE_ERRORS = {
+  'not-allowed':'麥克風權限被擋下了。請點網址列左邊的圖示，把麥克風改成允許，再按一次麥克風。',
+  'service-not-allowed':'麥克風權限被擋下了。請點網址列左邊的圖示，把麥克風改成允許，再按一次麥克風。',
+  'no-speech':'沒有聽到聲音。請靠近麥克風，按一下再說一次。',
+  'audio-capture':'找不到麥克風。請確認麥克風有接上，或在系統設定裡選對輸入裝置。',
+  'network':'語音辨識需要連上網路，瀏覽器會把聲音送到它的辨識服務轉成文字。請確認網路後再試一次。',
+  'language-not-supported':'這個瀏覽器不支援中文語音辨識，請改用 Chrome 或 Edge。',
+};
+function toggleVoice(){
+  if(voiceRec){ voiceRec.stop(); return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!window.isSecureContext){ setComposerHint('語音輸入只能在 https 網址或本機網址使用。', 'voice-err'); return; }
+  if(!SR){ setComposerHint('這個瀏覽器不支援語音輸入，請改用 Chrome 或 Edge，或直接打字。', 'voice-err'); return; }
+  const inp = document.getElementById('chat-input');
+  voiceBase = inp.value ? inp.value.replace(/\s+$/, '') + ' ' : '';
+  voiceHeard = false;
+  const rec = new SR();
+  rec.lang = 'zh-TW';
+  rec.interimResults = true;
+  rec.continuous = false;
+  rec.onstart = () => { voiceUI(true); setComposerHint('正在聽，說完停一下就會自動結束，也可以再按一次麥克風結束。', 'voice'); };
+  rec.onresult = ev => {
+    let text = '';
+    for(let i = 0; i < ev.results.length; i++) text += ev.results[i][0].transcript;
+    voiceHeard = !!text.trim();
+    inp.value = voiceBase + text;
+    autoGrowChatInput(inp);
+  };
+  rec.onerror = ev => {
+    if(ev.error === 'aborted') return;
+    setComposerHint(VOICE_ERRORS[ev.error] || ('語音輸入失敗，請再試一次，或直接打字。（' + ev.error + '）'), 'voice-err');
+  };
+  rec.onend = () => {
+    voiceRec = null; voiceUI(false);
+    const h = document.getElementById('composer-hint-txt');
+    if(voiceHeard){ setComposerHint('辨識好的文字已經放進輸入框，確認沒問題再按送出。', 'voice'); inp.focus(); }
+    else if(h && !h.classList.contains('voice-err')) setComposerHint('沒有聽到聲音。請靠近麥克風，按一下再說一次。', 'voice-err');
+  };
+  try { rec.start(); voiceRec = rec; }
+  catch(e){ voiceRec = null; voiceUI(false); setComposerHint('語音輸入啟動失敗，請再按一次。', 'voice-err'); }
 }
 
 // ── 使用說明書 / K8s 小百科 ──
@@ -2903,6 +3013,7 @@ async function startDeployFlow(text){
     });
     flow.review = d.review || null;
     flow.resource = d.resource_summary || null;
+    flow.scenario = d.scenario || null;
     appendMsg('assistant', renderFlowCard(flow));
   }catch(e){
     appendMsg('assistant', '解析部署需求時連線失敗，請再試一次。（' + e + '）', null, 'text');
@@ -3580,7 +3691,7 @@ function flowStateAttrs(flow){
   const st = {id:flow.id, seq:flow.seq, kind:flow.kind, step:flow.step, originalText:flow.originalText,
               spec:flow.spec, review:flow.review, resource:flow.resource, rollout:flow.rollout || null,
               resultMsg:flow.resultMsg || null, errorMsg:flow.errorMsg || null, blockers:flow.blockers || null,
-              retryStep:flow.retryStep || null, pendingSync:!!flow.pendingSync};
+              retryStep:flow.retryStep || null, pendingSync:!!flow.pendingSync, scenario:flow.scenario || null};
   return `data-flow-id="${flow.id}" data-flow-seq="${flow.seq}" data-flow-step="${flow.step}" data-flow-state="${encodeURIComponent(JSON.stringify(st))}" data-summary="${esc(flowSummary(flow))}"`;
 }
 function flowSummary(flow){
@@ -3627,12 +3738,49 @@ function renderBusyCard(flow, label){
     + `<div class="busy"><div class="spinner"></div><div style="min-width:0"><div>${esc(txt)}</div>${sub ? `<div class="dim">${sub}</div>` : ''}</div><div class="scanbar" aria-hidden="true"></div></div>`);
 }
 
+// 情境推算：把「怎麼算出副本數」「能省多少」攤開給使用者看。AI 判讀的欄位另外標示，
+// 跟原句直接抽出來的數字分開，使用者才知道哪些要多看一眼。
+function scenarioHTML(sc){
+  if(!sc || !sc.applies) return '';
+  const a = sc.attrs || {}, src = sc.sources || {};
+  const aiMark = k => src[k] === 'model' ? '<em>AI 判讀</em>' : '';
+  const facts = [];
+  if(a.total_users) facts.push(['使用人數', a.total_users + ' 人', aiMark('total_users')]);
+  if(a.concurrent_users) facts.push(['同時在線', a.concurrent_users + ' 人', aiMark('concurrent_users')]);
+  if(a.duration_days) facts.push(['使用期間', (a.duration_days < 1 ? Math.round(a.duration_days * 24) + ' 小時' : a.duration_days + ' 天'), aiMark('duration_days')]);
+  if(a.criticality) facts.push(['重要程度', {high:'高', normal:'一般', low:'測試用'}[a.criticality] || a.criticality, aiMark('criticality')]);
+  const head = sc.replicas_applied
+    ? `依你描述的情境，建議開 <b>${esc(sc.replicas)}</b> 個副本`
+    : `你指定了 <b>${esc(sc.replicas)}</b> 個副本，下面是情境推算的參考`;
+  let save = '';
+  const sv = sc.savings;
+  if(sv && sv.total_usd > 0){
+    const max = Math.max(sv.baseline_usd, sv.scenario_usd, 0.01);
+    const pct = v => Math.max(2, Math.round(v / max * 100));
+    save = `<div class="scn-save">
+      <div class="scn-save-top"><span>跟沒考慮情境的作法相比，估計可以省下</span><b>$${esc(sv.total_usd)}</b></div>
+      <div class="scn-bars">
+        <div class="scn-bar"><span>沒考慮情境</span><div class="track"><div class="fill" style="width:${pct(sv.baseline_usd)}%"></div></div><b>$${esc(sv.baseline_usd)}</b></div>
+        <div class="scn-bar mine"><span>照情境推算</span><div class="track"><div class="fill" style="width:${pct(sv.scenario_usd)}%"></div></div><b>$${esc(sv.scenario_usd)}</b></div>
+      </div>
+      <ul>${(sv.items || []).map(i => `<li><span>${esc(i.label)}</span><b>省 $${esc(i.usd)}</b></li>`).join('')}</ul>
+      <p class="scn-basis">${esc(sv.basis || '')}</p></div>`;
+  }
+  return `<section class="scn" aria-label="情境推算">
+    <div class="scn-head"><span class="scn-tag">SCENARIO</span><h3>${head}</h3></div>
+    ${facts.length ? `<div class="scn-facts">${facts.map((f, i) => `<div class="scn-fact" style="--i:${i}"><span>${f[0]}</span><b>${esc(f[1])}</b>${f[2]}</div>`).join('')}</div>` : ''}
+    ${(sc.reasons || []).length ? `<ol class="scn-steps">${sc.reasons.map((r, i) => `<li style="--i:${i}">${esc(r)}</li>`).join('')}</ol>` : ''}
+    ${(sc.notes || []).length ? `<ul class="scn-notes">${sc.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
+    ${save}</section>`;
+}
+
 function renderSpecCard(flow){
   const s = flow.spec || {};
   const out = s.output || s;
   const g = k => esc(out[k] != null ? out[k] : (s[k] != null ? s[k] : ''));
   return flowShell(flow, flowHead('部署單', stepsHTML(1)) + `<div class="body">
-    <div class="lead">我照你的描述整理成下面的規格。有不對的地方直接改，再按「下一步」。</div>
+    <div class="lead">${flow.scenario && flow.scenario.applies ? '我依你描述的情境推算出下面的規格，推算過程如下。' : '我照你的描述整理成下面的規格。'}有不對的地方直接改，再按「下一步」。</div>
+    ${scenarioHTML(flow.scenario)}
     <div class="fgrid">
       <div><label for="${flow.id}-app">服務名稱</label><input id="${flow.id}-app" data-field="app_name" value="${g('app_name')}" placeholder="my-app"><div class="hint">小寫英文字母開頭，只能用小寫字母、數字和連字號，例如 web-frontend</div></div>
       <div><label for="${flow.id}-img">映像檔</label><input id="${flow.id}-img" data-field="image" value="${g('image')}" placeholder="nginx:1.27"></div>
@@ -5087,10 +5235,47 @@ def _mentions_node_capacity(text: str) -> bool:
     return bool(_NODE_CAPACITY_HINT_RE.search(text or ""))
 
 
+# 情境線索：句子裡沒有明確人數或天數，但看得出是在描述使用情境，才值得多問 Gemini 一次
+_SCENARIO_CUE_RE = re.compile(r"活動|社團|課程|比賽|期末|展示|報名|投票|班上|全班|營隊|workshop|event|class|party|hackathon",
+                              re.IGNORECASE)
+
+
+def _apply_scenario(user_input: str, parsed: dict):
+    """情境解析部署（2026-10-09）：從使用者的描述推算副本數，附上推算理由與省錢估算。
+    數字全部由 agents/scenario.py 的固定規則計算；Gemini 只補重要程度、要不要存資料，
+    它給的數字要在原句裡找得到才採用。句子裡明講副本數時照使用者的，只提供建議。"""
+    from agents.scenario import extract_by_rules, merge_model_attrs, has_scenario, plan, explicit_replicas
+    rules = extract_by_rules(user_input)
+    model = None
+    if (has_scenario(rules) or _SCENARIO_CUE_RE.search(user_input)) and (
+            rules.get("criticality") is None or rules.get("needs_persistence") is None):
+        try:
+            from core.gemini_client import gemini_extract_scenario
+            model = gemini_extract_scenario(user_input)
+        except Exception:
+            model = None
+    attrs = merge_model_attrs(user_input, rules, model)
+    if not has_scenario(attrs):
+        return None
+    result = plan(attrs, parsed.get("image"), parsed.get("app_name"), explicit_replicas(user_input),
+                  parsed.get("memory"), parsed.get("cpu"))
+    if result["replicas_applied"]:
+        parsed["pods"] = result["replicas"]
+    return result
+
+
 def _prepare_deploy(user_input: str, parsed_override: dict = None):
     parsed = _sanitize_deploy_payload(parsed_override) if parsed_override else ask_llama(user_input)
     if "error" in parsed:
         return None, None, None, ({"error": parsed["error"]}, 422)
+    if not parsed_override:
+        try:
+            scenario = _apply_scenario(user_input, parsed)
+        except Exception as e:
+            print(f"[情境解析] 失敗，照原本的規格繼續：{e}")
+            scenario = None
+        if scenario:
+            parsed["_scenario"] = scenario
 
     enriched = enrich_parsed_result(user_input, parsed)
     if not enriched["is_k8s"]:
@@ -5337,12 +5522,16 @@ def api_deploy_parse():
     if not user_input or len(user_input) < 3:
         return jsonify({"error": "輸入內容太短，請描述清楚要部署什麼"}), 400
     parsed, enriched, review, error = _prepare_deploy(user_input, parsed_override)
+    scenario = parsed.pop("_scenario", None) if isinstance(parsed, dict) else None
+    if isinstance(enriched, dict):
+        enriched.pop("_scenario", None)
     if error:
         payload, status = error
         return jsonify(payload), status
     return jsonify({
         "parsed": enriched, "raw": parsed, "review": review, "k8s": K8S_ENABLED,
         "resource_summary": _resource_summary(parsed, review),
+        "scenario": scenario,
     })
 
 
@@ -5361,6 +5550,9 @@ def api_deploy():
         return jsonify({"error": "輸入內容太短，請描述清楚要部署什麼"}), 400
 
     parsed, enriched, review, error = _prepare_deploy(user_input, parsed_override)
+    for d in (parsed, enriched):
+        if isinstance(d, dict):
+            d.pop("_scenario", None)
     if error:
         payload, status = error
         return jsonify(payload), status

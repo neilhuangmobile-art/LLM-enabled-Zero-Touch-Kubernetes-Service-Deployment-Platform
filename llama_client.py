@@ -251,8 +251,11 @@ _CN_DIGIT_MAP = {
     '一': 1, '二': 2, '兩': 2, '两': 2, '三': 3, '四': 4, '五': 5,
     '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
 }
+# 「個／台」後面接的是人（「200個人會用」「三個同學」），講的是使用人數，不是副本數。
+# 2026-10-09 實測「200個人會用」被當成 200 個副本而直接報錯，情境部署會大量出現這種句子。
+_NOT_PEOPLE = r'(?!\s*(?:人|使用者|用戶|用户|同學|同学|學生|学生|會員|会员|客人|訪客|访客|參加|参加|朋友|老師|老师|員工|员工|顧客|顾客|成員|成员|位))'
 _CN_COUNT_RE = re.compile(
-    r'([一二兩两三四五六七八九十])\s*(?:個|个|副本|台|pods?|replicas?|instances?)',
+    r'([一二兩两三四五六七八九十])\s*(?:副本|pods?|replicas?|instances?|(?:個|个|台)' + _NOT_PEOPLE + r')',
 )
 # 已知服務關鍵字 + 複合服務詞——偵測「幫我部署兩個服務，一個nginx一個redis」這種
 # 一次要求多個服務的請求，不要靜默只做其中一個（image 比對只會取第一個命中的關鍵字，
@@ -274,7 +277,7 @@ def _extract_pods_count(raw: str) -> Optional[int]:
     要退回預設值 1，還是視為解析失敗）。"""
     count_patterns = [
         r'(?:deploy|run|start|launch|spin\s+up)\s+(-?\d+)\s*(?:pods?|replicas?|instances?)?',
-        r'(-?\d+)\s*(?:pods?|replicas?|instances?|個|个|副本|台)',
+        r'(-?\d+)\s*(?:pods?|replicas?|instances?|副本|(?:個|个|台)' + _NOT_PEOPLE + r')',
         r'(?:pods?|replicas?|instances?|副本|數量|数量)\s*(?:=|:|為|是|to)?\s*(-?\d+)',
     ]
     for pat in count_patterns:

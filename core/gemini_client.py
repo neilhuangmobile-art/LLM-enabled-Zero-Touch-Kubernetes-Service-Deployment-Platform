@@ -209,3 +209,36 @@ def classify_malicious_intent(message: str) -> dict:
         }
     except Exception:
         return {"malicious": False, "reason": "parse error"}
+
+
+# ── 情境屬性抽取（情境解析部署用）───────────────────────────────
+# 2026-10-09：Gemini 只負責「聽懂情境」，不決定副本數或資源。它給的數字在
+# agents/scenario.merge_model_attrs() 會再核對一次，原句裡找不到的數字一律丟掉。
+_SCENARIO_SYSTEM = (
+    "Extract the usage scenario from a user's request to deploy a web service. The user may "
+    "write in any language. Respond with ONLY a JSON object, no markdown, no explanation:\n"
+    '{"total_users": <int or null>, "concurrent_users": <int or null>, '
+    '"duration_days": <number or null>, "criticality": "high"|"normal"|"low"|null, '
+    '"needs_persistence": true|false|null}\n'
+    "Rules: copy numbers exactly as the user stated them; never estimate or invent a number. "
+    "concurrent_users only if the user said people use it at the same time. duration_days is how "
+    "long the service is needed (convert weeks/months to days). criticality is high when the user "
+    "says it must not go down or is for real/production use, low for testing or personal "
+    "experiments, otherwise null. needs_persistence is true when the service must keep user data "
+    "such as sign-ups, votes, orders or uploads. Use null for anything the user did not mention."
+)
+
+
+def gemini_extract_scenario(text: str) -> Optional[dict]:
+    """回傳情境屬性 dict；Gemini 不可用或格式不對時回 None（呼叫端改用規則抽到的結果）。"""
+    out = _generate(_SCENARIO_SYSTEM, text, "情境抽取")
+    if not out:
+        return None
+    try:
+        import json
+        import re as _re
+        m = _re.search(r"\{.*\}", out, _re.DOTALL)
+        data = json.loads(m.group(0)) if m else None
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
