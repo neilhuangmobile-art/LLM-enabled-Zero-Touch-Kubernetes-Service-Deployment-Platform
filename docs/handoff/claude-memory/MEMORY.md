@@ -1,4 +1,5 @@
 - [接下來順序：前端大改](2026-10-09-next-roadmap-frontend-redesign.md) — ①客戶叢集收尾 ②前端大改（精緻、動畫、不要AI感與特殊符號）③舊電腦待辦功能
+- [Gemini key 違反條款](2026-10-09-gemini-keys-tos-issue.md) — 6把key來自6個不同帳號輪流湊額度，違反Google APIs條款§2(d)；修正方案待使用者決定
 - [一律用中文回覆](feedback_always_reply_in_chinese.md) — 使用者要求所有對話文字（含工具間進度說明）都用繁體中文
 - [客戶自帶叢集（已完成）](2026-10-09-customer-cluster-onboarding-project.md) — GitOps模式C+Flux+唯讀回報器+同意書；6階段全完成實測；殘留：.env未開CUSTOMER_CLUSTER_MODE、未用學校筆電實測
 ﻿- [安全審查進度](next-session-security-audit.md) — 多租戶隔離+Gemini封鎖+雙層injection防線+114測試+CI都已做完並驗證；剩RBAC/換模型/負載測試待資源
