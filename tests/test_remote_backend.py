@@ -321,3 +321,22 @@ def test_heal_cooldown_prevents_stacked_fixes(remote, monkeypatch):
     from gitops.tenant_repo import tenant_slug
     r = web_demo._real_heal_pod("api-xyz-1", tenant_slug("carol"))  # 背景迴圈走同一個入口
     assert r["action"] == "in_progress" and remote.repo.calls == [("restart", "api")]
+
+
+def test_remote_heal_budget_caps_per_hour(remote, monkeypatch):
+    """背景安全審查：客戶可自建大量壞 Pod，自動修復每位客戶每小時有上限（防 GPU/GitHub 被吃光）。"""
+    monkeypatch.setattr(web_demo, "_remote_heal_budget", {})
+    allowed = [web_demo._remote_heal_allowed("carol") for _ in range(15)]
+    assert allowed.count(True) == web_demo._REMOTE_HEAL_PER_HOUR and allowed[-1] is False
+    assert web_demo._remote_heal_allowed("dave") is True, "上限是每位客戶各自計算"
+
+
+def test_auto_fix_is_capped(remote, monkeypatch):
+    import healer.diagnose as hd
+    monkeypatch.setattr(hd, "diagnose_issue", lambda ctx: {"action": "manual_inspect"})
+    many = [{"name": f"bad-{i}-x-y", "app": f"bad{i}", "phase": "Running",
+             "containers": [{"name": "c", "state": "waiting", "reason": "CrashLoopBackOff"}]} for i in range(12)]
+    from gitops.tenant_repo import tenant_slug
+    web_demo.CLUSTERS.store_report("carol", REPORT(namespace=tenant_slug("carol"), pods=many))
+    d = remote.post("/api/healer/auto_fix").get_json()
+    assert len(d["details"]) == web_demo._REMOTE_AUTOFIX_MAX

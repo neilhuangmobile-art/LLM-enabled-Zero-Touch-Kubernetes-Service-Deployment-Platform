@@ -233,3 +233,14 @@ def test_check_status_json_and_unlock_after_connected(customer_mode):
 def test_admin_is_never_gated(customer_mode, monkeypatch):
     monkeypatch.setattr(web_demo, "_is_admin_user", lambda u: True)
     assert customer_mode.get("/").status_code == 200
+
+
+def test_reinstall_restarts_reporter_with_new_token():
+    """重跑安裝指令會換 token：Pod 範本要跟著變，否則跑著的回報器拿舊 token 被拒（實測 401）。"""
+    def ann(token):
+        docs = list(yaml.safe_load_all(build_bundle(NS, "a", "https://x.ts.net", "git@github.com:o/r.git", KEY, token)))
+        dep = next(d for d in docs if d["kind"] == "Deployment")
+        return dep["spec"]["template"]["metadata"]["annotations"]["zerotouch/reporter-rollout"]
+    assert ann("token-one-aaaaaaaa") != ann("token-two-bbbbbbbb")
+    assert ann("same") == ann("same")
+    assert "token-one" not in ann("token-one-aaaaaaaa"), "annotation 只放雜湊，不能洩漏 token"

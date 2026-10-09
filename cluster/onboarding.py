@@ -14,6 +14,7 @@ cluster/onboarding.py
 用 Python dict → yaml.safe_dump 產生，不用字串拼接：私鑰、token 等內容不可能破壞 YAML 結構
 或注入額外的資源。
 """
+import hashlib
 import os
 import re
 from typing import Dict
@@ -50,6 +51,10 @@ def build_bundle(namespace: str, owner: str, base_url: str, repo_ssh_url: str,
     if ssh_url.startswith("git@github.com:"):
         ssh_url = "ssh://git@github.com/" + ssh_url[len("git@github.com:"):]
     nodes_role = f"zt-reporter-nodes-{namespace}"
+    # 回報器程式碼或 token 一變，Pod 範本的這個雜湊就跟著變，Kubernetes 會自動滾動重啟回報器。
+    # 2026-10-09 實測：沒有這個的話，客戶重跑安裝指令後 ConfigMap/Secret 雖然更新了，但跑著的
+    # 回報器還是舊程式碼、舊 token → 被平台拒絕（401）→ 退避成 5 分鐘一次，看起來像叢集離線。
+    rollout_hash = hashlib.sha256((reporter_src + "|" + report_token).encode()).hexdigest()[:16]
 
     docs = [
         {"apiVersion": "v1", "kind": "Namespace",
@@ -114,7 +119,8 @@ def build_bundle(namespace: str, owner: str, base_url: str, repo_ssh_url: str,
          "metadata": {"name": "zt-reporter", "namespace": namespace, "labels": {**labels, "app": "zt-reporter"}},
          "spec": {"replicas": 1, "selector": {"matchLabels": {"app": "zt-reporter"}},
                   "template": {
-                      "metadata": {"labels": {**labels, "app": "zt-reporter"}},
+                      "metadata": {"labels": {**labels, "app": "zt-reporter"},
+                                   "annotations": {"zerotouch/reporter-rollout": rollout_hash}},
                       "spec": {
                           "serviceAccountName": "zt-reporter",
                           "securityContext": {"runAsNonRoot": True, "runAsUser": 65534, "runAsGroup": 65534,

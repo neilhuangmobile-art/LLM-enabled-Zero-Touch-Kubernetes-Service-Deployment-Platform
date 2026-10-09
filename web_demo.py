@@ -6796,7 +6796,7 @@ def api_healer_auto_fix():
     try:
         from healer.pod_watcher import scan_once
         _ns = _session_ns()
-        issues = (_rv.unhealthy_issues(_remote_report(_ns), _ns) if _is_remote_ns(_ns)
+        issues = (_rv.unhealthy_issues(_remote_report(_ns), _ns)[:_REMOTE_AUTOFIX_MAX] if _is_remote_ns(_ns)
                   else scan_once(namespace=_ns) or [])
         fixed, failed, details = 0, 0, []
         for issue in issues:
@@ -7228,6 +7228,27 @@ def _real_heal_pod(pod_name, namespace="default"):
     return result
 
 
+# 每位客戶的自動修復上限（2026-10-09 背景安全審查：resource exhaustion）。客戶可以不經過平台，
+# 直接在自己叢集建一大堆會壞的 Pod，回報器最多回報 300 個；沒有上限的話，背景迴圈會對每個都跑一次
+# LLM 診斷 + 一個 GitHub commit，一個客戶就能吃光平台的 GPU 與 GitHub API 額度、拖慢所有人。
+_REMOTE_HEAL_PER_SCAN = 3
+_REMOTE_HEAL_PER_HOUR = 10
+_REMOTE_AUTOFIX_MAX = 5
+_remote_heal_budget = {}  # username -> [時間戳記…]（最近一小時）
+
+
+def _remote_heal_allowed(username) -> bool:
+    now = _time.time()
+    with _remote_heal_lock:
+        recent = [t for t in _remote_heal_budget.get(username, []) if now - t < 3600]
+        if len(recent) >= _REMOTE_HEAL_PER_HOUR:
+            _remote_heal_budget[username] = recent
+            return False
+        recent.append(now)
+        _remote_heal_budget[username] = recent
+        return True
+
+
 def _remote_healer_loop(interval: int = 30):
     """客戶叢集的背景自動修復：每 30 秒看每個已連線客戶的最新回報，同一個問題只處理一次
     （同本機 _healer_background_loop 的 seen 集合做法），修復紀錄併進同一個 Healer 狀態。"""
@@ -7241,11 +7262,16 @@ def _remote_healer_loop(interval: int = 30):
                 if not CLUSTERS.status(username)["ok"]:
                     continue
                 ns = tenant_slug(username)
+                handled = 0
                 for issue in _rv.unhealthy_issues(_remote_report(ns), ns):
                     key = f"{ns}/{issue['app'] or issue['pod_name']}/{issue['reason']}"
                     now_keys.add(key)
                     if key in seen:
                         continue
+                    # 超過這一輪或這一小時的上限：先不處理，也不記進 seen，下一輪/額度恢復後再處理
+                    if handled >= _REMOTE_HEAL_PER_SCAN or not _remote_heal_allowed(username):
+                        continue
+                    handled += 1
                     seen.add(key)
                     try:
                         result = _real_heal_pod(issue["pod_name"], ns)
