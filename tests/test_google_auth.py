@@ -105,15 +105,15 @@ class TestDeriveUsernameFromGoogle:
 class TestGoogleLoginButtonVisibility:
     def test_button_hidden_when_not_configured(self, client):
         resp = client.get("/")
-        assert b"Sign in with Google" not in resp.data
+        assert "使用 Google 帳號登入".encode() not in resp.data
 
     def test_button_shown_when_configured(self, client, google_configured):
         resp = client.get("/")
-        assert b"Sign in with Google" in resp.data
+        assert "使用 Google 帳號登入".encode() in resp.data
 
     def test_register_page_also_respects_configuration(self, client, google_configured):
         resp = client.get("/auth/register")
-        assert b"Sign in with Google" in resp.data
+        assert "使用 Google 帳號登入".encode() in resp.data
 
 
 class TestGoogleLoginRoute:
@@ -195,7 +195,7 @@ class TestGoogleCallbackRoute:
             sess["google_oauth_state"] = "s1"
         _mock_google_apis(monkeypatch, email="erin@example.com", sub="sub-erin")
         resp = client.get("/auth/google/callback?code=abc&state=s1")
-        assert b"banned" in resp.data
+        assert "已經被封鎖".encode() in resp.data
         with client.session_transaction() as sess:
             assert "username" not in sess
 

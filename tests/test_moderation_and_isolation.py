@@ -128,7 +128,7 @@ class TestBanEnforcement:
         web_demo.USERS["carol"]["banned"] = True
         resp = _login(client, "carol")
         assert resp.status_code == 200  # 停在登入頁，不是 302
-        assert b"banned" in resp.data
+        assert "已經被封鎖".encode() in resp.data
 
     def test_active_session_gets_rejected_on_next_request_after_ban(self, client):
         # 使用者在還沒被封鎖之前登入（session 是好的），封鎖動作發生在這之後——

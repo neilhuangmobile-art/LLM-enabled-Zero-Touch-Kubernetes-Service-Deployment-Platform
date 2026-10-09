@@ -96,17 +96,17 @@ class TestAuthFlow:
             sess.clear()  # 模擬換一個訪客再註冊同名帳號
         resp = _register(client, "bob", "differentpw")
         assert resp.status_code == 200  # 停在註冊頁，不是 302 redirect
-        assert b"already taken" in resp.data
+        assert "已經有人用了".encode() in resp.data
 
     def test_register_short_password_rejected(self, client):
         resp = _register(client, "carol", "123")
         assert resp.status_code == 200
-        assert b"at least 6 characters" in resp.data
+        assert "至少要 6 個字元".encode() in resp.data
 
     def test_register_password_mismatch_rejected(self, client):
         resp = _register(client, "dave", "hunter22", confirm="different")
         assert resp.status_code == 200
-        assert b"do not match" in resp.data
+        assert "密碼不一樣".encode() in resp.data
 
     def test_login_wrong_password_rejected(self, client):
         _register(client, "erin", "hunter22")
@@ -114,7 +114,7 @@ class TestAuthFlow:
             sess.clear()
         resp = _login(client, "erin", "wrongpassword")
         assert resp.status_code == 200
-        assert b"Invalid username or password" in resp.data
+        assert "帳號或密碼不正確".encode() in resp.data
 
     def test_login_persists_session_across_requests(self, client):
         _register(client, "frank", "hunter22")

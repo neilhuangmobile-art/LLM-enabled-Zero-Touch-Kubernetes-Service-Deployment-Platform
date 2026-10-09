@@ -1237,365 +1237,369 @@ HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Zero-Touch Kubernetes Service Deployment Platform</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<title>ZeroTouch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+// 主題在第一次繪製前就決定，避免先閃一下深色再變淺色
+(function(){try{var t=localStorage.getItem('zt_theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}})();
+</script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
+/* ══════════════════════════════════════════════════════════════════
+   ZeroTouch 介面設計系統（2026-10-09 改版）
+   方向：艦橋主控台。深海藍底＋細格線，系統資料是帶四角刻度的儀表模組；
+   唯一品牌色是儀表訊號藍，綠／黃／紅只用來表示通過、提醒、擋下。
+   深色為預設，淺色由系統設定或右上角切換決定。
+   舊的變數名稱（--green、--surface…）保留成別名，行內樣式不用逐一改。
+   ══════════════════════════════════════════════════════════════════ */
 :root{
-  --bg:#FAFAFA;--surface:#FFFFFF;--border:#E5E7EB;--border2:#D1D5DB;
-  --text:#111827;--text2:#6B7280;--text3:#9CA3AF;
-  --green:#16A34A;--green-light:#DCFCE7;--green-mid:#BBF7D0;
-  --red:#DC2626;--red-light:#FEE2E2;
-  --blue:#2563EB;--blue-light:#DBEAFE;
-  --yellow:#D97706;--yellow-light:#FEF3C7;
-  --radius:10px;--radius-sm:6px;--shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
-  --shadow-md:0 4px 6px rgba(0,0,0,.07),0 2px 4px rgba(0,0,0,.04);
+  --void:#0B1622; --panel:#0F2030; --panel-2:#142A3C; --panel-3:#1A3449;
+  --grid:#1D3A50; --grid-2:#28506B; --grid-line:rgba(70,130,170,.10);
+  --text:#DCE8F0; --text-2:#93AABB; --text-3:#62798A;
+  --signal:#5CC8FF; --signal-soft:rgba(92,200,255,.12); --signal-line:rgba(92,200,255,.45);
+  --pass:#3DD68C; --pass-soft:rgba(61,214,140,.13);
+  --caution:#F5B547; --caution-soft:rgba(245,181,71,.14);
+  --stop:#FF6B5B; --stop-soft:rgba(255,107,91,.14);
+  --on-signal:#04111C; --scrim:rgba(3,10,16,.62); --shadow-pop:0 18px 50px rgba(0,0,0,.45);
+  --f-display:"Oxanium","Noto Sans TC",system-ui,sans-serif;
+  --f-body:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-id:"JetBrains Mono",Consolas,monospace;
+  --radius:6px; --radius-sm:5px;
+  /* 舊名稱別名 */
+  --bg:var(--panel-2); --surface:var(--panel); --surface2:var(--panel-2); --border:var(--grid); --border2:var(--grid-2);
+  --text2:var(--text-2); --text3:var(--text-3);
+  --green:var(--signal); --green-light:var(--signal-soft); --green-mid:var(--signal-line);
+  --red:var(--stop); --red-light:var(--stop-soft); --yellow:var(--caution); --yellow-light:var(--caution-soft);
+  --blue:var(--signal); --blue-light:var(--signal-soft);
+  --shadow:none; --shadow-md:var(--shadow-pop);
+  color-scheme:dark;
 }
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){
+  --void:#E8EFF5; --panel:#FFFFFF; --panel-2:#F2F6FA; --panel-3:#E6EEF5;
+  --grid:#CFDCE6; --grid-2:#B5C7D5; --grid-line:rgba(30,90,140,.07);
+  --text:#0E1E2B; --text-2:#475D6D; --text-3:#7A8E9C;
+  --signal:#0A6DB3; --signal-soft:rgba(10,109,179,.09); --signal-line:rgba(10,109,179,.4);
+  --pass:#1C8A57; --pass-soft:rgba(28,138,87,.1); --caution:#A66A05; --caution-soft:rgba(166,106,5,.1);
+  --stop:#C23A2B; --stop-soft:rgba(194,58,43,.09); --on-signal:#FFFFFF; --scrim:rgba(14,30,43,.38);
+  --shadow-pop:0 18px 50px rgba(14,30,43,.18); color-scheme:light } }
+:root[data-theme="light"]{
+  --void:#E8EFF5; --panel:#FFFFFF; --panel-2:#F2F6FA; --panel-3:#E6EEF5;
+  --grid:#CFDCE6; --grid-2:#B5C7D5; --grid-line:rgba(30,90,140,.07);
+  --text:#0E1E2B; --text-2:#475D6D; --text-3:#7A8E9C;
+  --signal:#0A6DB3; --signal-soft:rgba(10,109,179,.09); --signal-line:rgba(10,109,179,.4);
+  --pass:#1C8A57; --pass-soft:rgba(28,138,87,.1); --caution:#A66A05; --caution-soft:rgba(166,106,5,.1);
+  --stop:#C23A2B; --stop-soft:rgba(194,58,43,.09); --on-signal:#FFFFFF; --scrim:rgba(14,30,43,.38);
+  --shadow-pop:0 18px 50px rgba(14,30,43,.18); color-scheme:light }
 
-/* ── Auth Pages ── */
-.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)}
-.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px;width:100%;max-width:420px;box-shadow:var(--shadow-md)}
-.auth-logo{display:flex;align-items:center;gap:10px;margin-bottom:28px}
-.auth-logo svg{width:32px;height:32px}
-.auth-logo span{font-size:18px;font-weight:600;color:var(--text)}
-.auth-divider{display:flex;align-items:center;gap:10px;margin:18px 0}
-.auth-divider .line{flex:1;height:1px;background:var(--border2)}
-.auth-divider span{font-size:12px;color:var(--text3)}
-.google-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:10px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:#fff;color:#111827;font-size:14px;font-weight:500;text-decoration:none;font-family:inherit;transition:background .15s,border-color .15s}
-.google-btn:hover{background:var(--bg);border-color:var(--border)}
-.auth-title{font-size:22px;font-weight:600;margin-bottom:6px}
-.auth-sub{font-size:14px;color:var(--text2);margin-bottom:28px}
-.form-group{margin-bottom:16px}
-.form-group label{display:block;font-size:13px;font-weight:500;margin-bottom:6px;color:var(--text)}
-.form-group input{width:100%;padding:10px 14px;border:1px solid var(--border2);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;outline:none;transition:border .15s}
-.form-group input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.1)}
-.btn-primary{width:100%;padding:11px;background:var(--green);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:background .15s}
-.btn-primary:hover{background:#15803D}
-.auth-link{text-align:center;margin-top:20px;font-size:13px;color:var(--text2)}
-.auth-link a{color:var(--green);text-decoration:none;font-weight:500}
-.auth-error{background:var(--red-light);color:var(--red);padding:10px 14px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:16px}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--f-body);font-size:15px;line-height:1.65;color:var(--text);background-color:var(--void);
+  background-image:linear-gradient(var(--grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);
+  background-size:40px 40px;background-position:-1px -1px}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--signal)}
+:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+::selection{background:var(--signal-soft)}
+.mono,code{font-family:var(--f-id);font-size:.9em}
+.num{font-family:var(--f-display);font-variant-numeric:tabular-nums}
+*{scrollbar-width:thin;scrollbar-color:var(--grid-2) transparent}
 
-/* ── Layout ── */
-.layout{display:flex;height:100vh;overflow:hidden}
-.sidebar{width:240px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
-.sidebar-logo{padding:20px 18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
-.sidebar-logo svg{width:28px;height:28px;flex-shrink:0}
-.sidebar-logo span{font-size:13px;line-height:1.3;font-weight:600}
-.sidebar-nav{padding:12px 10px;flex:1;overflow-y:auto}
-.nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:13.5px;font-weight:500;color:var(--text2);transition:all .15s;border:none;background:none;width:100%;text-align:left}
-.nav-item:hover{background:var(--bg);color:var(--text)}
-.nav-item.active{background:var(--green-light);color:var(--green)}
-.nav-item svg{width:16px;height:16px;flex-shrink:0}
-.nav-section{font-size:11px;font-weight:600;color:var(--text3);padding:12px 10px 4px;text-transform:uppercase;letter-spacing:.6px}
-.sidebar-footer{padding:14px 18px;border-top:1px solid var(--border)}
-.user-info{display:flex;align-items:center;gap:10px}
-.user-avatar{width:32px;height:32px;background:var(--green);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600;flex-shrink:0}
-.user-name{font-size:13px;font-weight:500;flex:1}
-.admin-badge{font-size:10px;font-weight:700;color:#fff;background:var(--green);border-radius:4px;padding:2px 6px;margin-left:4px;letter-spacing:.3px;white-space:nowrap}
-.logout-btn{font-size:12px;color:var(--text3);cursor:pointer;border:none;background:none;font-family:inherit;padding:2px 6px;border-radius:4px}
-.logout-btn:hover{color:var(--red);background:var(--red-light)}
-
-/* ── Main ── */
-.main{flex:1;overflow-y:auto;display:flex;flex-direction:column}
-.page{display:none;padding:28px 32px;flex:1}
-.page.active{display:block}
-.page-title{font-size:20px;font-weight:600;margin-bottom:4px}
-.page-sub{font-size:13px;color:var(--text2);margin-bottom:24px}
-
-/* ── Status bar ── */
-.status-bar{padding:10px 32px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:20px}
-.status-pill{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--text3)}
-.dot.green{background:var(--green)}
-.dot.red{background:var(--red)}
-.dot.yellow{background:var(--yellow);animation:pulse 1.5s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-
-/* ── Cards ── */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
-.card-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px;text-transform:uppercase;letter-spacing:.4px}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
-.stat-num{font-size:28px;font-weight:600;line-height:1.1}
-.stat-label{font-size:12px;color:var(--text2);margin-top:4px}
-
-/* ── Deploy form ── */
-.deploy-input-wrap{display:flex;gap:10px;margin-bottom:20px}
-.deploy-input{flex:1;padding:12px 16px;border:1.5px solid var(--border2);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;outline:none;transition:border .15s;background:var(--surface)}
-.deploy-input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.1)}
-.deploy-btn{padding:12px 22px;background:var(--green);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s}
-.deploy-btn:hover{background:#15803D}
-.deploy-btn:disabled{background:var(--text3);cursor:not-allowed}
-.quick-tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
-.tag{padding:5px 12px;border:1px solid var(--border2);border-radius:20px;font-size:12px;cursor:pointer;font-family:'DM Mono',monospace;color:var(--text2);transition:all .15s;background:var(--surface)}
-.tag:hover{border-color:var(--green);color:var(--green);background:var(--green-light)}
-
-/* ── Deploy result ── */
-.result-box{padding:16px;border-radius:var(--radius-sm);font-size:13px;font-family:'DM Mono',monospace;margin-bottom:16px;display:none;white-space:pre-wrap;line-height:1.6}
-.result-box.success{background:var(--green-light);color:#166534;border:1px solid var(--green-mid)}
-.result-box.error{background:var(--red-light);color:#991B1B;border:1px solid #FECACA}
-
-/* ── Deploy result v2 (dataset enrichment) ── */
-.enrich-card{margin-bottom:16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow:hidden;display:none}
-.enrich-card.show{display:block}
-.enrich-card.rejected{border-color:#FECACA}
-.enrich-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.enrich-head .status-tag{font-size:12px;font-weight:600;padding:3px 10px;border-radius:12px}
-.status-tag.ok{background:var(--green-light);color:#166534}
-.status-tag.reject{background:var(--red-light);color:#991B1B}
-.enrich-id{font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);margin-left:auto}
-.enrich-headline{font-size:13px;color:var(--text2)}
-.enrich-body{padding:14px 18px}
-.enrich-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
-.enrich-field{padding:10px 12px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border)}
-.enrich-field .lbl{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;font-weight:600}
-.enrich-field .val{font-size:13px;font-weight:600;color:var(--text);font-family:'DM Mono',monospace}
-.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;font-family:inherit}
-.pill.simple,.pill.true{background:#DCFCE7;color:#166534}
-.pill.medium{background:#FEF3C7;color:#92400E}
-.pill.complex,.pill.false{background:#FEE2E2;color:#991B1B}
-.pill.en{background:#DBEAFE;color:#1E40AF}
-.pill.zhtw{background:#FCE7F3;color:#9D174D}
-.enrich-output-title{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:600}
-.enrich-output{background:#0F172A;color:#E2E8F0;padding:14px 16px;border-radius:var(--radius-sm);font-family:'DM Mono',monospace;font-size:12.5px;line-height:1.6;white-space:pre;overflow-x:auto;margin:0}
-.enrich-output .k{color:#7DD3FC}
-.enrich-output .s{color:#86EFAC}
-.enrich-output .n{color:#FCD34D}
-.enrich-output .b{color:#F472B6}
-.enrich-reject-msg{padding:10px 12px;background:var(--red-light);color:#991B1B;border-radius:var(--radius-sm);font-size:13px;margin-bottom:12px}
-
-/* ── Table ── */
-.table-wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;padding:10px 14px;font-size:11.5px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.4px}
-td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
-tr:last-child td{border-bottom:none}
-tr:hover td{background:var(--bg)}
-.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:11.5px;font-weight:500}
-.badge.running{background:var(--green-light);color:var(--green)}
-.badge.pending{background:var(--yellow-light);color:var(--yellow)}
-.badge.failed{background:var(--red-light);color:var(--red)}
-.badge.unknown{background:var(--bg);color:var(--text2);border:1px solid var(--border)}
-.mono{font-family:'DM Mono',monospace;font-size:12px}
-.btn-sm{padding:5px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:var(--surface);font-family:inherit;transition:all .15s}
-.btn-sm:hover{border-color:var(--blue);color:var(--blue)}
-.btn-sm:disabled{opacity:.4;cursor:not-allowed;border-color:var(--border2);color:inherit}
-.btn-sm:disabled:hover{border-color:var(--border2);color:inherit}
-.btn-danger{border-color:#FECACA;color:var(--red)}
-.btn-danger:hover{background:var(--red-light);border-color:var(--red)}
-.action-btns{display:flex;gap:6px}
-
-/* ── Pod detail modal ── */
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:1000;display:none;align-items:center;justify-content:center}
-.modal-bg.open{display:flex}
-.modal{background:var(--surface);border-radius:14px;width:90%;max-width:600px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 40px rgba(0,0,0,.15)}
-.modal-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface)}
-.modal-title{font-size:15px;font-weight:600}
-.modal-close{width:30px;height:30px;border-radius:50%;border:none;background:var(--bg);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--text2)}
-.modal-body{padding:20px 24px}
-.detail-section{margin-bottom:20px}
-.detail-section-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:10px}
-.detail-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
-.detail-row:last-child{border-bottom:none}
-.detail-key{color:var(--text2)}
-.detail-val{font-family:'DM Mono',monospace;font-size:12px;text-align:right;max-width:300px;word-break:break-all}
-.cond-badge{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
-.cond-true{background:var(--green-light);color:var(--green)}
-.cond-false{background:var(--red-light);color:var(--red)}
-
-/* ── Deploy confirmation card ── */
-.deploy-confirm{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:var(--shadow);min-width:min(560px,100%)}
-.deploy-confirm-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
-.deploy-confirm-title{font-size:14px;font-weight:750;color:var(--text)}
-.deploy-confirm-sub{font-size:12px;color:var(--text2);margin-top:2px}
-.deploy-confirm-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
-.deploy-confirm-field label{display:block;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
-.field-hint{font-size:10.5px;color:var(--text3);margin-top:3px;line-height:1.4}
-.deploy-confirm-field input{width:100%;border:1px solid var(--border2);border-radius:9px;padding:9px 10px;font-family:'DM Mono',monospace;font-size:12.5px;background:#fff;outline:none}
-.deploy-confirm-field input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(16,163,127,.12)}
-.deploy-confirm-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
-.deploy-confirm-note{font-size:12px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 10px;line-height:1.45}
-.deploy-confirm-error{display:none;font-size:12px;color:var(--red);background:var(--red-light);border:1px solid #fecaca;border-radius:9px;padding:8px 10px;margin-top:10px}
-.deploy-confirm-btn{border:1px solid var(--border2);background:#fff;color:var(--text);border-radius:9px;padding:9px 12px;font-weight:700;cursor:pointer;font-family:inherit}
-.deploy-confirm-btn.primary{background:var(--green);border-color:var(--green);color:#fff}
-.deploy-confirm-btn:disabled{opacity:.55;cursor:not-allowed}
-@media(max-width:760px){.deploy-confirm-grid{grid-template-columns:1fr}.deploy-confirm{min-width:0}}
-
-/* ── Chat ── */
-.chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 110px)}
-.chat-messages{flex:1;overflow-y:auto;padding:0 0 16px}
-.msg{display:flex;gap:10px;margin-bottom:16px}
-.msg.user{flex-direction:row-reverse}
-.msg-bubble{max-width:70%;padding:12px 16px;border-radius:12px;font-size:13.5px;line-height:1.6}
-.msg.ai .msg-bubble{background:var(--surface);border:1px solid var(--border)}
-.msg.user .msg-bubble{background:var(--green);color:#fff}
-.msg-avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
-.msg.ai .msg-avatar{background:var(--green-light);color:var(--green)}
-.msg.user .msg-avatar{background:var(--green);color:#fff}
-.chat-input-wrap{display:flex;gap:10px;padding-top:16px;border-top:1px solid var(--border)}
-.chat-input{flex:1;padding:11px 14px;border:1.5px solid var(--border2);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;outline:none;resize:none;transition:border .15s}
-.chat-input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.1)}
-.chat-send{padding:11px 20px;background:var(--green);color:#fff;border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:background .15s}
-.chat-send:hover{background:#15803D}
-.typing{display:flex;gap:4px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;width:fit-content}
-.typing span{width:6px;height:6px;background:var(--text3);border-radius:50%;animation:bounce .9s infinite}
-.typing span:nth-child(2){animation-delay:.15s}
-.typing span:nth-child(3){animation-delay:.3s}
-@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
-.think-row{display:flex;align-items:center;gap:9px;padding:11px 15px;background:var(--surface);border:1px solid var(--border);border-radius:12px;width:fit-content;font-size:13px;color:var(--text2)}
-.spinner{width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
-.think-dots span{animation:blink 1.4s infinite both}
-.think-dots span:nth-child(2){animation-delay:.2s}
-.think-dots span:nth-child(3){animation-delay:.4s}
-@keyframes blink{0%,80%,100%{opacity:0}40%{opacity:1}}
-
-/* ── 使用說明書 / K8s 小百科：topbar 按鈕 ────────────────────── */
-.icon-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:32px;padding:0 11px;border:none;border-radius:999px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.2px;transition:background .15s,transform .1s}
-.icon-btn:active{transform:scale(.93)}
-.icon-btn svg{flex-shrink:0}
-.lang-btn{background:var(--surface2);color:var(--text2)}
-.lang-btn:hover{background:var(--border)}
-.guide-btn{width:32px;padding:0;background:var(--green-light);color:var(--green)}
-.guide-btn:hover{background:var(--green-mid)}
-/* ── 是/否確認彈窗（名稱已存在 / port 被佔用）───────────────── */
-.confirm-dialog{background:#fff;border-radius:14px;max-width:420px;width:100%;padding:20px 22px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
-.confirm-dialog-title{font-size:15px;font-weight:750;color:#111;margin-bottom:8px}
-.confirm-dialog-body{font-size:13px;color:var(--text2);line-height:1.6}
-.confirm-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
-#manual-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:200;align-items:center;justify-content:center;padding:24px;display:none}
-/* [hidden] 是 HTML 標準屬性，但 #manual-overlay 這條 ID 規則的 specificity 比瀏覽器內建的
-   [hidden]{display:none} 規則高，等於蓋掉它——這是之前「一登入就跳出來、關不掉」的根因。
-   改用 JS 直接控制 style.display，不依賴 [hidden] 屬性，徹底避開這個 specificity 陷阱。 */
-.manual-panel{background:#fff;border-radius:16px;max-width:680px;width:100%;max-height:min(720px,88vh);display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
-.manual-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 22px;border-bottom:1px solid var(--border)}
-.manual-panel-title{font-size:16px;font-weight:750;color:#111}
-.manual-panel-sub{font-size:12px;color:var(--text3);margin-top:3px}
-.manual-close{border:none;background:var(--surface2);color:var(--text2);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:14px;flex-shrink:0}
-.manual-close:hover{background:var(--border)}
-.manual-panel-body{overflow-y:auto;padding:8px 22px 22px}
-.manual-panel-body details{border:1px solid var(--border);border-radius:12px;margin-top:10px;overflow:hidden}
-.manual-panel-body summary{cursor:pointer;padding:13px 16px;font-weight:700;font-size:13.5px;color:#222;list-style:none;background:var(--surface2)}
-.manual-panel-body summary::-webkit-details-marker{display:none}
-.manual-panel-body summary::before{content:'▸ ';color:var(--green)}
-.manual-panel-body details[open] summary::before{content:'▾ '}
-/* 2026-09-15 Healer 視覺化：一行式 Pod 清單，永遠不換行、名字太長用省略號截斷
-   （flex:1 1 auto + overflow:hidden 在名字上；其他固定寬度欄位用 flex:0 0 auto，
-   不會被擠爆）。詳情彈窗照抄 #manual-overlay 的 style.display 開關模式，不用
-   [hidden]，避開同一個 CSS specificity 陷阱。 */
-.pod-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;
-  cursor:pointer;white-space:nowrap;overflow:hidden;border:1px solid transparent}
-.pod-row:hover{background:var(--bg);border-color:var(--border)}
-.pod-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  font-family:monospace;font-size:13px;color:var(--text)}
-.pod-dot{flex:0 0 auto;width:9px;height:9px;border-radius:50%}
-.pod-meta{flex:0 0 auto;font-size:12px;color:var(--text3);min-width:0}
-.pod-meta.pod-meta-age{display:none}
-@media (min-width:560px){.pod-meta.pod-meta-age{display:inline}}
-#pod-detail-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:200;
-  align-items:center;justify-content:center;padding:24px;display:none}
-.pod-detail-section{margin-top:14px}
-.pod-detail-section-title{font-size:12.5px;font-weight:700;color:var(--text2);
-  text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px}
-.pod-chart-empty{font-size:12px;color:var(--text3);padding:16px;text-align:center;
-  border:1px dashed var(--border);border-radius:8px}
-.manual-section{padding:14px 16px;font-size:13px;color:var(--text2)}
-.manual-section code{background:var(--surface2);padding:1px 6px;border-radius:5px;font-family:'DM Mono',monospace;font-size:12px;color:#B45309}
-.term{border-bottom:1px dotted var(--green);color:var(--green);font-weight:600;cursor:pointer}
-#term-tip{position:fixed;max-width:260px;background:#111827;color:#F1F5F9;font-size:12.5px;line-height:1.6;padding:10px 12px;border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:250}
-
-/* ── Deploy decision court ── */
-.court-panel{margin-top:16px}
-.court-agents{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
-.court-agent-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;min-height:120px}
-.court-agent-card .court-agent-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
-.court-agent-card .court-agent-score{font-size:13px;font-weight:700;color:var(--text)}
-.court-agent-card .court-agent-summary{font-size:12.5px;color:var(--text2);line-height:1.5;margin-top:8px}
-.court-agent-card .court-agent-issues{margin-top:8px;display:flex;flex-direction:column;gap:6px}
-.court-agent-card.thinking .court-agent-summary::after{content:'評估中';color:var(--text3)}
-.court-agent-card.thinking .typing{margin-top:4px}
-.court-verdict{display:none}
-.result-box.warn{background:var(--yellow-light);color:#92400E;border:1px solid var(--yellow)}
-.court-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
-@media(max-width:760px){.court-agents{grid-template-columns:1fr}}
-
-/* ── Loading ── */
-.loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px}
-.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin 1s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.loading-text{font-size:14px;color:var(--text2)}
-
-/* ── Empty state ── */
-.empty{text-align:center;padding:48px 20px;color:var(--text2)}
-.empty svg{width:40px;height:40px;margin:0 auto 12px;opacity:.3}
+/* ── 共用：模組框（四角刻度） ── */
+.card,.module{position:relative;background:var(--panel);border:1px solid var(--grid);border-radius:4px;padding:20px}
+.card::before,.card::after,.module::before,.module::after{content:"";position:absolute;width:10px;height:10px;border-color:var(--signal);border-style:solid;opacity:.75;pointer-events:none}
+.card::before,.module::before{left:-1px;top:-1px;border-width:2px 0 0 2px}
+.card::after,.module::after{right:-1px;bottom:-1px;border-width:0 2px 2px 0}
+.card-title{font-size:13px;font-weight:500;color:var(--text-3);margin-bottom:10px}
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.stat-num{font-family:var(--f-display);font-size:30px;font-weight:600;line-height:1.15;font-variant-numeric:tabular-nums;color:var(--text)}
+.stat-label{font-size:13px;color:var(--text-2);margin-top:4px}
+.empty{text-align:center;padding:40px 20px;color:var(--text-3)}
 .empty p{font-size:14px}
 
+/* ── 按鈕 ── */
+.btn-primary,.deploy-btn,.deploy-confirm-btn,.btn-sm,.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--grid-2);background:var(--panel-2);color:var(--text);border-radius:var(--radius);font-weight:500;font-size:14px;padding:8px 16px;white-space:nowrap;transition:border-color .15s,background .15s,filter .15s,transform .1s}
+.btn-primary:hover,.deploy-btn:hover,.deploy-confirm-btn:hover,.btn-sm:hover,.btn:hover{border-color:var(--signal)}
+.btn-primary:active,.deploy-btn:active,.deploy-confirm-btn:active,.btn:active{transform:translateY(1px)}
+.btn-primary,.deploy-btn,.deploy-confirm-btn.primary,.btn.primary{background:var(--signal);border-color:var(--signal);color:var(--on-signal)}
+.btn-primary:hover,.deploy-btn:hover,.deploy-confirm-btn.primary:hover,.btn.primary:hover{filter:brightness(1.08)}
+.btn-primary:disabled,.deploy-btn:disabled,.deploy-confirm-btn:disabled,.btn-sm:disabled,.btn:disabled{opacity:.45;cursor:not-allowed;filter:none;transform:none}
+.btn-sm{padding:4px 11px;font-size:13px}
+.btn-danger,.btn.danger{border-color:color-mix(in srgb,var(--stop) 55%,transparent);color:var(--stop);background:transparent}
+.btn-danger:hover,.btn.danger:hover{background:var(--stop-soft);border-color:var(--stop)}
+.btn-primary.danger{background:var(--stop);border-color:var(--stop);color:#fff}
+.action-btns{display:flex;gap:6px;flex-wrap:wrap}
 
-/* ── Product Shell Refresh ─────────────────────────────────── */
-:root{
-  --bg:#f7f7f5;--surface:#ffffff;--surface2:#f4f4f2;--border:#e4e4df;--border2:#d5d5ce;
-  --text:#171717;--text2:#5f6368;--text3:#9aa0a6;--green:#10a37f;--green-light:#e8f7f2;--green-mid:#b8eadb;
-  --radius:12px;--radius-sm:10px;--shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.04);
-  --shadow-md:0 12px 32px rgba(0,0,0,.10);
-}
-body{background:var(--bg);font-family:'DM Sans',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;letter-spacing:0}
-.layout{height:100vh;background:var(--bg)}
-.sidebar{width:300px;background:#171717;color:#f5f5f0;border-right:0;box-shadow:inset -1px 0 rgba(255,255,255,.06)}
-.sidebar-logo{min-height:64px;padding:16px 18px;border-bottom:1px solid rgba(255,255,255,.08)}
-.sidebar-logo span{font-size:13px;line-height:1.3;color:#fff;font-weight:700}
-.sidebar-logo svg rect{fill:var(--green)}
-.sidebar-nav{padding:12px 12px 16px!important;gap:2px}
-.sidebar-nav button[onclick="newChat()"],.new-chat-btn{height:44px;background:#fff!important;color:#111!important;border:1px solid rgba(255,255,255,.16)!important;border-radius:12px!important;font-weight:700!important;box-shadow:0 6px 18px rgba(0,0,0,.18)}
-.nav-section{color:#8f8f8a;padding:18px 10px 8px;font-size:11px;letter-spacing:.08em}
-.nav-item{color:#d8d8d2;border-radius:10px;padding:10px 12px;font-size:14px;background:transparent}
-.nav-item:hover{background:#242424;color:#fff}
-.nav-item.active{background:#2f2f2f;color:#fff}
-.nav-item svg{opacity:.85}
-#chat-room-list{max-height:none!important;padding:0!important;min-height:150px!important}
-.chat-room-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-radius:10px;cursor:pointer;margin-bottom:2px;font-size:13px;color:#d8d8d2;background:transparent;transition:background .15s,color .15s}
-.chat-room-item:hover,.chat-room-item.active{background:#2f2f2f;color:#fff}
+/* ── 登入／註冊 ── */
+.auth-wrap{min-height:100vh;display:grid;place-items:center;padding:24px 16px;overflow-y:auto;height:100%}
+.auth-card{width:100%;max-width:400px;padding:34px 32px}
+.auth-logo{display:flex;align-items:center;gap:10px;margin-bottom:26px;color:var(--signal)}
+.auth-logo span{font-family:var(--f-display);font-weight:700;font-size:21px;letter-spacing:.04em;color:var(--text)}
+.auth-title{font-size:22px;font-weight:700;margin-bottom:4px}
+.auth-sub{font-size:14px;color:var(--text-2);margin-bottom:24px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;color:var(--text-2);margin-bottom:6px}
+.form-group input,.deploy-input,.deploy-confirm-field input,textarea{width:100%;background:var(--panel-2);border:1px solid var(--grid-2);border-radius:var(--radius);padding:10px 12px;font-size:14.5px;color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s}
+.form-group input:focus,.deploy-input:focus,.deploy-confirm-field input:focus,textarea:focus{border-color:var(--signal);box-shadow:0 0 0 3px var(--signal-soft)}
+.auth-card .btn-primary{width:100%;padding:11px;margin-top:4px}
+.auth-divider{display:flex;align-items:center;gap:10px;margin:20px 0}
+.auth-divider .line{flex:1;height:1px;background:var(--grid)}
+.auth-divider span{font-size:13px;color:var(--text-3)}
+.google-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:10px;border:1px solid var(--grid-2);border-radius:var(--radius);background:var(--panel-2);color:var(--text);font-size:14.5px;text-decoration:none;transition:border-color .15s}
+.google-btn:hover{border-color:var(--signal)}
+.auth-link{text-align:center;margin-top:20px;font-size:14px;color:var(--text-2)}
+.auth-link a{font-weight:500;text-decoration:none}
+.auth-error{background:var(--stop-soft);border:1px solid color-mix(in srgb,var(--stop) 50%,transparent);color:var(--text);padding:10px 12px;border-radius:var(--radius);font-size:14px;margin-bottom:16px}
+
+/* ── 外框：左側選單固定，右側內容各自捲動 ── */
+.layout{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:248px;flex:none;height:100vh;display:flex;flex-direction:column;gap:14px;padding:18px 14px 14px;background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(6px);border-right:1px solid var(--grid);overflow:hidden}
+.sidebar-logo{display:flex;align-items:center;gap:10px;padding:0 6px;color:var(--signal)}
+.sidebar-logo span{font-family:var(--f-display);font-weight:700;font-size:20px;letter-spacing:.04em;color:var(--text)}
+.new-chat-btn{width:100%;justify-content:center;background:transparent;border:1px dashed var(--signal-line);color:var(--signal);padding:8px 12px;border-radius:var(--radius);display:flex;align-items:center;gap:8px;font-weight:500;transition:background .15s,border-color .15s}
+.new-chat-btn:hover{background:var(--signal-soft);border-style:solid}
+.sidebar-nav{display:flex;flex-direction:column;gap:2px;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;margin:0 -6px;padding:0 6px}
+.nav-section{font-size:12.5px;color:var(--text-3);padding:14px 10px 4px}
+.nav-item{position:relative;display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:0;border-radius:var(--radius);background:transparent;color:var(--text-2);font-size:14.5px;text-align:left;transition:background .15s,color .15s}
+.nav-item svg{width:16px;height:16px;flex:none;opacity:.85}
+.nav-item:hover{background:var(--panel-2);color:var(--text)}
+.nav-item.active{background:var(--signal-soft);color:var(--text)}
+.nav-item.active::before{content:"";position:absolute;left:-8px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--signal);box-shadow:0 0 12px var(--signal)}
+.nav-item .count{margin-left:auto;font-family:var(--f-display);font-size:13px;color:var(--text-3)}
+#chat-room-list{display:flex;flex-direction:column;gap:1px;max-height:220px;overflow-y:auto}
+.chat-room-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:var(--radius);font-size:14px;color:var(--text-2);transition:background .15s,color .15s}
+.chat-room-item:hover{background:var(--panel-2);color:var(--text)}
+.chat-room-item.active{background:var(--panel-2);color:var(--text)}
 .chat-room-title{display:flex;align-items:center;gap:8px;overflow:hidden;flex:1;min-width:0}
+.chat-room-title svg{display:none}
 .chat-room-title span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.chat-room-delete{opacity:0;color:#a6a6a0;font-size:14px;padding-left:6px;flex-shrink:0;transition:opacity .15s}
-.chat-room-item:hover .chat-room-delete{opacity:1}
-.sidebar-footer{border-top:1px solid rgba(255,255,255,.08);padding:16px 18px}
-.user-avatar{background:var(--green);color:white}
-.user-name{color:#fff}.logout-btn{color:#aaa}.logout-btn:hover{background:#2f2f2f;color:#fff}
-.main{background:var(--bg);min-width:0;overflow:hidden}
-.status-bar{height:48px;padding:0 28px;background:rgba(247,247,245,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);flex-shrink:0}
-.page{padding:32px 40px;overflow-y:auto;height:calc(100vh - 48px)}
-.page.active{display:block}.page-title{font-size:26px;font-weight:750;letter-spacing:0;margin-bottom:6px}.page-sub{font-size:15px;margin-bottom:28px;color:var(--text2)}
-.card{border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:24px;background:#fff}.card-title{font-size:12px;letter-spacing:.08em;color:#747775}
-.grid-3{grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.grid-2{gap:18px}.stat-num{font-size:34px;font-weight:750;color:#111}
-.deploy-input-wrap{background:#fff;border:1px solid var(--border);border-radius:16px;padding:8px;gap:8px;box-shadow:0 8px 24px rgba(0,0,0,.04)}
-.deploy-input{border:0;font-size:16px;padding:12px 14px}.deploy-input:focus{box-shadow:none}.deploy-btn,.btn-primary{background:var(--green);border-radius:12px;font-weight:700}.deploy-btn{padding:12px 24px}.tag{border-radius:999px;padding:7px 13px;background:#fafafa}
-#page-chat{height:calc(100vh - 48px);padding:0!important;overflow:hidden;background:#fff}.chat-shell{height:100%;display:flex;flex-direction:column;background:#fff}.chat-topbar{height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;border-bottom:1px solid var(--border);flex-shrink:0}.chat-title{font-size:15px;font-weight:750;color:#222}.chat-subtitle{font-size:12px;color:var(--text3)}
-.chat-messages{flex:1;overflow-y:auto;padding:28px max(32px,calc((100vw - 1040px)/2)) 22px!important;background:#fff}.chat-empty{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:48px 24px}.chat-empty-logo{width:54px;height:54px;border-radius:16px;background:#171717;color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;margin-bottom:20px}.chat-empty h1{font-size:32px;font-weight:760;margin-bottom:10px}.chat-empty p{font-size:15px;color:var(--text2);max-width:560px;line-height:1.6;margin-bottom:28px}.prompt-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:720px}.prompt-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;text-align:left;cursor:pointer;transition:all .15s}.prompt-card:hover{border-color:#c9c9c2;box-shadow:0 8px 24px rgba(0,0,0,.06);transform:translateY(-1px)}.prompt-card strong{font-size:14px;color:#222}.prompt-card span{display:block;font-size:12px;color:var(--text3);margin-top:5px}
-.msg{max-width:900px;margin:0 auto 22px!important;display:flex;gap:14px}.msg.user{flex-direction:row-reverse}.msg-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:750;font-size:13px;flex-shrink:0;background:#171717;color:#fff}.msg.user .msg-avatar{background:var(--green)}.msg-bubble{max-width:76%;border-radius:18px;padding:13px 16px;font-size:14.5px;line-height:1.62;box-shadow:none}.msg.user .msg-bubble{background:var(--green);color:#fff}.msg.ai .msg-bubble{background:#f4f4f2;border:1px solid var(--border);color:#222}
-.chat-composer{padding:14px max(24px,calc((100vw - 960px)/2)) 20px;background:#fff;border-top:1px solid var(--border);flex-shrink:0}.composer-box{display:flex;align-items:flex-end;gap:10px;border:1px solid var(--border2);border-radius:18px;background:#fff;padding:10px 10px 10px 16px;box-shadow:0 8px 24px rgba(0,0,0,.06)}.chat-input{min-height:42px;max-height:180px;resize:none;border:0;outline:none;flex:1;font:inherit;font-size:15px;line-height:1.5;padding:9px 4px;background:transparent}.chat-send{width:42px;height:42px;border-radius:12px;border:0;background:var(--green);color:#fff;font-size:0;cursor:pointer;flex-shrink:0}.chat-send:before{content:'↑';font-size:22px;line-height:1}.composer-hint{text-align:center;font-size:11px;color:var(--text3);margin-top:8px}
-.table-wrap{border:1px solid var(--border);border-radius:14px;overflow:hidden}table{background:#fff}th{background:#fafaf8}td,th{padding:13px 16px}.enrich-card{border-radius:14px}.enrich-output{border-radius:12px}
-@media (max-width:900px){.sidebar{width:260px}.page{padding:24px}.grid-3,.prompt-grid{grid-template-columns:1fr}.msg-bubble{max-width:86%}}
+.chat-room-delete{opacity:0;color:var(--text-3);padding:0 4px;flex:none;transition:opacity .15s,color .15s}
+.chat-room-item:hover .chat-room-delete,.chat-room-item:focus-within .chat-room-delete{opacity:1}
+.chat-room-delete:hover{color:var(--stop)}
+.sys-panel{border:1px solid var(--grid);border-radius:8px;background:var(--panel);padding:10px 12px;display:flex;flex-direction:column;gap:7px;font-size:13.5px}
+.status-pill{display:flex;align-items:center;gap:8px;min-width:0}
+.status-pill .val{margin-left:auto;color:var(--text-3);font-size:13px;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--text-3);flex:none}
+.dot.green{background:var(--pass);box-shadow:0 0 8px var(--pass)}
+.dot.red{background:var(--stop);box-shadow:0 0 8px var(--stop)}
+.dot.yellow{background:var(--caution);box-shadow:0 0 8px var(--caution);animation:lamp 1.4s ease-in-out infinite}
+@keyframes lamp{50%{opacity:.35}}
+.sidebar-footer{border-top:1px solid var(--grid);padding:10px 4px 0}
+.user-info{display:flex;align-items:center;gap:10px;min-width:0}
+.user-avatar{width:30px;height:30px;flex:none;border-radius:7px;border:1px solid var(--signal);background:var(--signal-soft);color:var(--signal);display:grid;place-items:center;font-family:var(--f-display);font-weight:600}
+.user-name{flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.admin-badge{font-size:12px;color:var(--signal);border:1px solid var(--signal-line);border-radius:4px;padding:0 6px;margin-left:6px}
+.logout-btn{background:none;border:0;color:var(--text-3);font-size:13px;padding:2px 6px;border-radius:4px}
+.logout-btn:hover{color:var(--stop)}
 
+.main{flex:1;min-width:0;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.status-bar{height:52px;flex:none;display:flex;align-items:center;gap:14px;padding:0 28px;border-bottom:1px solid var(--grid);background:color-mix(in srgb,var(--void) 82%,transparent);backdrop-filter:blur(6px)}
+.topbar-title{font-size:16px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topbar-tools{margin-left:auto;display:flex;align-items:center;gap:8px}
+#clock{font-family:var(--f-display);font-size:13.5px;color:var(--text-3);font-variant-numeric:tabular-nums;margin-right:4px}
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 11px;border:1px solid var(--grid-2);border-radius:var(--radius);background:var(--panel);color:var(--text-2);font-size:13.5px;transition:border-color .15s,color .15s}
+.icon-btn:hover{border-color:var(--signal);color:var(--text)}
 
+/* 整條警告橫幅：新手一定看得到，而且寫清楚怎麼做 */
+.alert-banner{display:none;gap:12px;align-items:flex-start;padding:12px 28px;border-bottom:1px solid;font-size:14px;flex:none}
+.alert-banner.show{display:flex}
+.alert-banner.stop{background:var(--stop-soft);border-color:var(--stop)}
+.alert-banner.caution{background:var(--caution-soft);border-color:var(--caution)}
+.alert-banner .alert-mark{width:4px;align-self:stretch;border-radius:2px;flex:none}
+.alert-banner.stop .alert-mark{background:var(--stop)}
+.alert-banner.caution .alert-mark{background:var(--caution)}
+.alert-banner .alert-title{font-weight:700}
+.alert-banner.stop .alert-title{color:var(--stop)}
+.alert-banner.caution .alert-title{color:var(--caution)}
+.alert-banner .alert-body{color:var(--text-2);margin-top:2px}
+.alert-banner code{background:var(--panel);border:1px solid var(--grid);border-radius:4px;padding:1px 6px}
 
-/* ── Polish Fixes ─────────────────────────────────────────── */
-html,body{height:100%;overflow:hidden}
-.sidebar{height:100vh;overflow:hidden}
-.sidebar-nav{overflow-y:auto!important;overflow-x:hidden!important;min-height:0;scrollbar-width:thin;scrollbar-color:#4b4b4b transparent;padding-bottom:22px!important}
-.sidebar-nav::-webkit-scrollbar{width:8px}.sidebar-nav::-webkit-scrollbar-track{background:transparent}.sidebar-nav::-webkit-scrollbar-thumb{background:#4b4b4b;border-radius:999px;border:2px solid #171717}
-#chat-room-list{flex:0 0 auto!important;max-height:210px!important;overflow-y:auto!important;overflow-x:hidden!important;scrollbar-width:thin;scrollbar-color:#4b4b4b transparent}
-#chat-room-list::-webkit-scrollbar{width:8px}#chat-room-list::-webkit-scrollbar-track{background:transparent}#chat-room-list::-webkit-scrollbar-thumb{background:#4b4b4b;border-radius:999px;border:2px solid #171717}
-.main{height:100vh;overflow:hidden}.page{height:calc(100vh - 48px);overflow-y:auto}.page#page-chat{overflow:hidden!important}
-.chat-shell{min-height:0}.chat-messages{min-height:0;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#c8c8c1 transparent}.chat-messages::-webkit-scrollbar{width:10px}.chat-messages::-webkit-scrollbar-track{background:transparent}.chat-messages::-webkit-scrollbar-thumb{background:#c8c8c1;border-radius:999px;border:3px solid #fff}
-.chat-empty{min-height:100%;justify-content:center}.chat-send{display:flex!important;align-items:center!important;justify-content:center!important;padding:0!important}.chat-send:before{display:block;line-height:1;transform:translateY(-1px)}
-.chat-composer{position:relative;z-index:2}.composer-box:focus-within{border-color:var(--green);box-shadow:0 0 0 4px rgba(16,163,127,.12),0 8px 24px rgba(0,0,0,.06)}
+.page{display:none;flex:1;min-height:0;overflow-y:auto;padding:28px 32px 48px}
+.page.active{display:block;animation:pageIn .22s ease-out}
+@keyframes pageIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.page > *{max-width:1180px;margin-left:auto;margin-right:auto}
+.page-title{font-size:24px;font-weight:700;margin-bottom:4px}
+.page-sub{font-size:14.5px;color:var(--text-2);margin-bottom:22px}
 
-/* ── Compact deploy confirmation ─────────────────────────── */
-.msg.ai .msg-bubble:has(.deploy-confirm){background:transparent!important;border:0!important;padding:0!important;box-shadow:none!important;max-width:min(560px,92%)!important;width:min(560px,92%)!important}
-.deploy-confirm{width:100%!important;min-width:0!important;border-radius:12px!important;padding:14px!important;box-shadow:0 6px 18px rgba(0,0,0,.06)!important;background:#fff!important}
-.deploy-confirm-head{margin-bottom:10px!important;align-items:flex-start!important}.deploy-confirm-title{font-size:14px!important}.deploy-confirm-sub{font-size:12px!important;margin-top:1px!important}.deploy-confirm .badge{font-size:11px!important;padding:3px 8px!important;white-space:nowrap}
-.deploy-confirm-grid{grid-template-columns:1.1fr 1.1fr .55fr .55fr!important;gap:8px!important;margin:10px 0!important}.deploy-confirm-field label{font-size:10px!important;margin-bottom:4px!important}.deploy-confirm-field input{height:34px!important;padding:7px 9px!important;font-size:12px!important;border-radius:8px!important}.deploy-confirm-field.memory{grid-column:1 / -1}.deploy-confirm-note{font-size:11.5px!important;padding:8px 9px!important;border-radius:8px!important}.deploy-confirm-actions{margin-top:10px!important}.deploy-confirm-btn{padding:7px 10px!important;border-radius:8px!important;font-size:12px!important}.deploy-confirm-error{font-size:11.5px!important;padding:7px 9px!important;margin-top:8px!important}
-@media(max-width:760px){.deploy-confirm-grid{grid-template-columns:1fr 1fr!important}.deploy-confirm-field.memory{grid-column:1 / -1}.msg.ai .msg-bubble:has(.deploy-confirm){max-width:96%!important;width:96%!important}}
+/* ── 表格 ── */
+.table-wrap{overflow-x:auto;border:1px solid var(--grid);border-radius:4px;background:var(--panel)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;padding:10px 16px;font-size:13px;font-weight:500;color:var(--text-3);border-bottom:1px solid var(--grid);white-space:nowrap;background:var(--panel-2)}
+td{padding:11px 16px;border-bottom:1px solid color-mix(in srgb,var(--grid) 65%,transparent);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tbody tr{transition:background .12s}
+tbody tr:hover td{background:var(--signal-soft)}
+.badge,.pill,.status-tag,.cond-badge{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;font-size:13px;font-weight:500;border:1px solid transparent;white-space:nowrap}
+.badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.badge.running,.pill.simple,.pill.true,.status-tag.ok,.cond-true{background:var(--pass-soft);color:var(--pass)}
+.badge.pending,.pill.medium{background:var(--caution-soft);color:var(--caution)}
+.badge.failed,.pill.complex,.pill.false,.status-tag.reject,.cond-false{background:var(--stop-soft);color:var(--stop)}
+.badge.unknown,.pill.en,.pill.zhtw{background:var(--panel-2);color:var(--text-2);border-color:var(--grid)}
+.badge.running::before{animation:beat 2.4s ease-out infinite}
+@keyframes beat{0%{box-shadow:0 0 0 0 color-mix(in srgb,currentColor 60%,transparent)}70%,100%{box-shadow:0 0 0 6px transparent}}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 2px 0;font-size:13.5px;color:var(--text-3)}
+
+/* ── 彈窗、抽屜、提示 ── */
+.modal-bg,#manual-overlay,#pod-detail-overlay,#confirm-dialog-overlay{position:fixed;inset:0;background:var(--scrim);z-index:200;align-items:center;justify-content:center;padding:24px}
+.modal-bg{display:none}.modal-bg.open{display:flex}
+#manual-overlay,#pod-detail-overlay{display:none}
+.modal,.manual-panel,.confirm-dialog{position:relative;background:var(--panel);border:1px solid var(--grid-2);border-radius:6px;box-shadow:var(--shadow-pop);width:100%;animation:popIn .2s ease-out}
+@keyframes popIn{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+.modal{max-width:620px;max-height:85vh;overflow-y:auto}
+.modal-header,.manual-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 22px;border-bottom:1px solid var(--grid);position:sticky;top:0;background:var(--panel);z-index:1}
+.modal-title,.manual-panel-title{font-size:16px;font-weight:700}
+.manual-panel-sub{font-size:13px;color:var(--text-3);margin-top:3px}
+.modal-close,.manual-close{flex:none;border:1px solid var(--grid-2);background:transparent;color:var(--text-2);border-radius:var(--radius);padding:2px 10px;font-size:13px}
+.modal-close:hover,.manual-close:hover{border-color:var(--signal);color:var(--text)}
+.modal-body{padding:18px 22px}
+.manual-panel{max-width:700px;max-height:min(740px,88vh);display:flex;flex-direction:column}
+.manual-panel-body{overflow-y:auto;padding:8px 22px 22px}
+.manual-panel-body details{border:1px solid var(--grid);border-radius:4px;margin-top:10px;overflow:hidden}
+.manual-panel-body summary{cursor:pointer;padding:12px 16px;font-weight:500;list-style:none;background:var(--panel-2);display:flex;gap:8px;align-items:center}
+.manual-panel-body summary::-webkit-details-marker{display:none}
+.manual-panel-body summary::before{content:"";width:7px;height:7px;border-right:2px solid var(--signal);border-bottom:2px solid var(--signal);transform:rotate(-45deg);transition:transform .15s;flex:none}
+.manual-panel-body details[open] summary::before{transform:rotate(45deg)}
+.manual-section{padding:14px 16px;font-size:14px;color:var(--text-2)}
+.manual-section code{background:var(--panel-2);border:1px solid var(--grid);padding:1px 6px;border-radius:4px;color:var(--signal)}
+.term{border-bottom:1px dotted var(--signal);color:var(--signal);cursor:pointer}
+#term-tip{position:fixed;max-width:280px;background:var(--panel-3);color:var(--text);border:1px solid var(--signal-line);font-size:13.5px;line-height:1.6;padding:10px 12px;border-radius:6px;box-shadow:var(--shadow-pop);z-index:250}
+.confirm-dialog{max-width:440px;padding:22px}
+.confirm-dialog-title{font-size:16px;font-weight:700;margin-bottom:8px}
+.confirm-dialog-body{font-size:14px;color:var(--text-2)}
+.confirm-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.detail-section,.pod-detail-section{margin-bottom:18px}
+.detail-section-title,.pod-detail-section-title{font-size:13px;font-weight:500;color:var(--text-3);margin-bottom:8px}
+.detail-row{display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid color-mix(in srgb,var(--grid) 65%,transparent);font-size:14px}
+.detail-row:last-child{border-bottom:0}
+.detail-key{color:var(--text-2)}
+.detail-val{font-family:var(--f-id);font-size:13px;text-align:right;max-width:340px;overflow-wrap:anywhere}
+.pod-chart-empty{font-size:13px;color:var(--text-3);padding:16px;text-align:center;border:1px dashed var(--grid-2);border-radius:4px}
+.pod-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--radius);cursor:pointer;white-space:nowrap;overflow:hidden;border:1px solid transparent;transition:background .12s,border-color .12s}
+.pod-row:hover{background:var(--signal-soft);border-color:var(--signal-line)}
+.pod-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;font-family:var(--f-id);font-size:13.5px}
+.pod-dot{flex:none;width:8px;height:8px;border-radius:50%}
+.pod-meta{flex:none;font-size:13px;color:var(--text-3)}
+.pod-meta.pod-meta-age{display:none}
+@media (min-width:560px){.pod-meta.pod-meta-age{display:inline}}
+
+/* ── 結果框、思考中 ── */
+.result-box{display:none;padding:14px 16px;border-radius:4px;font-size:14px;margin-bottom:16px;white-space:pre-wrap;border:1px solid}
+.result-box.success{background:var(--pass-soft);border-color:color-mix(in srgb,var(--pass) 50%,transparent)}
+.result-box.error{background:var(--stop-soft);border-color:color-mix(in srgb,var(--stop) 50%,transparent)}
+.result-box.warn{background:var(--caution-soft);border-color:color-mix(in srgb,var(--caution) 50%,transparent)}
+.spinner{width:16px;height:16px;flex:none;border:2px solid var(--grid-2);border-top-color:var(--signal);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.typing{display:flex;gap:4px;padding:12px 16px;width:fit-content}
+.typing span{width:6px;height:6px;background:var(--signal);border-radius:50%;animation:bounce .9s infinite}
+.typing span:nth-child(2){animation-delay:.15s}.typing span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{50%{transform:translateY(-5px);opacity:.5}}
+.think-row{display:flex;align-items:center;gap:10px;padding:10px 14px;width:fit-content;font-size:14px;color:var(--text-2);border:1px solid var(--grid);border-radius:var(--radius);background:var(--panel);position:relative;overflow:hidden}
+.think-row::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,var(--signal-soft),transparent);transform:translateX(-100%);animation:sweep 1.6s ease-in-out infinite}
+@keyframes sweep{to{transform:translateX(100%)}}
+.think-dots span{animation:blink 1.4s infinite both}
+.think-dots span:nth-child(2){animation-delay:.2s}.think-dots span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:0}40%{opacity:1}}
+.loading-overlay{position:fixed;inset:0;background:var(--void);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:9999}
+
+/* ── 對話 ── */
+#page-chat{padding:0;overflow:hidden}
+#page-chat > *{max-width:none}
+.chat-shell{height:100%;display:flex;flex-direction:column;min-height:0}
+.chat-topbar{display:none}
+/* 對話欄自己有底色，把背景格線擋住；兩側留白露出格線 */
+.chat-messages{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:28px 24px 24px;
+  background:linear-gradient(90deg,transparent calc(50% - 520px),color-mix(in srgb,var(--grid) 70%,transparent) calc(50% - 520px),var(--void) calc(50% - 519px),var(--void) calc(50% + 519px),color-mix(in srgb,var(--grid) 70%,transparent) calc(50% + 519px),transparent calc(50% + 520px))}
+@media (max-width:1088px){.chat-messages{background:var(--void)}}
+.msg{display:flex;gap:12px;max-width:960px;margin:0 auto 20px}
+.msg.user{flex-direction:row-reverse}
+.msg-avatar{display:none}
+.msg-bubble{max-width:100%;font-size:15px;line-height:1.7;min-width:0}
+.msg.user .msg-bubble{max-width:78%;background:var(--signal-soft);border:1px solid var(--signal-line);padding:9px 15px;border-radius:12px 12px 3px 12px}
+.msg.ai .msg-bubble{color:var(--text)}
+.msg.ai .msg-bubble.enter,.msg.enter .msg-bubble{animation:msgIn .28s ease-out}
+@keyframes msgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.msg-bubble pre{background:var(--panel-2);border:1px solid var(--grid);border-radius:4px;padding:12px 14px;overflow-x:auto;font-family:var(--f-id);font-size:13px;margin:8px 0}
+.chat-empty{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 16px}
+.chat-empty-logo{width:56px;height:56px;color:var(--signal);margin-bottom:18px;display:grid;place-items:center}
+.chat-empty-logo svg{width:56px;height:56px;animation:helm 18s linear infinite}
+@keyframes helm{to{transform:rotate(360deg)}}
+.chat-empty h1{font-size:28px;font-weight:700;margin-bottom:8px;text-wrap:balance}
+.chat-empty p{font-size:15px;color:var(--text-2);max-width:56ch;margin-bottom:26px}
+.prompt-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:100%;max-width:720px}
+.prompt-card{text-align:left;background:var(--panel);border:1px solid var(--grid);border-radius:4px;padding:14px 16px;transition:border-color .15s,transform .15s,background .15s}
+.prompt-card:hover{border-color:var(--signal);background:var(--panel-2);transform:translateY(-2px)}
+.prompt-card strong{display:block;font-size:15px;font-weight:500;color:var(--text)}
+.prompt-card span{display:block;font-size:13.5px;color:var(--text-3);margin-top:4px;font-family:var(--f-id)}
+.chat-composer{flex:none;padding:12px 24px 18px;background:var(--void);border-top:1px solid var(--grid)}
+.composer-box{max-width:960px;margin:0 auto;display:flex;align-items:flex-end;gap:10px;background:var(--panel);border:1px solid var(--grid-2);border-radius:10px;padding:7px 7px 7px 16px;transition:border-color .2s,box-shadow .2s}
+.composer-box:focus-within{border-color:var(--signal);box-shadow:0 0 0 3px var(--signal-soft)}
+.chat-input{flex:1;min-height:40px;max-height:180px;resize:none;border:0;outline:none;background:transparent;font-size:15px;line-height:1.5;padding:8px 2px;box-shadow:none}
+.chat-input:focus{box-shadow:none}
+.chat-send{flex:none;height:40px;padding:0 18px;border:0;border-radius:7px;background:var(--signal);color:var(--on-signal);font-weight:500;transition:filter .15s}
+.chat-send:hover{filter:brightness(1.08)}
+.composer-hint{max-width:960px;margin:6px auto 0;font-size:13px;color:var(--text-3)}
+.chat-sources{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;font-size:13px;color:var(--text-3)}
+
+/* ── 部署確認卡（Chat 流程，第二階段會再改成部署單模組） ── */
+.deploy-confirm{position:relative;background:var(--panel);border:1px solid var(--grid);border-radius:4px;padding:16px;width:min(620px,100%)}
+.deploy-confirm-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+.deploy-confirm-title{font-size:15px;font-weight:700}
+.deploy-confirm-sub{font-size:13px;color:var(--text-2);margin-top:2px}
+.deploy-confirm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.deploy-confirm-field label{display:block;font-size:13px;color:var(--text-3);margin-bottom:5px}
+.deploy-confirm-field input{font-family:var(--f-id);font-size:13.5px;padding:8px 10px}
+.field-hint{font-size:12.5px;color:var(--text-3);margin-top:4px}
+.deploy-confirm-note{font-size:13.5px;color:var(--text-2);background:var(--panel-2);border:1px solid var(--grid);border-radius:4px;padding:9px 11px}
+.deploy-confirm-error{display:none;font-size:13.5px;background:var(--stop-soft);border:1px solid color-mix(in srgb,var(--stop) 50%,transparent);border-radius:4px;padding:8px 10px;margin-top:10px}
+.deploy-confirm-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px}
+.deploy-confirm-btn{padding:7px 14px;font-size:14px}
+
+/* ── 舊的 Deploy 頁元件（第三階段移除） ── */
+.deploy-input-wrap{display:flex;gap:8px;margin-bottom:16px}
+.quick-tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.tag{padding:4px 12px;border:1px solid var(--grid-2);border-radius:999px;font-size:13px;font-family:var(--f-id);color:var(--text-2);cursor:pointer;transition:border-color .15s,color .15s}
+.tag:hover{border-color:var(--signal);color:var(--text)}
+.enrich-card{display:none;margin-bottom:16px;border:1px solid var(--grid);border-radius:4px;background:var(--panel);overflow:hidden}
+.enrich-card.show{display:block}
+.enrich-head{padding:12px 16px;border-bottom:1px solid var(--grid);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.enrich-headline{font-size:14px;color:var(--text-2)}
+.enrich-id{font-family:var(--f-id);font-size:13px;color:var(--text-3);margin-left:auto}
+.enrich-body{padding:14px 16px}
+.enrich-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.enrich-field{padding:10px 12px;background:var(--panel-2);border:1px solid var(--grid);border-radius:4px}
+.enrich-field .lbl{font-size:12.5px;color:var(--text-3);margin-bottom:2px}
+.enrich-field .val{font-size:14px;font-family:var(--f-id)}
+.enrich-reject-msg{padding:10px 12px;background:var(--stop-soft);border-radius:4px;font-size:14px;margin-bottom:12px}
+.court-panel{margin-top:16px}
+.court-agents{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.court-agent-card{background:var(--panel-2);border:1px solid var(--grid);border-radius:4px;padding:14px;min-height:120px}
+.court-agent-title{font-size:13px;color:var(--text-3);margin-bottom:8px;display:flex;justify-content:space-between}
+.court-agent-score{font-weight:700;color:var(--text)}
+.court-agent-summary{font-size:13.5px;color:var(--text-2);margin-top:6px}
+.court-agent-issues{margin-top:6px;display:flex;flex-direction:column;gap:6px}
+.court-agent-card.thinking .court-agent-summary::after{content:"審查中";color:var(--text-3)}
+.court-verdict{display:none}
+.court-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px}
+
+@media (max-width:900px){
+  .sidebar{width:216px}
+  .page{padding:22px 18px 40px}
+  .grid-3,.grid-2,.prompt-grid,.court-agents,.enrich-grid{grid-template-columns:1fr}
+  .status-bar,.alert-banner{padding-left:18px;padding-right:18px}
+}
+@media (max-width:640px){
+  .layout{flex-direction:column}
+  .sidebar{width:100%;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:10px 16px;border-right:0;border-bottom:1px solid var(--grid)}
+  .sidebar-nav{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;flex:1 1 100%;order:3}
+  .sidebar-nav .nav-section,#chat-room-list,.sys-panel,.sidebar-footer,.new-chat-wrap{display:none}
+  .nav-item{width:auto;white-space:nowrap}
+  .nav-item.active::before{display:none}
+  .main{height:auto;flex:1;min-height:0}
+  .deploy-confirm-grid{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 
 </style>
 </head>
@@ -1604,170 +1608,118 @@ html,body{height:100%;overflow:hidden}
 {% if not logged_in and page != 'register' %}
 <!-- ── Login Page ── -->
 <div class="auth-wrap">
-  <div class="auth-card">
-    <div class="auth-logo">
-      <svg viewBox="0 0 28 28" fill="none">
-        <rect width="28" height="28" rx="7" fill="#16A34A"/>
-        <path d="M8 14h12M14 8v12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-      <span>ZeroTouch K8s</span>
-    </div>
-    <div class="auth-title">Welcome back</div>
-    <div class="auth-sub">Sign in to your account to continue</div>
+  <div class="auth-card card">
+    <div class="auth-logo"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13 3.5v19M3.5 13h19M6.3 6.3l13.4 13.4M19.7 6.3 6.3 19.7"/></g><circle cx="13" cy="13" r="3.4" fill="var(--panel)" stroke="currentColor" stroke-width="2"/></svg><span>ZeroTouch</span></div>
+    <div class="auth-title">登入</div>
+    <div class="auth-sub">用自然語言部署和管理你的 Kubernetes 服務</div>
     {% if error %}<div class="auth-error">{{ error }}</div>{% endif %}
     <form method="POST" action="/auth/login">
       <div class="form-group">
-        <label>Username</label>
-        <input type="text" name="username" placeholder="Enter your username" required autofocus>
+        <label for="login-username">帳號</label>
+        <input id="login-username" type="text" name="username" autocomplete="username" required autofocus>
       </div>
       <div class="form-group">
-        <label>Password</label>
-        <input type="password" name="password" placeholder="Enter your password" required>
+        <label for="login-password">密碼</label>
+        <input id="login-password" type="password" name="password" autocomplete="current-password" required>
       </div>
-      <button class="btn-primary" type="submit">Sign In</button>
+      <button class="btn-primary" type="submit">登入</button>
     </form>
     {% if google_login_available %}
-    <div class="auth-divider"><div class="line"></div><span>or</span><div class="line"></div></div>
+    <div class="auth-divider"><div class="line"></div><span>或</span><div class="line"></div></div>
     <a href="/auth/google/login" class="google-btn">
       <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.09-1.8 2.73v2.27h2.92c1.7-1.57 2.68-3.88 2.68-6.64z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.27c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.71H.96v2.34C2.44 15.98 5.48 18 9 18z"/><path fill="#FBBC05" d="M3.97 10.7c-.18-.54-.28-1.11-.28-1.7s.1-1.16.28-1.7V4.96H.96A8.996 8.996 0 000 9c0 1.45.35 2.83.96 4.04l3.01-2.34z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.59-2.59C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l3.01 2.34C4.68 5.16 6.66 3.58 9 3.58z"/></svg>
-      使用 Google 登入 / Sign in with Google
+      使用 Google 帳號登入
     </a>
     {% endif %}
-    <div class="auth-link">Don't have an account? <a href="/auth/register">Register</a></div>
+    <div class="auth-link">還沒有帳號？<a href="/auth/register">註冊</a></div>
   </div>
 </div>
 
 {% elif page == 'register' %}
 <!-- ── Register Page ── -->
 <div class="auth-wrap">
-  <div class="auth-card">
-    <div class="auth-logo">
-      <svg viewBox="0 0 28 28" fill="none">
-        <rect width="28" height="28" rx="7" fill="#16A34A"/>
-        <path d="M8 14h12M14 8v12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-      <span>ZeroTouch K8s</span>
-    </div>
-    <div class="auth-title">Create account</div>
-    <div class="auth-sub">Get started with ZeroTouch K8s</div>
+  <div class="auth-card card">
+    <div class="auth-logo"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13 3.5v19M3.5 13h19M6.3 6.3l13.4 13.4M19.7 6.3 6.3 19.7"/></g><circle cx="13" cy="13" r="3.4" fill="var(--panel)" stroke="currentColor" stroke-width="2"/></svg><span>ZeroTouch</span></div>
+    <div class="auth-title">建立帳號</div>
+    <div class="auth-sub">註冊後就能用對話部署第一個服務</div>
     {% if error %}<div class="auth-error">{{ error }}</div>{% endif %}
     <form method="POST" action="/auth/register">
       <div class="form-group">
-        <label>Username</label>
-        <input type="text" name="username" placeholder="Choose a username" required autofocus>
+        <label for="reg-username">帳號</label>
+        <input id="reg-username" type="text" name="username" autocomplete="username" required autofocus>
       </div>
       <div class="form-group">
-        <label>Password</label>
-        <input type="password" name="password" placeholder="Create a password" required>
+        <label for="reg-password">密碼</label>
+        <input id="reg-password" type="password" name="password" autocomplete="new-password" required>
       </div>
       <div class="form-group">
-        <label>Confirm Password</label>
-        <input type="password" name="confirm" placeholder="Confirm your password" required>
+        <label for="reg-confirm">再輸入一次密碼</label>
+        <input id="reg-confirm" type="password" name="confirm" autocomplete="new-password" required>
       </div>
-      <button class="btn-primary" type="submit">Create Account</button>
+      <button class="btn-primary" type="submit">建立帳號</button>
     </form>
     {% if google_login_available %}
-    <div class="auth-divider"><div class="line"></div><span>or</span><div class="line"></div></div>
+    <div class="auth-divider"><div class="line"></div><span>或</span><div class="line"></div></div>
     <a href="/auth/google/login" class="google-btn">
       <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.09-1.8 2.73v2.27h2.92c1.7-1.57 2.68-3.88 2.68-6.64z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.27c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.71H.96v2.34C2.44 15.98 5.48 18 9 18z"/><path fill="#FBBC05" d="M3.97 10.7c-.18-.54-.28-1.11-.28-1.7s.1-1.16.28-1.7V4.96H.96A8.996 8.996 0 000 9c0 1.45.35 2.83.96 4.04l3.01-2.34z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.59-2.59C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l3.01 2.34C4.68 5.16 6.66 3.58 9 3.58z"/></svg>
-      使用 Google 登入 / Sign in with Google
+      使用 Google 帳號登入
     </a>
     {% endif %}
-    <div class="auth-link">Already have an account? <a href="/">Sign In</a></div>
+    <div class="auth-link">已經有帳號了？<a href="/">登入</a></div>
   </div>
 </div>
 
 {% else %}
 <!-- ── Main App ── -->
 <div class="layout">
-  <!-- Sidebar -->
-  <aside class="sidebar">
-    <div class="sidebar-logo">
-      <svg viewBox="0 0 28 28" fill="none">
-        <rect width="28" height="28" rx="7" fill="#16A34A"/>
-        <path d="M8 14h12M14 8v12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-      <span>Zero-Touch Kubernetes Service Deployment Platform</span>
-    </div>
-    <nav class="sidebar-nav" style="display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden">
-      <div style="padding:10px 10px 6px">
-        <button class="new-chat-btn" onclick="newChat()" style="width:100%;padding:9px 12px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
-          <span style="font-size:18px;line-height:1">+</span> New Chat
-        </button>
-      </div>
-      <div class="nav-section">Chats</div>
-      <div id="chat-room-list" style="flex:1;overflow-y:auto;padding:0 6px;min-height:60px;max-height:200px"></div>
-      <div class="nav-section">Main</div>
-      <button class="nav-item active" data-page="chat" onclick="showPage('chat')">
-        <svg viewBox="0 0 16 16" fill="none"><path d="M2.5 3.5a2 2 0 012-2h7a2 2 0 012 2v5a2 2 0 01-2 2H8l-3.5 3v-3a2 2 0 01-2-2v-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
-        Chat
-      </button>
-      <!-- Deploy Console 側邊欄入口 2026-09-13 移除：Chat 的多步部署流程（規格確認→資源+三方
-           審查→執行→完成指路）已經是它的超集合，兩條路走同一套後端會分裂維護（這次才修好
-           Deploy Console 法庭卡巢狀讀取少一層的舊 bug 就是徵兆）。#page-deploy 頁面與
-           /api/deploy(/parse) 路由完全沒刪，網址列仍可進（見 AGENT_RULES.md 新手友善原則）。 -->
-      <button class="nav-item" data-page="pods" onclick="showPage('pods')">
-        <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
-        Pods
-      </button>
-      <button class="nav-item" data-page="deployments" onclick="showPage('deployments')">
-        <svg viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        Deployments
-      </button>
-      <button class="nav-item" data-page="dashboard" onclick="showPage('dashboard')">
-        <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="9" y="2" width="5" height="9" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>
-        Dashboard
-      </button>
-      <div class="nav-section">Tools</div>
-      <button class="nav-item" data-page="gitops" onclick="showPage('gitops')">
-        <svg viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 6v1a3 3 0 003 3h1M11 6v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        GitOps Log
-      </button>
-      <button class="nav-item" data-page="healer" onclick="showPage('healer')">
-        <svg viewBox="0 0 16 16" fill="none"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        Healer
-      </button>
-      <button class="nav-item" data-page="metrics" onclick="showPage('metrics')">
-        <svg viewBox="0 0 16 16" fill="none"><path d="M2 12L5 8l3 2 3-4 3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Metrics
-      </button>
-      <!-- Dataset / Knowledge Base 是給開發者整理訓練資料 / RAG 索引用的內部工具，
-           一般使用者不需要看到，2026-09-13 依使用者要求從側邊欄移除（新手友善原則，見 AGENT_RULES.md）。
-           後端 /api/dataset/*、/api/rag/* 路由與 #page-dataset、#page-kb 都刻意保留，開發者仍可直接呼叫 API。 -->
+  <!-- 左側選單：固定不跟著內容捲動 -->
+  <aside class="sidebar" aria-label="主選單">
+    <div class="sidebar-logo"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13 3.5v19M3.5 13h19M6.3 6.3l13.4 13.4M19.7 6.3 6.3 19.7"/></g><circle cx="13" cy="13" r="3.4" fill="var(--panel)" stroke="currentColor" stroke-width="2"/></svg><span>ZeroTouch</span></div>
+    <div class="new-chat-wrap"><button class="new-chat-btn" type="button" onclick="newChat()">新對話</button></div>
+    <nav class="sidebar-nav" aria-label="功能">
+      <button class="nav-item active" type="button" data-page="chat" onclick="showPage('chat')"><svg viewBox="0 0 16 16" fill="none"><path d="M2.5 3.5a2 2 0 012-2h7a2 2 0 012 2v5a2 2 0 01-2 2H8l-3.5 3v-3a2 2 0 01-2-2v-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>對話</button>
+      <button class="nav-item" type="button" data-page="deployments" onclick="showPage('deployments')"><svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2.5" width="12" height="4" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="2" y="9.5" width="12" height="4" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>服務</button>
+      <button class="nav-item" type="button" data-page="pods" onclick="showPage('pods')"><svg viewBox="0 0 16 16" fill="none"><path d="M8 1.8l5.4 3.1v6.2L8 14.2l-5.4-3.1V4.9z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>Pod</button>
+      <button class="nav-item" type="button" data-page="healer" onclick="showPage('healer')"><svg viewBox="0 0 16 16" fill="none"><path d="M1.5 8.5h3l1.5-4 3 7 1.5-3h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>自動修復</button>
+      <button class="nav-item" type="button" data-page="dashboard" onclick="showPage('dashboard')"><svg viewBox="0 0 16 16" fill="none"><path d="M2.5 11a5.5 5.5 0 1111 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 11l2.6-3.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>資源總覽</button>
+      <button class="nav-item" type="button" data-page="metrics" onclick="showPage('metrics')"><svg viewBox="0 0 16 16" fill="none"><path d="M2 12L5 8l3 2 3-4 3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>監控指標</button>
+      <button class="nav-item" type="button" data-page="gitops" onclick="showPage('gitops')"><svg viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 6v1a3 3 0 003 3h1M11 6v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>部署紀錄</button>
+      <div class="nav-section">最近的對話</div>
+      <div id="chat-room-list"></div>
     </nav>
+    <div class="sys-panel" aria-label="系統狀態">
+      <div class="status-pill"><div class="dot {% if k8s %}green{% else %}red{% endif %}" id="k8s-dot"></div><span>Kubernetes</span><span class="val" id="k8s-status">{% if k8s %}已連線{% else %}未連線{% endif %}</span></div>
+      <div class="status-pill"><div class="dot" id="model-dot"></div><span>AI 模型</span><span class="val" id="model-status">檢查中</span></div>
+    </div>
     <div class="sidebar-footer">
       <div class="user-info">
         <div class="user-avatar">{{ username[0].upper() }}</div>
-        <div class="user-name">{{ username }}{% if is_admin %}<span class="admin-badge">管理員 / Admin</span>{% endif %}</div>
+        <div class="user-name">{{ username }}{% if is_admin %}<span class="admin-badge">管理員</span>{% endif %}</div>
         <form method="POST" action="/auth/logout" style="margin:0">
-          <button class="logout-btn" type="submit">Out</button>
+          <button class="logout-btn" type="submit">登出</button>
         </form>
       </div>
     </div>
   </aside>
 
-  <!-- Main Content -->
   <div class="main">
-    <!-- Docker/K8s 沒開時的新手警告：整條顯眼橫幅，不是小圓點而已 -->
-    <div id="docker-warning" style="display:none;background:#FEF3C7;border:1px solid #F59E0B;border-radius:10px;padding:12px 16px;margin-bottom:12px;font-size:13px;color:#92400E;align-items:flex-start;gap:10px">
-      <span style="font-size:18px;line-height:1">⚠️</span>
-      <div>
-        <div style="font-weight:700" id="docker-warning-title">Docker 沒有啟動 / Docker is not running</div>
-        <div style="margin-top:2px" id="docker-warning-body">請先開啟 Docker Desktop，等它完全啟動後重新整理這個頁面。<br>Please start Docker Desktop, wait until it's fully running, then refresh this page.</div>
+    <div class="status-bar">
+      <div class="topbar-title" id="topbar-title">對話</div>
+      <div class="topbar-tools">
+        <span id="clock"></span>
+        <button class="icon-btn" type="button" onclick="openManual()">說明書</button>
+        <button class="icon-btn" type="button" id="theme-btn" onclick="toggleTheme()">淺色</button>
       </div>
     </div>
 
-    <!-- Status Bar -->
-    <div class="status-bar">
-      <div class="status-pill">
-        <div class="dot" id="model-dot"></div>
-        <span id="model-status">Model loading...</span>
-      </div>
-      <div class="status-pill">
-        <div class="dot {% if k8s %}green{% else %}red{% endif %}" id="k8s-dot"></div>
-        <span id="k8s-status">K8s {% if k8s %}Connected{% else %}Simulation{% endif %}</span>
-      </div>
-      <div class="status-pill" style="margin-left:auto;font-size:12px;color:var(--text3)" id="clock"></div>
+    <!-- 整條警告橫幅：AI 模型沒在執行、Docker 或 Kubernetes 連不上時，直接講原因跟怎麼做 -->
+    <div class="alert-banner stop" id="model-warning" role="alert">
+      <div class="alert-mark"></div>
+      <div><div class="alert-title" id="model-warning-title"></div><div class="alert-body" id="model-warning-body"></div></div>
+    </div>
+    <div class="alert-banner stop" id="docker-warning" role="alert">
+      <div class="alert-mark"></div>
+      <div><div class="alert-title" id="docker-warning-title"></div><div class="alert-body" id="docker-warning-body"></div></div>
     </div>
 
     <!-- Dashboard Page -->
@@ -1863,7 +1815,7 @@ html,body{height:100%;overflow:hidden}
         <div class="card">
           <div class="card-title">Model</div>
           <div class="stat-num" style="font-size:18px" id="stat-model">—</div>
-          <div class="stat-label">LLaMA-3.1 + LoRA</div>
+          <div class="stat-label">Qwen2.5 3B</div>
         </div>
       </div>
     </div>
@@ -1935,36 +1887,14 @@ html,body{height:100%;overflow:hidden}
     <!-- Chat Page -->
     <div class="page active" id="page-chat" style="padding:0;overflow:hidden">
       <div class="chat-shell">
-        <div class="chat-topbar">
-          <div>
-            <div class="chat-title" id="chat-title-txt">ZeroTouch K8s Assistant</div>
-            <div class="chat-subtitle" id="chat-subtitle-txt">Chat, deploy, inspect, and recover Kubernetes services</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:10px">
-            <button class="icon-btn lang-btn" onclick="setLang(uiLang==='zh'?'en':'zh')" title="Switch language" aria-label="Switch language">
-              <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
-                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/>
-                <path d="M2 8h12M8 2c1.8 1.8 2.6 4 2.6 6s-.8 4.2-2.6 6c-1.8-1.8-2.6-4-2.6-6s.8-4.2 2.6-6z" stroke="currentColor" stroke-width="1.1"/>
-              </svg>
-              <span id="lang-btn-txt">EN</span>
-            </button>
-            <button class="icon-btn guide-btn" onclick="openManual()" title="使用說明書 / User guide" aria-label="使用說明書 / User guide">
-              <svg viewBox="0 0 16 16" fill="none" width="17" height="17">
-                <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/>
-                <path d="M6.1 6.3c.1-1.05 1-1.8 2-1.8 1.1 0 2 .78 2 1.75 0 .72-.42 1.13-1.05 1.6-.58.42-.95.78-.95 1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-                <circle cx="8" cy="11.4" r=".65" fill="currentColor"/>
-              </svg>
-            </button>
-            <div class="status-pill"><div class="dot green"></div><span id="workspace-status-txt">Workspace ready</span></div>
-          </div>
-        </div>
         <div class="chat-messages" id="chat-messages"></div>
         <div class="chat-composer">
           <div class="composer-box">
-            <textarea class="chat-input" id="chat-input" placeholder="Message ZeroTouch K8s..." rows="1" oninput="autoGrowChatInput(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
-            <button class="chat-send" onclick="sendChat()" aria-label="Send message" id="chat-send-txt">Send</button>
+            <label for="chat-input" style="position:absolute;left:-9999px">輸入訊息</label>
+            <textarea class="chat-input" id="chat-input" placeholder="說說你想部署什麼，或問服務的狀況" rows="1" oninput="autoGrowChatInput(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
+            <button class="chat-send" type="button" onclick="sendChat()" id="chat-send-txt">送出</button>
           </div>
-          <div class="composer-hint" id="composer-hint-txt">Ask about Kubernetes, deploy services, list pods, scale workloads, or troubleshoot failures.</div>
+          <div class="composer-hint" id="composer-hint-txt">部署、擴縮、刪除之前都會先讓你確認。</div>
         </div>
       </div>
     </div>
@@ -1975,10 +1905,10 @@ html,body{height:100%;overflow:hidden}
       <div class="manual-panel">
         <div class="manual-panel-head">
           <div>
-            <div class="manual-panel-title" id="manual-title">📖 User Guide</div>
-            <div class="manual-panel-sub" id="manual-sub">Terms with a dotted underline are clickable definitions.</div>
+            <div class="manual-panel-title" id="manual-title">使用說明書</div>
+            <div class="manual-panel-sub" id="manual-sub">有虛線底線的名詞，點一下可以看簡單說明</div>
           </div>
-          <button class="manual-close" onclick="closeManual()" aria-label="Close">✕</button>
+          <button class="manual-close" type="button" onclick="closeManual()">關閉</button>
         </div>
         <div class="manual-panel-body" id="manual-body"></div>
       </div>
@@ -1988,13 +1918,13 @@ html,body{height:100%;overflow:hidden}
     <!-- 通用是/否確認彈窗：部署第一步偵測到名稱已存在或 port 被佔用時用，
          askConfirm() 回傳 Promise<boolean>，跟 startClarify 那種純文字提示不同，
          這個會真的擋住流程等使用者按下按鈕。 -->
-    <div id="confirm-dialog-overlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:300;align-items:center;justify-content:center;padding:24px">
+    <div id="confirm-dialog-overlay" style="display:none;z-index:300">
       <div class="confirm-dialog">
         <div class="confirm-dialog-title" id="confirm-dialog-title"></div>
         <div class="confirm-dialog-body" id="confirm-dialog-body"></div>
         <div class="confirm-dialog-actions">
-          <button class="deploy-confirm-btn" id="confirm-dialog-no">No</button>
-          <button class="deploy-confirm-btn primary" id="confirm-dialog-yes">Yes</button>
+          <button class="deploy-confirm-btn" type="button" id="confirm-dialog-no">否</button>
+          <button class="deploy-confirm-btn primary" type="button" id="confirm-dialog-yes">是</button>
         </div>
       </div>
     </div>
@@ -2077,9 +2007,9 @@ html,body{height:100%;overflow:hidden}
       <div class="page-title">GitOps Log</div>
       <div class="page-sub">Deployment history and rollback</div>
       <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <span style="font-size:13px;color:var(--text2)">All git commits for deployments</span>
-          <button class="btn-primary" onclick="loadGitops()">Refresh</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px">
+          <span style="font-size:14px;color:var(--text2)">每一次部署、擴縮、回滾都會留下一筆紀錄</span>
+          <button class="btn-sm" type="button" onclick="loadGitops()">重新整理</button>
         </div>
         <div id="gitops-list"><div style="color:var(--text3);font-size:13px">Loading...</div></div>
       </div>
@@ -2099,8 +2029,8 @@ html,body{height:100%;overflow:hidden}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
           <span style="font-size:13px;color:var(--text2)">點一個 Pod 看完整狀態跟趨勢圖 / Click a pod for full status &amp; trend charts</span>
           <div style="display:flex;gap:10px">
-            <button class="btn-primary" onclick="loadHealer()">Scan Now</button>
-            <button class="btn-primary" onclick="healerAutoFix()" style="background:#DC2626">Auto Fix All</button>
+            <button class="btn-sm" type="button" onclick="loadHealer()">立即掃描</button>
+            <button class="btn-primary danger" type="button" onclick="healerAutoFix()">全部自動修復</button>
           </div>
         </div>
         <div id="healer-list"><div style="color:var(--text3);font-size:13px">Loading...</div></div>
@@ -2121,7 +2051,7 @@ html,body{height:100%;overflow:hidden}
             <div class="manual-panel-title" id="pod-detail-title" style="font-family:monospace;font-size:16px">pod-name</div>
             <div class="manual-panel-sub" id="pod-detail-sub">--</div>
           </div>
-          <button class="manual-close" onclick="closePodDetail()" aria-label="Close">✕</button>
+          <button class="manual-close" type="button" onclick="closePodDetail()">關閉</button>
         </div>
         <div class="manual-panel-body" id="pod-detail-body"></div>
       </div>
@@ -2221,7 +2151,7 @@ html,body{height:100%;overflow:hidden}
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="modal-pod-name">Pod Details</div>
-      <button class="modal-close" onclick="closeModal()">✕</button>
+      <button class="modal-close" type="button" onclick="closeModal()">關閉</button>
     </div>
     <div class="modal-body" id="modal-pod-body"></div>
   </div>
@@ -2237,13 +2167,14 @@ const k8sEnabled = {{ 'true' if k8s else 'false' }};
 // 同一台瀏覽器換帳號登入會看到上一個帳號的聊天記錄。用 CURRENT_USER 把 key 綁定到
 // 帳號，換帳號登入時就不會看到別人（或自己上一個帳號）的聊天內容。
 const CURRENT_USER = "{{ username }}";
+const IS_ADMIN = {{ 'true' if is_admin else 'false' }};
 
 // ══════════════════════════════════════════════════════════════════
 //  中英切換（Chat 分頁 + 使用說明書）。專有名詞（Pod/Deployment/...）
 //  兩種語言都固定用英文，只有說明文字跟著切換。
 // ══════════════════════════════════════════════════════════════════
+// 2026-10-09 改版：介面只用中文（專有名詞與系統名稱用英文），不再提供語言切換
 let uiLang = 'zh';
-try { uiLang = localStorage.getItem('zt_lang') || 'zh'; } catch(e){}
 
 const I18N = {
   zh: {
@@ -2253,17 +2184,17 @@ const I18N = {
     chatSubtitle: '聊天、部署、檢視並修復 Kubernetes 服務',
     workspaceReady: '系統就緒',
     sendBtn: '送出',
-    composerHint: '用自然語言部署服務、查詢 Pod 狀態、調整副本數，或詢問任何 Kubernetes 問題。',
-    emptyTitle: '有什麼我能協助你處理叢集的？',
-    emptyDesc: '用自然語言描述你想做的事：部署服務、檢視運作狀態、排查錯誤，或詢問任何 Kubernetes 概念。',
+    composerHint: '部署、擴縮、刪除之前都會先讓你確認。',
+    emptyTitle: '想部署什麼，或想知道服務哪裡出了問題？',
+    emptyDesc: '直接用中文說。部署前會先列出規格、跑完安全、成本、效能三項審查，你確認後才會真的部署。',
     cards: [
-      {title:'部署服務', example:'deploy 3 nginx:latest pods for web-frontend', send:'deploy 3 nginx:latest pods for web-frontend'},
-      {title:'檢視叢集狀態', example:'list pods and show deployments', send:'list pods'},
-      {title:'學習 Kubernetes', example:'Explain Deployment vs Service', send:'Explain Kubernetes Deployment vs Service'},
-      {title:'排查問題', example:'How do I debug CrashLoopBackOff?', send:'How do I debug CrashLoopBackOff?'},
+      {title:'部署服務', example:'部署 2 個 nginx:1.27，開 80 port', send:'部署 2 個 nginx:1.27，開 80 port'},
+      {title:'查看我的 Pod', example:'列出我所有的 Pod', send:'列出我所有的 Pod'},
+      {title:'學 Kubernetes', example:'Deployment 跟 Service 差在哪', send:'Deployment 跟 Service 差在哪？'},
+      {title:'排查問題', example:'Pod 一直 CrashLoopBackOff 怎麼辦', send:'Pod 一直 CrashLoopBackOff 怎麼辦？'},
     ],
-    manualTitle: '📖 使用說明書',
-    manualSub: '名詞下方有虛線底線的可以點擊展開簡明定義',
+    manualTitle: '使用說明書',
+    manualSub: '有虛線底線的名詞，點一下可以看簡單說明',
   },
   en: {
     langBtn: '中文',
@@ -2453,7 +2384,7 @@ function renderManualBody(){
 // ── Clock ──
 function updateClock(){
   const el = document.getElementById('clock');
-  if(el) el.textContent = new Date().toLocaleTimeString('en-GB');
+  if(el) el.textContent = new Date().toLocaleTimeString('zh-TW', {hour12:false});
 }
 setInterval(updateClock, 1000);
 updateClock();
@@ -2515,8 +2446,31 @@ document.getElementById('manual-body') && document.getElementById('manual-body')
   tip.style.top = (r.bottom + 6) + 'px';
 });
 
+// ── 深色／淺色切換：記在這台瀏覽器，沒選過就跟著系統設定 ──
+function isDarkTheme(){
+  const t = document.documentElement.dataset.theme;
+  if(t) return t === 'dark';
+  return !window.matchMedia('(prefers-color-scheme: light)').matches;
+}
+function syncThemeBtn(){
+  const b = document.getElementById('theme-btn');
+  if(b) b.textContent = isDarkTheme() ? '淺色' : '深色';
+}
+function toggleTheme(){
+  const next = isDarkTheme() ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem('zt_theme', next); } catch(e){}
+  syncThemeBtn();
+}
+syncThemeBtn();
+
+const PAGE_TITLES = {chat:'對話', deployments:'服務', pods:'Pod', healer:'自動修復', dashboard:'資源總覽',
+  metrics:'監控指標', gitops:'部署紀錄', deploy:'部署', dataset:'訓練資料', kb:'知識庫'};
+
 // ── Page nav ──
 function showPage(name){
+  const tt = document.getElementById('topbar-title');
+  if(tt) tt.textContent = PAGE_TITLES[name] || '';
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const page = document.getElementById('page-' + name);
@@ -2543,22 +2497,41 @@ async function pollStatus(){
     const dot = document.getElementById('model-dot');
     const txt = document.getElementById('stat-model');
     const ms  = document.getElementById('model-status');
+    // 三種狀態分開講：就緒、正在載入、根本沒在執行（2026-10-09 之前沒在執行也顯示「載入中」，新手會一直等）
+    const mWarn = document.getElementById('model-warning');
     if(d.model_ready){
       dot.className = 'dot green';
-      if(ms) ms.textContent = 'Model Ready';
-      if(txt) txt.textContent = 'Ready';
-    } else {
+      if(ms) ms.textContent = '就緒';
+      if(txt) txt.textContent = '就緒';
+      if(mWarn) mWarn.classList.remove('show');
+    } else if(d.model_loading){
       dot.className = 'dot yellow';
-      if(ms) ms.textContent = 'Model Loading...';
-      if(txt) txt.textContent = 'Loading';
+      if(ms) ms.textContent = '載入中';
+      if(txt) txt.textContent = '載入中';
+      if(mWarn){
+        mWarn.className = 'alert-banner caution show';
+        document.getElementById('model-warning-title').textContent = 'AI 模型正在載入，大約需要一分鐘。';
+        document.getElementById('model-warning-body').textContent = '載入完成後這則提示會自動消失。這段時間一般問答會先用簡易回答。';
+      }
+    } else {
+      dot.className = 'dot red';
+      if(ms) ms.textContent = '未執行';
+      if(txt) txt.textContent = '未執行';
+      if(mWarn){
+        mWarn.className = 'alert-banner stop show';
+        document.getElementById('model-warning-title').textContent = 'AI 模型伺服器沒有在執行。';
+        document.getElementById('model-warning-body').innerHTML = IS_ADMIN
+          ? '一般問答會改用簡易回答，部署仍然可以用。請在專案資料夾開一個 PowerShell，執行 <code>python core/model_server.py</code>，大約一分鐘後這則提示會自動消失。'
+          : '一般問答會改用簡易回答，部署仍然可以用。平台管理員重新啟動模型後，這則提示會自動消失。';
+      }
     }
 
     const k8sDot = document.getElementById('k8s-dot');
     const k8sTxt = document.getElementById('k8s-status');
     if(k8sDot) k8sDot.className = 'dot ' + (d.k8s ? 'green' : 'red');
     if(k8sTxt) k8sTxt.textContent = d.customer_cluster
-      ? ('你的叢集 ' + (d.k8s ? 'Connected' : 'Offline'))
-      : ('K8s ' + (d.k8s ? 'Connected' : 'Simulation'));
+      ? (d.k8s ? '你的叢集已連線' : '你的叢集離線')
+      : (d.k8s ? '已連線' : '未連線');
 
     // 新手警告：Docker 沒開 / 開了但 K8s 連不上，兩種訊息分開講清楚原因跟解法
     const warn = document.getElementById('docker-warning');
@@ -2569,32 +2542,27 @@ async function pollStatus(){
         // 客戶自帶叢集（2026-10-09）：平台自己的 Docker/K8s 跟客戶無關，看的是客戶叢集的回報
         const cc = d.customer_cluster;
         if(cc.ok){
-          warn.style.display = 'none';
+          warn.className = 'alert-banner stop';
         } else if(cc.code === 'awaiting_report'){
           // 平台剛重啟、還在等第一份回報：黃色提示，不是紅色警報
           wTitle.textContent = cc.title; wBody.innerHTML = escHtml(cc.howto || '');
-          warn.style.background = '#FEF3C7'; warn.style.borderColor = '#F59E0B'; warn.style.color = '#92400E';
-          warn.style.display = 'flex';
+          warn.className = 'alert-banner caution show';
         } else {
-          wTitle.textContent = cc.title || '你的叢集目前離線 / Your cluster is offline';
-          wBody.innerHTML = escHtml(cc.howto || '') +
-            '<br>離線期間不能部署或修改服務（已經在跑的服務不受影響）。 / Deploys and changes are paused while offline.';
-          warn.style.background = '#FEE2E2'; warn.style.borderColor = '#DC2626'; warn.style.color = '#991B1B';
-          warn.style.display = 'flex';
+          wTitle.textContent = cc.title || '你的叢集目前離線';
+          wBody.innerHTML = escHtml(cc.howto || '') + '<br>離線期間不能部署或修改服務，已經在跑的服務不受影響。';
+          warn.className = 'alert-banner stop show';
         }
       } else if(!d.docker_running){
-        wTitle.textContent = 'Docker 沒有啟動 / Docker is not running';
+        wTitle.textContent = 'Docker 沒有啟動';
         wBody.innerHTML = (d.docker_message ? escHtml(d.docker_message)+'<br>' : '') +
-          '請先開啟 Docker Desktop，等它完全啟動（圖示變綠/穩定）後重新整理這個頁面。<br>' +
-          "Please start Docker Desktop, wait until it's fully running, then refresh this page.";
-        warn.style.display = 'flex';
+          '請先開啟 Docker Desktop，等它完全啟動後重新整理這個頁面。';
+        warn.className = 'alert-banner stop show';
       } else if(!d.k8s){
-        wTitle.textContent = 'Docker 已啟動，但 Kubernetes 連不上 / Docker is running, but Kubernetes is unreachable';
-        wBody.innerHTML = '請確認 Docker Desktop 設定裡的 Kubernetes 功能已開啟（Settings → Kubernetes → Enable Kubernetes），啟動可能需要 1–2 分鐘。<br>' +
-          'Please check that Kubernetes is enabled in Docker Desktop settings (Settings → Kubernetes → Enable Kubernetes) — it can take 1–2 minutes to start.';
-        warn.style.display = 'flex';
+        wTitle.textContent = 'Docker 已啟動，但 Kubernetes 連不上';
+        wBody.innerHTML = '請到 Docker Desktop 的 Settings 裡打開 Kubernetes 頁籤，勾選 Enable Kubernetes。啟動大約需要 1 到 2 分鐘。';
+        warn.className = 'alert-banner stop show';
       } else {
-        warn.style.display = 'none';
+        warn.className = 'alert-banner stop';
       }
     }
   } catch(e){}
@@ -3174,9 +3142,9 @@ async function loadPodList(){
       const readyCond = (p.conditions||[]).find(c=>c.type==='Ready');
       const isReady = readyCond ? readyCond.status==='True' : false;
       let color, label;
-      if(p.phase==='Running' && isReady){ color='#16A34A'; label='Running'; }
-      else if(p.phase==='Pending'){ color='#D97706'; label='Pending'; }
-      else { color='#DC2626'; label=p.phase||'Unknown'; }
+      if(p.phase==='Running' && isReady){ color='var(--pass)'; label='Running'; }
+      else if(p.phase==='Pending'){ color='var(--caution)'; label='Pending'; }
+      else { color='var(--stop)'; label=p.phase||'Unknown'; }
       return `<div class="pod-row" onclick="openPodDetail('${escHtml(p.name)}')">
         <span class="pod-dot" style="background:${color}" title="${escHtml(label)}"></span>
         <span class="pod-name">${escHtml(p.name)}</span>
@@ -3229,7 +3197,7 @@ async function openPodDetail(name){
     renderPodDetail(name, detailData, histData.history || []);
   }catch(e){
     if(_podDetailCurrent !== name) return;
-    document.getElementById('pod-detail-body').innerHTML = '<div style="color:#DC2626;font-size:13px">Error: '+e+'</div>';
+    document.getElementById('pod-detail-body').innerHTML = '<div style="color:var(--stop);font-size:13px">Error: '+e+'</div>';
   }
 }
 
@@ -3251,7 +3219,7 @@ function renderPodDetail(name, detailData, history){
   html += (pod.containers||[]).map(c => `
     <div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)">
       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.name)} <span style="color:var(--text3)">(${escHtml(c.image)})</span></span>
-      <span style="flex-shrink:0;color:${c.ready?'#16A34A':'#DC2626'}">${c.ready ? 'ready' : escHtml((c.state||'')+(c.reason?'/'+c.reason:''))} · restarts ${c.restart_count}</span>
+      <span style="flex-shrink:0;color:${c.ready?'var(--pass)':'var(--stop)'}">${c.ready ? 'ready' : escHtml((c.state||'')+(c.reason?'/'+c.reason:''))} · restarts ${c.restart_count}</span>
     </div>`).join('');
   const ru = pod.real_usage || {};
   html += `<div style="font-size:12px;color:var(--text3);padding-top:6px">實際使用 / Actual usage：` +
@@ -3268,7 +3236,7 @@ function renderPodDetail(name, detailData, history){
   if(!pod.healthy){
     html += `<div class="pod-detail-section" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <button class="btn-primary" onclick="diagnosePodDetail('${escHtml(name)}')" style="background:var(--surface);color:var(--text);border:1px solid var(--border)">診斷根因 / Diagnose</button>
-      <button class="btn-primary" onclick="fixPod('${escHtml(name)}')" style="background:#DC2626">Fix</button>
+      <button class="btn-primary" onclick="fixPod('${escHtml(name)}')" style="background:var(--stop)">Fix</button>
     </div>
     <div id="pod-diagnosis-result" class="pod-detail-section" style="font-size:13px;display:none"></div>`;
   }
@@ -3322,11 +3290,11 @@ function renderRestartChart(history){
   const pts = restarts.map((v,i) => [pad + i*stepX, h - pad - (v/maxR)*(h-pad*2)]);
   const path = pts.map((p,i) => (i===0?'M':'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block">
-    <path d="${path}" fill="none" stroke="#2563EB" stroke-width="2"/>
-    ${pts.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.5" fill="#2563EB"/>`).join('')}
-    <text x="${pad}" y="${h-4}" font-size="10" fill="#9CA3AF">${escHtml(_fmtChartTime(history[0].t))}</text>
-    <text x="${w-pad}" y="${h-4}" font-size="10" fill="#9CA3AF" text-anchor="end">${escHtml(_fmtChartTime(history[history.length-1].t))}</text>
-    <text x="${w-pad}" y="14" font-size="11" fill="#2563EB" text-anchor="end">目前 / current: ${restarts[restarts.length-1]}</text>
+    <path d="${path}" fill="none" stroke="var(--signal)" stroke-width="2"/>
+    ${pts.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.5" fill="var(--signal)"/>`).join('')}
+    <text x="${pad}" y="${h-4}" font-size="10" fill="var(--text-3)">${escHtml(_fmtChartTime(history[0].t))}</text>
+    <text x="${w-pad}" y="${h-4}" font-size="10" fill="var(--text-3)" text-anchor="end">${escHtml(_fmtChartTime(history[history.length-1].t))}</text>
+    <text x="${w-pad}" y="14" font-size="11" fill="var(--signal)" text-anchor="end">目前 / current: ${restarts[restarts.length-1]}</text>
   </svg>`;
 }
 
@@ -3348,8 +3316,8 @@ function renderTrendChart(points, color, unit){
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block">
     <path d="${path}" fill="none" stroke="${color}" stroke-width="2"/>
     ${pts.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2" fill="${color}"/>`).join('')}
-    <text x="${pad}" y="${h-6}" font-size="10" fill="#9CA3AF">${escHtml(_fmtChartTime(points[0].t))}</text>
-    <text x="${w-pad}" y="${h-6}" font-size="10" fill="#9CA3AF" text-anchor="end">${escHtml(_fmtChartTime(points[points.length-1].t))}</text>
+    <text x="${pad}" y="${h-6}" font-size="10" fill="var(--text-3)">${escHtml(_fmtChartTime(points[0].t))}</text>
+    <text x="${w-pad}" y="${h-6}" font-size="10" fill="var(--text-3)" text-anchor="end">${escHtml(_fmtChartTime(points[points.length-1].t))}</text>
     <text x="${w-pad}" y="16" font-size="11" fill="${color}" text-anchor="end">目前 / current: ${last}${unit}</text>
   </svg>`;
 }
@@ -3363,10 +3331,10 @@ function renderHealthTimeline(history){
   const segW = w / history.length;
   const rects = history.map((s,i) => {
     const healthy = s.total>0 && s.ready===s.total && s.phase==='Running';
-    return `<rect x="${(i*segW).toFixed(1)}" y="0" width="${Math.ceil(segW)}" height="${h}" fill="${healthy?'#16A34A':'#DC2626'}"/>`;
+    return `<rect x="${(i*segW).toFixed(1)}" y="0" width="${Math.ceil(segW)}" height="${h}" fill="${healthy?'var(--pass)':'var(--stop)'}"/>`;
   }).join('');
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block;border-radius:4px;overflow:hidden">${rects}</svg>
-    <div style="display:flex;justify-content:space-between;font-size:10px;color:#9CA3AF;margin-top:2px">
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);margin-top:2px">
       <span>${escHtml(_fmtChartTime(history[0].t))}</span><span>${escHtml(_fmtChartTime(history[history.length-1].t))}</span>
     </div>`;
 }
@@ -3404,15 +3372,15 @@ async function loadHealerBgStatus(){
   try{
     const r=await fetch('/api/healer/status'); const d=await r.json();
     if(d.running){
-      banner.style.background='#ECFDF5'; banner.style.border='1px solid #6EE7B7'; banner.style.color='#065F46';
+      banner.style.background='var(--pass-soft)'; banner.style.border='1px solid var(--pass)'; banner.style.color='var(--pass)';
       banner.innerHTML=`🟢 自動監控中，每 30 秒自動掃描一次${d.last_scan?'，上次掃描：'+new Date(d.last_scan).toLocaleTimeString():''} / Auto-monitoring active, scans every 30s`;
     } else if(d.message){
       // K8s 有連線，但背景執行緒死掉或卡住了——這是真正的異常，不是「K8s 沒連線」這種
       // 正常情況，用紅色橫幅+具體建議動作顯示，不能只顯示跟正常運行時一樣的灰/黃色調。
-      banner.style.background='#FEF2F2'; banner.style.border='1px solid #FCA5A5'; banner.style.color='#991B1B';
+      banner.style.background='var(--stop-soft)'; banner.style.border='1px solid var(--stop)'; banner.style.color='var(--stop)';
       banner.innerHTML='🔴 '+escHtml(d.message);
     } else {
-      banner.style.background='#FFFBEB'; banner.style.border='1px solid #FCD34D'; banner.style.color='#92400E';
+      banner.style.background='var(--caution-soft)'; banner.style.border='1px solid var(--caution)'; banner.style.color='var(--caution)';
       banner.innerHTML='⚠️ 未啟動自動監控（K8s 未連線），只能手動掃描 / Auto-monitoring is not running (K8s not connected) — manual scan only';
     }
     // 「正在修復中」獨立顯示一行轉圈動畫，不管上面 banner 是什麼顏色都疊加在
@@ -3436,7 +3404,7 @@ async function loadHealerBgStatus(){
           <span style="font-weight:600">${escHtml(a.pod||'')}</span>
           <span style="color:var(--text3)">${a.time?new Date(a.time).toLocaleTimeString():''}</span>
         </div>
-        <div style="font-size:12px;color:#6B7280;margin-top:2px">${escHtml(a.reason||'')} → ${escHtml(a.root_cause||a.error||'-')} → ${escHtml(a.action||'-')} ${a.ok===false?'❌':'✅'}</div>
+        <div style="font-size:12px;color:var(--text-2);margin-top:2px">${escHtml(a.reason||'')} → ${escHtml(a.root_cause||a.error||'-')} → ${escHtml(a.action||'-')} ${a.ok===false?'❌':'✅'}</div>
         ${a.llm_raw_guess ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">AI 原本的猜測：${escHtml(a.llm_raw_guess)}（未採用，證據不足）</div>` : ''}
       </div>`).join('') : '<div style="color:var(--text3);font-size:13px">尚未發生自動修復事件 / No auto-heal events yet</div>';
   }catch(e){}
@@ -3477,7 +3445,7 @@ async function loadMetrics(){
     }
     const up = !!m.prometheus_up;
     document.getElementById('prom-status').textContent = up ? 'Online' : 'Offline';
-    document.getElementById('prom-status').style.color = up ? 'var(--green)' : '#DC2626';
+    document.getElementById('prom-status').style.color = up ? 'var(--green)' : 'var(--stop)';
     document.getElementById('prom-pods').textContent=m.running_pods!=null?m.running_pods:'N/A';
     document.getElementById('prom-url').textContent=d.url||'localhost:9090';
     // 2026-09-15：這個連結之前是寫死 http://192.168.50.219:30922（很久以前某次
@@ -3512,8 +3480,8 @@ async function loadMetrics(){
 // >=100% 紅色已超出），不要各處各自判斷、顏色標準兜不起來。
 function _dashWarnColor(pct){
   if(pct == null) return '';
-  if(pct >= 100) return '#DC2626';
-  if(pct >= 80) return '#D97706';
+  if(pct >= 100) return 'var(--stop)';
+  if(pct >= 80) return 'var(--caution)';
   return '';
 }
 function _dashPctBar(barId, labelId, usedVal, capVal){
@@ -3574,8 +3542,8 @@ async function loadDashboard(){
       document.getElementById('dash-cpu-trend').innerHTML = msg;
       document.getElementById('dash-mem-trend').innerHTML = msg;
     } else {
-      document.getElementById('dash-cpu-trend').innerHTML = renderTrendChart(d.cpu_trend, '#16A34A', ' cores');
-      document.getElementById('dash-mem-trend').innerHTML = renderTrendChart(d.mem_trend, '#2563EB', ' MiB');
+      document.getElementById('dash-cpu-trend').innerHTML = renderTrendChart(d.cpu_trend, 'var(--pass)', ' cores');
+      document.getElementById('dash-mem-trend').innerHTML = renderTrendChart(d.mem_trend, 'var(--signal)', ' MiB');
     }
 
     const deps = d.my_deployments || [];
@@ -3616,7 +3584,7 @@ async function loadDatasetStats(){
 
 // ── Knowledge Base (RAG) ──
 function kbConfColor(conf){
-  return conf === 'high' ? 'var(--green)' : (conf === 'medium' ? '#D97706' : 'var(--text3)');
+  return conf === 'high' ? 'var(--green)' : (conf === 'medium' ? 'var(--caution)' : 'var(--text3)');
 }
 function kbConfBadge(conf, score){
   return '<span style="font-size:11px;font-weight:600;color:'+kbConfColor(conf)+'">'+conf.toUpperCase()+' · '+(score*100).toFixed(0)+'%</span>';
@@ -3833,7 +3801,7 @@ function initChats(){
   currentChatId = localStorage.getItem(_currentChatKey()) || null;
   if(!chats.length){
     const id = 'chat_' + Date.now();
-    chats.push({id, title:'New Chat', messages:[]});
+    chats.push({id, title:'新對話', messages:[]});
     currentChatId = id;
     saveChats();
   }
@@ -3855,7 +3823,7 @@ function newChat(){
     try { chats = JSON.parse(localStorage.getItem(_chatsKey())||'[]'); } catch(e){ chats=[]; }
   }
   const id = 'chat_' + Date.now();
-  chats.push({id, title:'New Chat', messages:[]});
+  chats.push({id, title:'新對話', messages:[]});
   currentChatId = id;
   saveChats();
   showPage('chat');
@@ -3892,8 +3860,8 @@ function renderChatList(){
   if(!el) return;
   el.innerHTML = chats.slice().reverse().map(ch=>`
     <div class="chat-room-item ${ch.id===currentChatId?'active':''}" onclick="switchChat('${ch.id}')">
-      <span class="chat-room-title"><svg viewBox="0 0 16 16" fill="none" width="13" height="13" style="flex-shrink:0"><path d="M2 3a1 1 0 011-1h10a1 1 0 011 1v7a1 1 0 01-1 1H9l-3 2v-2H3a1 1 0 01-1-1V3z" stroke="currentColor" stroke-width="1.5"/></svg><span>${escHtml(ch.title)}</span></span>
-      <span class="chat-room-delete" onclick="deleteChat('${ch.id}',event)">&#x2715;</span>
+      <span class="chat-room-title"><span>${escHtml(ch.title)}</span></span>
+      <span class="chat-room-delete" role="button" tabindex="0" title="刪除這個對話" onclick="deleteChat('${ch.id}',event)">刪除</span>
     </div>`).join('');
 }
 
@@ -3914,7 +3882,7 @@ function renderMessages(){
          <strong>${escHtml(c.title)}</strong><span>${escHtml(c.example)}</span>
        </div>`).join('');
     msgs.innerHTML = `<div class="chat-empty">
-      <div class="chat-empty-logo">K</div>
+      <div class="chat-empty-logo"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13 3.5v19M3.5 13h19M6.3 6.3l13.4 13.4M19.7 6.3 6.3 19.7"/></g><circle cx="13" cy="13" r="3.4" fill="var(--panel)" stroke="currentColor" stroke-width="2"/></svg></div>
       <h1>${escHtml(t.emptyTitle)}</h1>
       <p>${escHtml(t.emptyDesc)}</p>
       <div class="prompt-grid">${cardsHtml}</div>
@@ -3935,16 +3903,16 @@ function renderSourcesHTML(sources){
       <div style="font-size:11.5px;color:var(--text3);margin-top:3px;white-space:pre-wrap">${escHtml(s.text||'')}</div>
     </div>`).join('');
   return `<details style="margin-top:10px;font-size:12px;border-top:1px solid var(--border);padding-top:8px">
-    <summary style="cursor:pointer;color:var(--text3)">📎 ${sources.length} 個引用來源（RAG 知識庫）</summary>
+    <summary style="cursor:pointer;color:var(--text3)">參考了知識庫的 ${sources.length} 段資料</summary>
     <div style="margin-top:6px">${items}</div>
   </details>`;
 }
 
 function renderMsgHTML(role, content, sources){
   if(role==='user'){
-    return `<div class="msg user" style="margin-bottom:16px"><div class="msg-avatar">U</div><div class="msg-bubble">${escHtml(content)}</div></div>`;
+    return `<div class="msg user"><div class="msg-bubble">${escHtml(content)}</div></div>`;
   }
-  return `<div class="msg ai" style="margin-bottom:16px"><div class="msg-avatar">K</div><div class="msg-bubble" style="white-space:pre-wrap">${content}${renderSourcesHTML(sources)}</div></div>`;
+  return `<div class="msg ai"><div class="msg-bubble" style="white-space:pre-wrap">${content}${renderSourcesHTML(sources)}</div></div>`;
 }
 
 function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -3959,7 +3927,8 @@ function appendMsg(role, content, sources){
   saveChats();
   renderChatList();
   const msgs = document.getElementById('chat-messages');
-  msgs.innerHTML += renderMsgHTML(role, content, sources);
+  msgs.insertAdjacentHTML('beforeend', renderMsgHTML(role, content, sources));
+  const added = msgs.lastElementChild; if(added) added.classList.add('enter');
   msgs.scrollTop = msgs.scrollHeight;
 }
 
@@ -3968,11 +3937,11 @@ function appendTyping(label){
   let div = document.getElementById('typing-indicator');
   if(!div){
     div = document.createElement('div');
-    div.className = 'msg ai'; div.id = 'typing-indicator'; div.style.marginBottom='16px';
+    div.className = 'msg ai'; div.id = 'typing-indicator';
     msgs.appendChild(div);
   }
   const txt = label || 'Thinking';
-  div.innerHTML = '<div class="msg-avatar">K</div><div class="think-row">'+
+  div.innerHTML = '<div class="think-row">'+
     '<div class="spinner"></div><span data-role="think-label">'+escHtml(txt)+'</span>'+
     '<span class="think-dots"><span>.</span><span>.</span><span>.</span></span></div>';
   msgs.scrollTop = msgs.scrollHeight;
@@ -4806,19 +4775,18 @@ def register():
     password = request.form.get("password","")
     confirm  = request.form.get("confirm","")
     if not username or not password:
-        return render_template_string(HTML, logged_in=False, page='register', error="Please fill in all fields", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
+        return render_template_string(HTML, logged_in=False, page='register', error="請填寫帳號、密碼和確認密碼。", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     if password != confirm:
-        return render_template_string(HTML, logged_in=False, page='register', error="Passwords do not match", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
+        return render_template_string(HTML, logged_in=False, page='register', error="兩次輸入的密碼不一樣，請重新輸入。", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     if username in USERS:
-        return render_template_string(HTML, logged_in=False, page='register', error="Username already taken", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
+        return render_template_string(HTML, logged_in=False, page='register', error="這個帳號名稱已經有人用了，請換一個。", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     if _namespace_taken(username):
         return render_template_string(
             HTML, logged_in=False, page='register',
-            error="這個帳號名稱跟既有帳號太相似（系統會把它們視為同一個工作空間），請換一個名稱。 / "
-                  "This username is too similar to an existing one — please choose another.",
+            error="這個帳號名稱跟既有帳號太相似（系統會把它們視為同一個工作空間），請換一個名稱。",
             k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     if len(password) < 6:
-        return render_template_string(HTML, logged_in=False, page='register', error="Password must be at least 6 characters", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
+        return render_template_string(HTML, logged_in=False, page='register', error="密碼至少要 6 個字元。", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     USERS[username] = {"password_hash": hash_password(password), "created_at": datetime.now().isoformat(),
                        "violation_count": 0, "banned": False}
     with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.json"), "w", encoding="utf-8") as _uf:
@@ -4838,8 +4806,7 @@ def login():
         # 動作，不要讓使用者以為自己打錯密碼一直重試（AGENT_RULES.md 新手友善原則）。
         return render_template_string(
             HTML, logged_in=False, page='login',
-            error="這個帳號是用 Google 登入建立的，沒有密碼，請改用下方的「使用 Google 登入」。 / "
-                  "This account was created via Google Sign-In and has no password — please use the Google button below.",
+            error="這個帳號是用 Google 登入建立的，沒有密碼，請改按下方的「使用 Google 帳號登入」。",
             k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     stored_hash = stored_user.get("password_hash", "") if isinstance(stored_user, dict) else stored_user
     if verify_password(password, stored_hash):
@@ -4848,7 +4815,7 @@ def login():
             # 不能只回 401——要講清楚原因，不然使用者會以為是打錯密碼。
             return render_template_string(
                 HTML, logged_in=False, page='login',
-                error="This account has been banned for repeated malicious behavior. / 此帳號因累積多次惡意行為已被封鎖。",
+                error="這個帳號因為多次嘗試操縱系統，已經被封鎖。",
                 k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
         # 舊帳號可能是「純字串密碼」或「dict 但裡面存的是弱雜湊（沒加鹽的 sha256）」，
         # 登入成功那一刻密碼是明文可用的，順便升級成 pbkdf2，不用等使用者自己改密碼。
@@ -4863,7 +4830,7 @@ def login():
         session["username"] = username
         session["is_admin"] = _is_admin_user(username)  # 密碼帳號恆為 False，保持呼叫一致避免未來改動漏掉
         return redirect("/")
-    return render_template_string(HTML, logged_in=False, page='login', error="Invalid username or password", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
+    return render_template_string(HTML, logged_in=False, page='login', error="帳號或密碼不正確。", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
 
 @app.route("/auth/logout", methods=["POST"])
 def logout():
@@ -4876,8 +4843,7 @@ def _google_config_error_page():
     404/500，講清楚原因（AGENT_RULES.md 新手友善原則：不能靜默失敗）。"""
     return render_template_string(
         HTML, logged_in=False, page='login',
-        error="Google 登入尚未設定（需要在 .env 填入 GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET）。 / "
-              "Google Sign-In is not configured yet.",
+        error="Google 登入尚未設定（需要在 .env 填入 GOOGLE_CLIENT_ID 和 GOOGLE_CLIENT_SECRET）。",
         k8s=K8S_ENABLED, username='', google_login_available=False)
 
 
@@ -4974,8 +4940,7 @@ def google_callback():
         _save_users()
         _ensure_user_namespace(_user_namespace(username))
     elif USERS[username].get("banned"):
-        return _login_error(
-            "This account has been banned for repeated malicious behavior. / 此帳號因累積多次惡意行為已被封鎖。")
+        return _login_error("這個帳號因為多次嘗試操縱系統，已經被封鎖。")
 
     session["username"] = username
     session["is_admin"] = _is_admin_user(username)
@@ -4999,7 +4964,7 @@ def _enforce_ban():
             return jsonify({"error": "This account has been banned for repeated malicious behavior. / 此帳號因累積多次惡意行為已被封鎖。"}), 403
         return render_template_string(
             HTML, logged_in=False, page='login',
-            error="This account has been banned for repeated malicious behavior. / 此帳號因累積多次惡意行為已被封鎖。",
+            error="這個帳號因為多次嘗試操縱系統，已經被封鎖。",
             k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     return None
 
