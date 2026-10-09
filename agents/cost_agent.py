@@ -90,6 +90,22 @@ _APP_PROFILES = {
 }
 
 
+def recommended_resources(image: str, app_name: str = "", memory: str = None, cpu: str = None) -> dict:
+    """部署時實際套用的資源設定。使用者有指定的維度照使用者的（需求量與上限相同），
+    沒指定的依映像檔類型補預設值。
+
+    2026-10-09 統一：原本部署前審查看的設定完全沒有資源欄位、本機部署依映像檔類型補預設、
+    客戶叢集的 Git 設定又固定 100m/128Mi，三處各用各的。審查因此一直提醒「沒設定資源上限」，
+    但實際部署其實有補，審查看的跟真正部署的不是同一份設定。現在三處都呼叫這裡。
+    """
+    req_cpu, req_mem, lim_cpu, lim_mem = _APP_PROFILES.get(
+        _detect_app_type(image or "", app_name or ""), _APP_PROFILES["default"])
+    return {
+        "requests": {"cpu": cpu or f"{req_cpu}m", "memory": memory or f"{req_mem}Mi"},
+        "limits":   {"cpu": cpu or f"{lim_cpu}m", "memory": memory or f"{lim_mem}Mi"},
+    }
+
+
 def _detect_app_type(image: str, app_name: str = "") -> str:
     """根據映像名稱和 app_name 推測應用程式類型。"""
     text = f"{image} {app_name}".lower()

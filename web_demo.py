@@ -385,20 +385,9 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
         # 改成套用 agents/cost_agent 既有的「依 image 類型推薦資源」規則（跟審查卡上顯示
         # 給使用者看的建議是同一份 profile，不會兩邊數字不一致）；使用者有指定的維度就照使用者的，
         # 沒指定的維度才補預設值。
-        try:
-            from agents.cost_agent import _APP_PROFILES, _detect_app_type
-            _profile = _APP_PROFILES.get(_detect_app_type(image, app_name), _APP_PROFILES["default"])
-            _req_cpu, _req_mem, _lim_cpu, _lim_mem = _profile
-        except Exception:
-            _req_cpu, _req_mem, _lim_cpu, _lim_mem = 100, 128, 500, 256
-        cpu_req = cpu or f"{_req_cpu}m"
-        cpu_lim = cpu or f"{_lim_cpu}m"
-        mem_req = memory or f"{_req_mem}Mi"
-        mem_lim = memory or f"{_lim_mem}Mi"
-        resources = k8s_client.V1ResourceRequirements(
-            requests={"memory": mem_req, "cpu": cpu_req},
-            limits={"memory": mem_lim, "cpu": cpu_lim},
-        )
+        from agents.cost_agent import recommended_resources
+        _res = recommended_resources(image, app_name, memory, cpu)
+        resources = k8s_client.V1ResourceRequirements(requests=_res["requests"], limits=_res["limits"])
         container = k8s_client.V1Container(
             name=app_name, image=image,
             ports=[k8s_client.V1ContainerPort(container_port=port)],
@@ -1114,17 +1103,15 @@ def _build_agent_manifest(parsed):
     port = int(parsed.get("port", 80))
     memory = parsed.get("memory")
     cpu = parsed.get("cpu")
+    # 審查看的必須是實際會部署的那一份：資源預設值與安全設定跟 k8s_deploy／Git 設定相同
+    from agents.cost_agent import recommended_resources
     container = {
         "name": app_name,
         "image": image,
         "ports": [{"containerPort": port}],
+        "resources": recommended_resources(image, app_name, memory, cpu),
+        "securityContext": {"allowPrivilegeEscalation": False},
     }
-    if memory or cpu:
-        cpu_req = cpu or "100m"
-        container["resources"] = {
-            "requests": {"memory": memory, "cpu": cpu_req} if memory else {"cpu": cpu_req},
-            "limits": {"memory": memory, "cpu": cpu_req} if memory else {"cpu": cpu_req},
-        }
     return {
         "apiVersion": "apps/v1",
         "kind": "Deployment",

@@ -161,3 +161,20 @@ class TestAnalyzeManifest:
         # 用 pytest.approx 容許這個已知的四捨五入誤差，不要求逐位元一致。
         import pytest
         assert cost["memory_gib"] == pytest.approx(3 * 128 / 1024, abs=0.01)
+
+
+def test_review_manifest_uses_same_resources_as_actual_deploy_2026_10_09():
+    """部署前審查看的設定，要跟實際部署（本機、Git）用同一套資源預設值。
+    原本審查看的設定沒有資源欄位，一直提醒「沒設定資源上限」，但實際部署其實有補。"""
+    from agents.cost_agent import recommended_resources
+    r = recommended_resources("nginx:1.27", "web")
+    assert r["requests"]["memory"] and r["limits"]["memory"] and r["limits"]["cpu"]
+    # 使用者有指定的維度照使用者的
+    r2 = recommended_resources("nginx:1.27", "web", memory="512Mi")
+    assert r2["requests"]["memory"] == r2["limits"]["memory"] == "512Mi"
+    from gitops.manifest_writer import _build_deployment_yaml
+    import yaml
+    doc = yaml.safe_load(_build_deployment_yaml({"app_name": "web", "image": "nginx:1.27", "pods": 1, "port": 80}, "user-x"))
+    c = doc["spec"]["template"]["spec"]["containers"][0]
+    assert c["resources"] == recommended_resources("nginx:1.27", "web")
+    assert c["securityContext"]["allowPrivilegeEscalation"] is False

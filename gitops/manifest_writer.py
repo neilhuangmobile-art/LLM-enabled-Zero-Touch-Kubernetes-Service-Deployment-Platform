@@ -122,8 +122,9 @@ def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
     image     = llm_result.get("image",    "nginx:latest")
     replicas  = int(llm_result.get("replicas", llm_result.get("pods", 1)))
     port      = int(llm_result.get("port", 80))
-    cpu_req   = llm_result.get("cpu",    "100m")
-    mem_req   = llm_result.get("memory", "128Mi")
+    # 資源設定跟本機部署、部署前審查共用同一套規則（agents/cost_agent.recommended_resources）
+    from agents.cost_agent import recommended_resources
+    resources = recommended_resources(image, app_name, llm_result.get("memory"), llm_result.get("cpu"))
     env_vars  = llm_result.get("env",    {})
 
     doc = {
@@ -148,10 +149,8 @@ def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
                         "name" : app_name,
                         "image": image,
                         "ports": [{"containerPort": port}],
-                        "resources": {
-                            "requests": {"cpu": cpu_req,    "memory": mem_req},
-                            "limits"  : {"cpu": cpu_req,    "memory": mem_req},
-                        },
+                        "resources": resources,
+                        "securityContext": {"allowPrivilegeEscalation": False},
                         "env": [
                             {"name": k, "value": str(v)}
                             for k, v in env_vars.items()
