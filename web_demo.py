@@ -1537,7 +1537,7 @@ tbody tr:hover td{background:var(--signal-soft)}
 
 
 /* ── 分析報告 ── */
-.rp{display:flex;flex-direction:column;gap:18px}
+.rp{display:flex;flex-direction:column;gap:18px;padding:16px 18px 18px}
 .rp-period{display:flex;gap:6px;flex-wrap:wrap}
 .rp-period .chip.on{background:var(--signal);color:var(--on-signal);border-color:var(--signal)}
 .rp-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
@@ -1596,7 +1596,8 @@ tbody tr:hover td{background:var(--signal-soft)}
   #print-host .module{border:0!important;box-shadow:none!important;background:#fff!important}
   #print-host .module::before,#print-host .module::after{display:none!important}
   #print-host .filters,#print-host .rp-period,#print-host .rp-pdf-hint{display:none!important}
-  #print-host *{animation:none!important}
+  #print-host *,#print-host *::before,#print-host *::after{animation:none!important}
+  #print-host .rp-chart{max-width:820px}
   #print-host .rp-sec,#print-host .rp-kpi,#print-host .rp-chart{break-inside:avoid}
   #print-host .print-title{display:block!important;font-size:20px;font-weight:700;margin:0 0 4px}
 }
