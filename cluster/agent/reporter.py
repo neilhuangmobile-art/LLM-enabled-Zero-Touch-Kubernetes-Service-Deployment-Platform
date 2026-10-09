@@ -18,7 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-AGENT_VERSION = "1"
+AGENT_VERSION = "2"  # 2：補 Pod IP、容器規格、Deployment 時間、Service（平台第 5 階段要用）
 API = "https://kubernetes.default.svc"
 SA_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
 NS = os.environ.get("ZT_NAMESPACE", "")
@@ -63,7 +63,7 @@ def collect():
     errors = []
     ns = urllib.parse.quote(NS)
     rep = {"agent_version": AGENT_VERSION, "namespace": NS, "errors": errors,
-           "deployments": [], "pods": [], "events": [], "nodes": [], "metrics": None}
+           "deployments": [], "pods": [], "events": [], "nodes": [], "metrics": None, "services": []}
 
     src = kget(f"/apis/source.toolkit.fluxcd.io/v1/namespaces/{ns}/gitrepositories/zt-apps", errors)
     ks = kget(f"/apis/kustomize.toolkit.fluxcd.io/v1/namespaces/{ns}/kustomizations/zt-apps", errors)
@@ -73,8 +73,12 @@ def collect():
     for d in (kget(f"/apis/apps/v1/namespaces/{ns}/deployments", errors) or {}).get("items", []):
         spec, st = d.get("spec", {}), d.get("status", {})
         c0 = ((spec.get("template") or {}).get("spec") or {}).get("containers") or [{}]
+        times = [d["metadata"].get("creationTimestamp")] + [
+            c.get("lastUpdateTime") or c.get("lastTransitionTime") for c in st.get("conditions") or []]
         rep["deployments"].append({
             "name": d["metadata"]["name"], "replicas": spec.get("replicas") or 0,
+            "created": d["metadata"].get("creationTimestamp"),
+            "updated": max([t for t in times if t] or [None]),
             "ready": st.get("readyReplicas") or 0, "available": st.get("availableReplicas") or 0,
             "image": c0[0].get("image"),
             "memory_limit": ((c0[0].get("resources") or {}).get("limits") or {}).get("memory"),
@@ -102,10 +106,23 @@ def collect():
                                         "previous": "true" if unhealthy["restart_count"] else "false"})
             logs = kget(f"/api/v1/namespaces/{ns}/pods/{urllib.parse.quote(meta['name'])}/log?{q}",
                         errors, raw=True) or ""
+        spec_containers = [{
+            "name": c.get("name"), "image": c.get("image"),
+            "ports": [pt.get("containerPort") for pt in c.get("ports") or [] if pt.get("containerPort")],
+            "requests": (c.get("resources") or {}).get("requests") or {},
+            "limits": (c.get("resources") or {}).get("limits") or {}}
+            for c in (p.get("spec") or {}).get("containers") or []]
         rep["pods"].append({"name": meta["name"], "app": (meta.get("labels") or {}).get("app"),
+                            "ip": st.get("podIP"), "spec_containers": spec_containers,
                             "phase": st.get("phase"), "node": (p.get("spec") or {}).get("nodeName"),
                             "created": meta.get("creationTimestamp"), "containers": containers,
                             "logs": logs[-8000:]})
+
+    for s in (kget(f"/api/v1/namespaces/{ns}/services", errors) or {}).get("items", []):
+        spec = s.get("spec") or {}
+        rep["services"].append({"name": s["metadata"]["name"], "type": spec.get("type"),
+                                "app": (spec.get("selector") or {}).get("app"),
+                                "ports": [pt.get("port") for pt in spec.get("ports") or [] if pt.get("port")]})
 
     evs = (kget(f"/api/v1/namespaces/{ns}/events?limit=200", errors) or {}).get("items", [])
     for e in evs[-200:]:

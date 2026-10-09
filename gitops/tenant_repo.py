@@ -39,6 +39,7 @@ APPS_DIR = "apps"
 PLATFORM_DIR = "_platform"
 COMMIT_AUTHOR = "ZeroTouch Platform <platform@zerotouch.invalid>"
 PREV_IMAGE_KEY = "zerotouch.k8s/previous-image"
+BAD_IMAGES_KEY = "zerotouch.k8s/known-bad-images"
 
 
 class TenantRepoError(Exception):
@@ -361,6 +362,40 @@ class TenantRepo:
             self._git("checkout", target, "--", rel)
             sha = self._commit_push(self._msg(f"rollback {app} to {target[:7]}"))
         return {"app": app, "commit": sha, "rolled_back_to": target[:7]}
+
+    def restore_previous_image(self, app: str) -> dict:
+        """Healer 修映像檔問題用：恢復成「最近一個跟現在不同的映像檔」。
+
+        2026-10-09 端到端實測抓到：原本 Healer 用 revert_app（還原最近一次變更），但修復
+        commit 之後、客戶叢集同步之前，壞掉的 Pod 還在，背景迴圈跟手動修復又各觸發一次——
+        「還原最近一次變更」還原的是上一次的修復本身，設定在好壞之間來回跳了 5 次。
+        這個做法重複執行也安全：已經是好的映像檔時，會找不到「更早且不同」的版本以外的動作，
+        結果不變（呼叫端另有冷卻時間，不會連續觸發）。"""
+        with self._lock:
+            self._sync()
+            doc = self._load(app)
+            c = doc["spec"]["template"]["spec"]["containers"][0]
+            current = c["image"]
+            ann = doc["spec"]["template"].setdefault("metadata", {}).setdefault("annotations", {})
+            # 被換掉的映像檔記為「已知壞掉」，之後不會再恢復回去——否則問題若因為別的原因持續，
+            # 冷卻時間過後又會被換回壞的那個，變成每 3 分鐘來回跳一次
+            bad = {x for x in (ann.get(BAD_IMAGES_KEY) or "").split(",") if x} | {current}
+            rel = (self._app_dir(app) / "deployment.yaml").relative_to(self.workdir.resolve()).as_posix()
+            for sha in self._git("log", "--format=%H", "--", rel).split():
+                old = yaml.safe_load(self._git("show", f"{sha}:{rel}", check=False) or "{}") or {}
+                try:
+                    img = old["spec"]["template"]["spec"]["containers"][0]["image"]
+                except (KeyError, IndexError, TypeError):
+                    continue
+                if img and img not in bad:
+                    c["image"] = img
+                    ann[PREV_IMAGE_KEY] = current
+                    ann[BAD_IMAGES_KEY] = ",".join(sorted(bad))[:1000]
+                    self._save(app, doc)
+                    sha_new = self._commit_push(self._msg(f"restore image of {app} -> {img}"))
+                    return {"app": app, "commit": sha_new, "restored_image": img, "previous_image": current}
+        raise TenantRepoError(
+            f"「{app}」找不到可以恢復的舊映像檔，請手動指定正確的映像檔。 / No earlier image to restore for '{app}'.")
 
     def history(self, app: Optional[str] = None, limit: int = 20) -> List[dict]:
         with self._lock:

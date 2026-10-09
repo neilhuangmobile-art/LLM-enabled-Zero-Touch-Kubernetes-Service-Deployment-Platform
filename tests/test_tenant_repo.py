@@ -214,3 +214,28 @@ def test_token_never_on_command_line_and_redacted_in_errors(tmp_path, monkeypatc
     assert all(secret not in part for part in cmd), "token 不能出現在指令列"
     assert env.get("GIT_CONFIG_VALUE_0") == auth
     assert secret not in str(ei.value)
+
+
+def test_restore_previous_image_never_oscillates(repo):
+    """2026-10-09 端到端實測：用 revert_app 修映像檔問題，修復 + 背景迴圈重複觸發讓設定在好壞間
+    跳了 5 次。restore_previous_image 重複呼叫也絕不能回到已知壞掉的映像檔。"""
+    repo.write_app(PARSED)                       # nginx:1.27（好）
+    repo.set_replicas("web", 3)
+    repo.set_image("web", "nginx:no-such-tag")   # 壞
+    r = repo.restore_previous_image("web")
+    assert r["restored_image"] == "nginx:1.27" and r["previous_image"] == "nginx:no-such-tag"
+    # 問題若因別的原因持續、冷卻後再被觸發：不能換回壞的那個
+    with pytest.raises(TenantRepoError, match="找不到可以恢復"):
+        repo.restore_previous_image("web")
+    dep = yaml.safe_load(_remote_file(repo, "apps/web/deployment.yaml"))
+    assert dep["spec"]["template"]["spec"]["containers"][0]["image"] == "nginx:1.27"
+    assert dep["spec"]["replicas"] == 3, "只換映像檔，不能把副本數等其他設定一起還原"
+
+
+def test_restore_skips_all_known_bad_images(repo):
+    repo.write_app(PARSED)
+    repo.set_image("web", "bad:1")
+    repo.restore_previous_image("web")           # → nginx:1.27，bad:1 記為壞
+    repo.set_image("web", "bad:2")
+    r = repo.restore_previous_image("web")       # 歷史最近的不同映像檔依序是 nginx:1.27、bad:1
+    assert r["restored_image"] == "nginx:1.27"

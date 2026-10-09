@@ -130,6 +130,13 @@ def test_ever_connected_without_report_is_offline_not_reinstall():
     assert connection_status([], None, None, NOW, ever_connected=True)["code"] == "offline"
 
 
+def test_just_restarted_platform_waits_instead_of_alarming():
+    st = connection_status([], None, None, NOW, ever_connected=True, platform_started=NOW - 10)
+    assert st["code"] == "awaiting_report"
+    st = connection_status([], None, None, NOW, ever_connected=True, platform_started=NOW - 600)
+    assert st["code"] == "offline"
+
+
 def test_registry_marks_connected_once(tmp_path):
     clk = Clock()
     reg = ClusterRegistry(str(tmp_path / "c.json"), clock=clk)
@@ -142,7 +149,7 @@ def test_registry_marks_connected_once(tmp_path):
 
 
 def test_every_status_has_bilingual_text_with_namespace():
-    for code in ["installing", "not_started", "no_kubectl", "cluster_unreachable", "flux_failed", "bundle_failed",
+    for code in ["awaiting_report", "installing", "not_started", "no_kubectl", "cluster_unreachable", "flux_failed", "bundle_failed",
                  "reporter_not_ready", "no_report", "git_not_ready", "sync_pending", "offline", "connected"]:
         title, howto = status_text(code, "zt-alice-1234")
         assert " / " in title and howto

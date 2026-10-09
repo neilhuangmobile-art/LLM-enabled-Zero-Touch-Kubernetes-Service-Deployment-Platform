@@ -65,6 +65,7 @@ def clean_report(raw: Any) -> Dict[str, Any]:
                  "kustomization": _cond((raw.get("flux") or {}).get("kustomization"))},
         "deployments": [], "pods": [], "events": [], "nodes": [], "metrics": None,
         "platform_configmap": bool(raw.get("platform_configmap")),
+        "services": [],
     }
     for d in (raw.get("deployments") or [])[:200]:
         if isinstance(d, dict):
@@ -73,6 +74,7 @@ def clean_report(raw: Any) -> Dict[str, Any]:
                 "ready": int(d.get("ready") or 0), "available": int(d.get("available") or 0),
                 "image": _clip(d.get("image"), 200),
                 "memory_limit": _clip(d.get("memory_limit"), 20),
+                "created": _clip(d.get("created"), 40), "updated": _clip(d.get("updated"), 40),
                 "conditions": [_clip(c, 200) for c in (d.get("conditions") or [])[:5]]})
     for p in (raw.get("pods") or [])[:300]:
         if not isinstance(p, dict):
@@ -87,7 +89,16 @@ def clean_report(raw: Any) -> Dict[str, Any]:
                     "last_reason": _clip(c.get("last_reason"), 60),
                     "message": _clip(c.get("message"), 300), "image": _clip(c.get("image"), 200)})
         logs = p.get("logs")
+        specs = []
+        for c in (p.get("spec_containers") or [])[:10]:
+            if isinstance(c, dict):
+                specs.append({
+                    "name": _clip(c.get("name"), 63), "image": _clip(c.get("image"), 200),
+                    "ports": [int(x) for x in (c.get("ports") or [])[:10] if str(x).isdigit()],
+                    "requests": {k: _clip(v, 20) for k, v in (c.get("requests") or {}).items() if k in ("cpu", "memory")},
+                    "limits": {k: _clip(v, 20) for k, v in (c.get("limits") or {}).items() if k in ("cpu", "memory")}})
         out["pods"].append({
+            "ip": _clip(p.get("ip"), 45), "spec_containers": specs,
             "name": _clip(p.get("name"), 253), "app": _clip(p.get("app"), 63),
             "phase": _clip(p.get("phase"), 20), "node": _clip(p.get("node"), 63),
             "created": _clip(p.get("created"), 40), "containers": containers,
@@ -99,6 +110,11 @@ def clean_report(raw: Any) -> Dict[str, Any]:
                 "object": _clip(e.get("object"), 253), "type": _clip(e.get("type"), 20),
                 "reason": _clip(e.get("reason"), 60), "message": _clip(e.get("message"), 300),
                 "count": int(e.get("count") or 1), "last": _clip(e.get("last"), 40)})
+    for s in (raw.get("services") or [])[:100]:
+        if isinstance(s, dict):
+            out["services"].append({"name": _clip(s.get("name"), 63), "type": _clip(s.get("type"), 20),
+                                    "app": _clip(s.get("app"), 63),
+                                    "ports": [int(x) for x in (s.get("ports") or [])[:10] if str(x).isdigit()]})
     for n in (raw.get("nodes") or [])[:50]:
         if isinstance(n, dict):
             out["nodes"].append({"name": _clip(n.get("name"), 63), "cpu": _clip(n.get("cpu"), 20),
@@ -149,6 +165,9 @@ STATUS_TEXT = {
                       "Usually a platform-side GitHub issue — regenerate the command and retry."),
     "sync_pending": ("連線成功，正在第一次同步 / Connected, first sync in progress",
                      "大約 30 秒，請稍候再按「重新檢查」。 / About 30 seconds — re-check shortly."),
+    "awaiting_report": ("正在等你的叢集回報狀態… / Waiting for your cluster to check in…",
+                        "平台剛重新啟動，你的叢集會在 15 秒內回報，不用做任何事。 / The platform just restarted; "
+                        "your cluster will check in within 15 seconds."),
     "offline": ("你的叢集目前離線 / Your cluster is offline",
                 "請確認電腦開著、Docker Desktop 正在執行。 / Make sure your computer is on and Docker Desktop is running."),
     "connected": ("連線成功！ / Connected!", "可以開始使用了。 / You're all set."),
@@ -160,7 +179,8 @@ _STEP_FAIL_STATUS = {"start": "not_started", "kubectl": "no_kubectl", "cluster":
 
 
 def connection_status(progress: List[dict], report: Optional[dict], report_at: Optional[float],
-                      now: float, ever_connected: bool = False) -> Dict[str, Any]:
+                      now: float, ever_connected: bool = False, platform_started: Optional[float] = None
+                      ) -> Dict[str, Any]:
     """依安裝進度與最新回報判斷狀況。回傳 {code, ok, detail}。"""
     fresh = report is not None and report_at is not None and now - report_at <= REPORT_FRESH_SEC
     if report is not None and report_at is not None:
@@ -174,7 +194,10 @@ def connection_status(progress: List[dict], report: Optional[dict], report_at: O
                 return {"code": "sync_pending", "ok": False, "detail": ks["message"]}
             return {"code": "connected", "ok": True, "detail": ""}
     if ever_connected and report is None:
-        # 平台重啟後還沒收到第一份回報：不要叫已經裝好的人重裝
+        # 平台重啟後還沒收到第一份回報：不要叫已經裝好的人重裝；剛啟動的一分鐘內也不要顯示
+        # 「離線」嚇人（2026-10-09 實測：重啟後前 15 秒每位客戶都會先看到紅色離線橫幅）
+        if platform_started is not None and now - platform_started < REPORT_FRESH_SEC:
+            return {"code": "awaiting_report", "ok": False, "detail": ""}
         return {"code": "offline", "ok": False, "detail": ""}
     if not progress:
         return {"code": "not_started", "ok": False, "detail": ""}
@@ -206,6 +229,7 @@ class ClusterRegistry:
         self._lock = threading.RLock()
         self._data: Dict[str, dict] = {}
         self._reports: Dict[str, Tuple[float, dict]] = {}
+        self.started_at = clock()
         if path and os.path.exists(path):
             try:
                 with open(path, encoding="utf-8") as f:
@@ -329,7 +353,7 @@ class ClusterRegistry:
     def status(self, username: str) -> Dict[str, Any]:
         at, rep = self.latest_report(username)
         prog = self._data.get(username, {}).get("progress") or []
-        st = connection_status(prog, rep, at, self.clock(), self.ever_connected(username))
+        st = connection_status(prog, rep, at, self.clock(), self.ever_connected(username), self.started_at)
         st["ever_connected"] = self.ever_connected(username)
         st["last_report_at"] = at
         return st

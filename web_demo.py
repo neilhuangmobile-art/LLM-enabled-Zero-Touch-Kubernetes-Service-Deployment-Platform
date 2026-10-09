@@ -2556,14 +2556,33 @@ async function pollStatus(){
     const k8sDot = document.getElementById('k8s-dot');
     const k8sTxt = document.getElementById('k8s-status');
     if(k8sDot) k8sDot.className = 'dot ' + (d.k8s ? 'green' : 'red');
-    if(k8sTxt) k8sTxt.textContent = 'K8s ' + (d.k8s ? 'Connected' : 'Simulation');
+    if(k8sTxt) k8sTxt.textContent = d.customer_cluster
+      ? ('你的叢集 ' + (d.k8s ? 'Connected' : 'Offline'))
+      : ('K8s ' + (d.k8s ? 'Connected' : 'Simulation'));
 
     // 新手警告：Docker 沒開 / 開了但 K8s 連不上，兩種訊息分開講清楚原因跟解法
     const warn = document.getElementById('docker-warning');
     const wTitle = document.getElementById('docker-warning-title');
     const wBody = document.getElementById('docker-warning-body');
     if(warn){
-      if(!d.docker_running){
+      if(d.customer_cluster){
+        // 客戶自帶叢集（2026-10-09）：平台自己的 Docker/K8s 跟客戶無關，看的是客戶叢集的回報
+        const cc = d.customer_cluster;
+        if(cc.ok){
+          warn.style.display = 'none';
+        } else if(cc.code === 'awaiting_report'){
+          // 平台剛重啟、還在等第一份回報：黃色提示，不是紅色警報
+          wTitle.textContent = cc.title; wBody.innerHTML = escHtml(cc.howto || '');
+          warn.style.background = '#FEF3C7'; warn.style.borderColor = '#F59E0B'; warn.style.color = '#92400E';
+          warn.style.display = 'flex';
+        } else {
+          wTitle.textContent = cc.title || '你的叢集目前離線 / Your cluster is offline';
+          wBody.innerHTML = escHtml(cc.howto || '') +
+            '<br>離線期間不能部署或修改服務（已經在跑的服務不受影響）。 / Deploys and changes are paused while offline.';
+          warn.style.background = '#FEE2E2'; warn.style.borderColor = '#DC2626'; warn.style.color = '#991B1B';
+          warn.style.display = 'flex';
+        }
+      } else if(!d.docker_running){
         wTitle.textContent = 'Docker 沒有啟動 / Docker is not running';
         wBody.innerHTML = (d.docker_message ? escHtml(d.docker_message)+'<br>' : '') +
           '請先開啟 Docker Desktop，等它完全啟動（圖示變綠/穩定）後重新整理這個頁面。<br>' +
@@ -5072,6 +5091,7 @@ def agent_report():
     except (ValueError, ReportError, UnicodeDecodeError):
         return jsonify({"error": "invalid report"}), 400
     CLUSTERS.store_report(username, report)
+    _record_remote_history(username, report)
     return "", 204
 
 
@@ -5338,7 +5358,7 @@ def _cluster_snapshot_for(message: str, namespace: str = None) -> str:
     只查傳入的 namespace（預設呼叫端使用者自己的 namespace），不會洩漏其他帳號的
     Deployment 資訊給接地問答用。"""
     namespace = namespace or NS
-    if not K8S_ENABLED:
+    if not K8S_ENABLED and not _is_remote_ns(namespace):
         return ""
     low = (message or "").lower()
     deps = k8s_get_deployments(namespace)
@@ -5399,7 +5419,7 @@ def _verify_grounded_reply(message: str, reply: str, namespace: str = None) -> s
     英文單字誤判成服務名稱。
     """
     namespace = namespace or NS
-    if not K8S_ENABLED:
+    if not K8S_ENABLED and not _is_remote_ns(namespace):
         return reply
     try:
         real_names = {d["name"].lower() for d in k8s_get_deployments(namespace)}
@@ -5538,6 +5558,14 @@ def api_status():
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
     ready, loading = _model_status()
+    if _is_remote_ns(_session_ns()):
+        st = CLUSTERS.status(session["username"])
+        title, howto = status_text(st["code"], _session_ns())
+        return jsonify({"model_ready": ready, "model_loading": loading, "claude_api": claude_available(),
+                        # 客戶叢集模式：平台自己的 Docker/K8s 跟客戶無關，回報的是客戶叢集的連線
+                        "k8s": st["ok"], "docker_running": True, "docker_message": "",
+                        "customer_cluster": {"ok": st["ok"], "code": st["code"], "title": title, "howto": howto,
+                                             "last_report_at": st.get("last_report_at")}})
     docker_running, docker_message = _check_docker()
     k8s_live = _check_k8s_live()
     return jsonify({
@@ -5588,7 +5616,7 @@ def api_chat():
                      f"violations will result in an automatic ban.",
         })
 
-    user_ns = _user_namespace(session["username"])
+    user_ns = _session_ns()
     # 問題若牽涉即時叢集狀態，先撈一份精簡快照當背景資料塞給模型（接地問答）。
     grounded = message
     snap = _cluster_snapshot_for(message, user_ns)
@@ -5974,7 +6002,7 @@ def api_deploy_conflicts():
     按「下一步」的當下就先問清楚，而不是等審查跑完才在一堆警告裡看到。"""
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    user_ns = _user_namespace(session["username"])
+    user_ns = _session_ns()
     app_name = (request.args.get("app_name") or "").strip()
     port_raw = (request.args.get("port") or "").strip()
     name_exists = bool(app_name) and app_name in {d["name"] for d in k8s_get_deployments(user_ns)}
@@ -6028,7 +6056,7 @@ def api_deploy_parse():
 def api_deploy():
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    user_ns = _user_namespace(session["username"])
+    user_ns = _session_ns()
     _ensure_user_namespace(user_ns)
     data = request.get_json() or {}
     user_input = data.get("input", "").strip()
@@ -6042,6 +6070,25 @@ def api_deploy():
     if error:
         payload, status = error
         return jsonify(payload), status
+
+    if _is_remote_ns(user_ns):
+        # 客戶叢集：部署 = 對客戶 repo commit，由客戶叢集的 Flux 套用（不寫進平台自己的 repo，
+        # 也不呼叫本機 k8s_deploy）
+        blocked = _remote_write_guard(user_ns)
+        if blocked:
+            return jsonify({"error": blocked, "parsed": enriched, "review": review}), 409
+        threading.Thread(target=save_gold_sample, args=(user_input, parsed), daemon=True).start()
+        try:
+            res = _tenant_repo(session["username"]).write_app(_with_resource_defaults(parsed))
+            gitops_result = {"ok": True, "files": [f"apps/{res['app']}/"], "commit_sha": res.get("commit"),
+                             "message": f"已寫入你的部署設定 repo（commit {str(res.get('commit') or '')[:7]}）"}
+            k8s_result = {"ok": True, "pending_sync": True, "message": _SYNC_MSG}
+        except Exception as e:
+            gitops_result = {"ok": False, "files": [], "commit_sha": None, "message": str(e)}
+            k8s_result = {"ok": False, "message": str(e)}
+        return jsonify({"parsed": enriched, "k8s": True, "review": review, "gitops": gitops_result,
+                        "k8s_deploy": k8s_result, "resource_summary": _resource_summary(parsed, review),
+                        "customer_cluster": True})
 
     gitops_result = None
     try:
@@ -6069,13 +6116,13 @@ def api_deploy():
 def api_pods():
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    return jsonify({"pods": k8s_get_pods(namespace=_user_namespace(session["username"]))})
+    return jsonify({"pods": k8s_get_pods(namespace=_session_ns())})
 
 @app.route("/api/deployments")
 def api_deployments():
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    return jsonify({"deployments": k8s_get_deployments(_user_namespace(session["username"]))})
+    return jsonify({"deployments": k8s_get_deployments(_session_ns())})
 
 
 @app.route("/api/pods/<name>/history")
@@ -6084,7 +6131,7 @@ def api_pod_history(name):
     隨時間變化）。只回傳使用者自己 namespace 的資料。"""
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    user_ns = _user_namespace(session["username"])
+    user_ns = _session_ns()
     return jsonify({"history": _get_pod_history(user_ns, name)})
 
 
@@ -6094,7 +6141,7 @@ def api_pod_detail(name):
     ?diagnose=1 且該 pod 不健康時，附上 healer 的 LLM 根因診斷。"""
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    user_ns = _user_namespace(session["username"])
+    user_ns = _session_ns()
     pods = k8s_describe_pod(name, user_ns)
     if not pods:
         dd = k8s_describe_deployment(name, user_ns)
@@ -6136,7 +6183,7 @@ def api_pod_detail(name):
 def api_deployment_detail(name):
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    d = k8s_describe_deployment(name, _user_namespace(session["username"]))
+    d = k8s_describe_deployment(name, _session_ns())
     if not d:
         return jsonify({"found": False, "message": f"找不到 deployment '{name}'"}), 404
     return jsonify({"deployment": d, "found": True})
@@ -6149,7 +6196,7 @@ def api_delete():
     name = (request.get_json() or {}).get("name","").strip()
     if not name:
         return jsonify({"error": "Name required"}), 400
-    ok, msg = k8s_delete_deployment(name, _user_namespace(session["username"]))
+    ok, msg = k8s_delete_deployment(name, _session_ns())
     return jsonify({"success": ok, "message": msg, "error": None if ok else msg})
 
 
@@ -6158,9 +6205,11 @@ def api_delete():
 def api_scale():
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
+    data = request.get_json() or {}
+    if _is_remote_ns(_session_ns()):
+        return _remote_scale(data)
     if not K8S_ENABLED:
         return jsonify({"success": False, "error": "K8s 未連線"}), 503
-    data = request.get_json() or {}
     name = data.get("name", "").strip()
     try:
         replicas = int(data.get("replicas", 1))
@@ -6170,7 +6219,7 @@ def api_scale():
         return jsonify({"success": False, "error": "Name required"}), 400
     if not 1 <= replicas <= 100:
         return jsonify({"success": False, "error": "replicas must be between 1 and 100"}), 400
-    user_ns = _user_namespace(session["username"])
+    user_ns = _session_ns()
     blocked, risk_msg = _check_scale_risk(name, replicas, user_ns)
     if blocked:
         return jsonify({"success": False, "error": risk_msg, "blocked_reason": "resource_exceeded"}), 409
@@ -6187,12 +6236,17 @@ def api_scale():
 def api_update():
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    if not K8S_ENABLED:
-        return jsonify({"success": False, "error": "K8s 未連線"}), 503
-    user_ns = _user_namespace(session["username"])
+    user_ns = _session_ns()
     data = request.get_json() or {}
     name = data.get("name", "").strip()
     image = data.get("image", "").strip()
+    if _is_remote_ns(user_ns):
+        if not name or not image:
+            return jsonify({"success": False, "error": "name and image are required"}), 400
+        return _remote_git_op(user_ns, lambda r: r.set_image(name, image),
+                              lambda res: f"已把 {name} 的映像檔改成 {image}（原本 {res.get('previous_image')}）。")
+    if not K8S_ENABLED:
+        return jsonify({"success": False, "error": "K8s 未連線"}), 503
     if not name or not image:
         return jsonify({"success": False, "error": "name and image are required"}), 400
     try:
@@ -6216,7 +6270,7 @@ def api_update():
 def api_rollback():
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    user_ns = _user_namespace(session["username"])
+    user_ns = _session_ns()
     data = request.get_json() or {}
     app_name = (data.get("app_name") or data.get("name") or "").strip()
     if not app_name:
@@ -6229,6 +6283,9 @@ def api_rollback():
         return jsonify({"success": False,
                         "error": "應用程式名稱不合法，只能用小寫英數字與連字號 / "
                                  "Invalid app name — use lowercase letters, digits and hyphens only"}), 400
+    if _is_remote_ns(user_ns):
+        return _remote_git_op(user_ns, lambda r: r.revert_app(app_name),
+                              lambda res: f"已把 {app_name} 回滾到上一版設定（{res.get('rolled_back_to')}）。")
     try:
         from gitops.rollback import rollback
         result = rollback(app_name, namespace=user_ns, repo_path=ROOT, strategy="auto", dry_run=False)
@@ -6369,7 +6426,15 @@ def api_dataset_run():
 @app.route("/api/gitops")
 def api_gitops():
     if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
-    user_ns = _user_namespace(session["username"])
+    user_ns = _session_ns()
+    if _is_remote_ns(user_ns):
+        try:
+            rows = _tenant_repo(session["username"]).history(limit=20)
+        except Exception as e:
+            return jsonify({"commits": [], "error": str(e)})
+        return jsonify({"commits": [{"hash": r["commit"], "message": r["message"], "time": r["time"][:16].replace("T", " "),
+                                     "app": _app_from_commit(r["message"])}
+                                    for r in rows], "customer_cluster": True})
     import subprocess
     try:
         # 只看自己 namespace 底下的歷史（manifests/<namespace>/），不要把所有帳號的
@@ -6406,7 +6471,9 @@ def api_gitops():
 @app.route("/api/healer/scan")
 def api_healer_scan():
     if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
-    user_ns = _user_namespace(session["username"])
+    user_ns = _session_ns()
+    if _is_remote_ns(user_ns):
+        return jsonify({"issues": _rv.unhealthy_issues(_remote_report(user_ns), user_ns), "customer_cluster": True})
     try:
         from healer.pod_watcher import scan_once
         issues = scan_once(namespace=user_ns)
@@ -6708,7 +6775,7 @@ def api_healer_fix():
     if not pod_name:
         return jsonify({"success": False, "error": "No pod name"})
     try:
-        result = _real_heal_pod(pod_name, _user_namespace(session["username"]))
+        result = _real_heal_pod(pod_name, _session_ns())
         return jsonify({
             "success": result.get("ok", False),
             "message": result.get("message"),
@@ -6728,7 +6795,9 @@ def api_healer_auto_fix():
     if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
     try:
         from healer.pod_watcher import scan_once
-        issues = scan_once(namespace=_user_namespace(session["username"])) or []
+        _ns = _session_ns()
+        issues = (_rv.unhealthy_issues(_remote_report(_ns), _ns) if _is_remote_ns(_ns)
+                  else scan_once(namespace=_ns) or [])
         fixed, failed, details = 0, 0, []
         for issue in issues:
             try:
@@ -6760,7 +6829,14 @@ def api_metrics():
     # 的統計（例如顯示 9 個 pod，其實是 auto-app+my-cache+zt-smoke 加總，不是
     # 使用者自己部署的數量）——跟 Healer 頁面顯示的「Total Pods」互相矛盾，
     # 使用者實測時直接發現這個不一致。
-    user_ns = _user_namespace(session["username"])
+    user_ns = _session_ns()
+    if _is_remote_ns(user_ns):
+        pods = k8s_get_pods(namespace=user_ns)
+        mine = [p for p in pods if p.get("app") != "zt-reporter"]
+        return jsonify({"connected": True, "url": None, "metrics": {
+            "prometheus_up": False, "namespace": user_ns, "cluster_pods": None,
+            "pod_count": len(mine), "running_pods": len([p for p in mine if p.get("phase") == "Running"]),
+            "source": "customer-cluster-report（你的叢集回報器，每 15 秒更新）"}})
     # localhost 在 Windows 會先試 IPv6 ::1、逾時才 fallback 到 127.0.0.1，每個查詢多等好幾秒。
     # 直接用 127.0.0.1 省掉那段。可用 PROMETHEUS_URL 覆寫。
     prom_url = os.environ.get("PROMETHEUS_URL", "http://127.0.0.1:9090").replace("localhost", "127.0.0.1")
@@ -6819,8 +6895,373 @@ def api_dashboard():
     分支移植。"""
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    user_ns = _user_namespace(session["username"])
+    user_ns = _session_ns()
     return jsonify(_dashboard_summary(user_ns))
+
+
+# ══════════════════════════════════════════════════════════════════
+# 客戶自帶叢集第 5 階段：所有功能接上客戶叢集（2026-10-09）
+# 做法：namespace 是客戶端（zt- 開頭）時，查詢類函式改讀回報器的最新報告
+# （cluster/remote_view.py，回傳格式跟本機版完全相同），寫入類改成對客戶 repo 的 commit。
+# 用「同名重新綁定」包裝原本的函式：Python 呼叫時才查全域名稱，所以所有既有呼叫端
+# （Chat 接地問答、事實核對、衝突檢查、Dashboard…）自動走包裝層，本機版程式碼一行都沒改。
+# ══════════════════════════════════════════════════════════════════
+from flask import has_request_context
+from cluster import remote_view as _rv
+from cluster import remote_ops as _rops
+from agents.cost_agent import (_parse_cpu_millicores as _pcpu, _parse_memory_bytes as _pmem,
+                               _estimate_monthly_cost as _est_cost)
+
+_SYNC_MSG = ("已送出，等你的叢集同步（約 30~60 秒），可以到 Pods 頁面看進度。 / "
+             "Submitted — your cluster will pick it up in about 30–60 seconds.")
+
+
+def _is_remote_ns(ns) -> bool:
+    return bool(ns) and str(ns).startswith("zt-")
+
+
+def _session_ns() -> str:
+    """目前登入者的 namespace：客戶叢集模式的非管理員 → 客戶叢集的 zt-…；其他 → 平台的 user-…。"""
+    u = session.get("username")
+    if CUSTOMER_CLUSTER_MODE and u and not session.get("is_admin"):
+        from gitops.tenant_repo import tenant_slug
+        return tenant_slug(u)
+    return _user_namespace(u)
+
+
+def _ctx_ns(ns=None):
+    """沒有明確傳 namespace 的呼叫（節點容量、跨 namespace 的 port 衝突）用目前登入者的。"""
+    if ns:
+        return ns
+    if has_request_context() and session.get("username"):
+        return _session_ns()
+    return None
+
+
+def _remote_owner(ns):
+    from gitops.tenant_repo import tenant_slug
+    for u in list(CLUSTERS._data.keys()):
+        if tenant_slug(u) == ns:
+            return u
+    return None
+
+
+def _remote_report(ns) -> dict:
+    u = _remote_owner(ns)
+    return (CLUSTERS.latest_report(u)[1] if u else None) or {}
+
+
+def _remote_write_guard(ns):
+    """叢集離線時擋下寫入：commit 雖然會在叢集恢復後生效，但使用者會以為已經部署了。"""
+    u = _remote_owner(ns)
+    st = CLUSTERS.status(u) if u else {"code": "offline", "ok": False}
+    if st["code"] == "awaiting_report":
+        return "平台剛重新啟動，正在等你的叢集回報（約 15 秒），請稍後再試。 / Waiting for your cluster to check in — try again in a moment."
+    if st["code"] == "offline":
+        return ("你的叢集目前離線（超過 2 分鐘沒有回報），請確認電腦開著、Docker Desktop 正在執行，"
+                "恢復連線後再操作。 / Your cluster is offline — make sure your computer and Docker Desktop are running.")
+    return None
+
+
+_tenant_repo_cache = {}
+_tenant_repo_cache_lock = threading.Lock()
+
+
+def _tenant_repo(username):
+    with _tenant_repo_cache_lock:
+        repo = _tenant_repo_cache.get(username)
+    if repo is None:
+        repo, _, _ = _tenant_repo_for(username)
+        with _tenant_repo_cache_lock:
+            _tenant_repo_cache[username] = repo
+    return repo
+
+
+def _with_resource_defaults(parsed: dict) -> dict:
+    """跟本機 k8s_deploy() 一樣：沒填 cpu/memory 就套 cost_agent 依映像檔類型推薦的值。"""
+    p = dict(parsed)
+    if p.get("cpu") and p.get("memory"):
+        return p
+    try:
+        from agents.cost_agent import _APP_PROFILES, _detect_app_type
+        req_cpu, req_mem, _, _ = _APP_PROFILES.get(_detect_app_type(p.get("image", ""), p.get("app_name", "")),
+                                                   _APP_PROFILES["default"])
+    except Exception:
+        req_cpu, req_mem = 100, 128
+    if not p.get("cpu"):
+        p["cpu"] = f"{req_cpu}m"
+    if not p.get("memory"):
+        p["memory"] = f"{req_mem}Mi"
+    return p
+
+
+def _app_from_commit(msg: str) -> str:
+    """從客戶 repo 的 commit 訊息取出 app 名稱（格式見 gitops/tenant_repo.py 的 _msg 呼叫處）：
+    "deploy web (...)"、"delete web"、"rollback web to abc"、"restart web"、"scale to 5: web"、
+    "update image -> x: web"、"set memory 512Mi: web"。"""
+    m = (re.match(r"^(?:deploy|delete|rollback|restart|restore image of) ([a-z0-9-]+)", msg)
+         or re.search(r": ([a-z0-9-]+) \(by ", msg))
+    return m.group(1) if m else ""
+
+
+def _remote_git_op(ns, op, describe):
+    blocked = _remote_write_guard(ns)
+    if blocked:
+        return jsonify({"success": False, "error": blocked}), 409
+    try:
+        res = op(_tenant_repo(session["username"]))
+    except Exception as e:  # TenantRepoError 訊息已是中英雙語
+        return jsonify({"success": False, "error": str(e)}), 400
+    return jsonify({"success": True, "pending_sync": True, "commit": res.get("commit"),
+                    "message": describe(res) + " " + _SYNC_MSG, "error": None})
+
+
+def _remote_scale(data):
+    ns = _session_ns()
+    name = (data.get("name") or "").strip()
+    try:
+        replicas = int(data.get("replicas", 1))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "replicas must be an integer"}), 400
+    if not name:
+        return jsonify({"success": False, "error": "Name required"}), 400
+    if not 1 <= replicas <= 100:
+        return jsonify({"success": False, "error": "replicas must be between 1 and 100"}), 400
+    blocked, risk_msg = _check_scale_risk(name, replicas, ns)
+    if blocked:
+        return jsonify({"success": False, "error": risk_msg, "blocked_reason": "resource_exceeded"}), 409
+    return _remote_git_op(ns, lambda r: r.set_replicas(name, replicas),
+                          lambda res: f"已把 {name} 調整為 {replicas} 個副本（原本 {res.get('previous_replicas')}）。")
+
+
+_remote_history_last = {}
+
+
+def _record_remote_history(username, report):
+    from gitops.tenant_repo import tenant_slug
+    now = _time.time()
+    if now - _remote_history_last.get(username, 0) < 30:
+        return
+    _remote_history_last[username] = now
+    ns = tenant_slug(username)
+    with _pod_history_lock:
+        for app, snap in _rv.light_snapshots(report, _utc_now_iso()).items():
+            hist = _pod_history.setdefault(f"{ns}/{app}", [])
+            hist.append(snap)
+            del hist[:-_POD_HISTORY_MAX_SAMPLES]
+
+
+# ── 查詢類包裝 ──
+_local_k8s_get_pods = k8s_get_pods
+_local_k8s_get_deployments = k8s_get_deployments
+_local_k8s_get_services = k8s_get_services
+_local_k8s_get_node_capacity = k8s_get_node_capacity
+_local_k8s_describe_pod = k8s_describe_pod
+_local_k8s_describe_deployment = k8s_describe_deployment
+_local_pod_real_usage = _pod_real_usage
+_local_ensure_user_namespace = _ensure_user_namespace
+_local_sum_cluster_resource_requests = _sum_cluster_resource_requests
+_local_check_scale_risk = _check_scale_risk
+_local_dashboard_summary = _dashboard_summary
+_local_k8s_delete_deployment = k8s_delete_deployment
+_local_real_heal_pod = _real_heal_pod
+
+
+def k8s_get_pods(app_name=None, namespace=None):
+    if _is_remote_ns(namespace):
+        return _rv.list_pods(_remote_report(namespace), app_name)
+    return _local_k8s_get_pods(app_name, namespace)
+
+
+def k8s_get_deployments(namespace=None):
+    if _is_remote_ns(namespace):
+        return _rv.list_deployments(_remote_report(namespace))
+    return _local_k8s_get_deployments(namespace)
+
+
+def k8s_get_services(namespace=None, all_namespaces=False):
+    # 客戶叢集的 host port 綁在客戶自己的電腦上，跟平台和其他客戶都無關；平台只看得到
+    # 客戶自己的 namespace（看不到客戶叢集裡其他程式佔用的 port，這是唯讀權限的取捨）
+    target = namespace or (_ctx_ns() if all_namespaces else None)
+    if _is_remote_ns(target):
+        return _rv.list_services(_remote_report(target), target)
+    return _local_k8s_get_services(namespace, all_namespaces)
+
+
+def k8s_get_node_capacity(namespace=None):
+    target = _ctx_ns(namespace)
+    if _is_remote_ns(target):
+        return _rv.node_capacity(_remote_report(target), _pmem)
+    return _local_k8s_get_node_capacity()
+
+
+def k8s_describe_pod(name, namespace=None):
+    if _is_remote_ns(namespace):
+        return _rv.describe_pods(_remote_report(namespace), name)
+    return _local_k8s_describe_pod(name, namespace)
+
+
+def k8s_describe_deployment(name, namespace=None):
+    if _is_remote_ns(namespace):
+        return _rv.describe_deployment(_remote_report(namespace), name)
+    return _local_k8s_describe_deployment(name, namespace)
+
+
+def _pod_real_usage(namespace, pod_name):
+    if _is_remote_ns(namespace):
+        return _rv.pod_usage(_remote_report(namespace), pod_name, _pcpu, _pmem)
+    return _local_pod_real_usage(namespace, pod_name)
+
+
+def _ensure_user_namespace(namespace):
+    if _is_remote_ns(namespace):
+        return  # 客戶叢集的 namespace 由安裝包建立，平台沒有權限也不需要建
+    return _local_ensure_user_namespace(namespace)
+
+
+def _sum_cluster_resource_requests(exclude_name=None, exclude_namespace=None):
+    target = _ctx_ns(exclude_namespace)
+    if _is_remote_ns(target):
+        rep = _remote_report(target)
+        if exclude_name:
+            rep = dict(rep, pods=[p for p in rep.get("pods") or [] if p.get("app") != exclude_name])
+        return _rv.requests_sum(rep, _pcpu, _pmem)
+    return _local_sum_cluster_resource_requests(exclude_name, exclude_namespace)
+
+
+def _check_scale_risk(name, new_replicas, namespace=None):
+    if not _is_remote_ns(namespace):
+        return _local_check_scale_risk(name, new_replicas, namespace)
+    rep = _remote_report(namespace)
+    cap = _rv.node_capacity(rep, _pmem)
+    if not cap:
+        return False, None
+    node_cpu, node_mem = _pcpu(cap["cpu"]) or 0, _pmem(cap["memory"]) or 0
+    base_cpu, base_mem = _sum_cluster_resource_requests(exclude_name=name, exclude_namespace=namespace)
+    req = _rv._app_requests(rep).get(name, {})
+    total_cpu = base_cpu + (_pcpu(req.get("cpu")) or 0) * new_replicas
+    total_mem = base_mem + (_pmem(req.get("memory")) or 0) * new_replicas
+    if (node_cpu and total_cpu > node_cpu) or (node_mem and total_mem > node_mem):
+        return True, (f"這樣會超出你電腦叢集的容量：套用後合計約需要 {total_cpu}m CPU / {total_mem // (1024**2)}Mi "
+                      f"記憶體，但你的節點只有 {node_cpu}m CPU / {node_mem // (1024**2)}Mi。多出來的 Pod 會卡在 "
+                      f"Pending。請降低副本數。 / This would exceed your cluster's capacity; please lower the replica count.")
+    return False, None
+
+
+def _dashboard_summary(namespace):
+    if not _is_remote_ns(namespace):
+        return _local_dashboard_summary(namespace)
+    rep = _remote_report(namespace)
+    result = {"k8s_enabled": True, "prometheus_up": False, "cluster_capacity": None, "cluster_used": None,
+              "cluster_used_source": None, "cluster_remaining": None, "my_deployments": [],
+              "my_total_cpu_cores": None, "my_total_mem_gib": None, "my_monthly_usd": None,
+              "cpu_trend": [], "mem_trend": [], "customer_cluster": True}
+    cap = _rv.node_capacity(rep, _pmem)
+    if cap:
+        node_cpu, node_mem = _pcpu(cap["cpu"]) or 0, _pmem(cap["memory"]) or 0
+        used_cpu, used_mem = _rv.requests_sum(rep, _pcpu, _pmem)
+        result["cluster_capacity"] = {"cpu_cores": round(node_cpu / 1000, 2), "mem_gib": round(node_mem / 1024 ** 3, 2)}
+        result["cluster_used"] = {"cpu_cores": round(used_cpu / 1000, 2), "mem_gib": round(used_mem / 1024 ** 3, 2)}
+        # 平台只看得到客戶自己的 namespace，「已使用」不含客戶叢集裡其他程式
+        result["cluster_used_source"] = {"cpu": "requests (your namespace)", "mem": "requests (your namespace)"}
+        result["cluster_remaining"] = {"cpu_cores": round((node_cpu - used_cpu) / 1000, 2),
+                                       "mem_gib": round((node_mem - used_mem) / 1024 ** 3, 2)}
+    my = _rv.deployment_breakdown(rep, _pcpu, _pmem, _est_cost)
+    result.update(my_deployments=my["deployments"], my_total_cpu_cores=my["total_cpu_cores"],
+                  my_total_mem_gib=my["total_mem_gib"], my_monthly_usd=my["monthly_usd"])
+    return result
+
+
+# ── 寫入類包裝 ──
+def k8s_delete_deployment(app_name, namespace=None):
+    if not _is_remote_ns(namespace):
+        return _local_k8s_delete_deployment(app_name, namespace)
+    blocked = _remote_write_guard(namespace)
+    if blocked:
+        return False, blocked
+    try:
+        _tenant_repo(_remote_owner(namespace)).delete_app(app_name)
+        return True, f"已刪除 {app_name}。{_SYNC_MSG}"
+    except Exception as e:
+        return False, str(e)
+
+
+_REMOTE_HEAL_COOLDOWN = 180  # 秒
+_remote_heal_recent = {}
+_remote_heal_lock = threading.Lock()
+
+
+def _real_heal_pod(pod_name, namespace="default"):
+    if not _is_remote_ns(namespace):
+        return _local_real_heal_pod(pod_name, namespace)
+    rep = _remote_report(namespace)
+    issue = next((i for i in _rv.unhealthy_issues(rep, namespace) if i["pod_name"] == pod_name), None)
+    if not issue:
+        return {"ok": True, "action": "none", "root_cause": None,
+                "message": f"Pod {pod_name} 目前狀態正常，無需修復 / already healthy"}
+    # 冷卻：修復 commit 之後、客戶叢集同步並換掉壞 Pod 之前（約 1 分鐘），回報裡還看得到同一個
+    # 問題。這段時間手動修復跟背景迴圈都不能再對同一個服務動手，否則會疊加修復
+    # （2026-10-09 端到端實測：設定因此在好壞之間來回跳了 5 次）。
+    cool_key = (namespace, issue.get("app") or pod_name)
+    with _remote_heal_lock:
+        last = _remote_heal_recent.get(cool_key, 0)
+        if _time.time() - last < _REMOTE_HEAL_COOLDOWN:
+            return {"ok": True, "action": "in_progress", "root_cause": None, "pending_sync": True,
+                    "message": f"{issue.get('app') or pod_name} 剛修復過，正在等你的叢集同步（最多約 "
+                               f"{_REMOTE_HEAL_COOLDOWN // 60} 分鐘），先不重複處理。 / Fix already in progress."}
+        _remote_heal_recent[cool_key] = _time.time()  # 先佔住，避免兩個請求同時進來都動手
+    from healer.diagnose import diagnose_issue
+    diagnosis = diagnose_issue({**issue, "reason": issue["reason"]})
+    dep = next((d for d in rep.get("deployments") or [] if d["name"] == issue.get("app")), {})
+    blocked = _remote_write_guard(namespace)
+    if blocked:
+        result = {"ok": False, "action": diagnosis.get("action"), "message": blocked}
+    else:
+        result = _rops.heal(_tenant_repo(_remote_owner(namespace)), issue, diagnosis,
+                            current_memory=dep.get("memory_limit"))
+    if not result.get("pending_sync"):
+        with _remote_heal_lock:  # 沒有真的送出修正（人工處理、失敗）→ 不佔冷卻時間
+            _remote_heal_recent.pop(cool_key, None)
+    result["root_cause"] = diagnosis.get("root_cause")
+    result["severity"] = diagnosis.get("severity")
+    result["llm_raw_guess"] = diagnosis.get("llm_raw_guess")
+    return result
+
+
+def _remote_healer_loop(interval: int = 30):
+    """客戶叢集的背景自動修復：每 30 秒看每個已連線客戶的最新回報，同一個問題只處理一次
+    （同本機 _healer_background_loop 的 seen 集合做法），修復紀錄併進同一個 Healer 狀態。"""
+    from gitops.tenant_repo import tenant_slug
+    seen = set()
+    stop = threading.Event()
+    while not stop.wait(interval):
+        try:
+            now_keys = set()
+            for username in list(CLUSTERS._data.keys()):
+                if not CLUSTERS.status(username)["ok"]:
+                    continue
+                ns = tenant_slug(username)
+                for issue in _rv.unhealthy_issues(_remote_report(ns), ns):
+                    key = f"{ns}/{issue['app'] or issue['pod_name']}/{issue['reason']}"
+                    now_keys.add(key)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    try:
+                        result = _real_heal_pod(issue["pod_name"], ns)
+                        entry = {"time": _utc_now_iso(), "pod": issue["pod_name"], "namespace": ns,
+                                 "reason": issue["reason"], "root_cause": result.get("root_cause"),
+                                 "action": result.get("action"), "ok": result.get("ok"),
+                                 "message": result.get("message"), "llm_raw_guess": result.get("llm_raw_guess")}
+                    except Exception as e:
+                        entry = {"time": _utc_now_iso(), "pod": issue["pod_name"], "namespace": ns,
+                                 "reason": issue["reason"], "ok": False, "error": str(e)}
+                    with _healer_bg_lock:
+                        _healer_bg_state["recent_actions"].insert(0, entry)
+                        _healer_bg_state["recent_actions"] = _healer_bg_state["recent_actions"][:_HEALER_BG_MAX_HISTORY]
+            seen &= now_keys
+        except Exception as e:
+            print(f"[remote healer] loop error: {e}")
 
 
 if __name__ == "__main__":
@@ -6841,6 +7282,9 @@ if __name__ == "__main__":
         print("  Healer: background auto-heal loop started (scan every 30s)")
     else:
         print("  Healer: background auto-heal loop NOT started (K8s not connected)")
+    if CUSTOMER_CLUSTER_MODE:
+        threading.Thread(target=_remote_healer_loop, daemon=True, kwargs={"interval": 30}).start()
+        print("  Healer: customer-cluster auto-heal loop started (every 30s, via Git)")
     # 有對外網址就只綁本機：外部流量一律經過通道（Tailscale Funnel / Cloudflare Tunnel），
     # ProxyFix 才能安全地信任 X-Forwarded-*。沒設定時維持舊行為，區網可直接連。
     _bind = "127.0.0.1" if PUBLIC_BASE_URL else "0.0.0.0"
