@@ -2285,7 +2285,7 @@ function autoGrowChatInput(el){
 // ── 語音輸入（瀏覽器內建的語音辨識，不用另外裝東西）──
 // 辨識完只把文字放進輸入框，不自動送出，讓使用者先看過再按送出。
 const HINT_DEFAULT = '部署、擴縮、刪除之前都會先讓你確認。';
-let voiceRec = null, voiceBase = '', voiceHeard = false;
+let voiceRec = null, voiceBase = '', voiceHeard = false, voiceWait = null;
 function setComposerHint(msg, cls){
   const h = document.getElementById('composer-hint-txt');
   if(!h) return;
@@ -2317,7 +2317,7 @@ function toggleVoice(){
   rec.lang = 'zh-TW';
   rec.interimResults = true;
   rec.continuous = false;
-  rec.onstart = () => { voiceUI(true); setComposerHint('正在聽，說完停一下就會自動結束，也可以再按一次麥克風結束。', 'voice'); };
+  rec.onstart = () => { clearTimeout(voiceWait); voiceUI(true); setComposerHint('正在聽，說完停一下就會自動結束，也可以再按一次麥克風結束。', 'voice'); };
   rec.onresult = ev => {
     let text = '';
     for(let i = 0; i < ev.results.length; i++) text += ev.results[i][0].transcript;
@@ -2330,13 +2330,22 @@ function toggleVoice(){
     setComposerHint(VOICE_ERRORS[ev.error] || ('語音輸入失敗，請再試一次，或直接打字。（' + ev.error + '）'), 'voice-err');
   };
   rec.onend = () => {
+    clearTimeout(voiceWait);
     voiceRec = null; voiceUI(false);
     const h = document.getElementById('composer-hint-txt');
     if(voiceHeard){ setComposerHint('辨識好的文字已經放進輸入框，確認沒問題再按送出。', 'voice'); inp.focus(); }
     else if(h && !h.classList.contains('voice-err')) setComposerHint('沒有聽到聲音。請靠近麥克風，按一下再說一次。', 'voice-err');
   };
+  // 第一次使用時瀏覽器會先跳出麥克風權限詢問，這段時間不會有任何事件，要先講清楚在等什麼
+  setComposerHint('正在開啟麥克風。如果瀏覽器詢問是否允許使用麥克風，請按允許。', 'voice');
+  clearTimeout(voiceWait);
+  voiceWait = setTimeout(() => {
+    if(voiceRec === rec && !document.getElementById('chat-mic')?.classList.contains('listening')){
+      setComposerHint('麥克風還沒開始收音。請看網址列附近有沒有權限詢問，按允許；或點網址列左邊的圖示，把麥克風改成允許後再按一次。', 'voice-err');
+    }
+  }, 8000);
   try { rec.start(); voiceRec = rec; }
-  catch(e){ voiceRec = null; voiceUI(false); setComposerHint('語音輸入啟動失敗，請再按一次。', 'voice-err'); }
+  catch(e){ clearTimeout(voiceWait); voiceRec = null; voiceUI(false); setComposerHint('語音輸入啟動失敗，請再按一次。', 'voice-err'); }
 }
 
 // ── 使用說明書 / K8s 小百科 ──

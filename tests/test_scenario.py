@@ -114,3 +114,17 @@ def test_people_count_is_not_replica_count():
 ])
 def test_explicit_replicas(text, expected):
     assert explicit_replicas(text) == expected
+
+
+@pytest.mark.parametrize("evil", [
+    "5" + " " * 5000 + "x", "1" * 5000 + "x", "1" + "," * 5000 + "x", "5 " * 5000,
+    "一" * 5000 + "人", "5" + " 多 " * 2000 + "人", "9" * 400 + " 天",
+])
+def test_rules_are_fast_on_hostile_input(evil):
+    """2026-10-09 安全審查：原本的數字規則遇到 500 個空白要回溯 113 秒，長數字還會報錯。"""
+    import time
+    t = time.perf_counter()
+    extract_by_rules(evil)
+    explicit_replicas(evil)
+    merge_model_attrs(evil, extract_by_rules(evil), {"total_users": 10 ** 30, "duration_days": 1e308})
+    assert time.perf_counter() - t < 0.5

@@ -38,18 +38,25 @@ MONTH_DAYS = 30
 _CN_DIGITS = {"零": 0, "〇": 0, "一": 1, "二": 2, "兩": 2, "两": 2, "三": 3, "四": 4,
               "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
 _CN_UNITS = {"十": 10, "百": 100, "千": 1000, "萬": 10000, "万": 10000}
-_NUM = r"(\d[\d,]*(?:\.\d+)?\s*[kK千百萬万]?|[零〇一二兩两三四五六七八九十百千萬万]+)"
+# 每一段都有長度上限：2026-10-09 安全審查實測，原本不限長度的寫法遇到 500 個空白就要回溯 113 秒
+_NUM = r"(\d[\d,]{0,9}(?:\.\d{1,2})?\s?[kK千百萬万]?|[零〇一二兩两三四五六七八九十百千萬万]{1,8})"
+# 只看前面這麼多字；情境描述不會更長，也避免超長輸入拖慢規則比對
+MAX_SCAN_CHARS = 600
 
 
 def _to_int(tok: str) -> Optional[int]:
     """「500」「1,000」「1.5k」「5百」「兩百」「三十」「一萬二」都轉成整數。"""
     tok = (tok or "").strip().replace(",", "").replace(" ", "")
-    if not tok:
+    if not tok or len(tok) > 12:
         return None
     m = re.fullmatch(r"(\d+(?:\.\d+)?)([kK千百萬万]?)", tok)
     if m:
         mult = {"": 1, "k": 1000, "K": 1000, "千": 1000, "百": 100, "萬": 10000, "万": 10000}[m.group(2)]
-        return int(round(float(m.group(1)) * mult))
+        try:
+            n = int(round(float(m.group(1)) * mult))
+        except (ValueError, OverflowError):
+            return None
+        return n if n <= 10_000_000 else None
     total, section, num, last_unit = 0, 0, 0, 0
     for ch in tok:
         if ch in _CN_DIGITS:
@@ -71,10 +78,10 @@ def _to_int(tok: str) -> Optional[int]:
     return total + section + num or None
 
 
-_PEOPLE = (r"(?:多|餘|左右)?\s*(?:個|位|名)?\s*(?:人|使用者|用戶|用户|同學|同学|學生|学生|會員|会员|"
+_PEOPLE = (r"(?:多|餘|左右)?\s{0,3}(?:個|位|名)?\s{0,3}(?:人|使用者|用戶|用户|同學|同学|學生|学生|會員|会员|"
            r"客人|訪客|访客|參加者|参加者|觀眾|观众|員工|员工|people|users?|visitors?|attendees?|"
            r"participants?|students?|members?)")
-_USERS_RE = re.compile(_NUM + r"\s*" + _PEOPLE, re.IGNORECASE)
+_USERS_RE = re.compile(_NUM + r"\s{0,3}" + _PEOPLE, re.IGNORECASE)
 _CONCURRENT_HINT = re.compile(r"同時|同时|同一時間|一起上線|在線|在线|concurrent|simultaneous|at the same time|at once",
                               re.IGNORECASE)
 _DUR_UNITS = [
@@ -83,7 +90,7 @@ _DUR_UNITS = [
     (r"(?:週|周|星期|禮拜|礼拜|weeks?)", 7),
     (r"(?:個月|个月|months?)", 30),
 ]
-_DUR_RE = [(re.compile(_NUM + r"\s*" + u, re.IGNORECASE), f) for u, f in _DUR_UNITS]
+_DUR_RE = [(re.compile(_NUM + r"\s{0,3}" + u, re.IGNORECASE), f) for u, f in _DUR_UNITS]
 
 _HIGH_RE = re.compile(r"很重要|非常重要|不能掛|不能挂|不可以掛|不能停|不能斷|不能当|不能當|正式上線|正式环境|正式環境|"
                       r"上線用|商業|商业|付費|付费|客戶在用|高可用|production|prod\b|critical|mission[- ]critical|"
@@ -98,7 +105,7 @@ _PERSIST_RE = re.compile(r"報名|报名|註冊|注册|訂單|订单|投票|留�
 def _numbers_in(text: str) -> set:
     """原句裡出現的所有數字（含中文數字、天數換算），用來核對 Gemini 給的數字有沒有根據。"""
     out = set()
-    for m in re.finditer(_NUM, text or ""):
+    for m in re.finditer(_NUM, (text or "")[:MAX_SCAN_CHARS]):
         n = _to_int(m.group(1))
         if n is not None:
             out.update({n, n * 7, n * 30})
@@ -107,7 +114,7 @@ def _numbers_in(text: str) -> set:
 
 def extract_by_rules(text: str) -> Dict:
     """用固定規則抽出情境屬性；抽不到的欄位是 None。"""
-    text = text or ""
+    text = (text or "")[:MAX_SCAN_CHARS]
     total = concurrent = None
     for m in _USERS_RE.finditer(text):
         n = _to_int(m.group(1))
@@ -148,7 +155,7 @@ def merge_model_attrs(text: str, rules: Dict, model: Optional[Dict]) -> Dict:
             v = float(model.get(key))
         except (TypeError, ValueError):
             continue
-        if v <= 0:
+        if not (0 < v <= 10_000_000):   # 也擋掉 inf、nan、模型回的離譜大數
             continue
         # 小於一天的時數（例如 0.5 天）不好核對，直接只接受整數且原句出現過的數字
         if key == "duration_days":
@@ -168,17 +175,17 @@ def merge_model_attrs(text: str, rules: Dict, model: Optional[Dict]) -> Dict:
 
 
 _EXPLICIT_REPLICA_RES = [
-    re.compile(_NUM + r"\s*(?:個|个|份)?\s*(?:副本|實例|实例|pods?\b|replicas?\b|instances?\b)", re.IGNORECASE),
-    re.compile(r"(?:副本|replicas?|pods?)\s*(?:數|数)?\s*(?:=|:|：|為|为|是|設|设|開|开)?\s*" + _NUM, re.IGNORECASE),
+    re.compile(_NUM + r"\s{0,3}(?:個|个|份)?\s{0,3}(?:副本|實例|实例|pods?\b|replicas?\b|instances?\b)", re.IGNORECASE),
+    re.compile(r"(?:副本|replicas?|pods?)\s{0,3}(?:數|数)?\s{0,3}(?:=|:|：|為|为|是|設|设|開|开)?\s{0,3}" + _NUM, re.IGNORECASE),
     # 「起兩個 redis」：兩個以上 + 映像檔名稱才算；「一個 nginx」多半只是「一個服務」的意思
-    re.compile(_NUM + r"\s*(?:個|个|份)\s*(?=[A-Za-z])"),
+    re.compile(_NUM + r"\s{0,3}(?:個|个|份)\s{0,3}(?=[A-Za-z])"),
 ]
 
 
 def explicit_replicas(text: str) -> Optional[int]:
     """使用者有沒有明講副本數。比部署解析器的判斷嚴格：「一個報名網站」的「一個」不算。"""
     for i, rx in enumerate(_EXPLICIT_REPLICA_RES):
-        m = rx.search(text or "")
+        m = rx.search((text or "")[:MAX_SCAN_CHARS])
         if m:
             n = _to_int(m.group(1))
             if n and (i < 2 or n >= 2):
@@ -276,7 +283,7 @@ def plan(attrs: Dict, image: str, app_name: str = "", explicit_replicas: Optiona
             "recommended_monthly_usd": round(rec_month, 2),
             "baseline_usd": round(baseline, 2),
             "scenario_usd": round(rec_month * span, 2),
-            "basis": "依公有雲（AWS）牌價估算每月費用。放在你自己的電腦或學校叢集不另外收費，省下的是電腦資源",
+            "basis": "依公有雲（AWS）牌價估算，以一個月為比較期間。放在你自己的電腦或學校叢集不另外收費，省下的是電腦資源",
         }
 
     return {
