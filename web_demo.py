@@ -3523,7 +3523,7 @@ W.report = {
     const kpis = [
       ['部署成功', rpCount(dp.ok), dp.failed ? `另有 ${dp.failed} 次失敗` : `共 ${dp.apps} 個服務`, 'var(--signal)'],
       ['審查擋下', rpCount(rv.block), rv.total ? `共審查 ${rv.total} 次` : '還沒有審查紀錄', 'var(--caution)'],
-      ['自動修復', rpCount(hl.total), hl.total ? `修好 ${hl.ok} 次` : '期間內沒有狀況', 'var(--pass)'],
+      ['自動修復', rpCount(hl.total), hl.total ? `修好 ${hl.ok} 次` + (hl.needs_you ? `，${hl.needs_you} 次要你處理` : '') : '期間內沒有狀況', 'var(--pass)'],
       ['連續無狀況', inc.days_without_incident == null ? '<b>未知</b>' : rpCount(inc.days_without_incident), inc.last_incident ? `上次是 ${inc.last_incident}` : '天', 'var(--pass)'],
       ['目前服務', live.services == null ? '<b>未知</b>' : rpCount(live.services), live.monthly_usd != null ? `估計每月 $${live.monthly_usd}` : (live.unhealthy ? `${live.unhealthy} 個 Pod 不正常` : ''), 'var(--signal)'],
     ];
@@ -7130,9 +7130,14 @@ def _record_events(resp):
 
 # Healer：手動修復、一鍵修復、背景自動修復最後都呼叫全域的 _real_heal_pod，在最外層包一層記錄
 _real_heal_pod_unrecorded = _real_heal_pod
-_HEAL_ACTION_LABEL = {"restart_pod": "重新啟動", "increase_memory": "調高記憶體上限",
-                      "rollback": "回到上一版", "restore_previous_image": "換回上一個映像檔",
-                      "restart_app": "重新啟動", "set_memory_limit": "調高記憶體上限", "revert_app": "回到上一版"}
+_HEAL_ACTION_LABEL = {"analyze_logs": "重新建立 Pod", "fix_image": "退回上一個版本", "increase_memory": "調高記憶體上限",
+                      "fix_probe": "放寬健康檢查的等待時間", "restore_previous_image": "換回上一個映像檔",
+                      "restart_app": "重新啟動", "set_memory_limit": "調高記憶體上限", "revert_app": "回到上一版",
+                      "check_dependencies": "檢查相依服務", "fix_permissions": "檢查權限設定",
+                      "create_config": "檢查設定檔", "fix_port_conflict": "檢查 Port 衝突", "manual_inspect": "需要人工檢查"}
+# 實際改動叢集（或送出修正 commit）的處理方式；其他的只列出資訊，回傳 ok 只代表「查完了」，不能算修好
+_HEAL_REPAIR_ACTIONS = {"analyze_logs", "fix_image", "increase_memory", "fix_probe", "restore_previous_image",
+                        "restart_app", "set_memory_limit", "revert_app"}
 
 
 def _real_heal_pod(pod_name, namespace="default"):
@@ -7140,8 +7145,8 @@ def _real_heal_pod(pod_name, namespace="default"):
     try:
         action = (result or {}).get("action")
         if action and action not in ("none", "in_progress"):
-            _events.record(namespace, "heal", _app_key_for_pod_name(pod_name),
-                           "ok" if result.get("ok") else "fail",
+            outcome = ("ok" if result.get("ok") else "fail") if action in _HEAL_REPAIR_ACTIONS else "inspect"
+            _events.record(namespace, "heal", _app_key_for_pod_name(pod_name), outcome,
                            {"pod": pod_name, "action": action, "action_label": _HEAL_ACTION_LABEL.get(action, action),
                             "root_cause": result.get("root_cause"), "message": str(result.get("message") or "")[:300]})
     except Exception as e:

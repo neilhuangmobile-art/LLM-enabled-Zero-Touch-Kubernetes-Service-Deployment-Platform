@@ -121,3 +121,11 @@ def test_web_report_route_is_scoped_and_records_events(monkeypatch, tmp_path):
     rows = event_store.query("user-reporter", kinds=["scale"])
     assert rows and rows[-1]["outcome"] == "fail" and rows[-1]["data"]["replicas"] == 2
     assert not event_store.query("user-other", kinds=["scale"])
+
+
+def test_inspect_only_heals_are_not_counted_as_fixed():
+    """Healer 只查出原因、沒有實際改動（例如人工檢查）時，不能在報告上算成「修好」。"""
+    f = build_report([_ev("heal", "web", "inspect", {"root_cause": "缺少設定檔", "action": "create_config"}, 1),
+                      _ev("heal", "api", "ok", {"root_cause": "記憶體不足", "action": "increase_memory"}, 1)], 7)
+    assert f["heals"]["ok"] == 1 and f["heals"]["needs_you"] == 1 and f["heals"]["failed"] == 0
+    assert any("需要你處理" in o["text"] for o in f["observations"])

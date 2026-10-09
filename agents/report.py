@@ -52,7 +52,7 @@ def clean_issue(msg: str) -> str:
 def _issue_key(msg: str) -> str:
     """把「容器 web 缺少 readinessProbe」跟「容器 api 缺少 readinessProbe」歸成同一類。"""
     s = clean_issue(msg)
-    s = re.sub(r"容器\s*\S+?(?=[\s：:，,]|使用|缺少|沒有|未)", "容器", s)
+    s = re.sub(r"^容器\s*[\w.-]{1,63}\s*[：:]?\s*", "", s)
     s = re.sub(r"[（(][^）)]{0,80}[）)]", "", s)
     return s.strip()
 
@@ -124,6 +124,8 @@ def build_report(events: List[Dict], days: int, now: float = None, live: Dict = 
     # ── Healer ──
     heals = [e for e in by_kind["heal"] if e.get("outcome") != "none"]
     heal_ok = sum(1 for e in heals if e.get("outcome") == "ok")
+    # inspect：Healer 只查出原因、列出資訊，沒有實際改動，需要使用者處理
+    heal_inspect = sum(1 for e in heals if e.get("outcome") == "inspect")
     causes = Counter(((e.get("data") or {}).get("root_cause") or "未判定") for e in heals)
     heal_apps = Counter(e.get("app") for e in heals if e.get("app"))
 
@@ -191,7 +193,8 @@ def build_report(events: List[Dict], days: int, now: float = None, live: Dict = 
                     "blocked_cost_usd": blocked_cost_usd,
                     "top_warnings": warn_issues.most_common(5)},
         "ops": ops,
-        "heals": {"total": len(heals), "ok": heal_ok, "failed": len(heals) - heal_ok,
+        "heals": {"total": len(heals), "ok": heal_ok, "needs_you": heal_inspect,
+                  "failed": len(heals) - heal_ok - heal_inspect,
                   "top_causes": causes.most_common(5), "top_apps": heal_apps.most_common(5)},
         "incidents": {"days_without_incident": days_clean,
                       "last_incident": _day_key(last_incident) if last_incident else None},
@@ -214,6 +217,8 @@ def _event_detail(e: Dict) -> str:
     if k == "review":
         lab = {"approve": "通過", "warn": "通過但有提醒", "block": "擋下"}.get(e.get("outcome"), e.get("outcome") or "")
         first = clean_issue(((d.get("blockers") or [None])[0]) or "") if e.get("outcome") == "block" else ""
+        # 時間軸只放第一句，完整原因在部署單上看過了
+        first = re.split(r"[：:。]", first, maxsplit=1)[0][:60]
         return f"審查{lab}" + (f"：{first}" if first else "")
     if k == "deploy":
         return (f"部署 {d.get('image') or ''}，{d.get('pods') or '?'} 個副本"
@@ -223,8 +228,8 @@ def _event_detail(e: Dict) -> str:
     if k == "update":
         return f"映像檔換成 {d.get('image')}" + ("" if e.get("outcome") == "ok" else "（失敗）")
     if k == "heal":
-        return f"{d.get('root_cause') or '未判定原因'}，處理方式：{d.get('action_label') or d.get('action') or ''}" + \
-               ("" if e.get("outcome") == "ok" else "（沒有修好）")
+        tail = {"ok": "", "inspect": "（需要你處理）"}.get(e.get("outcome"), "（沒有修好）")
+        return f"{d.get('root_cause') or '未判定原因'}，處理方式：{d.get('action_label') or d.get('action') or ''}{tail}"
     return _KIND_LABEL.get(k, k) + ("" if e.get("outcome") == "ok" else "（失敗）")
 
 
@@ -249,8 +254,13 @@ def observations(f: Dict) -> List[Dict]:
             out.append({"level": "info", "text": f"共部署 {dp['ok']} 次、涵蓋 {dp['apps']} 個服務。"})
     if hl["total"]:
         cause, n = hl["top_causes"][0]
-        out.append({"level": "info" if hl["failed"] == 0 else "warn",
-                    "text": f"Healer 處理了 {hl['total']} 次狀況，修好 {hl['ok']} 次；最常見的原因是「{cause}」（{n} 次）。"})
+        parts = [f"自動修好 {hl['ok']} 次"]
+        if hl["needs_you"]:
+            parts.append(f"{hl['needs_you']} 次只能查出原因、需要你處理")
+        if hl["failed"]:
+            parts.append(f"{hl['failed']} 次修復失敗")
+        out.append({"level": "info" if not (hl["failed"] or hl["needs_you"]) else "warn",
+                    "text": f"Healer 處理了 {hl['total']} 次狀況：{'、'.join(parts)}。最常見的原因是「{cause}」（{n} 次）。"})
         for app, n in hl["top_apps"]:
             if n >= 3:
                 out.append({"level": "warn", "text": f"{app} 在這段期間被修復了 {n} 次，同一個服務反覆出狀況，建議檢查它的設定或換一個穩定版本的映像檔。"})
