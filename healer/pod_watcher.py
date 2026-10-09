@@ -25,6 +25,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import re
 import time
 import json
 import argparse
@@ -186,32 +187,39 @@ def _check_pod(pod) -> Optional[dict]:
     return None
 
 
+# 讀日誌的 API 沒丟例外、但其實沒拿到日誌時回的訊息
+_LOG_UNAVAILABLE_RE = re.compile(
+    r"unable to retrieve container logs|previous terminated container .* not found|"
+    r"container .* is waiting to start|failed to try resolving symlinks",
+    re.IGNORECASE,
+)
+
+
 def _get_pod_logs(pod_name: str, namespace: str, container: str,
                   tail_lines: int = 50) -> str:
     """取得 Pod 最近的日誌。"""
     if not K8S_AVAILABLE:
         return "[模擬日誌] Error: connection refused\nPanic: nil pointer dereference"
-    try:
-        v1 = k8s_client.CoreV1Api()
-        return v1.read_namespaced_pod_log(
-            name=pod_name,
-            namespace=namespace,
-            container=container,
-            tail_lines=tail_lines,
-            previous=True,   # 取崩潰前的日誌
-        )
-    except Exception as e:
+    # 2026-10-10 實測：Docker Desktop 很快就把結束的舊容器清掉，這時「崩潰前的日誌」不會丟例外，
+    # 而是回一句正常文字「unable to retrieve container logs for docker://…」。原本把這句話當成日誌，
+    # 不會改抓目前容器的日誌，診斷因此看不到真正的錯誤（例如 FATAL: cannot connect to database），
+    # 一律判成證據不足，模型還從這句話編出「Docker 頻繁拉取映像」。現在先抓崩潰前的，
+    # 拿到的是空的或這類「沒抓到」的訊息，就改抓目前的；兩個都沒有就回固定字串，不把錯誤原文交給模型。
+    v1 = k8s_client.CoreV1Api()
+    for previous in (True, False):
         try:
-            # 取當前日誌
-            v1 = k8s_client.CoreV1Api()
-            return v1.read_namespaced_pod_log(
+            text = v1.read_namespaced_pod_log(
                 name=pod_name,
                 namespace=namespace,
                 container=container,
                 tail_lines=tail_lines,
+                previous=previous,
             )
         except Exception:
-            return f"[無法取得日誌：{e}]"
+            continue
+        if text and text.strip() and not _LOG_UNAVAILABLE_RE.search(text[:300]):
+            return text
+    return "[無法取得日誌]"
 
 
 def _get_pod_events(pod_name: str, namespace: str) -> list:

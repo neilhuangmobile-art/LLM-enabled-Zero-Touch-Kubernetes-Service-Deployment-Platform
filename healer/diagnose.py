@@ -18,6 +18,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import json
 import re
 
+# 依賴服務連不上的各種寫法（2026-10-10 補：原本只認 connection refused，
+# 「FATAL: cannot connect to database」這類常見寫法完全比對不到）
+_DEPENDENCY_RE = (r"ECONNREFUSED|connection refused|dial tcp.*refused|"
+                  r"(?:cannot|can't|could not|couldn't|unable to|failed to) connect|"
+                  r"connection (?:timed out|reset)|no route to host|ENOTFOUND|"
+                  r"name or service not known|temporary failure in name resolution|"
+                  r"連不上|無法連線")
+
 # 規則型快速分析（不需要 LLM，速度快）
 _RULE_PATTERNS = [
     # (正則, root_cause, action, severity)
@@ -36,11 +44,7 @@ _RULE_PATTERNS = [
     # reason 欄位就不會是 "CrashLoopBackOff"，完全靠事件文字撐住比對，原本的正則
     # 抓不到，導致規則層判定 confidence 不是 "rule"，連帶讓 _has_concrete_signal()
     # 那一整道幻覈防護被繞過（這道防護只在 confidence=="rule" 時才會跑）。
-    (r"crashloopbackoff|back-off restarting|back off restarting",
-     "容器反覆崩潰，需分析應用程式日誌",
-     "analyze_logs",
-     "high"),
-    (r"ECONNREFUSED|connection refused|dial tcp.*refused",
+    (_DEPENDENCY_RE,
      "依賴服務無法連線（資料庫/API 未啟動）",
      "check_dependencies",
      "medium"),
@@ -60,6 +64,13 @@ _RULE_PATTERNS = [
      "連接埠衝突",
      "fix_port_conflict",
      "medium"),
+    # 「反覆崩潰」只描述症狀、不是原因，排在最後：日誌裡有具體原因（例如連不上資料庫）時要先命中那一條。
+    # 2026-10-10 實測：這條原本排第三，崩潰的 Pod 一定有「重啟中」的事件，所以永遠先命中這條，
+    # 處理方式變成刪掉 Pod 重建；資料庫連不上時重建沒有用，Healer 每 30 秒重建一次，無限循環。
+    (r"crashloopbackoff|back-off restarting|back off restarting",
+     "容器反覆崩潰，需分析應用程式日誌",
+     "analyze_logs",
+     "high"),
 ]
 
 
@@ -74,7 +85,7 @@ _RULE_PATTERNS = [
 _CONCRETE_SIGNAL_RE = re.compile(
     r"oom|out of memory|image.*not found|manifest.*unknown|errimagepull|"
     r"permission denied|unauthorized|403|"
-    r"econnrefused|connection refused|dial tcp.*refused|"
+    + _DEPENDENCY_RE + "|" +
     r"configmap.*not found|secret.*not found|no such file|"
     r"liveness.*probe|readiness.*probe|probe failed|"
     r"port.*already in use|address already in use",
