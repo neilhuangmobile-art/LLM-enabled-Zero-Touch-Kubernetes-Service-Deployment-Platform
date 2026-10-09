@@ -193,34 +193,26 @@ def _rule_analyze(text: str, reason: str) -> dict:
         "root_cause": f"無法從規則比對識別原因（{reason}）",
         "severity"  : "unknown",
         "action"    : "manual_inspect",
-        "suggestion": "請手動執行 kubectl logs 和 kubectl describe pod 進行排查",
+        "suggestion": "自動判斷不出原因。請看 Pod 詳情裡的「最近的 log」和「最近事件」，通常會寫出錯在哪裡。",
         "confidence": "unknown",
         "raw_llm"   : "",
     }
 
 
 def _action_to_suggestion(action: str) -> str:
+    # 2026-10-09：建議都寫成平台裡就做得到的事，不叫使用者開終端機打 kubectl（零接觸定位）
     _map = {
-        "increase_memory"   : "增加 resources.limits.memory（建議至少翻倍），"
-                              "例如從 256Mi 調整到 512Mi",
-        "fix_image"         : "確認映像 tag 是否存在，"
-                              "執行 docker pull <image> 驗證，"
-                              "或檢查倉庫的 imagePullSecrets",
-        "analyze_logs"      : "執行 kubectl logs <pod> --previous 查看崩潰前日誌，"
-                              "尋找 Fatal/Panic/Exception 等錯誤",
-        "check_dependencies": "確認依賴的資料庫/API 服務是否正常運行，"
-                              "檢查對應 Service 和 Endpoints",
-        "fix_permissions"   : "檢查 ServiceAccount RBAC 設定，"
-                              "或確認掛載的 Volume 路徑權限",
-        "create_config"     : "確認 ConfigMap/Secret 是否存在於同一 namespace，"
-                              "執行 kubectl get configmap,secret -n <namespace>",
-        "fix_probe"         : "調整 livenessProbe/readinessProbe 的 initialDelaySeconds，"
-                              "給應用程式更多啟動時間",
-        "fix_port_conflict" : "確認 containerPort 設定正確，"
-                              "且沒有其他 Process 使用相同連接埠",
-        "manual_inspect"    : "請手動執行 kubectl logs 和 kubectl describe pod 進行排查",
+        "increase_memory"   : "把記憶體上限調高，建議至少加倍，例如 256Mi 改成 512Mi。可以讓 Healer 自動處理。",
+        "fix_image"         : "映像檔的名稱或版本可能打錯，或倉庫需要登入權限。請到服務詳情把映像檔改成正確的名稱。",
+        "analyze_logs"      : "看 Pod 詳情裡的「最近的 log」，找 error、fatal、exception 這類字，通常就是當掉的原因。",
+        "check_dependencies": "它依賴的資料庫或其他服務可能沒在執行。請到「我的服務」確認那些服務都是健康的。",
+        "fix_permissions"   : "權限不足（服務帳號或掛載的資料夾），需要調整部署設定，請聯絡平台管理員。",
+        "create_config"     : "缺少需要的設定檔或密碼（ConfigMap、Secret），請確認部署時有一起建立。",
+        "fix_probe"         : "健康檢查太早開始，應用程式還沒啟動完就被判定失敗，可以把啟動等待時間加長。",
+        "fix_port_conflict" : "Port 可能設錯，或被其他程式占用。請到服務詳情確認 Port。",
+        "manual_inspect"    : "自動判斷不出原因。請看 Pod 詳情裡的「最近的 log」和「最近事件」，通常會寫出錯在哪裡。",
     }
-    return _map.get(action, "請參考 kubectl describe pod 的輸出進行排查")
+    return _map.get(action, "請看 Pod 詳情裡的「最近的 log」和「最近事件」，通常會寫出錯在哪裡。")
 
 
 # ══════════════════════════════════════════════════════════════════

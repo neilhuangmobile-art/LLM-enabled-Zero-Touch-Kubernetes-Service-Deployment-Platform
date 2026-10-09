@@ -133,7 +133,7 @@ def _handle_fix_image(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
     if not deploy_name:
         return {
             "ok"     : False,
-            "message": f"無法從 {pod_name} 推斷 Deployment 名稱，請手動執行 kubectl rollout undo",
+            "message": f"找不到 {pod_name} 屬於哪個服務，沒辦法自動回滾。請到「我的服務」找到它，按「回滾到上一版」。",
         }
 
     if dry_run:
@@ -243,7 +243,7 @@ def _handle_fix_image(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
             "message": f"回滾失敗：{stderr}",
         }
     except FileNotFoundError:
-        return {"ok": False, "message": "kubectl 未安裝，無法執行回滾"}
+        return {"ok": False, "message": "平台這台電腦找不到 kubectl，沒辦法執行回滾，請聯絡平台管理員。"}
     except Exception as e:
         return {"ok": False, "message": f"回滾時發生錯誤：{e}"}
 
@@ -380,7 +380,7 @@ def _handle_check_dependencies(issue: dict, diagnosis: dict, dry_run: bool) -> d
     if not K8S_AVAILABLE:
         return {
             "ok"     : True,
-            "message": "請執行：kubectl get svc,endpoints -n " + namespace,
+            "message": "它依賴的服務可能沒在執行，請到「我的服務」確認相關服務都是健康的。",
         }
 
     try:
@@ -433,7 +433,7 @@ def _handle_fix_permissions(issue: dict, diagnosis: dict, dry_run: bool) -> dict
     if not K8S_AVAILABLE:
         return {
             "ok"     : True,
-            "message": f"請執行：kubectl get rolebinding,clusterrolebinding -n {namespace}",
+            "message": "權限設定可能不足，需要調整部署設定，請聯絡平台管理員。",
         }
 
     try:
@@ -464,7 +464,7 @@ def _handle_create_config(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
     if not K8S_AVAILABLE:
         return {
             "ok"     : True,
-            "message": f"請執行：kubectl get configmap,secret -n {namespace}",
+            "message": "可能缺少需要的設定檔或密碼（ConfigMap、Secret），請確認部署時有一起建立。",
         }
 
     try:
@@ -493,13 +493,7 @@ def _handle_fix_port_conflict(issue: dict, diagnosis: dict, dry_run: bool) -> di
     """連接埠衝突 — 僅記錄，提供排查指引。"""
     return {
         "ok"     : True,
-        "message": (
-            "連接埠衝突需人工排查。\n"
-            "建議：\n"
-            "  1. kubectl get pods -o wide 確認同節點的 Pod\n"
-            "  2. 修改 Deployment 的 containerPort 使用其他連接埠\n"
-            "  3. 或刪除佔用該連接埠的 Pod"
-        ),
+        "message": "Port 衝突沒辦法自動修。請到服務詳情把 Port 換成其他號碼，或刪掉占用這個 Port 的服務。",
     }
 
 
@@ -509,11 +503,9 @@ def _handle_manual_inspect(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
     namespace = issue["namespace"]
     return {
         "ok"     : True,
+        # 2026-10-09：不叫使用者打 kubectl，引導到平台上看得到 log 與事件的地方
         "message": (
-            f"此問題需要人工排查。\n"
-            f"建議執行：\n"
-            f"  kubectl describe pod {pod_name} -n {namespace}\n"
-            f"  kubectl logs {pod_name} -n {namespace} --previous\n"
+            f"這個問題沒辦法自動修。請到 Pod「{pod_name}」的詳情看「最近的 log」和「最近事件」。"
             f"診斷建議：{diagnosis.get('suggestion', '')}"
         ),
     }

@@ -1333,8 +1333,8 @@ a{color:var(--signal)}
 .auth-sub{font-size:14px;color:var(--text-2);margin-bottom:24px}
 .form-group{margin-bottom:16px}
 .form-group label{display:block;font-size:13px;color:var(--text-2);margin-bottom:6px}
-.form-group input,.deploy-input,.deploy-confirm-field input,textarea{width:100%;background:var(--panel-2);border:1px solid var(--grid-2);border-radius:var(--radius);padding:10px 12px;font-size:14.5px;color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s}
-.form-group input:focus,.deploy-input:focus,.deploy-confirm-field input:focus,textarea:focus{border-color:var(--signal);box-shadow:0 0 0 3px var(--signal-soft)}
+.form-group input,.deploy-input,.deploy-confirm-field input,.fgrid input,.inline-form input,textarea{width:100%;background:var(--panel-2);border:1px solid var(--grid-2);border-radius:var(--radius);padding:10px 12px;font-size:14.5px;color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s}
+.form-group input:focus,.deploy-input:focus,.deploy-confirm-field input:focus,.fgrid input:focus,.inline-form input:focus,textarea:focus{border-color:var(--signal);box-shadow:0 0 0 3px var(--signal-soft)}
 .auth-card .btn-primary{width:100%;padding:11px;margin-top:4px}
 .auth-divider{display:flex;align-items:center;gap:10px;margin:20px 0}
 .auth-divider .line{flex:1;height:1px;background:var(--grid)}
@@ -1411,7 +1411,7 @@ a{color:var(--signal)}
 .page{display:none;flex:1;min-height:0;overflow-y:auto;padding:28px 32px 48px}
 .page.active{display:block;animation:pageIn .22s ease-out}
 @keyframes pageIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-.page > *{max-width:1180px;margin-left:auto;margin-right:auto}
+.page > *{max-width:1280px;margin-left:auto;margin-right:auto}
 .page-title{font-size:24px;font-weight:700;margin-bottom:4px}
 .page-sub{font-size:14.5px;color:var(--text-2);margin-bottom:22px}
 
@@ -1502,9 +1502,9 @@ tbody tr:hover td{background:var(--signal-soft)}
 .chat-topbar{display:none}
 /* 對話欄自己有底色，把背景格線擋住；兩側留白露出格線 */
 .chat-messages{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:28px 24px 24px;
-  background:linear-gradient(90deg,transparent calc(50% - 520px),color-mix(in srgb,var(--grid) 70%,transparent) calc(50% - 520px),var(--void) calc(50% - 519px),var(--void) calc(50% + 519px),color-mix(in srgb,var(--grid) 70%,transparent) calc(50% + 519px),transparent calc(50% + 520px))}
-@media (max-width:1088px){.chat-messages{background:var(--void)}}
-.msg{display:flex;gap:12px;max-width:960px;margin:0 auto 20px}
+  background:linear-gradient(90deg,transparent calc(50% - 620px),color-mix(in srgb,var(--grid) 70%,transparent) calc(50% - 620px),var(--void) calc(50% - 619px),var(--void) calc(50% + 619px),color-mix(in srgb,var(--grid) 70%,transparent) calc(50% + 619px),transparent calc(50% + 620px))}
+@media (max-width:1288px){.chat-messages{background:var(--void)}}
+.msg{display:flex;gap:12px;max-width:1160px;margin:0 auto 20px}
 .msg.user{flex-direction:row-reverse}
 .msg-avatar{display:none}
 .msg-bubble{max-width:100%;font-size:15px;line-height:1.7;min-width:0}
@@ -1525,13 +1525,13 @@ tbody tr:hover td{background:var(--signal-soft)}
 .prompt-card strong{display:block;font-size:15px;font-weight:500;color:var(--text)}
 .prompt-card span{display:block;font-size:13.5px;color:var(--text-3);margin-top:4px;font-family:var(--f-id)}
 .chat-composer{flex:none;padding:12px 24px 18px;background:var(--void);border-top:1px solid var(--grid)}
-.composer-box{max-width:960px;margin:0 auto;display:flex;align-items:flex-end;gap:10px;background:var(--panel);border:1px solid var(--grid-2);border-radius:10px;padding:7px 7px 7px 16px;transition:border-color .2s,box-shadow .2s}
+.composer-box{max-width:1160px;margin:0 auto;display:flex;align-items:flex-end;gap:10px;background:var(--panel);border:1px solid var(--grid-2);border-radius:10px;padding:7px 7px 7px 16px;transition:border-color .2s,box-shadow .2s}
 .composer-box:focus-within{border-color:var(--signal);box-shadow:0 0 0 3px var(--signal-soft)}
 .chat-input{flex:1;min-height:40px;max-height:180px;resize:none;border:0;outline:none;background:transparent;font-size:15px;line-height:1.5;padding:8px 2px;box-shadow:none}
 .chat-input:focus{box-shadow:none}
 .chat-send{flex:none;height:40px;padding:0 18px;border:0;border-radius:7px;background:var(--signal);color:var(--on-signal);font-weight:500;transition:filter .15s}
 .chat-send:hover{filter:brightness(1.08)}
-.composer-hint{max-width:960px;margin:6px auto 0;font-size:13px;color:var(--text-3)}
+.composer-hint{max-width:1160px;margin:6px auto 0;font-size:13px;color:var(--text-3)}
 .chat-sources{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;font-size:13px;color:var(--text-3)}
 
 /* ── 部署確認卡（Chat 流程，第二階段會再改成部署單模組） ── */
@@ -1555,7 +1555,7 @@ tbody tr:hover td{background:var(--signal-soft)}
 .t-stop{color:var(--stop)}
 .t-warn{color:var(--caution)}
 .w-lead{margin-bottom:10px}
-.md{max-width:74ch}
+.md{max-width:96ch}
 .md p{margin:0 0 .6em}
 .md p:last-child{margin-bottom:0}
 .md ul,.md ol{margin:.2em 0 .7em;padding-left:1.4em}
@@ -1826,6 +1826,7 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
 #dash-mon div{display:flex;flex-direction:column;gap:2px}
 #dash-mon .dim{font-size:13px}
 .pod-chart-empty{margin:0}
+.logbox{margin:0;max-height:260px;overflow:auto;background:var(--void);border:1px solid var(--grid);border-radius:4px;padding:10px 12px;font-family:var(--f-id);font-size:12.5px;line-height:1.6;color:var(--text-2);white-space:pre-wrap;word-break:break-all}
 .module{padding:0}
 .card.module,.auth-card{padding:34px 32px}
 .pd + .pd{padding-top:18px;margin-top:2px}
@@ -2023,7 +2024,7 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
 
     <div class="page" id="page-gitops">
       <div class="page-head"><div><h1 class="page-title">部署紀錄</h1>
-        <p class="page-sub">每一次部署、擴縮、更新、回滾都會寫進 Git，留下可以追查的紀錄。每個服務最新的那一筆可以回滾到上一版，回滾前會先請你確認。</p></div></div>
+        <p class="page-sub">每一次部署都會寫進 Git，留下可以追查的版本；連上你自己的叢集時，擴縮、更新、回滾也都會寫進來。每個服務最新的那一筆可以回滾到上一版，回滾前會先請你確認。</p></div></div>
       <div class="page-stack"><div id="gitops-w"></div></div>
     </div>
 
@@ -2982,7 +2983,8 @@ async function getJSON(url){
 function mdInline(s){
   return escHtml(String(s))
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^\w])_([^_\n]+)_(?=[^\w]|$)/g, '$1<em>$2</em>');
 }
 function mdToHtml(src){
   const lines = String(src == null ? '' : src).replace(/\r/g, '').split('\n');
@@ -3099,7 +3101,13 @@ function slimPod(p){
   return {name:p.name, app:p.app || '', phase:p.phase || 'Unknown', restarts:p.restarts || 0, age:p.age || '',
           image:c0.image || '', node:p.node || '', conditions:(p.conditions || []).filter(c => c.type === 'Ready')};
 }
-function cleanCommitMsg(m){ return String(m || '').replace(/^gitops:\s*/i, '').replace(/\s*\[[^\]]*\]\s*$/, ''); }
+function cleanCommitMsg(m){
+  return String(m || '').replace(/^gitops:\s*/i, '').replace(/\s*\[[^\]]*\]\s*$/, '')
+    .replace(/^deploy\s+(\S+)\s+to\s+\S+$/i, '部署 $1')
+    .replace(/^rollback\s+(\S+).*$/i, '回滾 $1')
+    .replace(/^scale\s+(\S+)\s+to\s+(\d+).*$/i, '把 $1 調成 $2 個副本')
+    .replace(/^delete\s+(\S+).*$/i, '刪除 $1');
+}
 
 function esc(v){ return escHtml(String(v==null?'':v)); }
 
@@ -3202,7 +3210,7 @@ W.gitops = {
   head: d => `<h2>部署紀錄</h2><span class="meta"><span>共 ${d.items.length} 筆</span><span>${esc(d.at)} 的資料</span></span>
     <div class="filters"><button type="button" class="chip ghost" data-act="refresh">重新整理</button></div>`,
   body: (d, st) => {
-    if(!d.items.length) return emptyBlock('還沒有任何部署紀錄。', '每一次部署、擴縮、回滾都會在這裡留下一筆。');
+    if(!d.items.length) return emptyBlock('還沒有任何部署紀錄。', '部署之後，這裡會留下一筆可以追查的版本。');
     const firstIdx = {};
     d.items.forEach((c, i) => { if(c.app && firstIdx[c.app] == null) firstIdx[c.app] = i; });
     const pages = Math.max(1, Math.ceil(d.items.length / W_PER));
@@ -3460,6 +3468,7 @@ function podDetailHTML(pd, opts){
     ${usage ? `<div><div class="sec-t">即時用量</div><div class="ctrs">${usage}</div></div>` : ''}
     <div><div class="sec-t">容器</div><div class="ctrs">${ctrs.map(c => `<div class="ctr"><span class="id">${esc(c.image || c.name)}</span><span>${ctrStateText(c)}</span>
       ${c.message ? `<span class="msgline">${esc(String(c.message).slice(0, 200))}</span>` : ''}${c.note ? `<span class="msgline">${esc(c.note)}</span>` : ''}</div>`).join('') || '<div class="dim">沒有容器資訊。</div>'}</div></div>
+    ${pd.logs ? `<div><div class="sec-t">最近的 log</div><pre class="logbox">${esc(String(pd.logs).trim().split('\n').slice(-30).join('\n'))}</pre></div>` : ''}
     ${evs ? `<div><div class="sec-t">最近事件</div><ol class="events">${evs}</ol></div>` : ''}
     ${actions.length ? `<div class="actions">${actions.join('')}</div>` : ''}
   </div>`;
@@ -3667,7 +3676,8 @@ function cleanIssue(m){
   return String(m || '')
     .replace(/^\s*(?:\[[^\]]*\]\s*)+/, '')
     .replace(/^[A-Za-z]+\/[\w.-]+:\s*/, '')
-    .replace(/'([^']+)'/g, '$1');
+    .replace(/'([^']+)'/g, '$1')
+    .replace(/^\s*[✓✗⚠~]\s*/, '');
 }
 const SEV_RANK = {critical:0, high:1, medium:2, low:3, info:4};
 function reviewerOf(title, a, extra, tag, rv){
@@ -3679,7 +3689,7 @@ function reviewerOf(title, a, extra, tag, rv){
   const worst = blocked ? 'stop' : issues.some(i => ['critical', 'high', 'medium'].includes(i.severity)) ? 'warn' : 'ok';
   const verdict = {ok:'通過', warn:'提醒', stop:'擋下'}[worst];
   const lines = issues.filter(i => i.message).slice(0, 2).map(i => esc(cleanIssue(i.message)));
-  const text = lines.length ? lines.join('<br>') : esc(a.summary || extra || '沒有發現問題。');
+  const text = lines.length ? lines.join('<br>') : esc(cleanIssue(a.summary || extra || '沒有發現問題。'));
   return `<div class="reviewer ${worst}"><i class="scan" aria-hidden="true"></i><span class="role">${title}</span><span class="verdict"><i></i>${verdict}</span><p>${text}</p></div>`;
 }
 function renderReviewCard(flow){
@@ -5409,6 +5419,15 @@ def api_pod_detail(name):
                         "message": f"找不到符合 '{name}' 的 pod 或 deployment"}), 404
     for pd in pods:
         pd["real_usage"] = _pod_real_usage(user_ns, pd["name"])
+        # 2026-10-09：有狀況的 Pod 直接附上最近的 log，客戶不用自己打 kubectl logs（零接觸）。
+        # 客戶叢集的回報器已經帶了 log；本機叢集這裡現抓（取崩潰前那一次，抓不到就是空字串）。
+        if not pd["healthy"] and not pd.get("logs") and not _is_remote_ns(user_ns):
+            try:
+                from healer.pod_watcher import _get_pod_logs
+                first = (pd.get("containers") or [{}])[0].get("name", "")
+                pd["logs"] = (_get_pod_logs(pd["name"], user_ns, first, 40) or "")[-4000:]
+            except Exception:
+                pd["logs"] = ""
     if request.args.get("diagnose") == "1":
         for pd in pods:
             if pd["healthy"]:
@@ -5419,7 +5438,7 @@ def api_pod_detail(name):
                 "pod_name": pd["name"], "container": (bad or {}).get("name", ""),
                 "reason": (bad or {}).get("reason") or (bad or {}).get("last_reason") or pd["phase"],
                 "restart_count": pd["restarts"],
-                "logs": (bad or {}).get("message", ""),
+                "logs": pd.get("logs") or (bad or {}).get("message", ""),
                 "events": [{"reason": e["reason"], "message": e["message"]} for e in pd["events"]],
             }
             try:
@@ -5483,7 +5502,7 @@ def api_scale():
         api = k8s_client.AppsV1Api()
         body = {"spec": {"replicas": replicas}}
         api.patch_namespaced_deployment_scale(name=name, namespace=user_ns, body=body)
-        return jsonify({"success": True, "message": f"已調整 {name} replicas={replicas}"})
+        return jsonify({"success": True, "message": f"已把 {name} 的副本調成 {replicas} 個。"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -5524,7 +5543,7 @@ def api_update():
         dep.spec.template.metadata.annotations = annotations
         dep.spec.template.spec.containers[0].image = image
         api.patch_namespaced_deployment(name, user_ns, dep)
-        return jsonify({"success": True, "message": f"已更新 {name} image={image}", "previous_image": old_image})
+        return jsonify({"success": True, "message": f"已把 {name} 的映像檔換成 {image}。", "previous_image": old_image})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 

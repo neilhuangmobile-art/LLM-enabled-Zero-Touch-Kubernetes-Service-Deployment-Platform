@@ -64,7 +64,8 @@ class TestRemediateDryRun:
             dry_run=True,
         )
         assert result["ok"] is True
-        assert "kubectl" in result["message"]
+        # 2026-10-09：改成引導使用者到平台上的 Pod 詳情，不再叫他打 kubectl
+        assert "最近的 log" in result["message"] and "kubectl" not in result["message"]
 
     def test_result_includes_timestamp_and_action(self):
         result = remediate(
