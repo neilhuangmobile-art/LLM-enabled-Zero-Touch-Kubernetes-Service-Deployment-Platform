@@ -4690,6 +4690,8 @@ _IDENTIFIER_CANDIDATE_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9]*(?:-[a-zA-Z0-9]+)+
 
 
 _SHELL_WORDS = re.compile(r"\b(?:kubectl|docker|helm|kubeadm|minikube)\b", re.I)
+# 系統內部標記（[現況]、[參考知識]）或 <pod-name> 這類佔位字，不該出現在給使用者的回覆裡
+_INTERNAL_MARKS = re.compile(r"\[(?:現況|參考知識|問題)\]|<[a-z][a-z-]*-name>|<namespace>", re.I)
 
 
 def _strip_shell_commands(message: str, reply: str) -> str:
@@ -4704,7 +4706,8 @@ def _strip_shell_commands(message: str, reply: str) -> str:
     out = re.sub(r"```[^\n]*\n.*?```", lambda m: "" if _SHELL_WORDS.search(m.group(0)) else m.group(0),
                  reply, flags=re.S)
     out = re.sub(r"`[^`\n]*`", lambda m: "" if _SHELL_WORDS.search(m.group(0)) else m.group(0), out)
-    lines = [ln for ln in out.split("\n") if not _SHELL_WORDS.search(ln)]
+    lines = [ln for ln in out.split("\n")
+             if not _SHELL_WORDS.search(ln) and not _INTERNAL_MARKS.search(ln)]
     out = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
     if not out:
         return ("這個問題通常要看服務的 log 才能判斷。請在對話裡說「服務名稱 有沒有壞」，"

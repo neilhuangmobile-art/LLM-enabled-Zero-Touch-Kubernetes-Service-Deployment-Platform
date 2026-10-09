@@ -413,3 +413,13 @@ def test_shell_commands_are_stripped_from_chat_replies():
     assert "到 Pod 詳情看最近的 log" in out and "CrashLoopBackOff 代表容器一直重啟" in out
     # 使用者本來就在問 kubectl 時不過濾
     assert web_demo._strip_shell_commands("kubectl 是什麼？", "kubectl 是命令列工具") == "kubectl 是命令列工具"
+
+
+def test_internal_markers_and_placeholders_are_stripped():
+    reply = ("CrashLoopBackOff 代表容器一直重啟。\n"
+             "可以查一下 [現況] 中列出的所有 Pod 名稱。\n"
+             "如果知道 <pod-name> 的名稱的話。\n"
+             "也可以讓 Healer 自動修復。")
+    out = web_demo._strip_shell_commands("CrashLoopBackOff 怎麼辦", reply)
+    assert "[現況]" not in out and "<pod-name>" not in out
+    assert "讓 Healer 自動修復" in out
