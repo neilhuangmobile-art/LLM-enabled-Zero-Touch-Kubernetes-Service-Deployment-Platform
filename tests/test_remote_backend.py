@@ -271,6 +271,14 @@ def test_writes_become_git_commits(remote):
     assert g["commits"][0]["app"] == "web" and g["customer_cluster"]
 
 
+def test_update_to_miner_image_is_blocked_before_git(remote):
+    """換映像檔不經過完整 guardian 驗證，挖礦映像要在 /api/update 就擋下，不能寫進客戶 repo。"""
+    resp = remote.post("/api/update", json={"name": "web", "image": "metal3d/xmrig:6.21"})
+    assert resp.status_code == 400
+    assert "挖礦" in resp.get_json()["error"]
+    assert not any(c[0] == "image" for c in remote.repo.calls)
+
+
 def test_scale_over_customer_capacity_is_blocked(remote):
     r = remote.post("/api/scale", json={"name": "web", "replicas": 100})
     assert r.status_code == 409 and "容量" in r.get_json()["error"]

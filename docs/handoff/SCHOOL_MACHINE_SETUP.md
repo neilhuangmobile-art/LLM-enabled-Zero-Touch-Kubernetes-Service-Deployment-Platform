@@ -36,13 +36,15 @@ QA 數據才對得上。差別只有 torch 的安裝檔：家裡用 `requirement
 | 對外網址 | `https://user.tail4c2fd2.ts.net` | 隊友自己的 Tailscale 網址 |
 | 網站帳號（`users.json`） | 各自一份，**不會同步** | 各自一份 |
 | 客戶 repo 的 GitHub org | `zerotouch-tenants` | **隊友自己開一個新的 org** |
-| Gemini、Google 登入等金鑰 | 負責人自己的 | **隊友自己的** |
+| Gemini API key | 團隊付費專案的第 1 把 | **同一個付費專案的第 2 把** |
+| Google 登入等其他金鑰 | 負責人自己的 | **隊友自己的** |
 
 所以：在家裡那台註冊的帳號，在學校這台不存在。客戶要接哪一台，就到哪一台的網址註冊。
 
-> **為什麼金鑰不能共用**：Google APIs 服務條款規定憑證要保密，也禁止用多個帳號的額度湊在一起
-> （§2(d)、§4(b)(1)，https://developers.google.com/terms）。每台用自己帳號的金鑰，就沒有這個問題，
-> 用量和責任也分得清楚。
+> **Gemini key 的規則**：Google APIs 服務條款禁止用多個帳號的額度湊在一起（§2(d)，
+> https://developers.google.com/terms），額度是依「專案」計算。團隊在 2026-10-09 開了一個付費專案
+> （預付儲值、沒開自動儲值，四人分攤），兩台各用這個專案底下的一把 key：合規、只有一份帳單，
+> 也能在 AI Studio 分別看到兩把 key 的用量。**不要再用其他帳號的免費 key。**
 
 ---
 
@@ -152,13 +154,20 @@ python -m pip install --timeout 20 --retries 10 -r requirements-nvidia.txt
 
 ### 申請 A：Gemini API key（翻譯層，必要）
 
-1. 用**你自己的** Google 帳號打開 https://aistudio.google.com/apikey
-2. 按 **Create API key** → 選一個專案（沒有的話讓它建立新專案）→ 複製產生的 key
-3. **只用這一把**，不要跟別人借 key 湊額度（違反 Google 條款，見上方說明）
-4. 建議開啟付費並設定花費上限：額度會比免費高很多，送出的內容也不會被拿去改善 Google 的產品。
-   做法：在 https://console.cloud.google.com 選同一個專案 → **帳單**連結帳單帳戶 →
-   **預算與快訊**建立預算（例如每月 5 美元）。不開付費也能用，只是額度很快用完時，
-   系統會改用本機解析，而且惡意意圖偵測會暫時失效。
+**由管理團隊付費專案的人來做**（不是隊友自己申請）：
+
+1. 用團隊付費專案所在的 Google 帳號打開 https://aistudio.google.com/apikey
+2. 按 **Create API key** → 專案選**已經開通付費的那一個**（Billing Tier 顯示付費）→ 複製產生的 key
+3. 用安全的方式交給隊友（當面、或私訊後立刻刪除訊息），**不要貼在群組或 GitHub**
+4. 隊友填進 `.env`：
+   ```
+   GEMINI_API_KEYS=<這把 key>
+   GEMINI_NORMALIZE_MODEL=gemini-3.5-flash-lite
+   ```
+   `gemini-2.5-flash` 對新專案會回 404；3.8 Flash 太慢又貴，實測過 Flash-Lite 最合適。
+
+費用：Flash-Lite 每則部署訊息約 0.00024 美元，兩台加起來一般用量每月不到 1 美元。
+預付餘額用完 API 就停（翻譯層失效時系統會退回本機解析），偶爾到 AI Studio 的 Billing 頁看一下餘額。
 
 ### 申請 B：Tailscale（讓網站有固定的對外網址）
 
@@ -199,7 +208,7 @@ python -m pip install --timeout 20 --retries 10 -r requirements-nvidia.txt
 
 不做的話，網站只是沒有「使用 Google 登入」按鈕，帳號密碼登入照常可用。要做的話：
 
-1. https://console.cloud.google.com → 上方選擇專案（可以用申請 A 的同一個專案）
+1. 用**你自己的** Google 帳號打開 https://console.cloud.google.com → 上方建立或選擇一個專案（不用開付費）
 2. 左側 **API 和服務** → **OAuth 同意畫面**：使用者類型選 **外部**，填應用程式名稱和你的 email，
    範圍不用加，測試使用者加入要登入的 Google 帳號
 3. 左側 **憑證** → **建立憑證** → **OAuth 用戶端 ID** → 應用程式類型選 **網頁應用程式**
@@ -275,7 +284,7 @@ Docker Desktop 要開著，Tailscale 要登入著。要對外時確認 `tailscal
 3. 讀 `CLAUDE.md`、本文件，以及記憶裡的：
    - `2026-10-09-dual-machine-gpu-requirement`：雙機設定原則
    - `2026-10-09-customer-cluster-onboarding-project`：客戶自帶叢集的完整進度
-   - `2026-10-09-gemini-keys-tos-issue`：**為什麼這台要用隊友自己的 Gemini key**
+   - `2026-10-09-gemini-keys-tos-issue`：**為什麼兩台都要用團隊付費專案的 key**
    - `2026-10-09-next-roadmap-frontend-redesign`：專案接下來的順序
 4. 陪隊友走完第一部分。能用指令做的由你執行，每一步**實際驗證**後才說完成。
 
@@ -379,7 +388,7 @@ uv tool update-shell
   （同意書、貼指令、連線檢查、部署、擴縮、回滾、刪除、三種自癒都在真的客戶叢集上實測過）、兩人並行測試 29/29。
 - **專案接下來的順序**（負責人交代的）：
   1. 這台設定完成並驗證 NVIDIA 路徑
-  2. 處理 Gemini key 的合規問題（記憶 `2026-10-09-gemini-keys-tos-issue`）
+  2. ~~處理 Gemini key 的合規問題~~（2026-10-09 已改成團隊付費專案，見 `docs/security_review.md` 第 34 節）
   3. 前端大改（記憶 `2026-10-09-next-roadmap-frontend-redesign`），動手前先出計畫給負責人看
   4. 舊電腦留下的待辦功能
 - 隊友要做哪一部分，以負責人和隊友的分工為準。不確定時先問。

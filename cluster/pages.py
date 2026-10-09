@@ -100,6 +100,9 @@ details{margin-top:10px}summary{cursor:pointer;font-size:14px;color:var(--blue)}
     <h2>會傳回平台的資料</h2>
     <p><code>{{ namespace }}</code> 裡的 Pod / Deployment 狀態、事件訊息、<strong>不健康 Pod 的最後 50 行 log</strong>（用來診斷問題），以及節點的 CPU / 記憶體容量。平台只在記憶體中保留最新一份狀態；同意紀錄與連線紀錄會保存在平台。</p>
 
+    <h2>你在網站輸入的文字</h2>
+    <p>你在聊天或部署欄位輸入的文字，會先送到 <strong>Google Gemini API</strong> 整理成固定格式，並檢查有沒有惡意操縱的意圖，之後才交給平台自己的模型處理。我們使用 Gemini 的付費方案，依 Google 的條款，這些內容不會被拿去改善 Google 的產品，但 Google 可能為了偵測濫用而短期保存。<strong>請不要輸入密碼、金鑰或個人資料。</strong>部署設定、叢集狀態與 log 不會送給 Gemini。</p>
+
     <h2>請注意的風險</h2>
     <ul>
       <li>你部署的服務會使用你電腦的資源。電腦變慢時，可以到網站刪除服務</li>

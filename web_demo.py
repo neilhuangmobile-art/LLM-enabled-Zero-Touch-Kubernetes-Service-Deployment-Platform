@@ -6265,6 +6265,13 @@ def api_update():
     data = request.get_json() or {}
     name = data.get("name", "").strip()
     image = data.get("image", "").strip()
+    # 換映像檔不經過 _prepare_deploy 的完整 guardian 驗證，映像規則（禁止清單、
+    # 挖礦程式關鍵字）要在這裡單獨檢查，本機與客戶叢集兩條路都適用。
+    if image:
+        from guardian.yaml_validator import check_image
+        image_errors = check_image(image)
+        if image_errors:
+            return jsonify({"success": False, "error": "；".join(image_errors)}), 400
     if _is_remote_ns(user_ns):
         if not name or not image:
             return jsonify({"success": False, "error": "name and image are required"}), 400

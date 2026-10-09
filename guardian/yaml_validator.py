@@ -94,6 +94,17 @@ def validate_yaml(
     }
 
 
+def check_image(image: str, policy_file: str = None) -> list:
+    """
+    只檢查一個映像名稱，回傳阻斷原因清單（空清單＝允許）。
+    給不經過完整 manifest 驗證的路徑用，例如 /api/update 直接換映像檔。
+    """
+    policy = _load_policy(policy_file or str(_POLICY_FILE))
+    doc = {"spec": {"template": {"spec": {"containers": [{"name": "app", "image": image}]}}}}
+    errors, _ = _check_images(doc, policy)
+    return errors
+
+
 def validate_from_llm_result(llm_result: dict) -> dict:
     """直接接受 ask_llama() 輸出進行驗證（便利包裝）。"""
     if "error" in llm_result:
@@ -270,7 +281,8 @@ def _check_images(doc: dict, policy: dict) -> tuple:
 
     denied   = img_policy.get("denied_images") or []
     allowed  = img_policy.get("allowed_registries") or []
-    if not denied and not allowed:
+    keywords = [str(k).lower() for k in (img_policy.get("denied_image_keywords") or []) if k]
+    if not denied and not allowed and not keywords:
         return errors, warnings
 
     for c in _get_containers(doc):
@@ -280,6 +292,12 @@ def _check_images(doc: dict, policy: dict) -> tuple:
             continue
         if image in denied:
             errors.append(f"容器 '{name}' 使用了禁止的映像：{image}")
+        hit = next((k for k in keywords if k in image.lower()), None)
+        if hit:
+            errors.append(
+                f"容器 '{name}' 的映像 {image} 疑似挖礦程式（符合禁止關鍵字「{hit}」），"
+                f"平台不允許部署。 / Image looks like a crypto miner and is not allowed."
+            )
         if allowed and not any(image.startswith(prefix) for prefix in allowed):
             errors.append(
                 f"容器 '{name}' 的映像 {image} 不在允許的倉庫清單內"

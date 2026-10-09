@@ -980,3 +980,14 @@ ProxyFix 無效），改用 waitress 的 trusted_proxy。真正透過通道從�
 **兩人並行 QA**：29/29 通過（嚴格規則），隔離 4/4。報告 `docs/qa_concurrent_20261009.md`、
 資料 `docs/qa_concurrent_20261009*.jsonl`、圖表 `docs/qa_concurrent_20261009_dashboard.html`。
 **驗證**：`pytest` 419 個全過。
+
+### 18:40 — 修復：Gemini 改用團隊付費專案、補上資料去向說明、挖礦映像改用確定性規則擋下
+**為什麼**：原本 6 把 key 來自不同帳號、輪流湊免費額度，違反 Google 條款；同意書沒說輸入會送到 Gemini，
+接地問答還會把叢集狀態一起送出；部署和換映像檔完全擋不住挖礦程式（`metal3d/xmrig` 只得到「沒指定版本」警告）。
+**改了什麼**：`.env` 只留一把付費 key，模型改成 `gemini-3.5-flash-lite`（2.5 Flash 對新專案 404），程式預設值一起改；
+同意書加上 Gemini 說明（版本 `2026-10-09.2`）；`chat_llama()` 只送問題、不送「[現況]」摘要；
+`guardian/policy_rules.yaml` 新增 `denied_image_keywords`，`/api/update` 也改成先檢查映像檔；
+學校電腦交接文件改成用同一個付費專案的第二把 key。
+**驗證**：付費 key 實測 4 題全對，每則部署訊息約 0.00024 美元；`_review_deployment` 對 xmrig 判 `block`；
+新增 6 個測試。詳見 `docs/security_review.md` 第 34 節。
+

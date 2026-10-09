@@ -6,7 +6,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from guardian.yaml_validator import validate_yaml, _check_images, _check_naming
+from guardian.yaml_validator import validate_yaml, check_image, _check_images, _check_naming
 
 GOOD_YAML = """
 apiVersion: apps/v1
@@ -139,6 +139,30 @@ class TestNamingAndImagePolicy:
         # 空清單要代表「不限制」，不能讓現有的正常部署被誤擋。
         result = validate_yaml(GOOD_YAML)
         assert result["ok"] is True
+
+    def test_crypto_miner_images_are_blocked_by_default_policy(self):
+        """2026-10-09 實測：metal3d/xmrig 原本只得到「沒指定版本」警告就通過。
+        預設 policy_rules.yaml 的 denied_image_keywords 要擋下來，不分大小寫、
+        關鍵字出現在 registry、路徑或 tag 都算。"""
+        for image in ["metal3d/xmrig:latest", "ghcr.io/foo/XMRig:6.21",
+                      "docker.io/someone/tools:cpuminer-opt", "nicehash/excavator"]:
+            assert check_image(image), image
+        manifest = {
+            "apiVersion": "apps/v1", "kind": "Deployment",
+            "metadata": {"name": "web-frontend"},
+            "spec": {"replicas": 1, "template": {"spec": {"containers": [
+                {"name": "app", "image": "metal3d/xmrig:6.21",
+                 "resources": {"limits": {"memory": "128Mi", "cpu": "100m"}}},
+            ]}}},
+        }
+        result = validate_yaml(manifest)
+        assert result["ok"] is False
+        assert any("挖礦" in e for e in result["errors"])
+
+    def test_common_images_are_not_mistaken_for_miners(self):
+        for image in ["nginx:1.27", "redis:7", "postgres:16", "mongo:7",
+                      "grafana/grafana:11.0.0", "minio/minio:latest", "busybox:1.36"]:
+            assert check_image(image) == [], image
 
     def test_allowed_registries_blocks_images_outside_allowlist(self):
         manifest = {

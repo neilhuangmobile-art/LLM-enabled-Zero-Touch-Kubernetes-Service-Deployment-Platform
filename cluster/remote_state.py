@@ -22,7 +22,7 @@ REPORT_FRESH_SEC = 60            # 60 秒內有回報 = 線上（回報器每 15
 REPORT_OFFLINE_SEC = 120         # 超過 2 分鐘沒回報 = 離線
 NO_REPORT_GRACE_SEC = 90         # 安裝完成後等回報器第一次回報的寬限
 MAX_REPORT_BYTES = 256 * 1024
-CONSENT_VERSION = "2026-10-09.1"
+CONSENT_VERSION = "2026-10-09.2"  # .2：補上輸入文字會送到 Gemini 的說明
 
 # 安裝腳本回報的步驟名稱（install.ps1 與這裡要一致）
 STEPS = ("start", "kubectl", "cluster", "flux", "crds", "bundle", "reporter", "done")

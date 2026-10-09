@@ -829,10 +829,15 @@ def chat_llama(message: str, history: list = None) -> tuple:
             try:
                 from core.gemini_client import gemini_normalize_chat_message, is_available as gemini_available
                 if gemini_available():
-                    normalized = gemini_normalize_chat_message(message, history)
+                    # web_demo 的接地問答會在問題前面接上「[現況]…[問題]」叢集狀態摘要。
+                    # 只把使用者的問題送去整理：叢集狀態不該離開平台，也不能讓翻譯層改寫事實。
+                    context, sep, question = message.rpartition("\n\n[問題]\n")
+                    if not (sep and context.startswith("[現況]")):
+                        context, sep, question = "", "", message
+                    normalized = gemini_normalize_chat_message(question, history)
                     if normalized:
-                        print(f"[Gemini 翻譯層] chat {message!r} → {normalized!r}")
-                        message = normalized
+                        print(f"[Gemini 翻譯層] chat {question!r} → {normalized!r}")
+                        message = f"{context}{sep}{normalized}"
             except Exception as e:
                 print(f"[Gemini 翻譯層] chat 正規化失敗，改用原始輸入：{e}")
 

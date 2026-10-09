@@ -58,6 +58,27 @@ images:
   #   - "alpine:latest"     # 太舊，有已知漏洞
   #   - "ubuntu:18.04"      # EOL
 
+  # 映像名稱（含 registry、路徑、tag，不分大小寫）只要包含其中一個字就阻斷。
+  # 2026-10-09 加入：部署路徑原本完全不擋挖礦程式（實測 metal3d/xmrig 只得到
+  # 「沒指定版本」警告就通過），而 Gemini 惡意偵測只接在 /api/chat，而且失敗時放行。
+  # 這裡是不依賴任何外部服務的確定性防線。刻意不放「miner」這種太泛的字，避免誤擋。
+  denied_image_keywords:
+    - "xmrig"
+    - "xmr-stak"
+    - "cpuminer"
+    - "minerd"
+    - "cgminer"
+    - "bfgminer"
+    - "ethminer"
+    - "nbminer"
+    - "lolminer"
+    - "phoenixminer"
+    - "teamredminer"
+    - "srbminer"
+    - "nicehash"
+    - "coinhive"
+    - "cryptonight"
+
   # 允許的映像倉庫前綴（空列表 = 不限制）
   allowed_registries: []
   # 範例：

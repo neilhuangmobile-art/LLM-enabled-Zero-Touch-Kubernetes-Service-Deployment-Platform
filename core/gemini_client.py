@@ -6,8 +6,14 @@ Gemini API 翻譯層：把使用者模糊/口語化的輸入正規化成本地�
 2026-09-06 起：
   - 部署路徑一律先過翻譯層（不再被 deterministic parser 搶先），輸出固定的
     「### DeploySpec」key: value 區塊，只寫使用者真的講到的欄位。
-  - 支援多把 API key 輪換（跟隊友借 key 湊額度）：GEMINI_API_KEYS=key1,key2,...
-    遇到 429 / RESOURCE_EXHAUSTED 自動換下一把重試，繞一圈全滿才放棄。
+  - GEMINI_API_KEYS 可以放多把 key（逗號分隔），遇到 429 / RESOURCE_EXHAUSTED 換下一把重試。
+    **多把 key 只能來自同一個 Google Cloud 專案**（例如兩台平台各一把），額度是依專案計算，
+    同專案多把 key 不會增加額度。用不同帳號的 key 輪流湊額度違反 Google APIs 服務條款 §2(d)，
+    2026-10-09 已改成一個付費專案（見 docs/security_review.md 第 34 節）。
+
+2026-10-09 起：模型由 GEMINI_NORMALIZE_MODEL 指定，目前用 gemini-3.5-flash-lite
+（gemini-2.5-flash 對新專案回 404；3.8 Flash 每次多花 260~400 個思考 token、4~6 秒，
+實測還發生過惡意偵測逾時）。
 
 依賴：
   pip install google-genai
@@ -79,7 +85,7 @@ def _generate(system_instruction: str, contents: str, label: str) -> Optional[st
     if not keys:
         return None
 
-    model = os.environ.get("GEMINI_NORMALIZE_MODEL", "gemini-flash-latest")
+    model = os.environ.get("GEMINI_NORMALIZE_MODEL", "gemini-3.5-flash-lite")
     config = {
         "system_instruction": system_instruction,
         # 這個模型預設會用「思考」token，會算進 max_output_tokens；設太小會把答案從中間截斷
