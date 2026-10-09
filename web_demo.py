@@ -1728,19 +1728,27 @@ tr.enter{animation:rowIn .3s ease both}
 .review{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
 .reviewer{position:relative;padding:14px 18px;border-right:1px solid var(--grid);overflow:hidden;min-height:112px}
 .reviewer:last-child{border-right:0}
-.reviewer .role{font-size:13px;color:var(--text-3)}
-.reviewer .verdict{font-weight:700;display:flex;align-items:center;gap:7px;margin-top:2px}
-.reviewer .verdict i{width:8px;height:8px;border-radius:2px}
-.reviewer p{margin:4px 0 0;font-size:14px;color:var(--text-2)}
+.reviewer .r-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--grid)}
+.reviewer .role{margin:0;font-size:17px;font-weight:700;color:var(--text);letter-spacing:.03em}
+.reviewer .verdict{font-weight:700;font-size:13.5px;display:inline-flex;align-items:center;gap:6px;padding:1px 10px;border:1px solid currentColor;border-radius:999px;white-space:nowrap}
+.reviewer .verdict i{width:7px;height:7px;border-radius:50%}
+.reviewer p{margin:0;font-size:14px;color:var(--text-2)}
+.r-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.r-list li{position:relative;padding-left:16px;font-size:14px;line-height:1.6;color:var(--text-2)}
+.r-list li::before{content:"";position:absolute;left:1px;top:.6em;width:7px;height:7px;border-radius:50%;background:var(--text-3)}
+.r-list li.sev-critical::before,.r-list li.sev-high::before{background:var(--stop)}
+.r-list li.sev-medium::before{background:var(--caution)}
+.r-more{margin-top:8px;font-size:13px;color:var(--text-3)}
 .reviewer.ok .verdict{color:var(--pass)} .reviewer.ok .verdict i{background:var(--pass)}
 .reviewer.warn .verdict{color:var(--caution)} .reviewer.warn .verdict i{background:var(--caution)}
 .reviewer.stop .verdict{color:var(--stop)} .reviewer.stop .verdict i{background:var(--stop)}
 .reviewer .scan{position:absolute;inset:0;background:linear-gradient(180deg,transparent 0%,var(--signal-soft) 80%,var(--signal) 100%);transform:translateY(-100%);opacity:0;pointer-events:none}
-.flow.replay .reviewer.waiting .verdict,.flow.replay .reviewer.waiting p,.flow.replay .reviewer.scanning .verdict,.flow.replay .reviewer.scanning p{opacity:0}
-.flow.replay .reviewer.waiting::after,.flow.replay .reviewer.scanning::after{content:"審查中";position:absolute;left:18px;top:40px;color:var(--text-3);font-size:13.5px}
+.flow.replay .reviewer.waiting .verdict,.flow.replay .reviewer.waiting .r-list,.flow.replay .reviewer.waiting p,.flow.replay .reviewer.waiting .r-more,
+.flow.replay .reviewer.scanning .verdict,.flow.replay .reviewer.scanning .r-list,.flow.replay .reviewer.scanning p,.flow.replay .reviewer.scanning .r-more{opacity:0}
+.flow.replay .reviewer.waiting::after,.flow.replay .reviewer.scanning::after{content:"審查中";position:absolute;left:18px;top:62px;color:var(--text-3);font-size:13.5px}
 .flow.replay .reviewer.scanning .scan{animation:scan .7s ease-in-out both}
 @keyframes scan{0%{transform:translateY(-100%);opacity:1}100%{transform:translateY(0);opacity:0}}
-.reviewer .verdict,.reviewer p{transition:opacity .25s}
+.reviewer .verdict,.reviewer p,.reviewer .r-list,.reviewer .r-more{transition:opacity .25s}
 .res-line{display:flex;flex-wrap:wrap;gap:6px 22px;padding:12px 18px;border-top:1px solid var(--grid);font-size:14px;color:var(--text-2)}
 .res-line b{font-family:var(--f-display);color:var(--text);font-weight:600}
 .res-line .neg{color:var(--stop)}
@@ -3688,9 +3696,15 @@ function reviewerOf(title, a, extra, tag, rv){
   // 卡片上的每一項才會跟最終判定一致；其他中高嚴重度的問題只算提醒
   const worst = blocked ? 'stop' : issues.some(i => ['critical', 'high', 'medium'].includes(i.severity)) ? 'warn' : 'ok';
   const verdict = {ok:'通過', warn:'提醒', stop:'擋下'}[worst];
-  const lines = issues.filter(i => i.message).slice(0, 2).map(i => esc(cleanIssue(i.message)));
-  const text = lines.length ? lines.join('<br>') : esc(cleanIssue(a.summary || extra || '沒有發現問題。'));
-  return `<div class="reviewer ${worst}"><i class="scan" aria-hidden="true"></i><span class="role">${title}</span><span class="verdict"><i></i>${verdict}</span><p>${text}</p></div>`;
+  // 每一條判斷到的問題各列一點，圓點顏色代表嚴重程度；沒有問題時寫一句摘要
+  const listed = issues.filter(i => i.message);
+  const SHOW = 4;
+  const body = listed.length
+    ? `<ul class="r-list">${listed.slice(0, SHOW).map(i => `<li class="sev-${esc(i.severity || 'info')}">${esc(cleanIssue(i.message))}</li>`).join('')}</ul>`
+      + (listed.length > SHOW ? `<div class="r-more">還有 ${listed.length - SHOW} 項較輕微的建議</div>` : '')
+    : `<p class="r-ok">${esc(cleanIssue(a.summary || extra || '沒有發現問題。'))}</p>`;
+  return `<div class="reviewer ${worst}"><i class="scan" aria-hidden="true"></i>
+    <div class="r-head"><h3 class="role">${title}</h3><span class="verdict"><i></i>${verdict}</span></div>${body}</div>`;
 }
 function renderReviewCard(flow){
   const rv = flow.review || {};
