@@ -8,6 +8,9 @@
 > 或找不到 `new-machine-setup-checklist` 這份記憶），**先讀
 > [docs/handoff/NEW_MACHINE_HANDOFF.md](docs/handoff/NEW_MACHINE_HANDOFF.md)**，
 > 照裡面的步驟還原記憶、安裝環境，再處理使用者的需求。交接完成後，可以把這段提示刪掉。
+>
+> **如果這台是學校電腦（NVIDIA RTX 5080 Laptop）**：改讀
+> [docs/handoff/SCHOOL_MACHINE_SETUP.md](docs/handoff/SCHOOL_MACHINE_SETUP.md)，記憶快照是 2026-10-09 下午的最新版。
 
 ## 專案是什麼
 

@@ -1,4 +1,7 @@
-- [安全審查進度](next-session-security-audit.md) — 多租戶隔離+Gemini封鎖+雙層injection防線+114測試+CI都已做完並驗證；剩RBAC/換模型/負載測試待資源
+- [接下來順序：前端大改](2026-10-09-next-roadmap-frontend-redesign.md) — ①客戶叢集收尾 ②前端大改（精緻、動畫、不要AI感與特殊符號）③舊電腦待辦功能
+- [一律用中文回覆](feedback_always_reply_in_chinese.md) — 使用者要求所有對話文字（含工具間進度說明）都用繁體中文
+- [客戶自帶叢集（已完成）](2026-10-09-customer-cluster-onboarding-project.md) — GitOps模式C+Flux+唯讀回報器+同意書；6階段全完成實測；殘留：.env未開CUSTOMER_CLUSTER_MODE、未用學校筆電實測
+﻿- [安全審查進度](next-session-security-audit.md) — 多租戶隔離+Gemini封鎖+雙層injection防線+114測試+CI都已做完並驗證；剩RBAC/換模型/負載測試待資源
 - [驗證後才能說做完](feedback_verify_before_claiming_done.md) — 使用者常用簡短追問挖出沒真正驗證過的落差，回答前要真的去查
 - [主動維護 CHANGELOG.md](feedback_maintain_changelog.md) — 每次有實質分量的改動要主動記進去，不用等使用者交代（也已寫進 AGENT_RULES.md）
 - [下次：市場研究+使用者角度評判](next-session-market-research.md) — 市場調查10/8已完成(見下一條)；剩「再次以使用者角度嚴厲評判系統」還沒做
@@ -8,7 +11,10 @@
 - [2026-10-07 個人化功能決策](2026-10-07-personalization-decision.md) — 不新增模型，用統計分群+既有RAG+3B few-shot注入；重新定位成續訂留存機制：Chat變成使用者基礎設施累積記憶庫；使用者準備組新電腦
 - [2026-10-07 下次功能待辦](2026-10-07-next-session-feature-backlog.md) — 動態UI/動畫(目標是精緻)+一句話生成歷史分析報告(有圖有文+PDF下載)；先記錄不動工；附帶幻覈風險/權限重用/報告模型選擇等設計注意點
 - [2026-10-08 多模態/情境部署功能待辦](2026-10-08-multimodal-scenario-features-backlog.md) — 語音/情境解析/省錢/分時擴縮/檔案照片部署，含審核結論與優先序；新電腦更強(16GB待確認)可放手改
+- [2026-10-09 兩台機器GPU需求](2026-10-09-dual-machine-gpu-requirement.md) — 雙機同設定bf16已實作+AMD實測通過(pytest 307、整卡14/15.9GB)；已commit 4fc34c4；學校NVIDIA待實機驗證
+- [2026-10-09 WSL虛擬化錯誤修法](2026-10-09-wsl-hypervisor-fix.md) — Docker/WSL說未啟用虛擬化但BIOS已開；根因bcdedit缺hypervisorlaunchtype，設auto重開即好
 - [新電腦安裝待辦清單](new-machine-setup-checklist.md) — 先裝requirements跑得起來，再裝8個外掛+CLI掃描工具+GitHub token+重建gitleaks hook；附完整指令
+- [2026-10-09 新電腦是AMD顯卡](2026-10-09-new-machine-amd-gpu-env.md) — RX 9060 XT 16GB；全域Python 3.12.10+ROCm torch（.venv已刪）；bitsandbytes不能用；網路遇大量平行連線就卡(uv/hf_hub)，改單線pip/requests；3模型已下載
 - [2026-10-07 新電腦Python版本風險](2026-10-07-new-machine-python-version-risk.md) — requirements.txt釘死舊版套件可能在新Python裝不起來；使用者決定直接裝最新版、卡住再修，不是裝3.9.13；下次卡住先升級套件版本
 - [2026-10-07 大規模QA掃描+修復](2026-10-07-large-qa-sweep-and-fixes.md) — 206題找到2P0+3P1+1P2全部修復驗證；規則層假信心+Gemini正規化讓保護失效；10/8整理圖表時又發現3個新問題(數字參數無查核等)也已修復
 - [2026-10-08 RAG升級計畫](2026-10-08-rag-upgrade-plan.md) — 先做知識庫擴充+BGE-M3+hybrid search+reranker(地基)，Agentic深度模式放第二階段，建議落點Healer深度診斷(解決幻覈問題)+分析報告，不是泛用聊天
