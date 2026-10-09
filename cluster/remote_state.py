@@ -132,45 +132,36 @@ def clean_report(raw: Any) -> Dict[str, Any]:
 
 # 狀態代碼 → 給使用者看的標題與下一步（{ns} 會換成客戶的 namespace）
 STATUS_TEXT = {
-    "not_started": ("還沒收到安裝腳本的任何訊息 / The install command hasn't run yet",
-                    "請回到上一頁複製指令，貼到 PowerShell 執行（不是「命令提示字元」）。開啟方式：按 Windows 鍵，"
-                    "輸入 PowerShell，按 Enter。 / Go back, copy the command, and run it in PowerShell."),
-    "no_kubectl": ("你的電腦找不到 kubectl / kubectl was not found",
-                   "請安裝並開啟 Docker Desktop（它內建 kubectl），開啟後重新執行同一行指令。 / "
-                   "Install and open Docker Desktop (it includes kubectl), then run the same command again."),
-    "cluster_unreachable": ("連不上你的 Kubernetes 叢集 / Can't reach your Kubernetes cluster",
-                            "開啟 Docker Desktop → 齒輪（Settings）→ Kubernetes → 勾選 Enable Kubernetes → "
-                            "Apply & restart，等左下角變綠燈後重新執行指令。 / Enable Kubernetes in Docker Desktop "
-                            "settings, wait until it's green, then rerun the command."),
-    "flux_failed": ("安裝或啟動 Flux 時失敗 / Installing Flux failed",
-                    "通常是網路慢、映像檔下載卡住。請在 Docker Desktop 右下角圖示按右鍵選 Restart，等它變綠燈後，"
-                    "按「返回」取得新的指令再執行一次（重複執行是安全的）。下方灰色區塊是詳細狀態。 / Usually a slow "
-                    "or stuck image download — restart Docker Desktop, then get a new command and rerun it."),
-    "bundle_failed": ("套用平台設定時失敗 / Applying the platform config failed",
-                      "安裝指令可能已過期（30 分鐘），請按「返回」再「同意並繼續」取得新指令後重跑。 / "
-                      "The command may have expired — go back and get a new one."),
-    "installing": ("安裝進行中… / Installing…",
-                   "請等 PowerShell 視窗跑完（第一次大約 2~5 分鐘，會下載 Flux 與回報程式）。這個頁面會自動更新。 / "
-                   "Wait for the PowerShell window to finish; this page updates automatically."),
-    "reporter_not_ready": ("狀態回報程式還沒啟動 / The status reporter hasn't started",
-                           "第一次要下載映像檔，可能要 1~3 分鐘，請稍候再按「重新檢查」。仍然不行請在 PowerShell "
-                           "執行 kubectl get pods -n {ns} 看狀態。 / First start downloads an image; wait a "
-                           "minute and re-check."),
-    "no_report": ("安裝完成，但還沒收到你的叢集回報 / Installed, but no report received yet",
+    "not_started": ("還沒收到安裝腳本的任何訊息",
+                    "請回到上一頁複製指令，貼到 PowerShell 執行，不是「命令提示字元」。開啟方式：按 Windows 鍵，"
+                    "輸入 PowerShell，按 Enter。"),
+    "no_kubectl": ("你的電腦找不到 kubectl",
+                   "請安裝並開啟 Docker Desktop（它內建 kubectl），開啟後重新執行同一行指令。"),
+    "cluster_unreachable": ("連不上你的 Kubernetes 叢集",
+                            "打開 Docker Desktop，按右上角的齒輪進入 Settings，在 Kubernetes 頁籤勾選 Enable Kubernetes，"
+                            "按 Apply & restart。等左下角變成綠燈後，重新執行指令。"),
+    "flux_failed": ("安裝或啟動 Flux 時失敗",
+                    "通常是網路慢、映像檔下載卡住。請在 Docker Desktop 右下角的圖示按右鍵選 Restart，等它變綠燈後，"
+                    "按「返回」取得新的指令再執行一次，重複執行是安全的。下方灰色區塊是詳細狀態。"),
+    "bundle_failed": ("套用平台設定時失敗",
+                      "安裝指令可能已經過期（有效 30 分鐘），請按「返回」，再按「同意並繼續」取得新指令後重新執行。"),
+    "installing": ("安裝進行中",
+                   "請等 PowerShell 視窗跑完，第一次大約 2 到 5 分鐘，會下載 Flux 和回報程式。這個頁面會自動更新。"),
+    "reporter_not_ready": ("狀態回報程式還沒啟動",
+                           "第一次要下載映像檔，可能要 1 到 3 分鐘，請稍候再按「重新檢查」。還是不行的話，請在 PowerShell "
+                           "執行 kubectl get pods -n {ns} 看狀態。"),
+    "no_report": ("安裝完成，但還沒收到你的叢集回報",
                   "你的叢集可能連不到外網。請確認電腦能上網，並在 PowerShell 執行 kubectl logs -n {ns} "
-                  "deploy/zt-reporter 查看錯誤。 / Your cluster may not reach the internet; check the "
-                  "reporter logs."),
-    "git_not_ready": ("你的叢集拉不到部署設定 / Your cluster can't pull its config",
-                      "這通常是平台這端的 GitHub 設定問題，請按「返回」重新產生指令再執行一次；仍失敗請聯絡管理員。 / "
-                      "Usually a platform-side GitHub issue — regenerate the command and retry."),
-    "sync_pending": ("連線成功，正在第一次同步 / Connected, first sync in progress",
-                     "大約 30 秒，請稍候再按「重新檢查」。 / About 30 seconds — re-check shortly."),
-    "awaiting_report": ("正在等你的叢集回報狀態… / Waiting for your cluster to check in…",
-                        "平台剛重新啟動，你的叢集會在 15 秒內回報，不用做任何事。 / The platform just restarted; "
-                        "your cluster will check in within 15 seconds."),
-    "offline": ("你的叢集目前離線 / Your cluster is offline",
-                "請確認電腦開著、Docker Desktop 正在執行。 / Make sure your computer is on and Docker Desktop is running."),
-    "connected": ("連線成功！ / Connected!", "可以開始使用了。 / You're all set."),
+                  "deploy/zt-reporter 查看錯誤。"),
+    "git_not_ready": ("你的叢集拉不到部署設定",
+                      "這通常是平台這端的 GitHub 設定問題。請按「返回」重新產生指令再執行一次，還是失敗請聯絡管理員。"),
+    "sync_pending": ("連線成功，正在第一次同步",
+                     "大約 30 秒，請稍候再按「重新檢查」。"),
+    "awaiting_report": ("正在等你的叢集回報狀態",
+                        "平台剛重新啟動，你的叢集會在 15 秒內回報，不用做任何事。"),
+    "offline": ("你的叢集目前離線",
+                "請確認電腦開著、Docker Desktop 正在執行。"),
+    "connected": ("連線成功", "可以開始使用了。"),
 }
 
 _STEP_FAIL_STATUS = {"start": "not_started", "kubectl": "no_kubectl", "cluster": "cluster_unreachable",

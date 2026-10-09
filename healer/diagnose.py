@@ -157,9 +157,7 @@ def diagnose_issue(context: dict, use_llm: bool = True) -> dict:
                     # 攔下來了」，不是只呈現最終安全版本（見 docs/security_review.md）。
                     llm_result["llm_raw_guess"] = llm_result.get("root_cause")
                     llm_result["root_cause"] = (
-                        "證據不足，只能確定是重複重啟/異常終止，實際原因需要人工查看完整日誌 / "
-                        "Insufficient evidence for a specific root cause — only repeated restarts "
-                        "are confirmed; manual log review is needed."
+                        "證據不足，只能確定是重複重啟/異常終止，實際原因需要人工查看完整日誌"
                     )
                     llm_result["suggestion"] = rule_result["suggestion"]
                 elif not llm_result.get("suggestion"):

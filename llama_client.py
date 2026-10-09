@@ -725,13 +725,11 @@ def _parse_error_response(deterministic: dict) -> Optional[dict]:
     kind = deterministic['_parse_error']
     if kind == 'replica_out_of_range':
         n = deterministic.get('_requested_pods')
-        return {"error": f"副本數必須是 1~100 之間的正整數，你輸入的是 {n}，不合法 / "
-                          f"Replica count must be a positive integer between 1 and 100; "
-                          f"{n} is not valid."}
+        return {"error": f"副本數必須是 1~100 之間的正整數，你輸入的是 {n}，不合法"
+                          }
     if kind == 'multi_service_unsupported':
-        return {"error": "目前一次只能部署一個服務，請把多個服務分開、一次講一個 / "
-                          "Only one service can be deployed per request right now — "
-                          "please describe each service separately."}
+        return {"error": "目前一次只能部署一個服務，請把多個服務分開、一次講一個"
+                          }
     return {"error": "解析失敗", "raw": str(deterministic)}
 
 

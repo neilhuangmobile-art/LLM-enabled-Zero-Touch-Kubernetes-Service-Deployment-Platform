@@ -752,10 +752,7 @@ def _check_scale_risk(name: str, new_replicas: int, namespace: str = None):
                 f"{total_cpu_mc}m CPU / {total_mem_b // (1024**2)}Mi 記憶體，"
                 f"但叢集最大節點只有 {node_cpu_mc}m CPU / {node_mem_b // (1024**2)}Mi 可用。"
                 f"多出來排不進去的 Pod 會卡在 Pending 狀態，不會顯示錯誤，容易被忽略。"
-                f"已阻止這次操作，請降低副本數或先移除/縮小其他部署。 / "
-                f"This would push total cluster resource demand past the largest node's capacity — "
-                f"the extra pods would get stuck Pending silently. Blocked; please lower the replica "
-                f"count or scale down other deployments first."
+                f"已阻止這次操作，請降低副本數或先移除/縮小其他部署。"
             )
         return False, None
     except Exception:
@@ -1204,9 +1201,7 @@ def _review_deployment(parsed):
         if app_name and app_name in {d["name"] for d in k8s_get_deployments()}:
             review["warnings"].append(
                 f"名稱衝突：Deployment「{app_name}」已經存在，這次部署會更新現有的服務（例如換 image "
-                f"或副本數），不會建立新的服務。如果你是想建一個不一樣的新服務，請換一個名字。 / "
-                f"Name conflict: a Deployment named '{app_name}' already exists — this will update it "
-                f"in place, not create a new one. Use a different name if you meant to create a separate service."
+                f"或副本數），不會建立新的服務。如果你是想建一個不一樣的新服務，請換一個名字。"
             )
         port = parsed.get("port")
         if port:
@@ -1218,10 +1213,7 @@ def _review_deployment(parsed):
                 review["warnings"].append(
                     f"Port 衝突：port {port} 已經被「{other}」這個服務用掉了。Docker Desktop 的 K8s "
                     f"一個 port 只能真的對外綁一個服務，這次部署完可能會拿不到外部連線位址、瀏覽器連不到，"
-                    f"建議換一個 port。 / "
-                    f"Port conflict: port {port} is already used by '{other}'. Only one LoadBalancer "
-                    f"service can be externally reachable per port on Docker Desktop, so this deployment "
-                    f"may not get a working external address — consider using a different port."
+                    f"建議換一個 port。"
                 )
     except Exception as e:
         review["warnings"].append(f"conflict check unavailable: {e}")
@@ -1556,34 +1548,6 @@ tbody tr:hover td{background:var(--signal-soft)}
 .deploy-confirm-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px}
 .deploy-confirm-btn{padding:7px 14px;font-size:14px}
 
-/* ── 舊的 Deploy 頁元件（第三階段移除） ── */
-.deploy-input-wrap{display:flex;gap:8px;margin-bottom:16px}
-.quick-tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
-.tag{padding:4px 12px;border:1px solid var(--grid-2);border-radius:999px;font-size:13px;font-family:var(--f-id);color:var(--text-2);cursor:pointer;transition:border-color .15s,color .15s}
-.tag:hover{border-color:var(--signal);color:var(--text)}
-.enrich-card{display:none;margin-bottom:16px;border:1px solid var(--grid);border-radius:4px;background:var(--panel);overflow:hidden}
-.enrich-card.show{display:block}
-.enrich-head{padding:12px 16px;border-bottom:1px solid var(--grid);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.enrich-headline{font-size:14px;color:var(--text-2)}
-.enrich-id{font-family:var(--f-id);font-size:13px;color:var(--text-3);margin-left:auto}
-.enrich-body{padding:14px 16px}
-.enrich-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
-.enrich-field{padding:10px 12px;background:var(--panel-2);border:1px solid var(--grid);border-radius:4px}
-.enrich-field .lbl{font-size:12.5px;color:var(--text-3);margin-bottom:2px}
-.enrich-field .val{font-size:14px;font-family:var(--f-id)}
-.enrich-reject-msg{padding:10px 12px;background:var(--stop-soft);border-radius:4px;font-size:14px;margin-bottom:12px}
-.court-panel{margin-top:16px}
-.court-agents{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
-.court-agent-card{background:var(--panel-2);border:1px solid var(--grid);border-radius:4px;padding:14px;min-height:120px}
-.court-agent-title{font-size:13px;color:var(--text-3);margin-bottom:8px;display:flex;justify-content:space-between}
-.court-agent-score{font-weight:700;color:var(--text)}
-.court-agent-summary{font-size:13.5px;color:var(--text-2);margin-top:6px}
-.court-agent-issues{margin-top:6px;display:flex;flex-direction:column;gap:6px}
-.court-agent-card.thinking .court-agent-summary::after{content:"審查中";color:var(--text-3)}
-.court-verdict{display:none}
-.court-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px}
-
-
 /* ══ 對話互動模組（第二階段） ══ */
 .msg.ai .msg-bubble{flex:1;min-width:0}
 .id{font-family:var(--f-id);font-size:.92em}
@@ -1841,6 +1805,32 @@ details.why{margin-top:10px;border-top:1px solid var(--grid);padding-top:8px;fon
 details.why summary{cursor:pointer;color:var(--text-3)}
 details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
 
+/* ══ 頁面（第三階段） ══ */
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px 24px;flex-wrap:wrap;margin-bottom:20px}
+.page-head .page-title{margin:0 0 4px}
+.page-head .page-sub{margin:0;max-width:72ch}
+.page-actions{display:flex;gap:8px;flex-wrap:wrap}
+.page-stack{display:flex;flex-direction:column;gap:18px}
+.page-stack > *{min-width:0}
+.chart-box{padding:14px 18px 12px}
+.quiet tr.enter,.quiet li.enter{animation:none}
+.status-strip{display:flex;align-items:center;gap:10px;border:1px solid var(--grid);border-radius:4px;padding:11px 16px;background:var(--panel);font-size:14.5px}
+.status-strip .lamp-s{width:9px;height:9px;border-radius:50%;background:var(--text-3);flex:none}
+.status-strip.ok{border-color:color-mix(in srgb,var(--pass) 45%,transparent)}
+.status-strip.ok .lamp-s{background:var(--pass);box-shadow:0 0 8px var(--pass);animation:beat 2.4s ease-out infinite}
+.status-strip.caution{border-color:var(--caution);background:var(--caution-soft)}
+.status-strip.caution .lamp-s{background:var(--caution)}
+.status-strip.stop{border-color:var(--stop);background:var(--stop-soft)}
+.status-strip.stop .lamp-s{background:var(--stop)}
+.status-strip.busy{border-color:var(--signal-line);background:var(--signal-soft)}
+#dash-mon div{display:flex;flex-direction:column;gap:2px}
+#dash-mon .dim{font-size:13px}
+.pod-chart-empty{margin:0}
+.module{padding:0}
+.card.module,.auth-card{padding:34px 32px}
+.pd + .pd{padding-top:18px;margin-top:2px}
+.zt-drawer .pd + .pd{border-top:1px solid var(--grid)}
+
 @media (max-width:900px){
   .sidebar{width:216px}
   .page{padding:22px 18px 40px}
@@ -1936,11 +1926,9 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
     <div class="new-chat-wrap"><button class="new-chat-btn" type="button" onclick="newChat()">新對話</button></div>
     <nav class="sidebar-nav" aria-label="功能">
       <button class="nav-item active" type="button" data-page="chat" onclick="showPage('chat')"><svg viewBox="0 0 16 16" fill="none"><path d="M2.5 3.5a2 2 0 012-2h7a2 2 0 012 2v5a2 2 0 01-2 2H8l-3.5 3v-3a2 2 0 01-2-2v-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>對話</button>
-      <button class="nav-item" type="button" data-page="deployments" onclick="showPage('deployments')"><svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2.5" width="12" height="4" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="2" y="9.5" width="12" height="4" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>服務</button>
-      <button class="nav-item" type="button" data-page="pods" onclick="showPage('pods')"><svg viewBox="0 0 16 16" fill="none"><path d="M8 1.8l5.4 3.1v6.2L8 14.2l-5.4-3.1V4.9z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>Pod</button>
+      <button class="nav-item" type="button" data-page="services" onclick="showPage('services')"><svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2.5" width="12" height="4" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="2" y="9.5" width="12" height="4" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>我的服務</button>
       <button class="nav-item" type="button" data-page="healer" onclick="showPage('healer')"><svg viewBox="0 0 16 16" fill="none"><path d="M1.5 8.5h3l1.5-4 3 7 1.5-3h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>自動修復</button>
       <button class="nav-item" type="button" data-page="dashboard" onclick="showPage('dashboard')"><svg viewBox="0 0 16 16" fill="none"><path d="M2.5 11a5.5 5.5 0 1111 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 11l2.6-3.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>資源總覽</button>
-      <button class="nav-item" type="button" data-page="metrics" onclick="showPage('metrics')"><svg viewBox="0 0 16 16" fill="none"><path d="M2 12L5 8l3 2 3-4 3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>監控指標</button>
       <button class="nav-item" type="button" data-page="gitops" onclick="showPage('gitops')"><svg viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 6v1a3 3 0 003 3h1M11 6v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>部署紀錄</button>
       <div class="nav-section">最近的對話</div>
       <div id="chat-room-list"></div>
@@ -1980,166 +1968,12 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
       <div><div class="alert-title" id="docker-warning-title"></div><div class="alert-body" id="docker-warning-body"></div></div>
     </div>
 
-    <!-- Dashboard Page -->
-    <div class="page" id="page-deploy">
-      <div class="page-title">Deploy</div>
-      <div class="page-sub">Deploy services using natural language</div>
-
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-title">Natural Language Deploy</div>
-        <div class="deploy-input-wrap">
-          <input class="deploy-input" id="deploy-input" placeholder='e.g. "deploy 3 nginx:latest pods for web-frontend, port 80"' onkeydown="if(event.key==='Enter')doDeploy()">
-          <button class="deploy-btn" id="deploy-btn" onclick="doDeploy()">Deploy →</button>
-        </div>
-        <div class="quick-tags">
-          <span class="tag" onclick="setInput(this)">nginx ×1</span>
-          <span class="tag" onclick="setInput(this)">redis ×2</span>
-          <span class="tag" onclick="setInput(this)">postgres db</span>
-          <span class="tag" onclick="setInput(this)">node api ×4</span>
-          <span class="tag" onclick="setInput(this)">golang svc ×3</span>
-          <span class="tag" onclick="setInput(this)">python ×5</span>
-        </div>
-
-        <!-- ── Deploy decision court (三代理評審動畫) ── -->
-        <div class="court-panel" id="court-panel" style="display:none">
-          <div class="court-agents">
-            <div class="court-agent-card pending" id="court-security">
-              <div class="court-agent-title"><span>Security</span><span class="court-agent-score" id="court-security-score"></span></div>
-              <div class="court-agent-issues" id="court-security-issues"></div>
-              <div class="court-agent-summary" id="court-security-summary"></div>
-            </div>
-            <div class="court-agent-card pending" id="court-cost">
-              <div class="court-agent-title"><span>Cost</span><span class="court-agent-score" id="court-cost-score"></span></div>
-              <div class="court-agent-issues" id="court-cost-issues"></div>
-              <div class="court-agent-summary" id="court-cost-summary"></div>
-            </div>
-            <div class="court-agent-card pending" id="court-perf">
-              <div class="court-agent-title"><span>Performance</span><span class="court-agent-score" id="court-perf-score"></span></div>
-              <div class="court-agent-issues" id="court-perf-issues"></div>
-              <div class="court-agent-summary" id="court-perf-summary"></div>
-            </div>
-          </div>
-          <div class="result-box court-verdict" id="court-verdict"></div>
-          <div class="court-actions" id="court-actions"></div>
-        </div>
-
-        <!-- ── Dataset enrichment card (新增欄位顯示) ── -->
-        <div class="enrich-card" id="enrich-card">
-          <div class="enrich-head">
-            <span class="status-tag" id="enrich-status">—</span>
-            <span class="enrich-headline" id="enrich-headline">Parsed</span>
-            <span class="enrich-id" id="enrich-id"></span>
-          </div>
-          <div class="enrich-body">
-            <div class="enrich-reject-msg" id="enrich-reject-msg" style="display:none"></div>
-            <!-- 這是「系統聽懂了什麼」的白話摘要，不是給開發者看的資料集內部欄位
-                 （is_k8s/complexity/language/dataset ground truth JSON 這些 2026-09-13 已移除，
-                 新手友善原則見 AGENT_RULES.md）。 -->
-            <div class="enrich-grid">
-              <div class="enrich-field">
-                <div class="lbl">App name</div>
-                <div class="val" id="enrich-appname">—</div>
-              </div>
-              <div class="enrich-field">
-                <div class="lbl">Image</div>
-                <div class="val" id="enrich-image">—</div>
-              </div>
-              <div class="enrich-field">
-                <div class="lbl">Pods</div>
-                <div class="val" id="enrich-pods">—</div>
-              </div>
-              <div class="enrich-field">
-                <div class="lbl">Port</div>
-                <div class="val" id="enrich-port">—</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="result-box" id="result-box"></div>
-      </div>
-
-      <div class="grid-3">
-        <div class="card">
-          <div class="card-title">Pods</div>
-          <div class="stat-num" id="stat-pods">—</div>
-          <div class="stat-label">Total running</div>
-        </div>
-        <div class="card">
-          <div class="card-title">Deployments</div>
-          <div class="stat-num" id="stat-deps">—</div>
-          <div class="stat-label">Active deployments</div>
-        </div>
-        <div class="card">
-          <div class="card-title">Model</div>
-          <div class="stat-num" style="font-size:18px" id="stat-model">—</div>
-          <div class="stat-label">Qwen2.5 3B</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Pods Page -->
-    <div class="page" id="page-pods">
-      <div class="page-title">Pods</div>
-      <div class="page-sub">All running pods in the cluster</div>
-      <div class="card">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>App</th>
-                <th>Status</th>
-                <th>IP</th>
-                <th>Node</th>
-                <th>Restarts</th>
-                <th>Created</th>
-                <th>Updated</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="pods-tbody">
-              <tr><td colspan="8" class="empty"><p>Loading...</p></td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="pager" id="pods-pager" style="display:none;align-items:center;justify-content:space-between;padding:12px 4px 2px;font-size:13px;color:var(--text2)">
-          <button class="btn-sm" id="pods-prev" onclick="podsGoPage(-1)">‹ 上一頁 / Prev</button>
-          <span id="pods-page-info">第 1 頁 / 共 1 頁</span>
-          <button class="btn-sm" id="pods-next" onclick="podsGoPage(1)">下一頁 / Next ›</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Deployments Page -->
-    <div class="page" id="page-deployments">
-      <div class="page-title">Deployments</div>
-      <div class="page-sub">Manage your Kubernetes deployments</div>
-      <div class="card">
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Image</th>
-                <th>Replicas</th>
-                <th>Ready</th>
-                <th>Created</th>
-                <th>Updated</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="deps-tbody">
-              <tr><td colspan="7" class="empty"><p>Loading...</p></td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="pager" id="deps-pager" style="display:none;align-items:center;justify-content:space-between;padding:12px 4px 2px;font-size:13px;color:var(--text2)">
-          <button class="btn-sm" id="deps-prev" onclick="depsGoPage(-1)">‹ 上一頁 / Prev</button>
-          <span id="deps-page-info">第 1 頁 / 共 1 頁</span>
-          <button class="btn-sm" id="deps-next" onclick="depsGoPage(1)">下一頁 / Next ›</button>
-        </div>
-      </div>
+    <!-- 我的服務：服務（Deployment）與 Pod 用跟對話裡同一套模組 -->
+    <div class="page" id="page-services">
+      <div class="page-head"><div><h1 class="page-title">我的服務</h1>
+        <p class="page-sub">你部署的每個服務，以及它底下實際在跑的 Pod。點任一列可以看詳情，服務還可以擴縮、更新映像檔、回滾或刪除。</p></div>
+        <div class="page-actions"><button type="button" class="btn primary" data-act="example" data-text="部署 2 個 nginx:1.27，開 80 port">部署新服務</button></div></div>
+      <div class="page-stack"><div id="svc-deps"></div><div id="svc-pods"></div></div>
     </div>
 
     <!-- Chat Page -->
@@ -2187,231 +2021,37 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
       </div>
     </div>
 
-    <div class="page" id="page-dataset">
-      <div class="page-title">Dataset Manager</div>
-      <div class="page-sub">Enrich &amp; inspect the K8s training dataset</div>
-      <div class="grid-3" style="margin-bottom:16px">
-        <div class="card"><div class="card-title">Total Records</div><div class="stat-num" id="ds-total">--</div><div class="stat-label">across all files</div></div>
-        <div class="card"><div class="card-title">Output Filled</div><div class="stat-num" id="ds-output-pct">--</div><div class="stat-label">ground truth coverage</div></div>
-        <div class="card"><div class="card-title">K8s / Non-K8s</div><div class="stat-num" id="ds-k8s-ratio">--</div><div class="stat-label">is_k8s ratio</div></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-        <div class="card"><div class="card-title">Files</div><div id="ds-files" style="margin-top:8px;font-size:13px;color:var(--text2)">Loading...</div></div>
-        <div class="card"><div class="card-title">Top Categories</div><div id="ds-categories" style="margin-top:8px;font-size:13px;color:var(--text2)">Loading...</div></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Run Enrichment</div>
-        <div style="display:flex;gap:10px;margin:12px 0 8px;flex-wrap:wrap">
-          <button class="btn-primary" onclick="runEnrich('--skip-output')">Quick Fill (rules only)</button>
-          <button class="btn-primary" onclick="runEnrich('')">Full Enrich (LLaMA output)</button>
-          <button class="btn-primary" onclick="runEnrich('--dry-run')" style="background:var(--surface);color:var(--text);border:1px solid var(--border)">Dry Run</button>
-          <button class="btn-primary" onclick="loadDatasetStats()" style="background:var(--surface);color:var(--text);border:1px solid var(--border)">Refresh Stats</button>
-        </div>
-        <div id="ds-run-status" style="font-size:12px;color:var(--text3);margin-bottom:6px"></div>
-        <pre id="ds-log" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:12px;max-height:320px;overflow-y:auto;white-space:pre-wrap;color:var(--text2)">Log will appear here...</pre>
-      </div>
-    </div>
-
-    <div class="page" id="page-kb">
-      <div class="page-title">Knowledge Base (RAG)</div>
-      <div class="page-sub">Manage the documents that power retrieval-augmented answers &amp; measure retrieval quality</div>
-
-      <div class="grid-3" style="margin-bottom:16px">
-        <div class="card"><div class="card-title">Retrieval Method</div><div class="stat-num" id="kb-method" style="font-size:20px">--</div><div class="stat-label" id="kb-method-sub">embedding model</div></div>
-        <div class="card"><div class="card-title">Indexed Chunks</div><div class="stat-num" id="kb-chunks">--</div><div class="stat-label">across all documents</div></div>
-        <div class="card"><div class="card-title">Last Built</div><div class="stat-num" style="font-size:14px" id="kb-built-at">--</div><div class="stat-label" id="kb-built-sub">build time</div></div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-bottom:16px;align-items:start">
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-            <div class="card-title" style="margin:0">Documents</div>
-            <button class="btn-primary" onclick="rebuildKB()" id="kb-rebuild-btn">Rebuild Index</button>
-          </div>
-          <div id="kb-doc-list" style="font-size:13px;color:var(--text2)">Loading...</div>
-          <div id="kb-rebuild-status" style="font-size:12px;color:var(--text3);margin-top:8px"></div>
-        </div>
-        <div class="card">
-          <div class="card-title">Add Document</div>
-          <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
-            <input id="kb-new-filename" class="deploy-input" placeholder="filename.md (only .md / .txt)">
-            <textarea id="kb-new-content" placeholder="Markdown or plain text content..." style="width:100%;min-height:120px;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);resize:vertical;box-sizing:border-box"></textarea>
-            <button class="btn-primary" onclick="addKBDoc()">Upload &amp; Rebuild</button>
-            <div id="kb-add-status" style="font-size:12px;color:var(--text3)"></div>
-          </div>
-        </div>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <div class="card">
-          <div class="card-title">Test a Query</div>
-          <div style="margin-top:10px;display:flex;gap:8px">
-            <input id="kb-query-input" class="deploy-input" placeholder="e.g. CrashLoopBackOff 怎麼解決" onkeydown="if(event.key==='Enter')runKBQuery()">
-            <button class="btn-primary" onclick="runKBQuery()">Search</button>
-          </div>
-          <div id="kb-query-results" style="margin-top:12px;font-size:13px;color:var(--text2)"></div>
-        </div>
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div class="card-title" style="margin:0">Retrieval Quality Evaluation</div>
-            <button class="btn-primary" onclick="runKBEval()" id="kb-eval-btn">Run Evaluation</button>
-          </div>
-          <div id="kb-eval-results" style="margin-top:12px;font-size:13px;color:var(--text2)">Run an evaluation to compare ChromaDB vs the legacy TF-IDF method on a curated test set.</div>
-        </div>
-      </div>
-    </div>
-
     <div class="page" id="page-gitops">
-      <div class="page-title">GitOps Log</div>
-      <div class="page-sub">Deployment history and rollback</div>
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px">
-          <span style="font-size:14px;color:var(--text2)">每一次部署、擴縮、回滾都會留下一筆紀錄</span>
-          <button class="btn-sm" type="button" onclick="loadGitops()">重新整理</button>
-        </div>
-        <div id="gitops-list"><div style="color:var(--text3);font-size:13px">Loading...</div></div>
-      </div>
+      <div class="page-head"><div><h1 class="page-title">部署紀錄</h1>
+        <p class="page-sub">每一次部署、擴縮、更新、回滾都會寫進 Git，留下可以追查的紀錄。每個服務最新的那一筆可以回滾到上一版，回滾前會先請你確認。</p></div></div>
+      <div class="page-stack"><div id="gitops-w"></div></div>
     </div>
 
     <div class="page" id="page-healer">
-      <div class="page-title">Healer</div>
-      <div class="page-sub">你自己的 Pod 一覽 + 自動自癒 / Your pods at a glance + auto self-healing</div>
-      <div id="healer-bg-banner" style="margin-bottom:14px;padding:10px 14px;border-radius:10px;font-size:13px"></div>
-      <div id="healer-processing" style="display:none;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;border-radius:10px;font-size:13px;background:var(--surface);border:1px solid var(--border);color:var(--text2)"></div>
-      <div class="grid-3" style="margin-bottom:16px">
-        <div class="card"><div class="card-title">Total Pods</div><div class="stat-num" id="healer-count">--</div><div class="stat-label">你的 Pod 總數 / your pods</div></div>
-        <div class="card"><div class="card-title">Last Scan</div><div class="stat-num" style="font-size:14px" id="healer-time">--</div><div class="stat-label">Scan time</div></div>
-        <div class="card"><div class="card-title">Status</div><div class="stat-num" id="healer-fixed">OK</div><div class="stat-label">Healer state</div></div>
-      </div>
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
-          <span style="font-size:13px;color:var(--text2)">點一個 Pod 看完整狀態跟趨勢圖 / Click a pod for full status &amp; trend charts</span>
-          <div style="display:flex;gap:10px">
-            <button class="btn-sm" type="button" onclick="loadHealer()">立即掃描</button>
-            <button class="btn-primary danger" type="button" onclick="healerAutoFix()">全部自動修復</button>
-          </div>
-        </div>
-        <div id="healer-list"><div style="color:var(--text3);font-size:13px">Loading...</div></div>
-      </div>
-      <div class="card" style="margin-top:16px">
-        <div class="card-title">自動修復紀錄 / Auto-heal history</div>
-        <div style="font-size:12px;color:var(--text3);margin-bottom:8px">系統背景每 30 秒自動掃描一次，偵測到異常 Pod 會自動診斷根因並嘗試修復（非單純刪除）。/ The system scans every 30s in the background; on detecting an unhealthy pod it automatically diagnoses the root cause and attempts a matching fix (not just a blind delete).</div>
-        <div id="healer-bg-list"><div style="color:var(--text3);font-size:13px">--</div></div>
+      <div class="page-head"><div><h1 class="page-title">自動修復</h1>
+        <p class="page-sub">Healer 每 30 秒在背景檢查一次你的 Pod。發現問題會先找出原因，再套用對應的修復，例如調高記憶體上限或恢復上一個能用的映像檔，不只是把 Pod 刪掉重來。</p></div></div>
+      <div class="page-stack">
+        <div class="status-strip" id="heal-bg" role="status"><span class="lamp-s"></span><span>讀取中</span></div>
+        <div id="heal-processing"></div>
+        <div id="heal-scan"></div>
+        <section class="module"><div class="module-head"><h2>自動修復紀錄</h2><span class="meta"><span>最近的處理結果，最新的在最上面</span></span></div>
+          <div id="heal-history"></div></section>
       </div>
     </div>
 
-    <!-- Pod 詳情彈窗（Healer 視覺化）：仿照 #manual-overlay 的 style.display 開關
-         模式（不用 [hidden]，之前踩過 CSS specificity 的坑，見 openManual/closeManual）。 -->
-    <div id="pod-detail-overlay" onclick="if(event.target===this)closePodDetail()">
-      <div class="manual-panel" style="max-width:640px">
-        <div class="manual-panel-head">
-          <div>
-            <div class="manual-panel-title" id="pod-detail-title" style="font-family:monospace;font-size:16px">pod-name</div>
-            <div class="manual-panel-sub" id="pod-detail-sub">--</div>
-          </div>
-          <button class="manual-close" type="button" onclick="closePodDetail()">關閉</button>
-        </div>
-        <div class="manual-panel-body" id="pod-detail-body"></div>
-      </div>
-    </div>
-
-    <!-- Dashboard Page（2026-09-29 從隊友分支移植）-->
     <div class="page" id="page-dashboard">
-      <div class="page-title">Dashboard</div>
-      <div class="page-sub">部署前，先看看叢集還剩多少空間 / See how much cluster space is left before you deploy</div>
-      <div class="grid-3" style="margin-bottom:16px">
-        <div class="card"><div class="card-title">叢集總容量 / Cluster capacity</div><div class="stat-num" id="dash-capacity" style="font-size:20px">--</div><div class="stat-label">CPU / Memory</div></div>
-        <div class="card"><div class="card-title">已用量 / In use</div><div class="stat-num" id="dash-used" style="font-size:20px">--</div><div class="stat-label" id="dash-used-label">CPU / Memory</div></div>
-        <div class="card"><div class="card-title">剩餘空間 / Remaining</div><div class="stat-num" id="dash-remaining" style="font-size:20px">--</div><div class="stat-label">CPU / Memory</div></div>
-      </div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-title">使用率 / Utilization</div>
-        <div style="margin-top:10px">
-          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px">
-            <span>CPU</span><span id="dash-cpu-pct-label">--</span>
-          </div>
-          <div style="background:var(--bg);border-radius:6px;height:10px;overflow:hidden;margin-bottom:14px">
-            <div id="dash-cpu-bar" style="background:var(--green);height:100%;width:0%;transition:width .3s,background .3s"></div>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px">
-            <span>Memory</span><span id="dash-mem-pct-label">--</span>
-          </div>
-          <div style="background:var(--bg);border-radius:6px;height:10px;overflow:hidden">
-            <div id="dash-mem-bar" style="background:var(--green);height:100%;width:0%;transition:width .3s,background .3s"></div>
-          </div>
+      <div class="page-head"><div><h1 class="page-title">資源總覽</h1>
+        <p class="page-sub">部署前先看看叢集還剩多少空間。數字每 30 秒自動更新；同一時間可能有其他使用者在部署，送出部署時的審查結果才是準的。</p></div></div>
+      <div class="page-stack">
+        <div id="dash-res"></div>
+        <div class="grid-2">
+          <section class="module"><div class="module-head"><h2>CPU 用量趨勢</h2><span class="meta"><span>過去 30 分鐘，單位：核</span></span></div><div class="chart-box" id="dash-cpu-trend"></div></section>
+          <section class="module"><div class="module-head"><h2>記憶體用量趨勢</h2><span class="meta"><span>過去 30 分鐘，單位：MiB</span></span></div><div class="chart-box" id="dash-mem-trend"></div></section>
         </div>
-      </div>
-      <!-- 2026-10-03：使用者在 Prometheus 自己的 Graph 介面看到折線圖，要求「這種
-      折線圖也要出現在我自己的系統內」——用 Prometheus query_range() 撈過去 30 分鐘
-      的實際用量，畫成跟 Healer 頁一樣風格的 inline SVG 折線圖，顯示在自己的 Dashboard。 -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-        <div class="card">
-          <div class="card-title">CPU 用量趨勢（過去 30 分鐘）/ CPU trend (last 30 min)</div>
-          <div id="dash-cpu-trend" style="margin-top:8px">Loading...</div>
-        </div>
-        <div class="card">
-          <div class="card-title">記憶體用量趨勢（過去 30 分鐘）/ Memory trend (last 30 min)</div>
-          <div id="dash-mem-trend" style="margin-top:8px">Loading...</div>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <div class="card">
-          <div class="card-title">我的部署 / My deployments</div>
-          <div class="table-wrap" style="margin-top:8px">
-            <table>
-              <thead><tr><th>Name</th><th>Replicas</th><th>CPU</th><th>Memory</th></tr></thead>
-              <tbody id="dash-my-deployments"><tr><td colspan="4" class="empty"><p>Loading...</p></td></tr></tbody>
-            </table>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-title">我的費用估算 / My estimated cost</div>
-          <div style="margin-top:8px;font-size:13px;color:var(--text2)" id="dash-cost">Loading...</div>
-        </div>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:12px">
-        僅供參考，實際部署仍以送出當下的審查結果為準；同一時間可能有其他使用者一起部署，數字會有些微落差。 /
-        For reference only — the actual review at submission time is authoritative; numbers may drift slightly if other users deploy at the same time.
+        <section class="module"><div class="module-head"><h2>監控元件</h2><span class="meta"><span>用量數字從哪裡來</span></span></div><dl class="facts" id="dash-mon"></dl></section>
       </div>
     </div>
 
-    <div class="page" id="page-metrics">
-      <div class="page-title">Metrics</div>
-      <div class="page-sub">Prometheus observability</div>
-      <div class="grid-3" style="margin-bottom:16px">
-        <div class="card"><div class="card-title">Prometheus</div><div class="stat-num" id="prom-status">--</div><div class="stat-label">Connection</div></div>
-        <div class="card"><div class="card-title">Running Pods</div><div class="stat-num" id="prom-pods">--</div><div class="stat-label">你的 namespace / your namespace</div></div>
-        <div class="card"><div class="card-title">Endpoint</div><div class="stat-num" style="font-size:13px" id="prom-url">--</div><div class="stat-label">Prometheus URL</div></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <div class="card">
-          <div class="card-title">Live Metrics</div>
-          <div id="metrics-rows" style="margin-top:8px;font-size:13px;color:var(--text2)">Loading...</div>
-        </div>
-        <div class="card">
-          <div class="card-title">PromQL Quick Reference</div>
-          <div style="margin-top:8px">
-            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:12px;color:var(--text2)">All pods</span><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:4px">count(kube_pod_info)</code></div>
-            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:12px;color:var(--text2)">Running pods</span><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:4px">kube_pod_status_phase</code></div>
-            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:12px;color:var(--text2)">Deployments</span><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:4px">kube_deployment_spec_replicas</code></div>
-            <div style="display:flex;justify-content:space-between;padding:6px 0"><span style="font-size:12px;color:var(--text2)">Prometheus up</span><code style="font-size:11px;background:var(--bg);padding:2px 6px;border-radius:4px">up</code></div>
-            <div style="margin-top:10px;font-size:11px;color:var(--text3)">Full UI: <a id="prom-full-ui-link" href="#" target="_blank" style="color:var(--green)">--</a></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<!-- Pod Detail Modal -->
-<div class="modal-bg" id="pod-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title" id="modal-pod-name">Pod Details</div>
-      <button class="modal-close" type="button" onclick="closeModal()">關閉</button>
-    </div>
-    <div class="modal-body" id="modal-pod-body"></div>
   </div>
 </div>
 
@@ -2478,7 +2118,7 @@ const I18N = {
       {title:'Learn Kubernetes', example:'Explain Deployment vs Service', send:'Explain Kubernetes Deployment vs Service'},
       {title:'Troubleshoot', example:'How do I debug CrashLoopBackOff?', send:'How do I debug CrashLoopBackOff?'},
     ],
-    manualTitle: '📖 User Guide',
+    manualTitle: 'User Guide',
     manualSub: 'Terms with a dotted underline are clickable for a concise definition.',
   },
 };
@@ -2510,48 +2150,48 @@ function applyLang(){
 // ── 使用說明書內容：中英兩份獨立寫，專有名詞一律保留英文 ──
 const MANUAL_ZH = `
   <details open>
-    <summary>🚀 三步驟快速上手</summary>
+    <summary>三步驟上手</summary>
     <div class="manual-section">
       <ol style="margin:0;padding-left:20px;line-height:1.9">
-        <li>在 Chat 輸入部署需求，例如「<code>deploy 3 nginx pods for shop, port 80</code>」，系統會解析為結構化規格供你確認。</li>
-        <li>確認規格後選擇「下一步」，系統會計算此次部署所需的資源用量，並執行一次安全性、成本與效能的自動化審查；審查通過後才能執行部署。</li>
-        <li>部署完成後，畫面會提供連結，導向 <b>Pods</b> / <b>Deployments</b> 頁面確認執行結果。</li>
+        <li>在「對話」用中文說你想部署什麼，例如「<code>部署 2 個 nginx:1.27，開 80 port</code>」。系統會整理成一張部署單讓你確認，有不對的地方可以直接改。</li>
+        <li>按「下一步：審查」，系統會算出這次要用多少資源，並跑完安全、成本、效能三項審查。通過才會出現「開始部署」。</li>
+        <li>部署後，部署單會顯示實際進度，副本真的就緒才會顯示「運作中」。之後可以到「我的服務」查看。</li>
       </ol>
     </div>
   </details>
 
   <details>
-    <summary>💬 Chat 還能協助你做什麼</summary>
+    <summary>對話還能幫你做什麼</summary>
     <div class="manual-section">
-      <p style="margin:0 0 8px">除了部署，你也可以直接在 Chat 輸入以下指令：</p>
+      <p style="margin:0 0 8px">除了部署，也可以直接在對話裡問：</p>
       <ul style="margin:0;padding-left:20px;line-height:2">
-        <li><code>list pods</code> ／ <code>顯示所有部署</code> — 檢視目前叢集內的運作狀態</li>
-        <li><code>web-frontend 有沒有壞掉</code> — 精確檢查單一服務的健康狀態，異常時附上根因分析與修復建議</li>
-        <li><code>查看 api-gateway 細節</code> — 檢視單一 <span class="term" data-def="Kubernetes 中最小的可部署運算單位，用於封裝並執行你的應用程式容器。">Pod</span> 的詳細狀態</li>
-        <li><code>scale web-frontend to 5</code> — 調整副本數（執行前會先出示確認畫面）</li>
-        <li><code>rollback api-gateway</code> — 回滾至上一個版本</li>
-        <li><code>什麼是 Deployment</code> — 詢問任何 Kubernetes 概念，系統會以簡明的方式回答</li>
+        <li><code>列出我所有的 Pod</code>、<code>列出所有部署</code>：用表格列出來，可以篩選、排序、換頁，點任一列看詳情</li>
+        <li><code>web-frontend 有沒有壞</code>：檢查單一服務的健康狀態，有狀況時附上 Healer 的診斷</li>
+        <li><code>把 web-frontend 擴到 5 個</code>：調整副本數，執行前會先請你確認</li>
+        <li><code>web-frontend 回滾</code>：回到上一版設定</li>
+        <li><code>叢集狀態</code>：看 CPU、記憶體還剩多少</li>
+        <li><code>Deployment 跟 Service 差在哪</code>：任何 Kubernetes 的觀念問題</li>
       </ul>
     </div>
   </details>
 
   <details>
-    <summary>🗺️ 側邊欄各頁面說明</summary>
+    <summary>左側選單各頁面</summary>
     <div class="manual-section">
       <ul style="margin:0;padding-left:20px;line-height:2">
-        <li><b>Pods</b>：目前所有 <span class="term" data-def="Kubernetes 中最小的可部署運算單位，用於封裝並執行你的應用程式容器。">Pod</span> 的狀態、IP、所在節點與重啟次數。</li>
-        <li><b>Deployments</b>：各服務要求與實際的副本數量，以及所使用的映像版本。</li>
-        <li><b>Healer</b>：掃描異常 <span class="term" data-def="Kubernetes 中最小的可部署運算單位，用於封裝並執行你的應用程式容器。">Pod</span>（如 <span class="term" data-def="容器持續啟動失敗並反覆重啟，通常代表應用程式本身發生錯誤或設定有誤。">CrashLoopBackOff</span>），可一鍵修復重建。</li>
-        <li><b>GitOps Log</b>：部署歷史紀錄，每次部署皆會留下版本，便於回滾比對。</li>
-        <li><b>Metrics</b>：Prometheus 監控狀態，檢視叢集目前的運作規模。</li>
+        <li><b>對話</b>：部署、查詢、修復都可以用說的完成。</li>
+        <li><b>我的服務</b>：你部署的每個服務，以及底下的 <span class="term" data-def="Kubernetes 中最小的可部署運算單位，用於封裝並執行你的應用程式容器。">Pod</span>。點進去可以擴縮、更新映像檔、回滾或刪除。</li>
+        <li><b>自動修復</b>：Healer 每 30 秒檢查一次，發現像 <span class="term" data-def="容器持續啟動失敗並反覆重啟，通常代表應用程式本身發生錯誤或設定有誤。">CrashLoopBackOff</span> 這類問題會先找原因，再套用對應的修復。這裡可以看處理紀錄。</li>
+        <li><b>資源總覽</b>：叢集還剩多少 CPU 和記憶體、用量趨勢，以及依公有雲牌價估算的費用。</li>
+        <li><b>部署紀錄</b>：每一次部署、擴縮、回滾都會寫進 Git，可以從這裡回滾到上一版。</li>
       </ul>
     </div>
   </details>
 
   <details>
-    <summary>📚 K8s 小百科</summary>
+    <summary>K8s 小百科</summary>
     <div class="manual-section">
-      <p style="margin:0 0 10px;color:var(--text2)">以下名詞皆可點擊展開簡明定義。</p>
+      <p style="margin:0 0 10px;color:var(--text2)">每個名詞都可以點一下看簡單說明。</p>
       <p style="line-height:2.3">
         <span class="term" data-def="Kubernetes 中最小的可部署運算單位，用於封裝並執行你的應用程式容器。">Pod</span>、
         <span class="term" data-def="描述所需狀態的宣告式設定（例如映像版本與副本數量），Kubernetes 會持續協調實際狀態以符合此設定，並在 Pod 異常時自動重建。">Deployment</span>、
@@ -2569,74 +2209,7 @@ const MANUAL_ZH = `
         <span class="term" data-def="Kubernetes 內部用於描述資源的設定檔格式。本系統的設計目標即是讓使用者無需編寫 YAML。">YAML</span>、
         <span class="term" data-def="Kubernetes 官方提供的命令列工具。本系統的核心價值在於讓使用者無需學習此工具即可完成部署與維運。">kubectl</span>、
         <span class="term" data-def="將每次部署的設定變更記錄為 Git 版本，以利追蹤歷史與執行回滾。本系統會在每次部署時自動完成此流程。">GitOps</span>、
-        <span class="term" data-def="將服務退回至前一個穩定版本。於 Chat 輸入「rollback 應用程式名稱」即可執行。">Rollback</span>
-      </p>
-    </div>
-  </details>
-`;
-
-const MANUAL_EN = `
-  <details open>
-    <summary>🚀 Quick Start in 3 Steps</summary>
-    <div class="manual-section">
-      <ol style="margin:0;padding-left:20px;line-height:1.9">
-        <li>Describe what you need in Chat, e.g. "<code>deploy 3 nginx pods for shop, port 80</code>". The system parses it into a structured spec for you to confirm.</li>
-        <li>After confirming, choose "Next" — the system calculates the resource footprint for this deployment and runs an automated security, cost, and performance review. Deployment proceeds only after the review passes.</li>
-        <li>Once deployed, you'll get direct links to the <b>Pods</b> / <b>Deployments</b> pages to verify the result.</li>
-      </ol>
-    </div>
-  </details>
-
-  <details>
-    <summary>💬 What Else Chat Can Do</summary>
-    <div class="manual-section">
-      <p style="margin:0 0 8px">Beyond deployment, you can type these directly in Chat:</p>
-      <ul style="margin:0;padding-left:20px;line-height:2">
-        <li><code>list pods</code> / <code>show deployments</code> — inspect the current cluster state</li>
-        <li><code>is web-frontend healthy</code> — precisely check a single service's health, with root-cause analysis and remediation suggestions when something is wrong</li>
-        <li><code>describe pod api-gateway</code> — inspect the detailed status of a single <span class="term" data-def="The smallest deployable unit in Kubernetes, used to package and run your application container(s).">Pod</span></li>
-        <li><code>scale web-frontend to 5</code> — adjust replica count (a confirmation step is shown first)</li>
-        <li><code>rollback api-gateway</code> — revert to the previous version</li>
-        <li><code>what is a Deployment</code> — ask about any Kubernetes concept and get a plain-language answer</li>
-      </ul>
-    </div>
-  </details>
-
-  <details>
-    <summary>🗺️ Sidebar Pages</summary>
-    <div class="manual-section">
-      <ul style="margin:0;padding-left:20px;line-height:2">
-        <li><b>Pods</b>: status, IP, node, and restart count for every <span class="term" data-def="The smallest deployable unit in Kubernetes, used to package and run your application container(s).">Pod</span>.</li>
-        <li><b>Deployments</b>: desired vs. actual replica counts and the image version in use.</li>
-        <li><b>Healer</b>: scans for unhealthy <span class="term" data-def="The smallest deployable unit in Kubernetes, used to package and run your application container(s).">Pods</span> (e.g. <span class="term" data-def="A container keeps failing to start and restarting repeatedly, usually indicating an application bug or misconfiguration.">CrashLoopBackOff</span>) and can remediate them with one click.</li>
-        <li><b>GitOps Log</b>: deployment history — every deployment leaves a version for rollback comparison.</li>
-        <li><b>Metrics</b>: Prometheus monitoring status and current cluster scale.</li>
-      </ul>
-    </div>
-  </details>
-
-  <details>
-    <summary>📚 Kubernetes Glossary</summary>
-    <div class="manual-section">
-      <p style="margin:0 0 10px;color:var(--text2)">Click any term below to expand a concise definition.</p>
-      <p style="line-height:2.3">
-        <span class="term" data-def="The smallest deployable unit in Kubernetes, used to package and run your application container(s).">Pod</span>,
-        <span class="term" data-def="A declarative description of the desired state (e.g. image version and replica count). Kubernetes continuously reconciles the actual state to match it, automatically recreating Pods that fail.">Deployment</span>,
-        <span class="term" data-def="Automatically created by a Deployment to maintain the specified number of running Pods; you generally don't interact with it directly.">ReplicaSet</span>,
-        <span class="term" data-def="A stable, fixed address that routes traffic to a group of Pods behind it, unaffected by Pod IP changes after recreation.">Service</span>,
-        <span class="term" data-def="A boundary used to partition resources within a cluster. This system gives each account its own namespace — what you deploy only lands in your own namespace and is invisible to other accounts.">Namespace</span>,
-        <span class="term" data-def="A packaged 'application + runtime environment', e.g. nginx:latest. The part after the colon is the version tag; it defaults to latest if omitted.">Image</span>,
-        <span class="term" data-def="The number of identical Pods to keep running. Multiple replicas improve fault tolerance and distribute load.">Replicas</span>,
-        <span class="term" data-def="The network port a service accepts connections on, e.g. 80 for web servers, 6379 for Redis.">Port</span>,
-        <span class="term" data-def="A machine in the cluster that Pods are scheduled onto. This system simulates nodes using Docker Desktop's built-in Kubernetes.">Node</span>,
-        <span class="term" data-def="The complete Kubernetes system, made up of one or more Nodes.">Cluster</span>,
-        <span class="term" data-def="A container keeps failing to start and restarting repeatedly, usually indicating an application bug or misconfiguration.">CrashLoopBackOff</span>,
-        <span class="term" data-def="The specified image could not be retrieved — commonly due to a typo, a missing tag, or insufficient registry permissions.">ImagePullBackOff</span>,
-        <span class="term" data-def="The Pod exceeded its configured memory limit and was forcibly terminated by the system.">OOMKilled</span>,
-        <span class="term" data-def="The configuration file format Kubernetes uses internally to describe resources. This system is designed so you never need to write YAML yourself.">YAML</span>,
-        <span class="term" data-def="Kubernetes' official command-line tool. This system's core value is letting you deploy and operate without ever learning it.">kubectl</span>,
-        <span class="term" data-def="Recording every deployment's configuration as a Git version, enabling history tracking and rollback. This system does this automatically on every deployment.">GitOps</span>,
-        <span class="term" data-def="Reverting a service to its previous stable version. Type 'rollback &lt;app-name&gt;' in Chat to trigger it.">Rollback</span>
+        <span class="term" data-def="將服務退回至前一個穩定版本。在對話輸入「服務名稱 回滾」即可執行。">Rollback</span>
       </p>
     </div>
   </details>
@@ -2644,7 +2217,7 @@ const MANUAL_EN = `
 
 function renderManualBody(){
   const body = document.getElementById('manual-body');
-  if(body) body.innerHTML = (uiLang === 'en') ? MANUAL_EN : MANUAL_ZH;
+  if(body) body.innerHTML = MANUAL_ZH;
 }
 
 // ── Clock ──
@@ -2729,12 +2302,16 @@ function toggleTheme(){
   syncThemeBtn();
 }
 syncThemeBtn();
+try { window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', syncThemeBtn); } catch(e){}
 
-const PAGE_TITLES = {chat:'對話', deployments:'服務', pods:'Pod', healer:'自動修復', dashboard:'資源總覽',
-  metrics:'監控指標', gitops:'部署紀錄', deploy:'部署', dataset:'訓練資料', kb:'知識庫'};
+const PAGE_TITLES = {chat:'對話', services:'我的服務', healer:'自動修復', dashboard:'資源總覽', gitops:'部署紀錄'};
+// 舊頁面名稱（書籤、舊卡片上的按鈕）導到合併後的新頁面
+const PAGE_ALIAS = {pods:'services', deployments:'services', metrics:'dashboard', deploy:'chat', dataset:'chat', kb:'chat'};
 
 // ── Page nav ──
 function showPage(name){
+  name = PAGE_ALIAS[name] || name;
+  window.__page = name;
   const tt = document.getElementById('topbar-title');
   if(tt) tt.textContent = PAGE_TITLES[name] || '';
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -2745,14 +2322,10 @@ function showPage(name){
   if(nav) nav.classList.add('active');
 
   if(name === 'chat') { initChats(); setTimeout(()=>document.getElementById('chat-input')?.focus(), 0); }
-  if(name === 'pods') loadPods();
-  if(name === 'deployments') loadDeployments();
-  if(name === 'dataset') loadDatasetStats();
-  if(name === 'gitops') loadGitops();
-  if(name === 'healer') { loadPodList(); loadHealerBgStatus(); }
-  if(name === 'metrics') loadMetrics();
-  if(name === 'kb') loadKB();
-  if(name === 'dashboard') loadDashboard();
+  if(name === 'services') loadServicesPage();
+  if(name === 'gitops') loadGitopsPage();
+  if(name === 'healer') loadHealerPage();
+  if(name === 'dashboard') loadDashboardPage();
 }
 
 // ── Status polling ──
@@ -2840,7 +2413,7 @@ if(loggedIn){ pollStatus(); setInterval(pollStatus, 4000); }
 // 浪費請求），跟 Prometheus 本身 60 秒一個取樣點的頻率對齊，半分鐘內一定會看到新點。
 if(loggedIn){
   setInterval(() => {
-    if(document.getElementById('page-dashboard')?.classList.contains('active')) loadDashboard();
+    if(document.getElementById('page-dashboard')?.classList.contains('active')) loadDashboardPage(true);
   }, 30000);
 }
 // 2026-10-03：使用者要求「自癒系統在修復時要有轉圈動畫告訴使用者」——
@@ -2850,691 +2423,12 @@ if(loggedIn){
 // 只讀記憶體內的狀態，不會連 K8s，5 秒一次的頻率不會造成負擔。
 if(loggedIn){
   setInterval(() => {
-    if(document.getElementById('page-healer')?.classList.contains('active')) loadHealerBgStatus();
+    if(document.getElementById('page-healer')?.classList.contains('active')) loadHealerBg();
   }, 5000);
 }
 
-// ── Stats ──
-async function loadStats(){
-  try {
-    const [pr, dr] = await Promise.all([fetch('/api/pods'), fetch('/api/deployments')]);
-    const pd = await pr.json(); const dd = await dr.json();
-    const sp = document.getElementById('stat-pods');
-    const sd = document.getElementById('stat-deps');
-    if(sp) sp.textContent = pd.pods.length;
-    if(sd) sd.textContent = dd.deployments.length;
-  } catch(e){}
-}
-if(loggedIn){ loadStats(); setInterval(loadStats, 8000); }
-
-// ── Quick tags ──
-const TAG_MAP = {
-  'nginx ×1': 'deploy 1 nginx:latest pod for web-frontend, port 80',
-  'redis ×2': 'start 2 redis:7-alpine pods for cache-server, port 6379',
-  'postgres db': 'launch 3 postgres:15 pods named db-primary, port 5432',
-  'node api ×4': 'spin up 4 node:20-alpine pods for api-gateway, port 3000',
-  'golang svc ×3': 'create 3 golang:1.21-alpine pods for scheduler',
-  'python ×5': 'run 5 python:3.11-slim pods for data-processor',
-};
-function setInput(el){
-  const inp = document.getElementById('deploy-input');
-  if(inp) inp.value = TAG_MAP[el.textContent.trim()] || el.textContent;
-}
-
-// ── Deploy ──
-function renderEnrichCard(p, info){
-  // info = { ok: bool, headline: str, rejectMsg: str|null }
-  const card = document.getElementById('enrich-card');
-  card.classList.add('show');
-  card.classList.toggle('rejected', !info.ok);
-
-  const statusTag = document.getElementById('enrich-status');
-  statusTag.textContent = info.ok ? '✓ Accepted' : '✗ Rejected';
-  statusTag.className = 'status-tag ' + (info.ok ? 'ok' : 'reject');
-
-  document.getElementById('enrich-headline').textContent = info.headline;
-  document.getElementById('enrich-id').textContent = p.id ? '#' + p.id : '';
-
-  const rejBox = document.getElementById('enrich-reject-msg');
-  if(info.rejectMsg){
-    rejBox.style.display = 'block';
-    rejBox.textContent = info.rejectMsg;
-  } else {
-    rejBox.style.display = 'none';
-  }
-
-  // 白話摘要：系統聽懂的部署規格（不是資料集內部欄位，一般使用者看得懂就好）
-  const out = p.output || p;
-  document.getElementById('enrich-appname').textContent = out.app_name || p.app_name || '—';
-  document.getElementById('enrich-image').textContent = out.image || p.image || '—';
-  document.getElementById('enrich-pods').textContent = out.pods || p.pods || '—';
-  document.getElementById('enrich-port').textContent = out.port || p.port || '—';
-}
-
-let courtRequestId = 0;
-
-async function doDeploy(){
-  const inp = document.getElementById('deploy-input');
-  const btn = document.getElementById('deploy-btn');
-  const box = document.getElementById('result-box');
-  const card = document.getElementById('enrich-card');
-  const panel = document.getElementById('court-panel');
-  const text = inp.value.trim();
-  if(!text) return;
-  const myId = ++courtRequestId;
-  btn.disabled = true;
-  inp.disabled = true;
-  btn.textContent = 'Reviewing...';
-  box.style.display = 'none';
-  card.classList.remove('show');
-  panel.style.display = 'none';
-  try {
-    const r = await fetch('/api/deploy/parse', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({input: text})
-    });
-    if(myId !== courtRequestId) return;
-    const d = await r.json();
-    if(myId !== courtRequestId) return;
-    if(!r.ok || d.error){
-      box.style.display = 'block';
-      box.className = 'result-box error';
-      box.textContent = '✗ Error: ' + (d.error || 'request failed');
-      btn.disabled = false;
-      inp.disabled = false;
-      btn.textContent = 'Deploy →';
-    } else if(d.rejected){
-      // Guardian 拒絕:只顯示 enrichment 卡片,不送 K8s
-      renderEnrichCard(d.parsed, {
-        ok: false,
-        headline: 'Guardian blocked this request',
-        rejectMsg: d.reason || 'Not a K8s request'
-      });
-      btn.disabled = false;
-      inp.disabled = false;
-      btn.textContent = 'Deploy →';
-    } else {
-      renderEnrichCard(d.parsed, {
-        ok: true,
-        headline: 'Reviewed by agents — confirm to deploy',
-        rejectMsg: null
-      });
-      renderDecisionCourt(myId, text, d.raw || d.parsed, d.review);
-    }
-  } catch(e){
-    if(myId !== courtRequestId) return;
-    box.style.display = 'block';
-    box.className = 'result-box error';
-    box.textContent = '✗ Network error';
-    btn.disabled = false;
-    inp.disabled = false;
-    btn.textContent = 'Deploy →';
-  }
-}
-
-function _courtSeverityCls(sev){
-  return ['critical','high'].includes(sev) ? 'complex' : sev === 'medium' ? 'medium' : 'simple';
-}
-
-function _renderCourtIssues(elId, issues){
-  const el = document.getElementById(elId);
-  if(!el) return;
-  if(!issues || !issues.length){ el.innerHTML = ''; return; }
-  el.innerHTML = issues.map(i =>
-    `<span class="pill ${_courtSeverityCls(i.severity)}">${escHtml(i.severity || 'info')}: ${escHtml(i.message || '')}</span>`
-  ).join('');
-}
-
-function renderDecisionCourt(myId, originalText, parsed, review){
-  const btn = document.getElementById('deploy-btn');
-  const inp = document.getElementById('deploy-input');
-  const panel = document.getElementById('court-panel');
-  const verdict = document.getElementById('court-verdict');
-  const actions = document.getElementById('court-actions');
-  panel.style.display = 'block';
-  verdict.style.display = 'none';
-  actions.innerHTML = '';
-
-  // review.agents 是 orchestrate() 的完整結果，三個代理在 review.agents.agents 底下
-  const agents = review && review.agents && review.agents.agents;
-  const security = agents && agents.security;
-  const cost = agents && agents.cost;
-  const perf = agents && agents.perf;
-
-  const finish = () => {
-    if(myId !== courtRequestId) return;
-    btn.disabled = false;
-    inp.disabled = false;
-    btn.textContent = 'Deploy →';
-  };
-
-  if(!review || !security || !cost || !perf){
-    // 代理資料不完整,優雅降級:不演動畫,直接顯示最終判決
-    ['security','cost','perf'].forEach(a => {
-      const card = document.getElementById('court-' + a);
-      if(card) card.className = 'court-agent-card done';
-    });
-    showCourtVerdict(myId, originalText, parsed, review);
-    finish();
-    return;
-  }
-
-  const cards = [
-    {key: 'security', data: security, render: renderSecurityCard},
-    {key: 'cost', data: cost, render: renderCostCard},
-    {key: 'perf', data: perf, render: renderPerfCard},
-  ];
-  cards.forEach(c => {
-    const card = document.getElementById('court-' + c.key);
-    if(card) card.className = 'court-agent-card thinking';
-    document.getElementById(`court-${c.key}-issues`).innerHTML = '';
-    document.getElementById(`court-${c.key}-score`).textContent = '';
-    document.getElementById(`court-${c.key}-summary`).innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
-  });
-
-  cards.forEach((c, idx) => {
-    setTimeout(() => {
-      if(myId !== courtRequestId) return;
-      const card = document.getElementById('court-' + c.key);
-      if(card) card.className = 'court-agent-card done';
-      c.render(c.data);
-    }, idx * 500);
-  });
-
-  setTimeout(() => {
-    if(myId !== courtRequestId) return;
-    showCourtVerdict(myId, originalText, parsed, review);
-    finish();
-  }, cards.length * 500);
-}
-
-function renderSecurityCard(security){
-  document.getElementById('court-security-score').textContent =
-    typeof security.score === 'number' ? `${security.score}/100` : '';
-  _renderCourtIssues('court-security-issues', security.issues);
-  document.getElementById('court-security-summary').textContent = security.summary || '';
-}
-
-function renderCostCard(cost){
-  const est = cost.cost_estimate && cost.cost_estimate.estimated_usd;
-  document.getElementById('court-cost-score').textContent =
-    (est !== undefined && est !== null) ? `$${est}/mo` : '不明';
-  _renderCourtIssues('court-cost-issues', cost.issues);
-  document.getElementById('court-cost-summary').textContent = cost.summary || '';
-}
-
-function renderPerfCard(perf){
-  document.getElementById('court-perf-score').textContent = perf.hpa_yaml ? 'HPA suggested' : '';
-  _renderCourtIssues('court-perf-issues', perf.issues);
-  document.getElementById('court-perf-summary').textContent = perf.summary || '';
-}
-
-function showCourtVerdict(myId, originalText, parsed, review){
-  const verdict = document.getElementById('court-verdict');
-  const actions = document.getElementById('court-actions');
-  const decision = (review && review.decision) || 'block';
-  verdict.style.display = 'block';
-  if(decision === 'approve'){
-    verdict.className = 'result-box court-verdict success';
-    verdict.textContent = '✓ 通過 / Approved — ' + (review.reason || '三個代理檢查全部通過 / All agent checks passed');
-    actions.innerHTML = `<button class="deploy-confirm-btn primary" id="court-deploy-btn">確認部署 / Deploy</button>`;
-    document.getElementById('court-deploy-btn').onclick = () => courtProceedDeploy(myId, originalText, parsed);
-  } else if(decision === 'warn'){
-    verdict.className = 'result-box court-verdict warn';
-    verdict.textContent = '⚠ 警告 / Warning — ' + (review.reason || '發現警告 / Warnings found') +
-      (review.warnings && review.warnings.length ? '\n' + review.warnings.map(w => '· ' + w).join('\n') : '');
-    actions.innerHTML = `<button class="deploy-confirm-btn" id="court-cancel-btn">取消 / Cancel</button>
-      <button class="deploy-confirm-btn primary" id="court-deploy-btn">仍要部署 / Deploy anyway</button>`;
-    document.getElementById('court-deploy-btn').onclick = () => courtProceedDeploy(myId, originalText, parsed);
-    document.getElementById('court-cancel-btn').onclick = () => closeCourtPanel(myId);
-  } else {
-    verdict.className = 'result-box court-verdict error';
-    verdict.textContent = '✗ 阻擋 / Blocked — ' + (review.reason || '部署被阻擋 / Deployment blocked') +
-      (review.blockers && review.blockers.length ? '\n' + review.blockers.map(b => '· ' + b).join('\n') : '');
-    actions.innerHTML = `<button class="deploy-confirm-btn" id="court-close-btn">關閉 / Close</button>`;
-    document.getElementById('court-close-btn').onclick = () => closeCourtPanel(myId);
-  }
-}
-
-function closeCourtPanel(myId){
-  if(myId !== courtRequestId) return;
-  document.getElementById('court-panel').style.display = 'none';
-}
-
-async function courtProceedDeploy(myId, originalText, parsed){
-  if(myId !== courtRequestId) return;
-  const actions = document.getElementById('court-actions');
-  const verdict = document.getElementById('court-verdict');
-  actions.querySelectorAll('button').forEach(b => b.disabled = true);
-  try {
-    const r = await fetch('/api/deploy', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({input: originalText, parsed})
-    });
-    if(myId !== courtRequestId) return;
-    const d = await r.json();
-    if(myId !== courtRequestId) return;
-    if(d.error || d.rejected){
-      verdict.className = 'result-box court-verdict error';
-      verdict.textContent = '✗ 部署被阻擋 / Deployment blocked — ' + (d.error || d.reason || '');
-      actions.querySelectorAll('button').forEach(b => b.disabled = false);
-      return;
-    }
-    const p = d.parsed || parsed;
-    if(d.k8s_deploy && d.k8s_deploy.ok === false){
-      verdict.className = 'result-box court-verdict warn';
-      verdict.textContent = `⚠ GitOps 已提交，但 K8s 實際部署失敗 / GitOps committed, but the K8s deploy failed：${d.k8s_deploy.message}`;
-      actions.innerHTML = `<button class="deploy-confirm-btn" id="court-close-btn">關閉 / Close</button>`;
-      document.getElementById('court-close-btn').onclick = () => closeCourtPanel(myId);
-      return;
-    }
-    verdict.className = 'result-box court-verdict success';
-    verdict.textContent = `✓ 部署成功 / Deployed — App: ${p.app_name}  ·  Image: ${p.image}  ·  Pods: ${p.pods}${p.port ? '  ·  Port: ' + p.port : ''}`;
-    actions.innerHTML = `<button class="deploy-confirm-btn" id="court-close-btn">關閉 / Close</button>`;
-    document.getElementById('court-close-btn').onclick = () => closeCourtPanel(myId);
-    loadStats();
-    if(document.getElementById('page-pods')?.classList.contains('active')) loadPods();
-    if(document.getElementById('page-deployments')?.classList.contains('active')) loadDeployments();
-  } catch(e){
-    if(myId !== courtRequestId) return;
-    verdict.className = 'result-box court-verdict error';
-    verdict.textContent = '✗ Network error: ' + e;
-    actions.querySelectorAll('button').forEach(b => b.disabled = false);
-  }
-}
-
-// ── Pods ──
-// 2026-09-15：Pods/Deployments 列表加分頁，每頁最多 20 筆，超過就要換頁——
-// 後端 k8s_get_pods/k8s_get_deployments 已經改成用真正的 creation_timestamp
-// 排序（最新部署排最上面），這裡只需要照後端給的順序切頁，不用再排一次。
-const PAGE_SIZE = 20;
-let _podsAll = [];
-let _podsPage = 1;
-
-function _renderPager(prefix, page, totalPages){
-  const pager = document.getElementById(prefix+'-pager');
-  if(totalPages <= 1){ pager.style.display = 'none'; return; }
-  pager.style.display = 'flex';
-  document.getElementById(prefix+'-page-info').textContent = `第 ${page} 頁 / 共 ${totalPages} 頁 (Page ${page} of ${totalPages})`;
-  document.getElementById(prefix+'-prev').disabled = (page <= 1);
-  document.getElementById(prefix+'-next').disabled = (page >= totalPages);
-}
-
-function podsGoPage(delta){
-  const totalPages = Math.max(1, Math.ceil(_podsAll.length / PAGE_SIZE));
-  _podsPage = Math.min(totalPages, Math.max(1, _podsPage + delta));
-  renderPodsPage();
-}
-
-function renderPodsPage(){
-  const tbody = document.getElementById('pods-tbody');
-  if(!tbody) return;
-  if(!_podsAll.length){
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text3)">No pods found</td></tr>';
-    _renderPager('pods', 1, 1);
-    return;
-  }
-  const totalPages = Math.max(1, Math.ceil(_podsAll.length / PAGE_SIZE));
-  _podsPage = Math.min(totalPages, Math.max(1, _podsPage));
-  const start = (_podsPage - 1) * PAGE_SIZE;
-  const pageItems = _podsAll.slice(start, start + PAGE_SIZE);
-  tbody.innerHTML = pageItems.map(p => `
-      <tr>
-        <td class="mono">${p.name}</td>
-        <td>${p.app || '—'}</td>
-        <td><span class="badge ${p.phase.toLowerCase()}">${p.phase}</span></td>
-        <td class="mono">${p.ip || '—'}</td>
-        <td class="mono">${p.node || '—'}</td>
-        <td>${p.restarts}</td>
-        <td class="mono">${p.age}</td>
-        <td>
-          <div class="action-btns">
-            <button class="btn-sm" onclick='showPodDetail(${JSON.stringify(JSON.stringify(p))})'>Details</button>
-          </div>
-        </td>
-      </tr>
-    `).join('');
-  _renderPager('pods', _podsPage, totalPages);
-}
-
-async function loadPods(){
-  const tbody = document.getElementById('pods-tbody');
-  if(!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text3)">Loading...</td></tr>';
-  try {
-    const r = await fetch('/api/pods');
-    const d = await r.json();
-    _podsAll = d.pods || [];
-    // 重新整理清單時，如果原本停在的頁數超過新的總頁數（例如刪掉 pod 後），拉回最後一頁。
-    const totalPages = Math.max(1, Math.ceil(_podsAll.length / PAGE_SIZE));
-    if(_podsPage > totalPages) _podsPage = totalPages;
-    renderPodsPage();
-  } catch(e){
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--red)">Failed to load pods</td></tr>';
-  }
-}
-
-// ── Pod Detail Modal ──
-function showPodDetail(jsonStr){
-  const p = JSON.parse(jsonStr);
-  document.getElementById('modal-pod-name').textContent = p.name;
-  const body = document.getElementById('modal-pod-body');
-
-  const statusColor = p.phase === 'Running' ? 'var(--green)' : p.phase === 'Pending' ? 'var(--yellow)' : 'var(--red)';
-
-  let containersHtml = '';
-  if(p.containers && p.containers.length){
-    p.containers.forEach(c => {
-      const ports = c.ports.length ? c.ports.join(', ') : '—';
-      const req = Object.entries(c.resources.requests || {}).map(([k,v]) => `${k}: ${v}`).join(', ') || '—';
-      const lim = Object.entries(c.resources.limits || {}).map(([k,v]) => `${k}: ${v}`).join(', ') || '—';
-      containersHtml += `
-        <div style="background:var(--bg);border-radius:8px;padding:12px 14px;margin-bottom:10px">
-          <div style="font-weight:600;font-size:13px;margin-bottom:8px">${c.name}</div>
-          <div class="detail-row"><span class="detail-key">Image</span><span class="detail-val">${c.image}</span></div>
-          <div class="detail-row"><span class="detail-key">Ports</span><span class="detail-val">${ports}</span></div>
-          <div class="detail-row"><span class="detail-key">Requests</span><span class="detail-val">${req}</span></div>
-          <div class="detail-row"><span class="detail-key">Limits</span><span class="detail-val">${lim}</span></div>
-        </div>`;
-    });
-  } else {
-    containersHtml = '<p style="color:var(--text3);font-size:13px">No container info</p>';
-  }
-
-  let condHtml = '';
-  if(p.conditions && p.conditions.length){
-    condHtml = p.conditions.map(c =>
-      `<span class="cond-badge ${c.status==='True'?'cond-true':'cond-false'}" style="margin:2px">${c.type}: ${c.status}</span>`
-    ).join('');
-  } else {
-    condHtml = '<span style="color:var(--text3);font-size:13px">—</span>';
-  }
-
-  body.innerHTML = `
-    <div class="detail-section">
-      <div class="detail-section-title">General</div>
-      <div class="detail-row"><span class="detail-key">Name</span><span class="detail-val">${p.name}</span></div>
-      <div class="detail-row"><span class="detail-key">App</span><span class="detail-val">${p.app || '—'}</span></div>
-      <div class="detail-row"><span class="detail-key">Status</span><span class="detail-val" style="color:${statusColor};font-weight:600">${p.phase}</span></div>
-      <div class="detail-row"><span class="detail-key">Pod IP</span><span class="detail-val">${p.ip || '—'}</span></div>
-      <div class="detail-row"><span class="detail-key">Node</span><span class="detail-val">${p.node || '—'}</span></div>
-      <div class="detail-row"><span class="detail-key">Restarts</span><span class="detail-val">${p.restarts}</span></div>
-      <div class="detail-row"><span class="detail-key">Created</span><span class="detail-val">${p.age}</span></div>
-    </div>
-    <div class="detail-section">
-      <div class="detail-section-title">Containers</div>
-      ${containersHtml}
-    </div>
-    <div class="detail-section">
-      <div class="detail-section-title">Conditions</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">${condHtml}</div>
-    </div>
-  `;
-  document.getElementById('pod-modal').classList.add('open');
-}
-function closeModal(){ document.getElementById('pod-modal').classList.remove('open'); }
-document.getElementById('pod-modal')?.addEventListener('click', function(e){ if(e.target===this) closeModal(); });
-
-// ── Deployments ──
-let _depsAll = [];
-let _depsPage = 1;
-
-function depsGoPage(delta){
-  const totalPages = Math.max(1, Math.ceil(_depsAll.length / PAGE_SIZE));
-  _depsPage = Math.min(totalPages, Math.max(1, _depsPage + delta));
-  renderDepsPage();
-}
-
-function renderDepsPage(){
-  const tbody = document.getElementById('deps-tbody');
-  if(!tbody) return;
-  if(!_depsAll.length){
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">No deployments found</td></tr>';
-    _renderPager('deps', 1, 1);
-    return;
-  }
-  const totalPages = Math.max(1, Math.ceil(_depsAll.length / PAGE_SIZE));
-  _depsPage = Math.min(totalPages, Math.max(1, _depsPage));
-  const start = (_depsPage - 1) * PAGE_SIZE;
-  const pageItems = _depsAll.slice(start, start + PAGE_SIZE);
-  tbody.innerHTML = pageItems.map(dep => `
-      <tr>
-        <td style="font-weight:500">${dep.name}</td>
-        <td class="mono">${dep.image}</td>
-        <td>${dep.replicas}</td>
-        <td>
-          <span class="badge ${dep.ready >= dep.replicas ? 'running' : 'pending'}">
-            ${dep.ready}/${dep.replicas}
-          </span>
-        </td>
-        <td class="mono">${dep.age}</td>
-        <td class="mono">${dep.updated || dep.age}</td>
-        <td>
-          <div class="action-btns">
-            <button class="btn-sm btn-danger" onclick="deleteDeployment('${dep.name}')">Delete</button>
-          </div>
-        </td>
-      </tr>
-    `).join('');
-  _renderPager('deps', _depsPage, totalPages);
-}
-
-async function loadDeployments(){
-  const tbody = document.getElementById('deps-tbody');
-  if(!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">Loading...</td></tr>';
-  try {
-    const r = await fetch('/api/deployments');
-    const d = await r.json();
-    _depsAll = d.deployments || [];
-    const totalPages = Math.max(1, Math.ceil(_depsAll.length / PAGE_SIZE));
-    if(_depsPage > totalPages) _depsPage = totalPages;
-    renderDepsPage();
-  } catch(e){
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--red)">Failed to load</td></tr>';
-  }
-}
-
-async function deleteDeployment(name){
-  if(!confirm(`Delete deployment "${name}"?`)) return;
-  try {
-    const r = await fetch('/api/delete', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({name})
-    });
-    const d = await r.json();
-    if(d.success) loadDeployments();
-    else alert('Error: ' + d.error);
-  } catch(e){ alert('Network error'); }
-}
-
-// ── Chat ──
 let chatHistory = [];
 
-
-async function loadGitops(){
-  document.getElementById('gitops-list').innerHTML='<div style="color:var(--text3);font-size:13px">Loading...</div>';
-  try{
-    const r=await fetch('/api/gitops'); const d=await r.json();
-    const commits=d.commits||[];
-    if(!commits.length){document.getElementById('gitops-list').innerHTML='<div style="color:var(--text3);font-size:13px">No commits yet.</div>';return;}
-    document.getElementById('gitops-list').innerHTML=commits.map(cm=>`
-      <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <span style="font-family:monospace;font-size:11px;background:var(--bg);padding:2px 6px;border-radius:4px;color:var(--green)">${cm.hash}</span>
-            <span style="font-size:13px;margin-left:8px;font-weight:500">${cm.app||'--'}</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:11px;color:var(--text3)">${cm.time||''}</span>
-            <button onclick="doRollback('${cm.app||''}')" style="font-size:11px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface);cursor:pointer">Rollback</button>
-          </div>
-        </div>
-        <div style="font-size:12px;color:var(--text2);margin-top:4px">${cm.message||''}</div>
-      </div>`).join('');
-  }catch(e){document.getElementById('gitops-list').innerHTML='<div style="color:var(--text3)">Error: '+e+'</div>';}
-}
-
-async function doRollback(app){
-  if(!app){alert('No app name');return;}
-  if(!confirm('Rollback '+app+'?'))return;
-  const r=await fetch('/api/rollback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_name:app})});
-  const d=await r.json();
-  alert(d.message||d.error||'Done');
-  loadGitops();
-}
-
-// ══════════════════════════════════════════════════════════════════
-//  Healer 視覺化（2026-09-15）：一行式 Pod 清單（#healer-list）+ 點擊進入的
-//  詳情彈窗（#pod-detail-overlay，含隨時間變化的趨勢圖）。
-// ══════════════════════════════════════════════════════════════════
-
-async function loadPodList(){
-  const el = document.getElementById('healer-list');
-  el.innerHTML = '<div style="color:var(--text3);font-size:13px">Loading...</div>';
-  try{
-    const r = await fetch('/api/pods'); const d = await r.json();
-    const pods = d.pods || [];
-    document.getElementById('healer-count').textContent = pods.length;
-    document.getElementById('healer-time').textContent = new Date().toLocaleTimeString();
-    if(!pods.length){
-      el.innerHTML = '<div style="color:var(--text3);font-size:13px">目前沒有任何 Pod，用 Chat 部署一個試試看 / No pods yet — try deploying one from Chat</div>';
-      return;
-    }
-    el.innerHTML = pods.map(p => {
-      const readyCond = (p.conditions||[]).find(c=>c.type==='Ready');
-      const isReady = readyCond ? readyCond.status==='True' : false;
-      let color, label;
-      if(p.phase==='Running' && isReady){ color='var(--pass)'; label='Running'; }
-      else if(p.phase==='Pending'){ color='var(--caution)'; label='Pending'; }
-      else { color='var(--stop)'; label=p.phase||'Unknown'; }
-      return `<div class="pod-row" onclick="openPodDetail('${escHtml(p.name)}')">
-        <span class="pod-dot" style="background:${color}" title="${escHtml(label)}"></span>
-        <span class="pod-name">${escHtml(p.name)}</span>
-        <span class="pod-meta">${escHtml(label)}</span>
-        <span class="pod-meta">↻ ${p.restarts||0}</span>
-        <span class="pod-meta pod-meta-age">${escHtml(p.age||'')}</span>
-      </div>`;
-    }).join('');
-  }catch(e){ el.innerHTML = '<div style="color:var(--text3)">Error: '+e+'</div>'; }
-}
-
-async function loadHealer(){
-  // 「Scan Now」按鈕：主動打 /api/healer/scan 取得異常清單摘要，掃完刷新一行式清單
-  // （清單本身平時只顯示現況，不會自動跑診斷；按這顆才會真的觸發一次掃描）。
-  document.getElementById('healer-time').textContent = new Date().toLocaleTimeString();
-  try{
-    const r = await fetch('/api/healer/scan'); const d = await r.json();
-    const issues = d.issues || [];
-    await loadPodList();
-    if(issues.length){
-      alert(`掃描完成，發現 ${issues.length} 個異常 Pod，點清單裡標紅點的 Pod 可以看詳情跟修復。 / `+
-            `Scan complete — found ${issues.length} unhealthy pod(s). Click a red-dot pod below for details/fix.`);
-    } else {
-      alert('掃描完成，所有 Pod 健康 / Scan complete — all pods healthy.');
-    }
-  }catch(e){ alert('掃描失敗 / Scan failed: '+e); }
-}
-
-let _podDetailCurrent = null;
-
-function closePodDetail(){
-  document.getElementById('pod-detail-overlay').style.display = 'none';
-  _podDetailCurrent = null;
-}
-
-async function openPodDetail(name){
-  _podDetailCurrent = name;
-  document.getElementById('pod-detail-overlay').style.display = 'flex';
-  document.getElementById('pod-detail-title').textContent = name;
-  document.getElementById('pod-detail-sub').textContent = 'Loading...';
-  document.getElementById('pod-detail-body').innerHTML = '<div style="color:var(--text3);font-size:13px">Loading...</div>';
-  try{
-    const [detailR, histR] = await Promise.all([
-      fetch(`/api/pods/${encodeURIComponent(name)}`),
-      fetch(`/api/pods/${encodeURIComponent(name)}/history`),
-    ]);
-    const detailData = await detailR.json();
-    const histData = await histR.json();
-    if(_podDetailCurrent !== name) return;  // 使用者可能在等待期間換點了別的 Pod 或關掉
-    renderPodDetail(name, detailData, histData.history || []);
-  }catch(e){
-    if(_podDetailCurrent !== name) return;
-    document.getElementById('pod-detail-body').innerHTML = '<div style="color:var(--stop);font-size:13px">Error: '+e+'</div>';
-  }
-}
-
-function renderPodDetail(name, detailData, history){
-  const pod = (detailData.pods || [])[0];
-  const sub = document.getElementById('pod-detail-sub');
-  const body = document.getElementById('pod-detail-body');
-  if(!pod){
-    sub.textContent = detailData.message || '找不到這個 Pod / Not found';
-    body.innerHTML = detailData.deployment
-      ? `<div class="pod-detail-section"><div class="pod-detail-section-title">Deployment</div>
-         <div style="font-size:13px">${escHtml(detailData.deployment.health_summary||'')}</div></div>`
-      : '';
-    return;
-  }
-  sub.textContent = pod.healthy ? '✅ Healthy' : ('⚠️ ' + (pod.health_summary || 'Unhealthy'));
-  let html = '';
-  html += `<div class="pod-detail-section"><div class="pod-detail-section-title">容器狀態 / Containers</div>`;
-  html += (pod.containers||[]).map(c => `
-    <div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)">
-      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.name)} <span style="color:var(--text3)">(${escHtml(c.image)})</span></span>
-      <span style="flex-shrink:0;color:${c.ready?'var(--pass)':'var(--stop)'}">${c.ready ? 'ready' : escHtml((c.state||'')+(c.reason?'/'+c.reason:''))} · restarts ${c.restart_count}</span>
-    </div>`).join('');
-  const ru = pod.real_usage || {};
-  html += `<div style="font-size:12px;color:var(--text3);padding-top:6px">實際使用 / Actual usage：` +
-    (ru.available
-      ? `CPU ${ru.cpu_cores!=null ? ru.cpu_cores.toFixed(3)+' 核' : 'N/A'}　記憶體 ${ru.memory_mi!=null ? ru.memory_mi+' Mi' : 'N/A'}`
-      : `Prometheus 未連線，無法取得實際用量 / Prometheus unreachable, actual usage unavailable`) +
-    `</div>`;
-  html += `</div>`;
-  if(pod.events && pod.events.length){
-    html += `<div class="pod-detail-section"><div class="pod-detail-section-title">最近事件 / Recent Events</div>`;
-    html += pod.events.map(e => `<div style="font-size:12px;color:var(--text2);padding:3px 0">[${escHtml(e.type)}] ${escHtml(e.reason)}: ${escHtml(e.message)}</div>`).join('');
-    html += `</div>`;
-  }
-  if(!pod.healthy){
-    html += `<div class="pod-detail-section" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <button class="btn-primary" onclick="diagnosePodDetail('${escHtml(name)}')" style="background:var(--surface);color:var(--text);border:1px solid var(--border)">診斷根因 / Diagnose</button>
-      <button class="btn-primary" onclick="fixPod('${escHtml(name)}')" style="background:var(--stop)">Fix</button>
-    </div>
-    <div id="pod-diagnosis-result" class="pod-detail-section" style="font-size:13px;display:none"></div>`;
-  }
-  html += `<div class="pod-detail-section"><div class="pod-detail-section-title">重啟次數趨勢 / Restart Trend</div>${renderRestartChart(history)}</div>`;
-  html += `<div class="pod-detail-section"><div class="pod-detail-section-title">健康狀態時間軸 / Health Timeline</div>${renderHealthTimeline(history)}</div>`;
-  body.innerHTML = html;
-}
-
-async function diagnosePodDetail(name){
-  let el = document.getElementById('pod-diagnosis-result');
-  if(!el) return;
-  el.style.display = 'block';
-  el.textContent = '診斷中... / Diagnosing...';
-  try{
-    const r = await fetch(`/api/pods/${encodeURIComponent(name)}?diagnose=1`);
-    const d = await r.json();
-    const diag = ((d.pods||[])[0]||{}).diagnosis;
-    // 2026-10-07：改走 diagnose_issue()（規則層）後永遠回傳 dict，不會再是 null——
-    // 用 root_cause 存不存在判斷有沒有真的診斷出東西，比判斷 diag 本身存不存在準確。
-    if(diag && diag.root_cause){
-      let html = `<b>根因 / Root cause：</b>${escHtml(diag.root_cause)}<br><b>建議 / Suggestion：</b>${escHtml(diag.suggestion||'-')}`;
-      if(diag.llm_raw_guess){
-        // 近失事件可見化：規則層判斷證據不足、蓋掉了模型原本的猜測時，誠實呈現出來。
-        html += `<div style="margin-top:6px;color:var(--text3);font-size:12px">AI 原本以為「${escHtml(diag.llm_raw_guess)}」，但證據不足，系統沒有採用這個說法 / `+
-                `AI originally guessed "${escHtml(diag.llm_raw_guess)}", but there wasn't enough evidence, so the system did not adopt it.</div>`;
-      }
-      el.innerHTML = html;
-    } else {
-      el.textContent = '無法取得診斷（可能是監控模型尚未啟動） / Diagnosis unavailable';
-    }
-  }catch(e){ el.textContent = 'Error: '+e; }
-}
 
 function _fmtChartTime(iso){
   // 背景取樣每 30 秒一次，只顯示到分鐘的話，資料還沒累積超過 1 分鐘時左右兩個
@@ -3546,8 +2440,7 @@ function _fmtChartTime(iso){
 
 function renderRestartChart(history){
   if(!history || history.length < 2){
-    return '<div class="pod-chart-empty">觀察中，累積更多資料後會顯示趨勢圖（背景每 30 秒取樣一次） / '+
-           'Collecting data — the trend chart appears once enough samples are recorded (sampled every 30s)</div>';
+    return '<div class="pod-chart-empty">還在累積資料，背景每 30 秒取樣一次，有兩筆以上就會畫出趨勢。</div>';
   }
   const w=560, h=100, pad=24;
   const restarts = history.map(s => s.restarts||0);
@@ -3560,7 +2453,7 @@ function renderRestartChart(history){
     ${pts.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.5" fill="var(--signal)"/>`).join('')}
     <text x="${pad}" y="${h-4}" font-size="10" fill="var(--text-3)">${escHtml(_fmtChartTime(history[0].t))}</text>
     <text x="${w-pad}" y="${h-4}" font-size="10" fill="var(--text-3)" text-anchor="end">${escHtml(_fmtChartTime(history[history.length-1].t))}</text>
-    <text x="${w-pad}" y="14" font-size="11" fill="var(--signal)" text-anchor="end">目前 / current: ${restarts[restarts.length-1]}</text>
+    <text x="${w-pad}" y="14" font-size="11" fill="var(--signal)" text-anchor="end">目前 ${restarts[restarts.length-1]} 次</text>
   </svg>`;
 }
 
@@ -3569,8 +2462,7 @@ function renderRestartChart(history){
 // 接受 {t, v} 格式的點陣列跟自訂顏色/單位，不綁死在「重啟次數」這個情境。
 function renderTrendChart(points, color, unit){
   if(!points || points.length < 2){
-    return '<div class="pod-chart-empty">資料不足，Prometheus 需要累積一段時間才有足夠的取樣點 / '+
-           'Not enough data yet — Prometheus needs a bit more time to collect samples</div>';
+    return '<div class="pod-chart-empty">資料還不夠。Prometheus 每分鐘取樣一次，再等幾分鐘就會畫出趨勢。</div>';
   }
   const w=560, h=110, pad=26;
   const vals = points.map(p => p.v||0);
@@ -3584,14 +2476,13 @@ function renderTrendChart(points, color, unit){
     ${pts.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2" fill="${color}"/>`).join('')}
     <text x="${pad}" y="${h-6}" font-size="10" fill="var(--text-3)">${escHtml(_fmtChartTime(points[0].t))}</text>
     <text x="${w-pad}" y="${h-6}" font-size="10" fill="var(--text-3)" text-anchor="end">${escHtml(_fmtChartTime(points[points.length-1].t))}</text>
-    <text x="${w-pad}" y="16" font-size="11" fill="${color}" text-anchor="end">目前 / current: ${last}${unit}</text>
+    <text x="${w-pad}" y="16" font-size="11" fill="${color}" text-anchor="end">目前 ${last}${unit}</text>
   </svg>`;
 }
 
 function renderHealthTimeline(history){
   if(!history || history.length < 2){
-    return '<div class="pod-chart-empty">觀察中，累積更多資料後會顯示趨勢圖（背景每 30 秒取樣一次） / '+
-           'Collecting data — the trend chart appears once enough samples are recorded (sampled every 30s)</div>';
+    return '<div class="pod-chart-empty">還在累積資料，背景每 30 秒取樣一次，有兩筆以上就會畫出時間軸。</div>';
   }
   const w=560, h=28;
   const segW = w / history.length;
@@ -3605,249 +2496,11 @@ function renderHealthTimeline(history){
     </div>`;
 }
 
-async function fixPod(pod){
-  const r=await fetch('/api/healer/fix',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pod_name:pod})});
-  const d=await r.json();
-  let msg=d.message||d.error||'Done';
-  if(d.root_cause) msg=`根因 / Root cause：${d.root_cause}\n修復動作 / Action：${d.action||'-'}\n\n${msg}`;
-  if(d.llm_raw_guess) msg+=`\n\n（AI 原本以為是：${d.llm_raw_guess}，但證據不足，系統沒有採用這個說法 / AI originally guessed "${d.llm_raw_guess}", but there wasn't enough evidence, so it wasn't used.）`;
-  alert(msg);
-  loadPodList();
-  loadHealerBgStatus();
-  if(_podDetailCurrent === pod) openPodDetail(pod);  // 修復後如果詳情頁還開著，重新整理它
-}
-
-async function healerAutoFix(){
-  if(!confirm('Auto fix all issues?'))return;
-  const r=await fetch('/api/healer/auto_fix',{method:'POST'});
-  const d=await r.json();
-  let msg='Fixed: '+d.fixed+', Failed: '+d.failed;
-  if(Array.isArray(d.details) && d.details.length){
-    msg+='\n\n'+d.details.map(x=>`- ${x.pod}: ${x.root_cause||x.error||'-'} → ${x.action||'-'}`+
-      (x.llm_raw_guess ? `（AI 原本以為：${x.llm_raw_guess}，證據不足未採用）` : '')).join('\n');
-  }
-  alert(msg);
-  loadPodList();
-  loadHealerBgStatus();
-}
-
-async function loadHealerBgStatus(){
-  const banner=document.getElementById('healer-bg-banner');
-  const list=document.getElementById('healer-bg-list');
-  if(!banner||!list) return;
-  try{
-    const r=await fetch('/api/healer/status'); const d=await r.json();
-    if(d.running){
-      banner.style.background='var(--pass-soft)'; banner.style.border='1px solid var(--pass)'; banner.style.color='var(--pass)';
-      banner.innerHTML=`🟢 自動監控中，每 30 秒自動掃描一次${d.last_scan?'，上次掃描：'+new Date(d.last_scan).toLocaleTimeString():''} / Auto-monitoring active, scans every 30s`;
-    } else if(d.message){
-      // K8s 有連線，但背景執行緒死掉或卡住了——這是真正的異常，不是「K8s 沒連線」這種
-      // 正常情況，用紅色橫幅+具體建議動作顯示，不能只顯示跟正常運行時一樣的灰/黃色調。
-      banner.style.background='var(--stop-soft)'; banner.style.border='1px solid var(--stop)'; banner.style.color='var(--stop)';
-      banner.innerHTML='🔴 '+escHtml(d.message);
-    } else {
-      banner.style.background='var(--caution-soft)'; banner.style.border='1px solid var(--caution)'; banner.style.color='var(--caution)';
-      banner.innerHTML='⚠️ 未啟動自動監控（K8s 未連線），只能手動掃描 / Auto-monitoring is not running (K8s not connected) — manual scan only';
-    }
-    // 「正在修復中」獨立顯示一行轉圈動畫，不管上面 banner 是什麼顏色都疊加在
-    // 下面——根因診斷固定要打一次本地 LLM，實測 2-3 分鐘跑不掉，使用者點進來
-    // 不該看到「沒有任何動靜」，要讓他知道系統正在忙、不是卡住或沒反應。
-    const procEl=document.getElementById('healer-processing');
-    if(procEl){
-      if(d.processing){
-        const p=d.processing;
-        procEl.style.display='flex';
-        procEl.innerHTML=`<div class="spinner"></div><span>正在修復 ${escHtml(p.pod||'')}（${escHtml(p.reason||'')}）... 根因診斷需要跑本地模型，約 1-3 分鐘 / Healing ${escHtml(p.pod||'')} (${escHtml(p.reason||'')})... root-cause analysis runs a local model, ~1-3 min</span>`;
-      } else {
-        procEl.style.display='none';
-        procEl.innerHTML='';
-      }
-    }
-    const acts=d.recent_actions||[];
-    list.innerHTML = acts.length ? acts.map(a=>`
-      <div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px">
-        <div style="display:flex;justify-content:space-between;font-size:12px">
-          <span style="font-weight:600">${escHtml(a.pod||'')}</span>
-          <span style="color:var(--text3)">${a.time?new Date(a.time).toLocaleTimeString():''}</span>
-        </div>
-        <div style="font-size:12px;color:var(--text-2);margin-top:2px">${escHtml(a.reason||'')} → ${escHtml(a.root_cause||a.error||'-')} → ${escHtml(a.action||'-')} ${a.ok===false?'❌':'✅'}</div>
-        ${a.llm_raw_guess ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">AI 原本的猜測：${escHtml(a.llm_raw_guess)}（未採用，證據不足）</div>` : ''}
-      </div>`).join('') : '<div style="color:var(--text3);font-size:13px">尚未發生自動修復事件 / No auto-heal events yet</div>';
-  }catch(e){}
-}
-
-async function loadMetrics(){
-  // 2026-09-15：之前這裡完全沒讀 m.prometheus_up（後端算好了但前端沒用），
-  // 「Online」是只要這個 API 路由本身沒有拋例外就顯示，跟 Prometheus 有沒有
-  // 真的連得上完全無關——即使 Prometheus 掛了，畫面還是會唬弄使用者說 Online。
-  document.getElementById('prom-status').textContent='Checking';
-  try{
-    const r=await fetch('/api/metrics'); const d=await r.json();
-    if(!d.connected){
-      document.getElementById('prom-status').textContent='Error';
-      document.getElementById('prom-pods').textContent='--';
-      document.getElementById('prom-url').textContent='Error';
-      document.getElementById('metrics-rows').innerHTML='<div style="color:var(--text3)">查詢失敗 / Query failed: '+escHtml(d.error||'')+'</div>';
-      const errLink = document.getElementById('prom-full-ui-link');
-      errLink.href = '#'; errLink.textContent = '無法取得位址 / Unavailable';
-      return;
-    }
-    const m=d.metrics||{};
-    if((m.source||'').indexOf('customer-cluster') === 0){
-      // 客戶自帶叢集：平台的 Prometheus 本來就看不到客戶的電腦，這是「不適用」不是「離線」，
-      // 不能用紅字 Offline 嚇人（2026-10-09 實測發現）。數字來自客戶叢集的回報器。
-      document.getElementById('prom-status').textContent = '不適用';
-      document.getElementById('prom-status').style.color = 'var(--text2)';
-      document.getElementById('prom-pods').textContent = m.running_pods!=null ? m.running_pods : 'N/A';
-      document.getElementById('prom-url').textContent = '你的叢集回報器';
-      const lk = document.getElementById('prom-full-ui-link');
-      lk.href = '#'; lk.textContent = '客戶叢集模式不提供 / Not available for your cluster';
-      document.getElementById('metrics-rows').innerHTML = [
-        ['你的 Pod 數 / Your Pods', m.pod_count!=null ? m.pod_count : 'N/A'],
-        ['你的 Running Pods / Your Running', m.running_pods!=null ? m.running_pods : 'N/A'],
-        ['資料來源 / Data source', '你的叢集回報器，每 15 秒更新 / Your cluster reporter, every 15s'],
-      ].map(([k,v])=>'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2);font-size:12px">'+k+'</span><span style="font-size:12px;font-weight:500">'+escHtml(String(v))+'</span></div>').join('');
-      return;
-    }
-    const up = !!m.prometheus_up;
-    document.getElementById('prom-status').textContent = up ? 'Online' : 'Offline';
-    document.getElementById('prom-status').style.color = up ? 'var(--green)' : 'var(--stop)';
-    document.getElementById('prom-pods').textContent=m.running_pods!=null?m.running_pods:'N/A';
-    document.getElementById('prom-url').textContent=d.url||'localhost:9090';
-    // 2026-09-15：這個連結之前是寫死 http://192.168.50.219:30922（很久以前某次
-    // 遠端/NodePort 設定殘留下來的舊網址），跟現在真正部署的 Prometheus 位址完全
-    // 對不上，點下去會連到不存在的地方——改成用 /api/metrics 剛回的真實 url，
-    // 跟畫面上 Endpoint 那張卡片顯示的是同一個值，不會再兩邊講不同的位址。
-    const fullUiLink = document.getElementById('prom-full-ui-link');
-    const promUrl = d.url || '';
-    fullUiLink.href = promUrl || '#';
-    fullUiLink.textContent = promUrl ? 'Prometheus' : '無法取得位址 / Unavailable';
-    const rows = [
-      ['Prometheus', up ? 'UP' : 'DOWN'],
-      ['你的 Pod 數 / Your Pods',m.pod_count!=null?m.pod_count:'N/A'],
-      ['你的 Running Pods / Your Running',m.running_pods!=null?m.running_pods:'N/A'],
-    ];
-    if(up){
-      rows.push(['整個叢集 Pod 數 / Cluster-wide Pods',m.cluster_pods!=null?m.cluster_pods:'N/A']);
-    } else {
-      // Prometheus 連不上，但 Pod 數字仍然是真的（改用 K8s API 直接查），要講清楚
-      // 資料來源改變了，不能讓使用者以為 Prometheus 連得上、資料是它給的。
-      rows.push(['資料來源 / Data source', '直接查 K8s API（Prometheus 連不上） / Direct K8s API (Prometheus unreachable)']);
-    }
-    document.getElementById('metrics-rows').innerHTML = rows
-      .map(([k,v])=>'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2);font-size:12px">'+k+'</span><span style="font-size:12px;font-weight:500">'+v+'</span></div>').join('');
-  }catch(e){document.getElementById('prom-status').textContent='ERR';}
-}
-
 // ── Dashboard（2026-09-29 從隊友分支移植；沿用專案既有的靜態雙語標籤慣例，
 // 不接入動態語言切換 I18N 系統——Metrics/Pods/Deployments 等頁面本來就是這樣） ──
 // 2026-10-03：使用者要求「用量快要不足時變紅色」。統一用這個函式決定警示色，
 // 長條圖、百分比文字、已用量/剩餘空間的數字都套用同一套門檻（>=80% 橘色警告、
 // >=100% 紅色已超出），不要各處各自判斷、顏色標準兜不起來。
-function _dashWarnColor(pct){
-  if(pct == null) return '';
-  if(pct >= 100) return 'var(--stop)';
-  if(pct >= 80) return 'var(--caution)';
-  return '';
-}
-function _dashPctBar(barId, labelId, usedVal, capVal){
-  const bar = document.getElementById(barId), label = document.getElementById(labelId);
-  if(capVal == null || usedVal == null || !capVal){
-    label.textContent = 'N/A'; label.style.color = ''; bar.style.width = '0%'; return;
-  }
-  const rawPct = (usedVal / capVal) * 100;
-  const pct = Math.max(0, Math.min(100, rawPct));
-  const color = _dashWarnColor(rawPct);
-  bar.style.width = pct.toFixed(1) + '%';
-  bar.style.background = color || 'var(--green)';
-  label.textContent = pct.toFixed(1) + '%';
-  label.style.color = color;
-}
-
-async function loadDashboard(){
-  document.getElementById('dash-cost').textContent = 'Loading...';
-  document.getElementById('dash-my-deployments').innerHTML = '<tr><td colspan="4" class="empty"><p>Loading...</p></td></tr>';
-  try{
-    const r = await fetch('/api/dashboard');
-    const d = await r.json();
-    if(!d.k8s_enabled || !d.cluster_capacity){
-      document.getElementById('dash-capacity').textContent = 'N/A';
-      document.getElementById('dash-used').textContent = 'N/A';
-      document.getElementById('dash-remaining').textContent = 'N/A';
-      document.getElementById('dash-cpu-pct-label').textContent = 'K8s 未連線 / unavailable';
-      document.getElementById('dash-mem-pct-label').textContent = '--';
-      document.getElementById('dash-my-deployments').innerHTML = '<tr><td colspan="4" class="empty"><p>K8s 未連線，無法取得資料 / K8s not connected</p></td></tr>';
-      document.getElementById('dash-cost').textContent = 'N/A';
-      document.getElementById('dash-cpu-trend').innerHTML = '<div class="pod-chart-empty">K8s 未連線 / K8s not connected</div>';
-      document.getElementById('dash-mem-trend').innerHTML = '<div class="pod-chart-empty">K8s 未連線 / K8s not connected</div>';
-      return;
-    }
-    const cap = d.cluster_capacity, used = d.cluster_used, rem = d.cluster_remaining, src = d.cluster_used_source || {};
-    // 取 CPU/Memory 兩者裡比較吃緊的那個百分比，決定「已用量」「剩餘空間」這兩張卡
-    // 數字要不要變色——只要有一項資源快不夠了，就該整體警示，不是兩個都超標才警示。
-    const cpuPct = cap.cpu_cores ? (used.cpu_cores / cap.cpu_cores) * 100 : 0;
-    const memPct = cap.mem_gib ? (used.mem_gib / cap.mem_gib) * 100 : 0;
-    const warnColor = _dashWarnColor(Math.max(cpuPct, memPct));
-    document.getElementById('dash-capacity').textContent = cap.cpu_cores + ' cores / ' + cap.mem_gib + ' GiB';
-    const usedEl = document.getElementById('dash-used');
-    usedEl.textContent = used.cpu_cores + ' cores / ' + used.mem_gib + ' GiB';
-    usedEl.style.color = warnColor;
-    document.getElementById('dash-used-label').textContent =
-      'CPU ('+(src.cpu==='usage'?'實際用量 actual':'requests')+') / Memory ('+(src.mem==='usage'?'實際用量 actual':'requests')+')';
-    const remEl = document.getElementById('dash-remaining');
-    remEl.textContent = rem.cpu_cores + ' cores / ' + rem.mem_gib + ' GiB';
-    remEl.style.color = warnColor;
-    _dashPctBar('dash-cpu-bar', 'dash-cpu-pct-label', used.cpu_cores, cap.cpu_cores);
-    _dashPctBar('dash-mem-bar', 'dash-mem-pct-label', used.mem_gib, cap.mem_gib);
-
-    if(d.customer_cluster){
-      // 客戶自帶叢集：平台的 Prometheus 看不到客戶的電腦，客戶叢集預設也沒有指標收集元件，
-      // 等再久都不會有資料——直接講原因，不要讓人以為「再等一下就有」（2026-10-09 實測發現）
-      const msg = '<div class="pod-chart-empty">你的叢集沒有安裝指標收集元件（metrics-server），所以沒有用量趨勢。'+
-                  '上方的容量與已用量是依各服務設定的資源需求計算。 / Usage trends need metrics-server in your cluster.</div>';
-      document.getElementById('dash-cpu-trend').innerHTML = msg;
-      document.getElementById('dash-mem-trend').innerHTML = msg;
-    } else {
-      document.getElementById('dash-cpu-trend').innerHTML = renderTrendChart(d.cpu_trend, 'var(--pass)', ' cores');
-      document.getElementById('dash-mem-trend').innerHTML = renderTrendChart(d.mem_trend, 'var(--signal)', ' MiB');
-    }
-
-    const deps = d.my_deployments || [];
-    document.getElementById('dash-my-deployments').innerHTML = deps.length
-      ? deps.map(x => '<tr><td>'+escHtml(x.name)+'</td><td>'+x.replicas+'</td><td>'+x.cpu_cores+' cores</td><td>'+x.mem_gib+' GiB</td></tr>').join('')
-      : '<tr><td colspan="4" class="empty"><p>尚未部署任何東西 / No deployments yet</p></td></tr>';
-
-    document.getElementById('dash-cost').innerHTML =
-      '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>總 CPU / Total CPU</span><span>'+(d.my_total_cpu_cores!=null?d.my_total_cpu_cores+' cores':'--')+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>總記憶體 / Total memory</span><span>'+(d.my_total_mem_gib!=null?d.my_total_mem_gib+' GiB':'--')+'</span></div>'+
-      '<div style="display:flex;justify-content:space-between;padding:6px 0"><span>預估每月 / Est. monthly</span><span style="font-weight:600">'+(d.my_monthly_usd!=null?'$'+d.my_monthly_usd+' USD':'--')+'</span></div>'+
-      '<div style="font-size:11px;color:var(--text3);margin-top:6px">粗估值，僅供參考 / Rough estimate, for reference only</div>';
-  }catch(e){
-    document.getElementById('dash-cost').textContent = 'Error: ' + e;
-  }
-}
-
-async function loadDatasetStats(){
-  document.getElementById('ds-total').textContent = '...';
-  try {
-    const r = await fetch('/api/dataset/stats');
-    const d = await r.json();
-    document.getElementById('ds-total').textContent = d.total_records.toLocaleString();
-    document.getElementById('ds-output-pct').textContent = d.output_pct + '%';
-    document.getElementById('ds-k8s-ratio').textContent = d.k8s_count + ' / ' + d.non_k8s_count;
-    let fhtml = '';
-    for(const [name, cnt] of Object.entries(d.files)){
-      fhtml += '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)"><span>'+name+'</span><span style="color:var(--green);font-weight:600">'+cnt.toLocaleString()+'</span></div>';
-    }
-    document.getElementById('ds-files').innerHTML = fhtml || 'No files found';
-    let chtml = '';
-    for(const [cat, cnt] of d.top_categories){
-      chtml += '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)"><span style="font-size:11px">'+cat+'</span><span style="color:var(--text);font-weight:600">'+cnt+'</span></div>';
-    }
-    document.getElementById('ds-categories').innerHTML = chtml || 'No data';
-  } catch(e){ document.getElementById('ds-total').textContent = 'ERR'; }
-}
-
 // ── Knowledge Base (RAG) ──
 function kbConfColor(conf){
   return conf === 'high' ? 'var(--green)' : (conf === 'medium' ? 'var(--caution)' : 'var(--text3)');
@@ -3855,150 +2508,6 @@ function kbConfColor(conf){
 function kbConfBadge(conf, score){
   return '<span style="font-size:11px;font-weight:600;color:'+kbConfColor(conf)+'">'+conf.toUpperCase()+' · '+(score*100).toFixed(0)+'%</span>';
 }
-
-async function loadKB(){
-  document.getElementById('kb-doc-list').textContent = 'Loading...';
-  try{
-    const r = await fetch('/api/rag/status'); const d = await r.json();
-    document.getElementById('kb-method').textContent = (d.active_method||'--').toUpperCase();
-    document.getElementById('kb-method-sub').textContent = (d.chroma && d.chroma.embedding_model) ? d.chroma.embedding_model + ' (' + d.chroma.device + ')' : 'legacy TF-IDF';
-    document.getElementById('kb-chunks').textContent = d.chunk_count!=null ? d.chunk_count : '--';
-    document.getElementById('kb-built-at').textContent = d.built_at ? new Date(d.built_at*1000).toLocaleString() : 'never built';
-    document.getElementById('kb-built-sub').textContent = d.elapsed_sec!=null ? ('built in ' + d.elapsed_sec + 's') : 'build time';
-    renderKBDocs(d.documents || []);
-  }catch(e){
-    document.getElementById('kb-doc-list').textContent = 'Failed to load: ' + e;
-  }
-}
-
-function renderKBDocs(docs){
-  const el = document.getElementById('kb-doc-list');
-  if(!docs.length){ el.innerHTML = 'No documents yet — add one on the right.'; return; }
-  el.innerHTML = docs.map(doc => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-      <div>
-        <div style="font-weight:600">${escHtml(doc.filename)}</div>
-        <div style="font-size:11px;color:var(--text3)">${(doc.size_bytes/1024).toFixed(1)}KB · ${doc.chunk_count} chunks · ${new Date(doc.modified_at*1000).toLocaleDateString()}</div>
-      </div>
-      <button onclick="deleteKBDoc('${escHtml(doc.filename)}')" style="background:none;border:1px solid var(--border);color:var(--red);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">Delete</button>
-    </div>`).join('');
-}
-
-async function rebuildKB(){
-  const btn = document.getElementById('kb-rebuild-btn');
-  const status = document.getElementById('kb-rebuild-status');
-  btn.disabled = true;
-  status.textContent = 'Rebuilding index (embedding + writing to ChromaDB)...';
-  try{
-    const r = await fetch('/api/rag/rebuild', {method:'POST'});
-    const d = await r.json();
-    if(d.error){ status.textContent = 'Error: ' + d.error; }
-    else { status.textContent = `Rebuilt: ${d.chunk_count} chunks from ${d.doc_count} documents in ${d.elapsed_sec}s (${d.active_method}).`; }
-    await loadKB();
-  }catch(e){
-    status.textContent = 'Network error: ' + e;
-  }finally{
-    btn.disabled = false;
-  }
-}
-
-async function addKBDoc(){
-  const filename = document.getElementById('kb-new-filename').value.trim();
-  const content = document.getElementById('kb-new-content').value;
-  const status = document.getElementById('kb-add-status');
-  if(!filename || !content.trim()){ status.textContent = 'Filename and content are both required.'; return; }
-  status.textContent = 'Uploading...';
-  try{
-    const r = await fetch('/api/rag/docs', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({filename, content})});
-    const d = await r.json();
-    if(d.error){ status.textContent = 'Error: ' + d.error; return; }
-    document.getElementById('kb-new-filename').value = '';
-    document.getElementById('kb-new-content').value = '';
-    status.textContent = 'Uploaded. Rebuilding index...';
-    await rebuildKB();
-    status.textContent = 'Document added and index rebuilt.';
-  }catch(e){
-    status.textContent = 'Network error: ' + e;
-  }
-}
-
-async function deleteKBDoc(filename){
-  if(!confirm('Delete "' + filename + '" and rebuild the index?')) return;
-  const status = document.getElementById('kb-rebuild-status');
-  try{
-    const r = await fetch('/api/rag/docs/' + encodeURIComponent(filename), {method:'DELETE'});
-    const d = await r.json();
-    if(d.error){ status.textContent = 'Error: ' + d.error; return; }
-    status.textContent = 'Deleted. Rebuilding index...';
-    await rebuildKB();
-  }catch(e){
-    status.textContent = 'Network error: ' + e;
-  }
-}
-
-async function runKBQuery(){
-  const query = document.getElementById('kb-query-input').value.trim();
-  const el = document.getElementById('kb-query-results');
-  if(!query){ return; }
-  el.textContent = 'Searching...';
-  try{
-    const r = await fetch('/api/rag/query', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query, top_k:5})});
-    const d = await r.json();
-    if(d.error){ el.textContent = 'Error: ' + d.error; return; }
-    if(!d.results.length){ el.innerHTML = '<span style="color:var(--text3)">No matching documents found.</span>'; return; }
-    el.innerHTML = `<div style="font-size:11px;color:var(--text3);margin-bottom:8px">method: ${d.method}</div>` + d.results.map(r => `
-      <div style="padding:8px 0;border-bottom:1px solid var(--border)">
-        <div style="display:flex;justify-content:space-between"><strong>${escHtml(r.source)}</strong>${kbConfBadge(r.confidence, r.score)}</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:4px;white-space:pre-wrap">${escHtml(r.text.slice(0,220))}${r.text.length>220?'...':''}</div>
-      </div>`).join('');
-  }catch(e){
-    el.textContent = 'Network error: ' + e;
-  }
-}
-
-async function runKBEval(){
-  const btn = document.getElementById('kb-eval-btn');
-  const el = document.getElementById('kb-eval-results');
-  btn.disabled = true;
-  el.textContent = 'Running evaluation on curated test set...';
-  try{
-    const r = await fetch('/api/rag/eval', {method:'POST'});
-    const d = await r.json();
-    if(d.error){ el.textContent = 'Error: ' + d.error; return; }
-    const rows = ['chroma','tfidf'].map(key => {
-      const m = d.results[key];
-      if(!m) return '';
-      if(m.error) return `<div style="padding:6px 0;color:var(--text3)">${key}: ${escHtml(m.error)}</div>`;
-      return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
-        <span style="font-weight:600">${escHtml(m.method)}</span>
-        <span style="font-size:12px;color:var(--text2)">Recall@${d.top_k}: ${(m.recall_at_k*100).toFixed(0)}% · MRR: ${m.mrr.toFixed(2)} · ${m.avg_latency_ms.toFixed(0)}ms</span>
-      </div>`;
-    }).join('');
-    el.innerHTML = `<div style="font-size:11px;color:var(--text3);margin-bottom:6px">${d.num_queries} test queries</div>` + rows;
-  }catch(e){
-    el.textContent = 'Network error: ' + e;
-  }finally{
-    btn.disabled = false;
-  }
-}
-
-async function runEnrich(flags){
-  const log = document.getElementById('ds-log');
-  const status = document.getElementById('ds-run-status');
-  log.textContent = 'Starting...\n';
-  status.textContent = 'Running...';
-  try {
-    const r = await fetch('/api/dataset/run', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({flags: flags})
-    });
-    const d = await r.json();
-    log.textContent = d.log || d.error || 'Done';
-    status.textContent = d.success ? 'Completed' : 'Error';
-    if(d.success) loadDatasetStats();
-  } catch(e){ log.textContent = 'Connection error: ' + e; status.textContent = 'Failed'; }
-}
-
 
 // ── Multi-chat rooms ────────────────────────────────────────
 let chats = [];
@@ -4162,121 +2671,6 @@ function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace
 
 // 更新「思考中」文字但不重建元素（沒有 indicator 就建一個）
 function setTyping(label){ appendTyping(label); }
-
-function deployConfirmHTML(id, parsed, originalText){
-  const output = parsed.output || parsed;
-  const app = escHtml(String(output.app_name || parsed.app_name || 'auto-app'));
-  const image = escHtml(String(output.image || parsed.image || 'nginx:latest'));
-  const pods = escHtml(String(output.pods || parsed.pods || 1));
-  const port = escHtml(String(output.port || parsed.port || 80));
-  const memory = escHtml(String(output.memory || parsed.memory || ''));
-  return `<div class="deploy-confirm" id="${id}" data-original="${escHtml(originalText)}">
-    <div class="deploy-confirm-head">
-      <div>
-        <div class="deploy-confirm-title">Confirm deployment details</div>
-        <div class="deploy-confirm-sub">Edit anything that looks wrong, then deploy.</div>
-      </div>
-      <span class="badge pending">Needs confirmation</span>
-    </div>
-    <div class="deploy-confirm-grid">
-      <div class="deploy-confirm-field"><label>App name</label><input data-field="app_name" value="${app}" placeholder="my-app">
-        <div class="field-hint">必須小寫英文字母開頭，只能用小寫字母/數字/連字號，例如 <code>app-123</code> / Must start with a lowercase letter, e.g. <code>app-123</code></div>
-      </div>
-      <div class="deploy-confirm-field"><label>Image</label><input data-field="image" value="${image}" placeholder="nginx:latest"></div>
-      <div class="deploy-confirm-field"><label>Pods</label><input data-field="pods" type="number" min="1" max="100" value="${pods}"></div>
-      <div class="deploy-confirm-field"><label>Port</label><input data-field="port" type="number" min="1" max="65535" value="${port}"></div>
-      <div class="deploy-confirm-field memory"><label>Memory limit</label><input data-field="memory" value="${memory}" placeholder="optional, e.g. 128Mi"></div>
-    </div>
-    <div class="deploy-confirm-note">This will create or update a Kubernetes Deployment and Service after confirmation. If the app name already exists, Kubernetes updates that existing Deployment.</div>
-    <div class="deploy-confirm-error" data-role="error"></div>
-    <div class="deploy-confirm-actions">
-      <button class="deploy-confirm-btn" onclick="cancelDeployConfirm('${id}')">Cancel</button>
-      <button class="deploy-confirm-btn primary" onclick="confirmDeploy('${id}')">Confirm & Deploy</button>
-    </div>
-  </div>`;
-}
-
-function readDeployConfirm(id){
-  const root = document.getElementById(id);
-  if(!root) return null;
-  const get = f => root.querySelector(`[data-field="${f}"]`)?.value.trim() || '';
-  const parsed = {
-    app_name: get('app_name'),
-    image: get('image'),
-    pods: parseInt(get('pods'), 10),
-    port: parseInt(get('port'), 10)
-  };
-  const memory = get('memory');
-  if(memory) parsed.memory = memory;
-  return {root, parsed, input: root.dataset.original || ''};
-}
-
-function setDeployConfirmError(root, msg){
-  const el = root.querySelector('[data-role="error"]');
-  if(!el) return;
-  el.style.display = msg ? 'block' : 'none';
-  el.textContent = msg || '';
-}
-
-function cancelDeployConfirm(id){
-  const root = document.getElementById(id);
-  if(root){
-    root.querySelectorAll('input,button').forEach(el=>el.disabled=true);
-    const badge = root.querySelector('.badge');
-    if(badge){ badge.textContent='Cancelled'; badge.className='badge failed'; }
-  }
-}
-
-async function confirmDeploy(id){
-  const data = readDeployConfirm(id);
-  if(!data) return;
-  const {root, parsed, input} = data;
-  setDeployConfirmError(root, '');
-  if(!parsed.app_name || !parsed.image){ setDeployConfirmError(root, 'App name and image are required.'); return; }
-  if(!Number.isInteger(parsed.pods) || parsed.pods < 1 || parsed.pods > 100){ setDeployConfirmError(root, 'Pods must be between 1 and 100.'); return; }
-  if(!Number.isInteger(parsed.port) || parsed.port < 1 || parsed.port > 65535){ setDeployConfirmError(root, 'Port must be between 1 and 65535.'); return; }
-  if(parsed.memory && !/^\d+(Mi|Gi|Ki|M|G)$/.test(parsed.memory)){ setDeployConfirmError(root, 'Memory must look like 128Mi or 1Gi.'); return; }
-
-  root.querySelectorAll('input,button').forEach(el=>el.disabled=true);
-  const badge = root.querySelector('.badge');
-  if(badge){ badge.textContent='Deploying'; badge.className='badge pending'; }
-  try{
-    const r = await fetch('/api/deploy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input, parsed})});
-    const d = await r.json();
-    if(d.error || d.rejected){
-      setDeployConfirmError(root, d.error || d.reason || 'Deployment blocked.');
-      root.querySelectorAll('input,button').forEach(el=>el.disabled=false);
-      if(badge){ badge.textContent='Needs changes'; badge.className='badge failed'; }
-      return;
-    }
-    if(d.k8s_deploy && d.k8s_deploy.ok === false){
-      setDeployConfirmError(root, `GitOps 已提交，但 K8s 實際部署失敗 / GitOps committed, but the K8s deploy failed：${d.k8s_deploy.message}`);
-      root.querySelectorAll('input,button').forEach(el=>el.disabled=false);
-      if(badge){ badge.textContent='K8s failed'; badge.className='badge failed'; }
-      return;
-    }
-    const p = d.parsed || parsed;
-    const appName = p.app_name || parsed.app_name;
-    const pods = p.pods || parsed.pods;
-    const image = p.image || parsed.image;
-    const port = p.port || parsed.port;
-    const successText = `部署成功 / Deployed：${appName}，Pods: ${pods}，Image: ${image}${port ? '，Port: ' + port : ''}。可到 Pods / Deployments 頁查看狀態。 You can check status on the Pods / Deployments pages.`;
-    const ch = currentChat();
-    if(ch){
-      ch.messages = ch.messages.filter(m => !(m.role === 'assistant' && String(m.content || '').includes(`id="${id}"`)));
-      saveChats();
-    }
-    root.closest('.msg')?.remove();
-    appendMsg('assistant', successText);
-    loadStats();
-    if(document.getElementById('page-pods')?.classList.contains('active')) loadPods();
-    if(document.getElementById('page-deployments')?.classList.contains('active')) loadDeployments();
-  }catch(e){
-    setDeployConfirmError(root, 'Network error: ' + e);
-    root.querySelectorAll('input,button').forEach(el=>el.disabled=false);
-    if(badge){ badge.textContent='Failed'; badge.className='badge failed'; }
-  }
-}
 
 function removeTyping(){ const el=document.getElementById('typing-indicator'); if(el) el.remove(); }
 
@@ -4686,6 +3080,15 @@ function podState(p){
   return {cls:'pend', label:'狀態不明', attn:true};
 }
 function stateTag(s){ return `<span class="state s-${s.cls}"><i></i>${esc(s.label)}</span>`; }
+function humanSummary(s){
+  return String(s || '')
+    .replace(/^phase=Pending/, '排程或啟動中')
+    .replace(/^phase=(\w+)/, '狀態 $1')
+    .replace(/容器尚未全部 ready/, '還有容器沒準備好')
+    .replace(/(\d+) 個容器都 ready/, '$1 個容器都已就緒')
+    .replace(/^(\d+)\/(\d+) ready$/, '$1/$2 個副本就緒')
+    .replace(/^Running，/, '執行中，');
+}
 function healthTag(pd){
   if(pd.healthy) return stateTag({cls:'run', label:'健康'});
   if((pd.phase || '') === 'Pending') return stateTag({cls:'pend', label:'等待中'});
@@ -5046,7 +3449,7 @@ function podDetailHTML(pd, opts){
   if(!pd.healthy) actions.push(flowBtn('healer_fix', {pod_name:pd.name}, '讓 Healer 修復', 'primary'));
   if(opts.inline) actions.push(`<button type="button" class="btn" data-act="open-pod" data-name="${esc(pd.name)}">在側邊看完整詳情</button>`);
   return `<div class="pd">
-    <div class="pd-top">${healthTag(pd)}<span class="dim">${esc(pd.health_summary || '')}</span>${opts.inline ? `<span class="id dim">${esc(pd.name)}</span>` : ''}</div>
+    <div class="pd-top">${healthTag(pd)}<span class="dim">${esc(humanSummary(pd.health_summary))}</span>${opts.inline ? `<span class="id dim">${esc(pd.name)}</span>` : ''}</div>
     ${diagHTML(pd.diagnosis)}
     <dl class="kv">
       <div><dt>所屬服務</dt><dd class="id">${esc(pd.app || '無')}</dd></div>
@@ -5074,7 +3477,7 @@ function depDetailHTML(dep, pods, opts){
        <div class="actions">${flowBtn('rollback', {name:dep.name}, '回滾到上一版')}${flowBtn('delete', {name:dep.name}, '刪除這個服務', 'danger')}</div>
        <div class="dim">每個操作都會先在對話裡請你確認，不會直接執行。</div>`;
   return `<div class="pd">
-    <div class="pd-top">${dep.healthy ? stateTag({cls:'run', label:'健康'}) : stateTag({cls:'warn', label:'還沒全部就緒'})}<span class="dim">${esc(dep.health_summary || '')}</span>${opts.inline ? `<span class="id dim">${n}</span>` : ''}</div>
+    <div class="pd-top">${dep.healthy ? stateTag({cls:'run', label:'健康'}) : stateTag({cls:'warn', label:'還沒全部就緒'})}<span class="dim">${esc(humanSummary(dep.health_summary))}</span>${opts.inline ? `<span class="id dim">${n}</span>` : ''}</div>
     <dl class="kv">
       <div><dt>映像檔</dt><dd class="id">${esc(dep.image || '')}</dd></div>
       <div><dt>就緒的副本</dt><dd>${repsHTML(dep.ready || 0, dep.replicas || 0)}</dd></div>
@@ -5113,15 +3516,6 @@ function closeDrawer(){
   document.getElementById('zt-scrim').classList.remove('open');
   _drawerSeq++;
   if(_drawerLastFocus && document.contains(_drawerLastFocus)) _drawerLastFocus.focus();
-}
-async function openPodDrawer(name, diagnose){
-  const seq = openDrawerShell('Pod 詳情', name);
-  if(diagnose) fillDrawer(seq, '<div class="busy"><div class="spinner"></div><div>Healer 正在診斷原因，最久可能需要一到兩分鐘。</div></div>');
-  try{
-    const d = await getJSON('/api/pods/' + encodeURIComponent(name) + (diagnose ? '?diagnose=1' : ''));
-    if(!d.found || !(d.pods || []).length){ fillDrawer(seq, emptyBlock('找不到這個 Pod。', '它可能已經被重新建立或刪除，請重新查詢一次清單。')); return; }
-    fillDrawer(seq, d.pods.slice(0, 3).map(p => podDetailHTML(p)).join(''));
-  }catch(e){ fillDrawer(seq, emptyBlock('讀取失敗。', e.message || String(e))); }
 }
 async function openDepDrawer(name){
   const seq = openDrawerShell('服務詳情', name);
@@ -5518,6 +3912,125 @@ function startClarify(intent){
     <ul><li><code>把 web-frontend 擴到 3 個</code></li><li><code>刪除 web-frontend</code></li><li><code>web-frontend 回滾</code></li></ul>${renderClarifyReasonHTML(intent)}</div>`);
 }
 
+
+// ══════════════════════════════════════════════════════════════════
+//  頁面（2026-10-09 改版第三階段）：直接重用對話裡的模組，整站同一套外觀與互動
+// ══════════════════════════════════════════════════════════════════
+function currentPageName(){ return window.__page || 'chat'; }
+async function mountWidget(hostId, kind, state, quiet){
+  const host = document.getElementById(hostId);
+  if(!host) return;
+  const cur = host.querySelector('.zt-w');
+  if(!cur) host.innerHTML = '<div class="module"><div class="skeleton" style="padding:18px"><i></i><i></i><i></i></div></div>';
+  try{
+    const data = await W_LOAD[kind]({});
+    const st = cur ? (decState(cur.dataset.wState) || state || {}) : (state || {});
+    host.classList.toggle('quiet', !!(cur && quiet));
+    host.innerHTML = widgetHTML(kind, data, st, cur ? cur.dataset.wid : undefined);
+  }catch(e){
+    if(cur && quiet) return;   // 背景自動更新失敗就保留畫面上的舊資料，不要整塊變成錯誤
+    host.innerHTML = `<div class="module">${emptyBlock('讀取失敗。', e.message || String(e))}<div style="padding:0 18px 18px;text-align:center"><button type="button" class="btn" onclick="showPage(currentPageName())">再試一次</button></div></div>`;
+  }
+}
+function loadServicesPage(quiet){
+  mountWidget('svc-deps', 'deployments', {p:1}, quiet);
+  mountWidget('svc-pods', 'pods', {f:'all', p:1}, quiet);
+}
+function loadGitopsPage(quiet){ mountWidget('gitops-w', 'gitops', {p:1}, quiet); }
+function loadHealerPage(quiet){ mountWidget('heal-scan', 'healer', {p:1}, quiet); loadHealerBg(); }
+// 舊程式（部署完成等地方）會呼叫 loadStats() 刷新數字：改成悄悄刷新目前所在的頁面
+function loadStats(){
+  const p = currentPageName();
+  if(p === 'services') loadServicesPage(true);
+  if(p === 'healer') loadHealerPage(true);
+}
+if(loggedIn){ setInterval(() => { if(currentPageName() === 'services' && !document.hidden) loadServicesPage(true); }, 15000); }
+
+async function loadHealerBg(){
+  const bg = document.getElementById('heal-bg'), proc = document.getElementById('heal-processing'), hist = document.getElementById('heal-history');
+  if(!bg) return;
+  try{
+    const d = await getJSON('/api/healer/status');
+    if(d.running){
+      bg.className = 'status-strip ok';
+      bg.innerHTML = `<span class="lamp-s"></span><span>Healer 正在背景監控，每 30 秒檢查一次${d.last_scan ? `，上次檢查 ${esc(new Date(d.last_scan).toLocaleTimeString('zh-TW', {hour12:false}))}` : ''}。</span>`;
+    } else if(d.message){
+      // K8s 有連線但背景執行緒停了：這是真正的異常，用紅色並照原樣講出原因
+      bg.className = 'status-strip stop';
+      bg.innerHTML = `<span class="lamp-s"></span><span>${esc(d.message)}</span>`;
+    } else {
+      bg.className = 'status-strip caution';
+      bg.innerHTML = '<span class="lamp-s"></span><span>Kubernetes 沒有連線，Healer 暫停自動監控，目前只能手動掃描。</span>';
+    }
+    if(proc){
+      proc.innerHTML = d.processing
+        ? `<div class="status-strip busy"><span class="spinner"></span><span>正在修復 <span class="id">${esc(d.processing.pod || '')}</span>（${esc(d.processing.reason || '')}）。找原因要跑本地模型，大約 1 到 3 分鐘。</span></div>`
+        : '';
+    }
+    const acts = d.recent_actions || [];
+    if(hist){
+      hist.innerHTML = acts.length
+        ? `<ol class="timeline">${acts.map(a => `<li><time>${a.time ? esc(new Date(a.time).toLocaleTimeString('zh-TW', {hour12:false})) : ''}</time>
+            <div class="what"><span class="app">${esc(a.pod || '')}</span>${esc(a.reason || '')}，原因：${esc(a.root_cause || a.error || '沒有找到')}，處理：${esc(a.action || '無')}
+            ${a.llm_raw_guess ? `<div class="dim">AI 原本猜是「${esc(a.llm_raw_guess)}」，證據不足，沒有採用。</div>` : ''}</div>
+            <div>${a.ok === false ? stateTag({cls:'fail', label:'沒修好'}) : stateTag({cls:'run', label:'已處理'})}</div></li>`).join('')}</ol>`
+        : emptyBlock('還沒有自動修復過。', 'Pod 出狀況時，Healer 的處理過程會記在這裡。');
+    }
+  }catch(e){
+    bg.className = 'status-strip stop';
+    bg.innerHTML = `<span class="lamp-s"></span><span>讀不到 Healer 狀態：${esc(e.message || String(e))}</span>`;
+  }
+}
+
+async function loadDashboardPage(quiet){
+  mountWidget('dash-res', 'resources', {}, quiet);
+  const cpuEl = document.getElementById('dash-cpu-trend'), memEl = document.getElementById('dash-mem-trend'), mon = document.getElementById('dash-mon');
+  try{
+    const [d, m] = await Promise.all([getJSON('/api/dashboard'), getJSON('/api/metrics').catch(() => null)]);
+    if(!d.k8s_enabled || !d.cluster_capacity){
+      const msg = '<div class="pod-chart-empty">Kubernetes 沒有連線，讀不到用量。請先確認 Docker Desktop 的 Kubernetes 已經啟動。</div>';
+      cpuEl.innerHTML = msg; memEl.innerHTML = msg;
+    } else if(d.customer_cluster){
+      // 客戶叢集預設沒有指標收集元件，等再久都不會有趨勢，直接講原因
+      const msg = '<div class="pod-chart-empty">你的叢集沒有安裝指標收集元件（metrics-server），所以沒有用量趨勢。上方的容量與已用量是依各服務設定的資源需求計算。</div>';
+      cpuEl.innerHTML = msg; memEl.innerHTML = msg;
+    } else {
+      cpuEl.innerHTML = renderTrendChart(d.cpu_trend, 'var(--pass)', ' 核');
+      memEl.innerHTML = renderTrendChart(d.mem_trend, 'var(--signal)', ' MiB');
+    }
+    const mm = (m && m.metrics) || {};
+    const customer = (mm.source || '').indexOf('customer-cluster') === 0 || d.customer_cluster;
+    let promText, promNote;
+    if(customer){ promText = '不適用'; promNote = '數字來自你叢集裡的回報程式，每 15 秒更新'; }
+    else if(!m || !m.connected){ promText = '讀不到'; promNote = (m && m.error) ? m.error : '監控資料暫時讀不到'; }
+    else if(mm.prometheus_up){ promText = '運作中'; promNote = m.url ? `位址 ${m.url}` : ''; }
+    else { promText = '連不上'; promNote = 'Pod 數字改成直接查 Kubernetes'; }
+    mon.innerHTML = `<div><dt>Prometheus</dt><dd class="${promText === '運作中' ? '' : 't-warn'}">${esc(promText)}</dd><span class="dim">${esc(promNote)}</span></div>
+      <div><dt>我執行中的 Pod</dt><dd>${mm.running_pods ?? '讀不到'}<span class="dim"> / ${mm.pod_count ?? '?'} 個</span></dd></div>
+      <div><dt>整個叢集的 Pod</dt><dd>${customer ? '不適用' : (mm.cluster_pods ?? '讀不到')}</dd></div>`;
+  }catch(e){
+    const msg = `<div class="pod-chart-empty">讀取失敗：${esc(e.message || String(e))}</div>`;
+    if(!quiet){ cpuEl.innerHTML = msg; memEl.innerHTML = msg; }
+  }
+}
+
+// Pod 詳情抽屜加上 Healer 背景取樣的趨勢：重啟次數與健康狀態時間軸
+async function openPodDrawer(name, diagnose){
+  const seq = openDrawerShell('Pod 詳情', name);
+  if(diagnose) fillDrawer(seq, '<div class="busy"><div class="spinner"></div><div>Healer 正在找原因，最久可能需要一到兩分鐘。</div></div>');
+  try{
+    const [d, h] = await Promise.all([
+      getJSON('/api/pods/' + encodeURIComponent(name) + (diagnose ? '?diagnose=1' : '')),
+      getJSON('/api/pods/' + encodeURIComponent(name) + '/history').catch(() => null),
+    ]);
+    if(!d.found || !(d.pods || []).length){ fillDrawer(seq, emptyBlock('找不到這個 Pod。', '它可能已經被重新建立或刪除，請重新查詢一次清單。')); return; }
+    const history = (h && h.history) || [];
+    const charts = `<div class="pd"><div><div class="sec-t">重啟次數趨勢</div>${renderRestartChart(history)}</div>
+      <div><div class="sec-t">健康狀態時間軸（綠色是健康，紅色是有狀況）</div>${renderHealthTimeline(history)}</div></div>`;
+    fillDrawer(seq, d.pods.slice(0, 3).map(p => podDetailHTML(p)).join('') + (d.pods.length === 1 ? charts : ''));
+  }catch(e){ fillDrawer(seq, emptyBlock('讀取失敗。', e.message || String(e))); }
+}
+
 window.addEventListener('DOMContentLoaded', function(){
   if(loggedIn){
     applyLang();
@@ -5649,15 +4162,15 @@ def google_callback():
     got_state = request.args.get("state")
     if not expected_state or not got_state or not secrets.compare_digest(expected_state, got_state):
         return _login_error(
-            "Google 登入驗證失敗（連結可能已過期或遭到竄改），請重新登入一次。 / "
-            "Google Sign-In verification failed (state mismatch) — please try signing in again.")
+            "Google 登入驗證失敗（連結可能已過期或遭到竄改），請重新登入一次。"
+            )
 
     error_param = request.args.get("error")
     code = request.args.get("code")
     if error_param or not code:
         return _login_error(
-            f"Google 登入已取消或失敗：{error_param or 'no code returned'}。 / "
-            f"Google Sign-In was cancelled or failed: {error_param or 'no code returned'}.")
+            f"Google 登入已取消或失敗：{error_param or 'no code returned'}。"
+            )
 
     try:
         token_resp = requests.post(GOOGLE_TOKEN_URL, data={
@@ -5676,7 +4189,7 @@ def google_callback():
         userinfo_resp.raise_for_status()
         info = userinfo_resp.json()
     except Exception as e:
-        return _login_error(f"連線 Google 時發生錯誤，請稍後再試。 / Error contacting Google: {e}")
+        return _login_error(f"連線 Google 時發生錯誤，請稍後再試。")
 
     google_sub = info.get("sub")
     email = info.get("email", "")
@@ -5686,8 +4199,8 @@ def google_callback():
     if email_verified is not True and str(email_verified).lower() != "true":
         # 沒驗證的 email 不能信任是本人擁有——不擋這關等於任何人都能宣稱擁有別人的 email。
         return _login_error(
-            "這個 Google 帳號的 email 尚未驗證，無法用來登入。 / "
-            "This Google account's email is not verified and cannot be used to sign in.")
+            "這個 Google 帳號的 email 尚未驗證，無法用來登入。"
+            )
 
     # 用 google_sub（Google 的穩定使用者 ID，不會變動）找既有帳號，不是用 email——
     # email 理論上可能變動，sub 才是真正穩定的識別碼。
@@ -5880,8 +4393,8 @@ def _require_cluster_connection():
     if request.path.startswith(_ONBOARD_OPEN_PATHS):
         return None
     if request.path.startswith("/api/"):
-        return jsonify({"error": "請先完成叢集連線（同意書 → 執行指令 → 連線檢查）。 / "
-                                 "Please connect your cluster first.", "onboarding": "/onboarding"}), 403
+        return jsonify({"error": "請先完成叢集連線（同意書 → 執行指令 → 連線檢查）。"
+                                 , "onboarding": "/onboarding"}), 403
     return redirect("/onboarding")
 
 
@@ -6205,10 +4718,7 @@ def _verify_grounded_reply(message: str, reply: str, namespace: str = None) -> s
         if any(w in window for w in _POSITIVE_STATUS_WORDS):
             return (
                 f"更正：剛才的回覆可能不準確——`{name}` 目前叢集中並不存在，不應該被說成健康或正常。"
-                f"請確認名稱是否正確，或到 Pods / Deployments 頁面查看實際清單。 / "
-                f"Correction: the previous answer may be inaccurate — `{name}` does not exist in the "
-                f"current cluster and should not have been described as healthy. Please double-check "
-                f"the name, or check the Pods/Deployments page for the real list."
+                f"請確認名稱是否正確，或到「我的服務」頁面查看實際清單。"
             )
     return reply
 
@@ -6234,7 +4744,7 @@ def _system_help_reply(message: str) -> str:
             "1. 左側點 `Healer`。\n"
             "2. 按 `Scan Now` 掃描異常 Pod。\n"
             "3. 如果看到 CrashLoopBackOff、OOMKilled、ImagePullBackOff、ErrImagePull 或 Error，先看原因。\n"
-            "4. 只想修單一 Pod 就按該 Pod 的修復；想全部處理就按 `Auto Fix All`。\n"
+            "4. 只想修單一 Pod 就按該 Pod 的修復；想全部處理就按 「全部自動修復」。\n"
             "5. 回到 `Pods` 或 `Deployments` 確認新的 Pod 是否變成 Running。\n\n"
             "注意：Healer 的主要動作是刪掉壞掉的 Pod，讓 Deployment/ReplicaSet 重建。"
             "如果 image tag、Secret、環境變數或程式本身錯了，Pod 可能還會再壞，需要修根因。"
@@ -6364,17 +4874,14 @@ def api_chat():
         if banned_now:
             session.clear()
             return jsonify({
-                "reply": "偵測到多次惡意誘導/操縱行為，此帳號已被封鎖並移除所有部署的資源。 / "
-                         "Repeated malicious/manipulative behavior detected — this account has been "
-                         "banned and all its deployed resources have been removed.",
+                "reply": "偵測到多次惡意誘導/操縱行為，此帳號已被封鎖並移除所有部署的資源。"
+                         ,
                 "banned": True,
             }), 403
         return jsonify({
             "reply": f"這則訊息被判定為嘗試誘導/操縱系統行為（{verdict.get('reason','')}），已記一次違規。"
-                     f"累積達到門檻將自動封鎖帳號。 / "
-                     f"This message was flagged as an attempt to manipulate the system "
-                     f"({verdict.get('reason','')}). A violation has been recorded; repeated "
-                     f"violations will result in an automatic ban.",
+                     f"累積達到門檻將自動封鎖帳號。"
+                     ,
         })
 
     user_ns = _session_ns()
@@ -6572,11 +5079,7 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
                 f"App name「{parsed['app_name']}」格式不符合 K8s 命名規則：必須以小寫英文字母開頭，"
                 f"只能包含小寫字母、數字、連字號（-），結尾不能是連字號，長度不超過 59 字元"
                 f"（系統會自動建立對應的 Service，名稱規則比 Deployment 更嚴格，一定要字母開頭）。"
-                f"例如「123」要改成「app-123」。 / "
-                f"App name \"{parsed['app_name']}\" doesn't meet K8s naming rules: must start with a lowercase "
-                f"letter, contain only lowercase letters/digits/hyphens, not end with a hyphen, and be at most "
-                f"59 characters (the system auto-creates a matching Service, whose naming rule is stricter than "
-                f"Deployment and requires starting with a letter)."
+                f"例如「123」要改成「app-123」。"
             ),
             "parsed": enriched,
         }, 422)
@@ -6633,10 +5136,7 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
                     f"但叢集裡最大的節點只有 {node_cpu_mc}m CPU / {node_mem_b // (1024**2)}Mi 記憶體可用。"
                     f"這不是「需要更多節點」的問題——單一 Pod 一定要能塞進某一個節點才會被排程，"
                     f"不管有幾個節點都一樣排不進去，部署下去 Pod 會卡在 Pending 永遠不會變 Running。"
-                    f"請降低這次部署要求的 memory/cpu。 / "
-                    f"Resource request exceeds this cluster's largest node — no number of nodes helps, "
-                    f"since a single Pod must fit on ONE node. It would stay stuck Pending forever. "
-                    f"Please lower the requested memory/cpu."
+                    f"請降低這次部署要求的 memory/cpu。"
                 )
             elif K8S_ENABLED:
                 # 使用者確認要的方向：單一 pod 本身放得下，不代表「這次部署的所有副本」+
@@ -6661,12 +5161,7 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
                             f"{agg_mem_b // (1024**2)}Mi 記憶體，但叢集最大節點只有 {node_cpu_mc}m CPU / "
                             f"{node_mem_b // (1024**2)}Mi 可用。多出來排不進去的 Pod 會卡在 Pending 狀態，"
                             f"畫面卻顯示部署成功，容易被忽略。請降低這次部署的副本數/資源需求，或先移除、"
-                            f"縮小其他部署。 / "
-                            f"Combined with the cluster's existing deployments, total resource demand would "
-                            f"exceed the largest node's capacity after this deploy — the extra pods would "
-                            f"get stuck Pending silently even though the deploy reports success. Please "
-                            f"lower the replica count/resources for this deployment, or scale down other "
-                            f"deployments first."
+                            f"縮小其他部署。"
                         )
                 except Exception:
                     pass
@@ -6740,8 +5235,8 @@ def _resource_summary(parsed: dict, review: dict) -> dict:
 
     return {
         "replicas": parsed.get("pods"),
-        "per_pod_cpu": parsed.get("cpu") or "未指定 / unset",
-        "per_pod_mem": parsed.get("memory") or "未指定 / unset",
+        "per_pod_cpu": parsed.get("cpu") or "未指定",
+        "per_pod_mem": parsed.get("memory") or "未指定",
         "total_cpu_cores": est.get("cpu_cores"),
         "total_mem_gib": est.get("memory_gib"),
         "node_count": ne.get("node_count"),
@@ -6802,7 +5297,7 @@ def api_deploy_parse():
     if not user_input and parsed_override:
         user_input = _synth_input_from_spec(parsed_override)
     if not user_input or len(user_input) < 3:
-        return jsonify({"error": "輸入內容太短，請描述清楚要部署什麼 / Input too short — please describe what you want to deploy"}), 400
+        return jsonify({"error": "輸入內容太短，請描述清楚要部署什麼"}), 400
     parsed, enriched, review, error = _prepare_deploy(user_input, parsed_override)
     if error:
         payload, status = error
@@ -6825,7 +5320,7 @@ def api_deploy():
     if not user_input and parsed_override:
         user_input = _synth_input_from_spec(parsed_override)
     if not user_input or len(user_input) < 3:
-        return jsonify({"error": "輸入內容太短，請描述清楚要部署什麼 / Input too short — please describe what you want to deploy"}), 400
+        return jsonify({"error": "輸入內容太短，請描述清楚要部署什麼"}), 400
 
     parsed, enriched, review, error = _prepare_deploy(user_input, parsed_override)
     if error:
@@ -7049,8 +5544,8 @@ def api_rollback():
     from gitops.rollback import is_valid_k8s_name
     if not is_valid_k8s_name(app_name):
         return jsonify({"success": False,
-                        "error": "應用程式名稱不合法，只能用小寫英數字與連字號 / "
-                                 "Invalid app name — use lowercase letters, digits and hyphens only"}), 400
+                        "error": "應用程式名稱不合法，只能用小寫英數字與連字號"
+                                 }), 400
     if _is_remote_ns(user_ns):
         return _remote_git_op(user_ns, lambda r: r.revert_app(app_name),
                               lambda res: f"已把 {app_name} 回滾到上一版設定（{res.get('rolled_back_to')}）。")
@@ -7102,14 +5597,14 @@ def api_rollback():
         if getattr(e, "status", None) == 404:
             return jsonify({
                 "success": False,
-                "error": f"找不到名為「{app_name}」的部署，請到 Deployments 頁面確認名稱 / "
-                         f"No deployment named '{app_name}' — check the name on the Deployments page",
+                "error": f"找不到名為「{app_name}」的部署，請到「我的服務」頁面確認名稱"
+                         ,
                 "details": result.get("details", {}),
             }), 404
         print(f"[rollback] fallback failed for {user_ns}/{app_name}: {e}")
         return jsonify({"success": False,
-                        "error": "回滾失敗，請稍後再試；若持續發生請到 Healer 頁面查看狀態 / "
-                                 "Rollback failed — please retry, or check the Healer page",
+                        "error": "回滾失敗，請稍後再試；若持續發生請到「自動修復」頁面查看狀態"
+                                 ,
                         "details": result.get("details", {})}), 500
 
 @app.route("/api/dataset/stats")
@@ -7280,7 +5775,7 @@ def _real_heal_pod(pod_name: str, namespace: str = "default") -> dict:
     from healer.pod_watcher import _check_pod, _get_pod_logs, _get_pod_events
     issue = _check_pod(pod)
     if not issue:
-        return {"ok": True, "action": "none", "message": f"Pod {pod_name} 目前狀態正常，無需修復 / already healthy", "root_cause": None}
+        return {"ok": True, "action": "none", "message": f"Pod {pod_name} 目前狀態正常，無需修復", "root_cause": None}
     logs = _get_pod_logs(issue["pod_name"], issue["namespace"], issue["container"])
     events = _get_pod_events(issue["pod_name"], issue["namespace"])
     context = {**issue, "logs": logs, "events": events}
@@ -7515,16 +6010,12 @@ def _healer_bg_liveness() -> dict:
     if K8S_ENABLED and not thread_alive:
         message = (
             "自動監控背景執行緒已經停止（可能因未預期錯誤中斷），現在只能靠手動 Scan Now / "
-            "Auto Fix All，不會自動偵測新問題。請重新啟動 web_demo.py 以恢復自動監控。 / "
-            "The background auto-heal thread has stopped — automatic detection is currently off "
-            "(manual Scan/Fix still works). Restart web_demo.py to recover it."
+            "「全部自動修復」，不會自動偵測新問題。請重新啟動 web_demo.py 以恢復自動監控。"
         )
     elif K8S_ENABLED and stale:
         message = (
             "自動監控似乎卡住了（太久沒有新的掃描紀錄，可能在等一個沒有逾時設定的 K8s API 呼叫）。"
-            "建議重新啟動 web_demo.py 確認。 / "
-            "Auto-monitoring looks stuck (no recent scan, possibly blocked on a K8s API call with "
-            "no timeout). Consider restarting web_demo.py."
+            "建議重新啟動 web_demo.py 確認。"
         )
 
     return {
@@ -7684,8 +6175,8 @@ from cluster import remote_ops as _rops
 from agents.cost_agent import (_parse_cpu_millicores as _pcpu, _parse_memory_bytes as _pmem,
                                _estimate_monthly_cost as _est_cost)
 
-_SYNC_MSG = ("已送出，等你的叢集同步（約 30~60 秒），可以到 Pods 頁面看進度。 / "
-             "Submitted — your cluster will pick it up in about 30–60 seconds.")
+_SYNC_MSG = ("已送出，等你的叢集同步（約 30~60 秒），可以到「我的服務」頁面看進度。"
+             )
 
 
 def _is_remote_ns(ns) -> bool:
@@ -7728,10 +6219,10 @@ def _remote_write_guard(ns):
     u = _remote_owner(ns)
     st = CLUSTERS.status(u) if u else {"code": "offline", "ok": False}
     if st["code"] == "awaiting_report":
-        return "平台剛重新啟動，正在等你的叢集回報（約 15 秒），請稍後再試。 / Waiting for your cluster to check in — try again in a moment."
+        return "平台剛重新啟動，正在等你的叢集回報（約 15 秒），請稍後再試。"
     if st["code"] == "offline":
         return ("你的叢集目前離線（超過 2 分鐘沒有回報），請確認電腦開著、Docker Desktop 正在執行，"
-                "恢復連線後再操作。 / Your cluster is offline — make sure your computer and Docker Desktop are running.")
+                "恢復連線後再操作。")
     return None
 
 
@@ -7970,7 +6461,7 @@ def _real_heal_pod(pod_name, namespace="default"):
     issue = next((i for i in _rv.unhealthy_issues(rep, namespace) if i["pod_name"] == pod_name), None)
     if not issue:
         return {"ok": True, "action": "none", "root_cause": None,
-                "message": f"Pod {pod_name} 目前狀態正常，無需修復 / already healthy"}
+                "message": f"Pod {pod_name} 目前狀態正常，無需修復"}
     # 冷卻：修復 commit 之後、客戶叢集同步並換掉壞 Pod 之前（約 1 分鐘），回報裡還看得到同一個
     # 問題。這段時間手動修復跟背景迴圈都不能再對同一個服務動手，否則會疊加修復
     # （2026-10-09 端到端實測：設定因此在好壞之間來回跳了 5 次）。
@@ -7980,7 +6471,7 @@ def _real_heal_pod(pod_name, namespace="default"):
         if _time.time() - last < _REMOTE_HEAL_COOLDOWN:
             return {"ok": True, "action": "in_progress", "root_cause": None, "pending_sync": True,
                     "message": f"{issue.get('app') or pod_name} 剛修復過，正在等你的叢集同步（最多約 "
-                               f"{_REMOTE_HEAL_COOLDOWN // 60} 分鐘），先不重複處理。 / Fix already in progress."}
+                               f"{_REMOTE_HEAL_COOLDOWN // 60} 分鐘），先不重複處理。"}
         _remote_heal_recent[cool_key] = _time.time()  # 先佔住，避免兩個請求同時進來都動手
     from healer.diagnose import diagnose_issue
     diagnosis = diagnose_issue({**issue, "reason": issue["reason"]})

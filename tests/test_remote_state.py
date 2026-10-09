@@ -148,11 +148,12 @@ def test_registry_marks_connected_once(tmp_path):
     assert data["alice"]["connected_at"]
 
 
-def test_every_status_has_bilingual_text_with_namespace():
+def test_every_status_has_text_with_namespace():
     for code in ["awaiting_report", "installing", "not_started", "no_kubectl", "cluster_unreachable", "flux_failed", "bundle_failed",
                  "reporter_not_ready", "no_report", "git_not_ready", "sync_pending", "offline", "connected"]:
         title, howto = status_text(code, "zt-alice-1234")
-        assert " / " in title and howto
+        # 2026-10-09 介面改版：只用中文，不再「中文 / English」並列
+        assert title and howto and " / " not in title and " / " not in howto
         assert "{ns}" not in howto
 
 

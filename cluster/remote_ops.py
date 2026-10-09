@@ -34,9 +34,9 @@ def heal(repo, issue: Dict[str, Any], diagnosis: Dict[str, Any],
     base = {"action": action, "pending_sync": False}
     if not app:
         return {**base, "ok": False,
-                "message": "找不到這個 Pod 屬於哪個部署，無法自動修復，請參考診斷建議手動處理。 / "
-                           "Can't tell which deployment owns this pod."}
-    sync_note = "已送出修正，等你的叢集同步（約 30~60 秒）。 / Fix committed — waiting for your cluster to sync."
+                "message": "找不到這個 Pod 屬於哪個部署，無法自動修復，請參考診斷建議手動處理。"
+                           }
+    sync_note = "已送出修正，等你的叢集同步（約 30~60 秒）。"
     try:
         if action == "analyze_logs":
             res = repo.restart_app(app)
@@ -64,5 +64,5 @@ def heal(repo, issue: Dict[str, Any], diagnosis: Dict[str, Any],
         return {**base, "ok": False, "message": str(e)}
     suggestion = diagnosis.get("suggestion") or diagnosis.get("root_cause") or ""
     return {**base, "ok": False, "manual": True,
-            "message": "這類問題不適合自動修改設定，請參考診斷建議處理。 / Needs a manual fix. "
+            "message": "這類問題不適合自動修改設定，請參考診斷建議處理。"
                        + (f"建議：{suggestion}" if suggestion else "")}

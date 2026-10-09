@@ -141,7 +141,7 @@ class TestGoogleCallbackRoute:
         with client.session_transaction() as sess:
             sess["google_oauth_state"] = "expected-state"
         resp = client.get("/auth/google/callback?code=abc&state=wrong-state")
-        assert b"state mismatch" in resp.data or "state 不符".encode() in resp.data
+        assert "登入驗證失敗".encode() in resp.data
         with client.session_transaction() as sess:
             assert "username" not in sess
 
