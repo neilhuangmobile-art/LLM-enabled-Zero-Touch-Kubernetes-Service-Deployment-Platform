@@ -340,3 +340,15 @@ def test_auto_fix_is_capped(remote, monkeypatch):
     web_demo.CLUSTERS.store_report("carol", REPORT(namespace=tenant_slug("carol"), pods=many))
     d = remote.post("/api/healer/auto_fix").get_json()
     assert len(d["details"]) == web_demo._REMOTE_AUTOFIX_MAX
+
+
+def test_clean_exit_crash_loop_is_detected():
+    """一直 exit 0 又被重啟的服務（busybox）也要當成故障（2026-10-09 實測 Healer 沒反應）。"""
+    pods = [{"name": "crash-x-1", "app": "crash", "phase": "Running", "containers": [
+        {"name": "c", "ready": False, "restart_count": 4, "state": "terminated",
+         "reason": "Completed", "last_reason": "Completed"}]},
+            {"name": "ok-x-1", "app": "ok", "phase": "Running", "containers": [
+        {"name": "c", "ready": True, "restart_count": 7, "state": "running"}]}]
+    issues = rv.unhealthy_issues(REPORT(pods=pods), NS)
+    assert [(i["app"], i["reason"]) for i in issues] == [("crash", "CrashLoopBackOff")], \
+        "目前正常執行的服務就算重啟過很多次也不算"

@@ -77,6 +77,26 @@
 6. 所有變更透過 GitOps 版本控管，可隨時回滾
 ```
 
+## 客戶自帶叢集模式（2026-10-09，`CUSTOMER_CLUSTER_MODE=1`）
+
+```
+客戶瀏覽器 ──HTTPS──> Tailscale Funnel / Cloudflare Tunnel ──> web_demo（只綁 127.0.0.1，waitress）
+                                                                 │ 同一套審查：orchestrator → guardian → dry-run
+                                                                 ▼
+                                      gitops/tenant_repo.py：commit 到 GitHub 私有 repo zt-<帳號>-<雜湊>
+                                                                 ▲ 唯讀 deploy key，每 30 秒拉一次
+客戶叢集 ┌ Flux（只能操作客戶專屬 namespace，Pod Security baseline）
+         └ zt-reporter（唯讀）── 每 15 秒 POST ──> /agent/report ──> cluster/remote_state.py
+                                                                         │
+     web_demo 查詢函式遇到 zt- namespace → cluster/remote_view.py（回報 → 跟本機同格式）
+     Healer 補救 → cluster/remote_ops.py → Git commit（重啟 / 恢復映像檔 / 調記憶體）
+```
+
+- 平台永遠不連進客戶叢集。所有「改變」都經過 Git，所以每個動作都有 commit 可以稽核、可以回滾。
+- 引導流程：同意書 → 貼指令 → 連線檢查（`cluster/pages.py`、`cluster/onboarding.py`）。
+- 本機叢集模式（管理員、或 `CUSTOMER_CLUSTER_MODE=0`）的程式碼路徑完全沒有變。
+- 安全設計與實測問題見 `docs/security_review.md` 32、33 節。
+
 ## 技術棧
 
 | 組件 | 技術 |

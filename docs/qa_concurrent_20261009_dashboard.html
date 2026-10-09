@@ -1,0 +1,148 @@
+<title>雙人並行部署測試</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* 版面：單欄報告，先結論數字，再兩張圖，最後原始表格；顏色只用於資料，其餘是帶一點藍的中性灰 */
+:root{
+  --bg:#f7f8fa; --surface:#ffffff; --line:#e3e6eb; --fg:#15181d; --fg2:#565c66; --fg3:#8a909a;
+  --s1:#2a78d6; --bad:#e34948; --s1-soft:#d6e6f8;
+  --f-body:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#121418; --surface:#1a1d22; --line:#2c3038; --fg:#eef0f3; --fg2:#b4bac4; --fg3:#7d8490;
+  --s1:#3987e5; --bad:#e66767; --s1-soft:#1d3554; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#121418; --surface:#1a1d22; --line:#2c3038; --fg:#eef0f3; --fg2:#b4bac4; --fg3:#7d8490;
+  --s1:#3987e5; --bad:#e66767; --s1-soft:#1d3554; color-scheme:dark }
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.7}
+.wrap{max-width:880px;margin:0 auto;padding-inline:20px;padding-block:40px 64px;display:flex;flex-direction:column;gap:36px}
+h1{font-size:28px;font-weight:700;margin:0;text-wrap:balance;letter-spacing:.01em}
+h2{font-size:17px;font-weight:700;margin:0 0 4px}
+.lede{color:var(--fg2);margin:6px 0 0;max-width:62ch}
+.meta{font-family:var(--f-mono);font-size:12px;color:var(--fg3);margin-top:10px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.stat{background:var(--surface);padding:16px 18px}
+.stat b{display:block;font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}
+.stat span{font-size:13px;color:var(--fg2)}
+section{display:flex;flex-direction:column;gap:12px}
+.note{color:var(--fg2);font-size:14px;max-width:66ch;margin:0}
+.chart{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 18px 10px;overflow-x:auto}
+.legend{display:flex;gap:18px;font-size:13px;color:var(--fg2);flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+svg text{font-family:var(--f-body);fill:var(--fg2);font-size:12px}
+svg .num{font-family:var(--f-mono);fill:var(--fg)}
+svg .grid{stroke:var(--line);stroke-width:1}
+svg .hit{fill:transparent;cursor:default}
+.tip{position:fixed;pointer-events:none;background:var(--fg);color:var(--bg);font-size:12px;padding:6px 9px;border-radius:5px;font-family:var(--f-mono);white-space:nowrap}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--fg3);font-weight:500}
+td.r,th.r{text-align:right}
+.tbl{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+details summary{cursor:pointer;color:var(--s1);font-size:14px}
+details summary:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+@media (max-width:640px){ .stats{grid-template-columns:repeat(2,minmax(0,1fr))} }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>雙人並行部署測試</h1>
+    <p class="lede">兩個客戶帳號同時透過外網網址使用平台，各自把服務部署到自己的叢集：從 Chat 問答、部署、擴縮到刪除，並檢查彼此是否完全隔離。</p>
+    <div class="meta">2026-10-09 · qa_concurrent_users.py · 客戶自帶叢集模式</div>
+  </header>
+
+  <div class="stats" role="list">
+    <div class="stat" role="listitem"><b>29 / 29</b><span>第二輪全部通過</span></div>
+    <div class="stat" role="listitem"><b>4 / 4</b><span>隔離檢查通過</span></div>
+    <div class="stat" role="listitem"><b>160 秒</b><span>兩人跑完整流程</span></div>
+    <div class="stat" role="listitem"><b>1 個</b><span>抓到並修好的錯誤</span></div>
+  </div>
+
+  <section>
+    <h2>部署解析：版本號有沒有被保留</h2>
+    <p class="note">輸入都是「部署 2 個 nginx:1.27」。單獨送出時全部正確；兩人同時送出時，翻譯層 Gemini 因為額度或過載失敗，退回本機備援解析器，而它會把中文輸入的版本號丟掉。修正後兩人同時送出也正確。</p>
+    <div class="legend"><span><i style="background:var(--s1)"></i>解析正確</span><span><i style="background:var(--bad)"></i>版本號錯誤（變成 latest）</span></div>
+    <div class="chart" id="c1"></div>
+  </section>
+
+  <section>
+    <h2>第二輪各步驟耗時（兩人同時，平均值）</h2>
+    <p class="note">「送出」類操作都在 6 秒內完成。「到叢集生效」取決於客戶叢集的 Flux 每 30 秒同步一次，所以落在 20 到 45 秒。橫線末端的刻度是兩人中較慢的那一次。</p>
+    <div class="chart" id="c2"></div>
+  </section>
+
+  <section>
+    <h2>同時使用會不會變慢</h2>
+    <p class="note">這組數字不能下結論：第二輪兩人同時反而比單人快。Chat 的時間大多在等外部的 Gemini，它本身起伏很大，單人基準又只有 3 題。能確定的是兩人同時使用沒有明顯變慢，也沒有任何請求失敗。</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Chat 平均延遲</th><th class="r">第一輪</th><th class="r">第二輪</th></tr></thead>
+      <tbody>
+        <tr><td>單人（3 題）</td><td class="r">25.6 秒</td><td class="r">19.7 秒</td></tr>
+        <tr><td>兩人同時（6 題）</td><td class="r">27.8 秒</td><td class="r">10.7 秒</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <details>
+    <summary>查看圖表的原始數字</summary>
+    <div class="tbl" style="margin-top:10px"><table id="raw">
+      <thead><tr><th>步驟</th><th class="r">平均</th><th class="r">較慢的一次</th></tr></thead><tbody></tbody>
+    </table></div>
+  </details>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+const parse = [
+  {label:'單獨送出（修正前）', ok:4, bad:0},
+  {label:'兩人同時（修正前）', ok:3, bad:5},
+  {label:'兩人同時（修正後）', ok:2, bad:0},
+];
+const steps = [
+  ['部署解析', 4.8, 5.1], ['部署送出', 5.2, 5.4], ['擴縮送出', 3.1, 3.2], ['刪除送出', 2.9, 2.9],
+  ['Chat 問答', 10.7, 16.0], ['問服務狀態', 13.2, 13.8],
+  ['部署到叢集生效', 22.5, 25.0], ['擴縮到叢集生效', 32.5, 40.0], ['刪除到叢集生效', 30.0, 45.0],
+];
+const NS='http://www.w3.org/2000/svg';
+const tip=document.getElementById('tip');
+function el(n,a,p){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e}
+function hover(node,text){
+  node.addEventListener('mousemove',ev=>{tip.textContent=text;tip.hidden=false;tip.style.left=(ev.clientX+12)+'px';tip.style.top=(ev.clientY-30)+'px'});
+  node.addEventListener('mouseleave',()=>{tip.hidden=true});
+}
+// 圖一：堆疊橫條，以次數為單位
+(function(){
+  const W=720,rowH=40,L=150,R=60,T=8,max=8,H=T+parse.length*rowH+26;
+  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',role:'img','aria-label':'部署解析正確與錯誤次數'});
+  const x=v=>L+(W-L-R)*v/max;
+  for(let v=0;v<=max;v+=2){el('line',{x1:x(v),x2:x(v),y1:T,y2:H-22,class:'grid'},svg);el('text',{x:x(v),y:H-6,'text-anchor':'middle'},svg).textContent=v}
+  parse.forEach((d,i)=>{
+    const y=T+i*rowH+8,h=20;
+    el('text',{x:L-10,y:y+h/2+4,'text-anchor':'end'},svg).textContent=d.label;
+    if(d.ok) el('rect',{x:x(0),y,width:x(d.ok)-x(0)-(d.bad?1:0),height:h,rx:3,fill:'var(--s1)'},svg);
+    if(d.bad) el('rect',{x:x(d.ok)+1,y,width:x(d.ok+d.bad)-x(d.ok)-1,height:h,rx:3,fill:'var(--bad)'},svg);
+    el('text',{x:x(d.ok+d.bad)+8,y:y+h/2+4,class:'num'},svg).textContent=d.bad?`${d.ok} 對 ${d.bad} 錯`:`${d.ok} 對`;
+    hover(el('rect',{x:0,y:y-6,width:W,height:h+12,class:'hit'},svg),`${d.label}：正確 ${d.ok} 次，錯誤 ${d.bad} 次`);
+  });
+  document.getElementById('c1').appendChild(svg);
+})();
+// 圖二：單一數列橫條，末端刻度標較慢的一次
+(function(){
+  const W=720,rowH=30,L=150,R=70,T=6,max=50,H=T+steps.length*rowH+26;
+  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',role:'img','aria-label':'各步驟平均耗時（秒）'});
+  const x=v=>L+(W-L-R)*v/max;
+  for(let v=0;v<=max;v+=10){el('line',{x1:x(v),x2:x(v),y1:T,y2:H-22,class:'grid'},svg);el('text',{x:x(v),y:H-6,'text-anchor':'middle'},svg).textContent=v+' 秒'}
+  steps.forEach(([n,avg,mx],i)=>{
+    const y=T+i*rowH+7,h=14;
+    el('text',{x:L-10,y:y+h/2+4,'text-anchor':'end'},svg).textContent=n;
+    el('rect',{x:x(0),y,width:Math.max(2,x(avg)-x(0)),height:h,rx:3,fill:'var(--s1)'},svg);
+    el('line',{x1:x(mx),x2:x(mx),y1:y-2,y2:y+h+2,stroke:'var(--fg3)','stroke-width':2},svg);
+    el('text',{x:x(Math.max(avg,mx))+8,y:y+h/2+4,class:'num'},svg).textContent=avg.toFixed(1);
+    hover(el('rect',{x:0,y:y-7,width:W,height:h+14,class:'hit'},svg),`${n}：平均 ${avg} 秒，較慢的一次 ${mx} 秒`);
+  });
+  document.getElementById('c2').appendChild(svg);
+  const tb=document.querySelector('#raw tbody');
+  steps.forEach(([n,a,m])=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${n}</td><td class="r">${a.toFixed(1)} 秒</td><td class="r">${m.toFixed(1)} 秒</td>`;tb.appendChild(tr)});
+})();
+</script>

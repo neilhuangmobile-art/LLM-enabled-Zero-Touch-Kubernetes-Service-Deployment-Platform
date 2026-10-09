@@ -190,6 +190,45 @@ HTTPS 自動處理。`web_demo.py` 已改用正式伺服器 waitress，並有頻
 
 ---
 
+## 7.6 客戶自帶叢集模式（客戶用自己電腦的資源部署）
+
+開啟後，非管理員帳號登入時會先看到同意書，接著在 PowerShell 貼一行指令，把自己的 Kubernetes
+接上平台；連線成功後才能使用網站。之後所有部署、擴縮、回滾、Healer 修復都會變成平台替客戶在
+GitHub 開的私有 repo 的 commit，再由客戶叢集裡的 Flux 自動套用（約 30~60 秒生效）。
+設計與安全考量見 `docs/security_review.md` 33 節。
+
+**平台端要準備的（一次性）**：
+1. 先完成 7.5 節，讓網站有對外網址（`PUBLIC_BASE_URL`），因為客戶叢集要連回這個網址回報狀態。
+2. GitHub 建立一個免費 Organization（例如 `zerotouch-tenants`），專門放客戶的 repo。
+3. **Organization → Settings → Member privileges → Deploy keys 改成 Enabled**。
+   2024 年 10 月後新建立的 organization 預設是關閉的；沒開的話，建立 deploy key 會失敗（HTTP 422
+   「Deploy keys are disabled for this repository」）。
+4. Organization → Settings → Personal access tokens → 允許 fine-grained token，並且不需要核准。
+5. 個人 Settings → Developer settings → Fine-grained tokens → 產生 token：
+   - Resource owner 選這個 organization，選 All repositories
+   - Administration 和 Contents 都設成 Read and write
+6. `.env` 加入：
+   ```
+   TENANT_GITHUB_TOKEN=github_pat_...
+   TENANT_GITHUB_ORG=zerotouch-tenants
+   CUSTOMER_CLUSTER_MODE=1
+   ```
+7. 重啟 `python web_demo.py`。管理員帳號不受影響，仍然使用平台自己的叢集。
+
+**客戶端需要**：Windows PowerShell、開啟 Kubernetes 的 Docker Desktop、能連上網路。
+安裝腳本會自動判斷叢集是否已經有 Flux：沒有就安裝 v2.9.6，有就沿用，不會更動原本的版本。
+
+**驗證（2026-10-09 實測）**：透過外網網址完成註冊 → 同意書 → 執行指令 → 連線檢查；部署和擴縮
+都在 40 秒內生效；換成壞掉的映像檔後，Healer 35 秒內偵測到，自動修復 15 秒後恢復。
+
+**疑難排解**：
+- 檢查頁顯示「叢集拉不到部署設定」：通常是第 3 步的 deploy key 沒開，或 token 權限不足。
+- 客戶重跑安裝指令是安全的。回報器會自動換新 token 並重啟。
+- 解除安裝：`kubectl delete namespace <客戶的 zt-… namespace>`，再刪除對應的
+  `clusterrole`/`clusterrolebinding zt-reporter-nodes-<namespace>`。
+
+---
+
 ## 8. Kubernetes 設定
 
 確認 kubeconfig 正確：

@@ -3459,6 +3459,22 @@ async function loadMetrics(){
       return;
     }
     const m=d.metrics||{};
+    if((m.source||'').indexOf('customer-cluster') === 0){
+      // 客戶自帶叢集：平台的 Prometheus 本來就看不到客戶的電腦，這是「不適用」不是「離線」，
+      // 不能用紅字 Offline 嚇人（2026-10-09 實測發現）。數字來自客戶叢集的回報器。
+      document.getElementById('prom-status').textContent = '不適用';
+      document.getElementById('prom-status').style.color = 'var(--text2)';
+      document.getElementById('prom-pods').textContent = m.running_pods!=null ? m.running_pods : 'N/A';
+      document.getElementById('prom-url').textContent = '你的叢集回報器';
+      const lk = document.getElementById('prom-full-ui-link');
+      lk.href = '#'; lk.textContent = '客戶叢集模式不提供 / Not available for your cluster';
+      document.getElementById('metrics-rows').innerHTML = [
+        ['你的 Pod 數 / Your Pods', m.pod_count!=null ? m.pod_count : 'N/A'],
+        ['你的 Running Pods / Your Running', m.running_pods!=null ? m.running_pods : 'N/A'],
+        ['資料來源 / Data source', '你的叢集回報器，每 15 秒更新 / Your cluster reporter, every 15s'],
+      ].map(([k,v])=>'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2);font-size:12px">'+k+'</span><span style="font-size:12px;font-weight:500">'+escHtml(String(v))+'</span></div>').join('');
+      return;
+    }
     const up = !!m.prometheus_up;
     document.getElementById('prom-status').textContent = up ? 'Online' : 'Offline';
     document.getElementById('prom-status').style.color = up ? 'var(--green)' : '#DC2626';
@@ -3550,8 +3566,17 @@ async function loadDashboard(){
     _dashPctBar('dash-cpu-bar', 'dash-cpu-pct-label', used.cpu_cores, cap.cpu_cores);
     _dashPctBar('dash-mem-bar', 'dash-mem-pct-label', used.mem_gib, cap.mem_gib);
 
-    document.getElementById('dash-cpu-trend').innerHTML = renderTrendChart(d.cpu_trend, '#16A34A', ' cores');
-    document.getElementById('dash-mem-trend').innerHTML = renderTrendChart(d.mem_trend, '#2563EB', ' MiB');
+    if(d.customer_cluster){
+      // 客戶自帶叢集：平台的 Prometheus 看不到客戶的電腦，客戶叢集預設也沒有指標收集元件，
+      // 等再久都不會有資料——直接講原因，不要讓人以為「再等一下就有」（2026-10-09 實測發現）
+      const msg = '<div class="pod-chart-empty">你的叢集沒有安裝指標收集元件（metrics-server），所以沒有用量趨勢。'+
+                  '上方的容量與已用量是依各服務設定的資源需求計算。 / Usage trends need metrics-server in your cluster.</div>';
+      document.getElementById('dash-cpu-trend').innerHTML = msg;
+      document.getElementById('dash-mem-trend').innerHTML = msg;
+    } else {
+      document.getElementById('dash-cpu-trend').innerHTML = renderTrendChart(d.cpu_trend, '#16A34A', ' cores');
+      document.getElementById('dash-mem-trend').innerHTML = renderTrendChart(d.mem_trend, '#2563EB', ' MiB');
+    }
 
     const deps = d.my_deployments || [];
     document.getElementById('dash-my-deployments').innerHTML = deps.length
@@ -6635,6 +6660,10 @@ def _healer_background_loop(interval: int = 30):
             issues = scan_once(namespace="") or []
             now_keys = set()
             for issue in issues:
+                # 客戶叢集的 namespace（zt-）交給 _remote_healer_loop 用 Git 處理。平台自己的叢集剛好
+                # 也是客戶叢集時（例如本機測試），兩個迴圈會搶同一個 Pod（2026-10-09 實測）。
+                if _is_remote_ns(issue.get("namespace")):
+                    continue
                 key = f"{issue['namespace']}/{issue['pod_name']}/{issue['reason']}"
                 now_keys.add(key)
                 if key in seen:
@@ -7263,8 +7292,15 @@ def _remote_healer_loop(interval: int = 30):
                     continue
                 ns = tenant_slug(username)
                 handled = 0
-                for issue in _rv.unhealthy_issues(_remote_report(ns), ns):
-                    key = f"{ns}/{issue['app'] or issue['pod_name']}/{issue['reason']}"
+                rep_now = _remote_report(ns)
+                deps_now = {d["name"]: d for d in rep_now.get("deployments") or []}
+                for issue in _rv.unhealthy_issues(rep_now, ns):
+                    # 把目前的記憶體上限與映像檔也算進「是不是同一個狀況」：修過之後設定變了就算新狀況，
+                    # 可以再處理一次（例如記憶體加倍一次不夠，會繼續加倍到修好或碰到 4Gi 上限）；
+                    # 設定沒變就不重複處理。另有冷卻時間與每小時上限保護。
+                    dep = deps_now.get(issue.get("app"), {})
+                    key = (f"{ns}/{issue['app'] or issue['pod_name']}/{issue['reason']}/"
+                           f"{dep.get('memory_limit')}/{dep.get('image')}")
                     now_keys.add(key)
                     if key in seen:
                         continue
@@ -7275,6 +7311,8 @@ def _remote_healer_loop(interval: int = 30):
                     seen.add(key)
                     try:
                         result = _real_heal_pod(issue["pod_name"], ns)
+                        if result.get("action") == "in_progress":
+                            continue  # 冷卻中、這次沒有動作，不寫進修復紀錄（避免出現沒做事卻打勾的紀錄）
                         entry = {"time": _utc_now_iso(), "pod": issue["pod_name"], "namespace": ns,
                                  "reason": issue["reason"], "root_cause": result.get("root_cause"),
                                  "action": result.get("action"), "ok": result.get("ok"),

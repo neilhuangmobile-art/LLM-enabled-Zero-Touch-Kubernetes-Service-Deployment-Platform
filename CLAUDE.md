@@ -265,3 +265,20 @@ Metrics 頁面「Prometheus: Online」查出來是寫死的（已修成真的探
   `monitoring` namespace 之後依然成立，驗證完已清除。
 - `requirements.txt` 補上 `requests==2.32.5`（`prometheus_client.py` 需要，之前沒被
   列出來是因為程式碼從沒被執行過）。
+
+## 客戶自帶叢集模式（2026-10-09 完成，`CUSTOMER_CLUSTER_MODE=1` 才啟用）
+
+客戶貼一行 PowerShell 指令，就把自己的 K8s 接上平台。平台**不連進客戶叢集**：變更寫進平台替客戶在
+GitHub org 開的私有 repo（`gitops/tenant_repo.py`），客戶叢集的 Flux 用唯讀 deploy key 拉取；狀態靠
+客戶叢集裡的唯讀回報器（`cluster/agent/reporter.py`）每 15 秒 POST 回 `/agent/report`。架構圖見
+`docs/architecture.md`，安全設計見 `docs/security_review.md` 33 節，設定步驟見 `docs/setup.md` 7.5～7.6 節。
+
+- **改 web_demo 查詢/寫入 K8s 的程式時注意**：檔案尾端用「同名重新綁定」包裝了 `k8s_get_pods`、
+  `k8s_get_deployments`、`k8s_describe_*`、`_dashboard_summary`、`_real_heal_pod` 等函式。namespace
+  是 `zt-` 開頭就改讀回報（`cluster/remote_view.py`）或改成 Git commit。路由一律用 `_session_ns()`
+  取 namespace，不要再直接寫 `_user_namespace(session["username"])`，不然客戶會看到平台自己的叢集。
+- 回報器是部署在客戶那邊的程式：改了 `reporter.py` 要遞增 `AGENT_VERSION`，客戶重跑安裝指令才會更新
+  （Pod 範本有程式碼加 token 的雜湊，會自動滾動重啟）。
+- **踩過的坑**：Healer 不能用「還原最近一次變更」修映像檔問題，會讓設定來回跳；要用
+  `restore_previous_image` 加冷卻時間。新的 GitHub org 預設關閉 deploy key，要手動開。這台電腦的網路
+  遇到大量平行下載會卡住，第一次拉 Flux 映像檔可能要重啟 Docker Desktop。

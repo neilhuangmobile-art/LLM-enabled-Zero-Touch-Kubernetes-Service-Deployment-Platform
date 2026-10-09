@@ -1,0 +1,36 @@
+{
+ "total": 29,
+ "passed": 29,
+ "pass_rate": 1.0,
+ "concurrent_wall_seconds": 243.1,
+ "chat_latency_ms": {
+  "baseline_avg": 25582,
+  "concurrent_avg": 27828
+ },
+ "by_category": {
+  "chat": {
+   "total": 9,
+   "passed": 9
+  },
+  "intent": {
+   "total": 2,
+   "passed": 2
+  },
+  "deploy": {
+   "total": 4,
+   "passed": 4
+  },
+  "sync": {
+   "total": 6,
+   "passed": 6
+  },
+  "isolation": {
+   "total": 4,
+   "passed": 4
+  },
+  "ops": {
+   "total": 4,
+   "passed": 4
+  }
+ }
+}

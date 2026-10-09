@@ -196,8 +196,13 @@ def unhealthy_issues(rep: Dict[str, Any], namespace: str) -> List[dict]:
         for c in p.get("containers") or []:
             reason = c.get("reason") or ""
             last = c.get("last_reason") or ""
+            ok_now = c.get("state") == "running" and c.get("ready")
             bad = reason if (reason in BAD_WAITING or reason in BAD_TERMINATED) else \
-                (last if last in BAD_TERMINATED and not (c.get("state") == "running" and c.get("ready")) else "")
+                (last if last in BAD_TERMINATED and not ok_now else "")
+            # 一直「正常結束」（exit 0、Completed）又被重啟的長期服務也是故障：只認錯誤狀態的話，
+            # 這種 crash loop 完全偵測不到（2026-10-09 實測：busybox 重啟 4 次 Healer 都沒反應）
+            if not bad and not ok_now and int(c.get("restart_count") or 0) >= 3:
+                bad = "CrashLoopBackOff"
             if not bad:
                 continue
             issues.append({"pod": p["name"], "pod_name": p["name"], "namespace": namespace,
