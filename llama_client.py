@@ -324,6 +324,14 @@ def _deterministic_deploy_parse(prompt_text: str) -> Optional[dict]:
     image = None
     image_patterns = [
         r'(?:image|映像|鏡像)\s*(?:=|:|為|是)?\s*([\w./:-]+)',
+        # 2026-10-09 兩人同時使用 QA 抓到：Gemini 額度用完/過載（429/503）退回這個解析器時，
+        # 中文輸入「部署 2 個 nginx:1.27，名稱 x」會丟掉版本號、「部署 2 個 redis:7.2 名稱 cache」
+        # 甚至變成 nginx:latest——下面那條 lookahead 要求映像檔後面先有空白再接「，」，而中文
+        # 輸入通常沒有空白，「名稱」也不在清單裡。補兩條更可靠的規則：
+        # ① 帶 tag 或 registry 路徑的 token（開頭必須是英文字母，避開「10:30」這類時間）
+        r'(?<![A-Za-z0-9_./-])([a-z][a-z0-9._-]*(?:/[a-z0-9._-]+)*:[a-z0-9][\w.-]*)(?![A-Za-z0-9_./:-])',
+        # ② 常見映像檔名稱，前後只要不是英數字就算（中文字緊接在後也可以，例如「nginx服務」）
+        r'(?<![A-Za-z0-9_./-])(nginx|redis|postgres|mysql|mongo|node|python|golang|httpd|busybox)(?![A-Za-z0-9_/.:-])',
         # 2026-10-07 量化評估腳本實測發現的真實 bug：「...node:20-alpine 作為
         # api-gateway」這種「image 後面接『作為/當作』再接 app 名稱」的句型，
         # image token 後面不是 pod/container/for/給/，這幾個詞，lookahead 完全
@@ -337,7 +345,9 @@ def _deterministic_deploy_parse(prompt_text: str) -> Optional[dict]:
     for pat in image_patterns:
         for m in re.finditer(pat, raw, re.IGNORECASE):
             cand = m.group(1).strip('.,，。')
-            if cand.lower() not in {'deploy', 'run', 'start', 'launch', 'pod', 'pods'} and (':' in cand or '/' in cand or cand in {'nginx', 'redis', 'postgres', 'mysql', 'node', 'python', 'golang'}):
+            if cand.split(':')[0].lower() in {'port', 'image', 'replicas', 'pods', 'memory', 'cpu', 'name', 'app'}:
+                continue  # 「port:80」這類是設定，不是映像檔
+            if cand.lower() not in {'deploy', 'run', 'start', 'launch', 'pod', 'pods'} and (':' in cand or '/' in cand or cand.lower() in {'nginx', 'redis', 'postgres', 'mysql', 'mongo', 'node', 'python', 'golang', 'httpd', 'busybox'}):
                 image = cand
                 break
         if image:

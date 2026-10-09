@@ -240,3 +240,24 @@ class TestImageExtractionConnectorWords:
         result = _deterministic_deploy_parse("部署三台 mysql")
         assert result is not None
         assert result["image"] == "mysql:latest"
+
+
+# 2026-10-09 兩人同時使用 QA 抓到：Gemini 429/503 退回這個解析器時，中文輸入會丟掉版本號，
+# 甚至把 redis 換成 nginx（使用者要 redis 卻部署 nginx）。單獨送時 Gemini 正常所以測不到。
+@pytest.mark.parametrize("text,image,app", [
+    ("部署 2 個 nginx:1.27，名稱 qa-b-web，port 80", "nginx:1.27", "qa-b-web"),
+    ("部署 2 個 redis:7.2 名稱 cache", "redis:7.2", "cache"),
+    ("部署 3 個 redis 名稱 cache", "redis:latest", "cache"),
+    ("部署 1 個 postgres:16，記憶體 512Mi", "postgres:16", None),
+    ("run myrepo/app:v1.2 named api port:8080", "myrepo/app:v1.2", "api"),
+])
+def test_chinese_input_keeps_image_and_tag_2026_10_09(text, image, app):
+    r = llama_client._deterministic_deploy_parse(text)
+    assert r["image"] == image
+    if app:
+        assert r["app_name"] == app
+
+
+def test_port_and_time_are_not_mistaken_for_images_2026_10_09():
+    assert llama_client._deterministic_deploy_parse("run myrepo/app:v1.2 named api port:8080")["port"] == 8080
+    assert llama_client._deterministic_deploy_parse("10:30 部署 2 個 nginx")["image"] == "nginx:latest"
