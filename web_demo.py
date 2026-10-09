@@ -1535,6 +1535,72 @@ tbody tr:hover td{background:var(--signal-soft)}
 .composer-hint.voice-err{color:var(--caution)}
 @media (prefers-reduced-motion:reduce){.chat-mic.listening::before,.chat-mic.listening::after,.mic-meter i{animation:none}}
 
+
+/* ── 分析報告 ── */
+.rp{display:flex;flex-direction:column;gap:18px}
+.rp-period{display:flex;gap:6px;flex-wrap:wrap}
+.rp-period .chip.on{background:var(--signal);color:var(--on-signal);border-color:var(--signal)}
+.rp-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.rp-kpi{position:relative;padding:12px 14px 11px;border:1px solid var(--grid);border-radius:6px;background:var(--panel-2);overflow:hidden;animation:popIn .4s both;animation-delay:calc(var(--i,0)*70ms)}
+.rp-kpi::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--kc,var(--signal));transform-origin:left;animation:barGrow .8s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(300ms + var(--i,0)*70ms)}
+.rp-kpi span{display:block;font-size:12.5px;color:var(--text-3)}
+.rp-kpi b{display:block;font-family:var(--f-id);font-size:28px;font-weight:600;line-height:1.25;color:var(--text);margin-top:2px}
+.rp-kpi small{display:block;font-size:12.5px;color:var(--text-2);margin-top:1px}
+.rp-sec{border-top:1px solid var(--grid);padding-top:14px}
+.rp-sec>h3{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 10px;font-size:15px;font-weight:600;color:var(--text)}
+.rp-tag{font-size:11.5px;font-weight:500;padding:2px 8px;border-radius:10px;border:1px solid var(--grid-2);color:var(--text-3)}
+.rp-tag.fact{border-color:var(--signal-line);color:var(--signal)}
+.rp-tag.rule{border-color:color-mix(in srgb,var(--pass) 45%,transparent);color:var(--pass)}
+.rp-tag.ai{border-color:color-mix(in srgb,var(--caution) 50%,transparent);color:var(--caution)}
+.rp-chart{width:100%;height:auto;display:block}
+.rp-chart .bar{transform-box:fill-box;transform-origin:bottom;animation:rpRise .7s cubic-bezier(.2,.7,.2,1) both}
+@keyframes rpRise{from{transform:scaleY(0)}}
+.rp-chart .axis{stroke:var(--grid);stroke-width:1}
+.rp-chart text{fill:var(--text-3);font-size:11px;font-family:var(--f-id)}
+.rp-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--text-2);margin-top:6px}
+.rp-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.rp-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.rp-cols h4{margin:0 0 8px;font-size:13px;font-weight:500;color:var(--text-3)}
+.rp-hbars{display:flex;flex-direction:column;gap:8px}
+.rp-hbar{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:4px 10px;font-size:13.5px;color:var(--text-2)}
+.rp-hbar .lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rp-hbar b{font-family:var(--f-id);font-weight:500;text-align:right;color:var(--text)}
+.rp-hbar .track{grid-column:1/-1;height:6px;border-radius:3px;background:var(--panel-3);overflow:hidden}
+.rp-hbar .fill{height:100%;border-radius:3px;background:var(--hc,var(--signal));transform-origin:left;animation:barGrow .8s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(200ms + var(--i,0)*80ms)}
+.rp-none{font-size:13.5px;color:var(--text-3)}
+.rp-obs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.rp-obs li{position:relative;padding:8px 12px 8px 30px;border-radius:5px;background:var(--panel-2);font-size:14px;line-height:1.6;color:var(--text-2);animation:rowIn .4s both;animation-delay:calc(var(--i,0)*90ms)}
+.rp-obs li::before{content:"";position:absolute;left:12px;top:15px;width:7px;height:7px;border-radius:50%;background:var(--text-3)}
+.rp-obs li.good::before{background:var(--pass)}
+.rp-obs li.warn::before{background:var(--caution)}
+.rp-ai{margin:0;padding:12px 14px;border-left:3px solid var(--caution);background:color-mix(in srgb,var(--caution) 7%,transparent);border-radius:0 6px 6px 0}
+.rp-ai p{margin:0 0 6px;font-size:14px;line-height:1.7;color:var(--text-2)}
+.rp-ai p:last-child{margin-bottom:0}
+.rp-ai .note{font-size:12.5px;color:var(--text-3)}
+.rp-tl{list-style:none;margin:0;padding:0}
+.rp-tl li{display:grid;grid-template-columns:110px 84px minmax(0,1fr);gap:10px;padding:7px 0;border-bottom:1px solid var(--grid);font-size:13.5px;color:var(--text-2)}
+.rp-tl li:last-child{border-bottom:0}
+.rp-tl time{font-family:var(--f-id);font-size:12.5px;color:var(--text-3)}
+.rp-tl .k{font-size:12.5px;color:var(--text-3)}
+.rp-tl .k.fail{color:var(--stop)}
+.rp-tl .app{font-family:var(--f-id);color:var(--text);margin-right:6px}
+.rp-foot{font-size:12.5px;color:var(--text-3);line-height:1.6}
+.rp-pdf-hint{display:none;font-size:12.5px;color:var(--text-2);margin-top:4px}
+.rp-pdf-hint.on{display:block}
+#print-host{display:none}
+@media (max-width:900px){.rp-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.rp-cols{grid-template-columns:1fr}.rp-tl li{grid-template-columns:90px minmax(0,1fr)}.rp-tl .k{display:none}}
+@media print{
+  html,body{height:auto!important;overflow:visible!important;background:#fff!important}
+  body.print-report>*:not(#print-host){display:none!important}
+  body.print-report #print-host{display:block!important;padding:0}
+  #print-host .module{border:0!important;box-shadow:none!important;background:#fff!important}
+  #print-host .module::before,#print-host .module::after{display:none!important}
+  #print-host .filters,#print-host .rp-period,#print-host .rp-pdf-hint{display:none!important}
+  #print-host *{animation:none!important}
+  #print-host .rp-sec,#print-host .rp-kpi,#print-host .rp-chart{break-inside:avoid}
+  #print-host .print-title{display:block!important;font-size:20px;font-weight:700;margin:0 0 4px}
+}
+.print-title{display:none}
 /* 情境推算：部署單上說明副本數怎麼算出來、能省多少 */
 .scn{position:relative;margin:2px 0 16px;border:1px solid var(--signal-line);border-radius:6px;background:linear-gradient(180deg,var(--signal-soft),transparent 70%);padding:14px 16px;overflow:hidden}
 .scn::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--signal)}
@@ -2794,11 +2860,13 @@ function removeTyping(){ const el=document.getElementById('typing-indicator'); i
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 const DESTRUCTIVE_KINDS = ['scale','update_image','rollback','delete','healer_fix','healer_auto_fix'];
 const READ_ACTIONS = ['list_pods','list_deployments','gitops_log','cluster_metrics','healer_scan',
-                      'describe_pod','pod_health','describe_deployment'];
+                      'describe_pod','pod_health','describe_deployment','report'];
 
 function matchClientRule(text){
   const t = text.trim();
   const rules = [
+    // 分析報告：句子裡有「報告／報表／週報／月報」而且不是在要求部署
+    ['report', /^(?!.*(?:\u90e8\u7f72|deploy|\u8d77\u4e00\u500b|\u958b\u4e00\u500b)).*(?:\u5206\u6790\u5831\u544a|\u5831\u544a|\u5831\u8868|\u9031\u5831|\u5468\u5831|\u6708\u5831|\breport\b)/i, () => ({q:text})],
     ['list_pods', /^(list|show|\u67e5\u770b|\u986f\u793a|\u5217\u51fa)\s*(all\s*|\u6240\u6709|\u5168\u90e8)?\s*(pods?|\u5bb9\u5668)/i, null],
     ['list_deployments', /^(list|show|\u67e5\u770b|\u986f\u793a|\u5217\u51fa)\s*(all\s*|\u6240\u6709|\u5168\u90e8)?\s*(deploy(ment)?s?|\u90e8\u7f72)/i, null],
     ['gitops_log', /^(gitops|deploy history|git ?log)|\u90e8\u7f72(\u7d00\u9304|\u6b77\u53f2|\u8a18\u9304)/i, null],
@@ -3401,8 +3469,96 @@ W.depdetail = {
   body: d => depDetailHTML(d.dep, null, {inline:true}),
 };
 
+
+// ── 分析報告 ──
+// 三種內容分開標示：統計（從紀錄算出來）、系統觀察（固定規則依數字寫的）、AI 解讀（數字已核對）
+const RP_DAYS = [[1, '今天'], [7, '7 天'], [30, '30 天'], [90, '90 天']];
+const RP_KIND = {deploy:'部署', review:'審查', scale:'擴縮', update:'換映像檔', delete:'刪除', rollback:'回滾', heal:'自動修復'};
+function rpCount(n, dec){ return `<b class="count-up" data-to="${Number(n) || 0}" data-dec="${dec || 0}">${esc(dec ? Number(n || 0).toFixed(dec) : (n || 0))}</b>`; }
+function rpDaily(series){
+  const days = series || [];
+  if(!days.length) return '<p class="rp-none">沒有資料。</p>';
+  const W = 760, H = 170, padL = 26, padB = 22, padT = 8;
+  const max = Math.max(1, ...days.map(d => d.deploys + d.blocks + d.heals + d.ops));
+  const bw = (W - padL - 4) / days.length;
+  const gap = Math.min(4, bw * .25);
+  const y = v => (H - padB) - v / max * (H - padB - padT);
+  const parts = [['deploys', 'var(--signal)'], ['ops', 'var(--text-3)'], ['blocks', 'var(--caution)'], ['heals', 'var(--pass)']];
+  const step = Math.max(1, Math.ceil(days.length / 8));
+  let bars = '', labels = '';
+  days.forEach((d, i) => {
+    let acc = 0;
+    const x = padL + i * bw + gap / 2;
+    const tip = `${d.date}：部署 ${d.deploys}、其他操作 ${d.ops}、審查擋下 ${d.blocks}、自動修復 ${d.heals}`;
+    parts.forEach(([k, c]) => {
+      const v = d[k] || 0;
+      if(!v) return;
+      const y1 = y(acc + v), h = y(acc) - y1;
+      bars += `<rect class="bar" x="${x.toFixed(1)}" y="${y1.toFixed(1)}" width="${Math.max(1, bw - gap).toFixed(1)}" height="${h.toFixed(1)}" rx="1.5" fill="${c}" style="animation-delay:${Math.min(900, i * 18)}ms"><title>${esc(tip)}</title></rect>`;
+      acc += v;
+    });
+    if(!acc) bars += `<rect x="${x.toFixed(1)}" y="${(H - padB - 1).toFixed(1)}" width="${Math.max(1, bw - gap).toFixed(1)}" height="1" fill="var(--grid-2)"><title>${esc(tip)}</title></rect>`;
+    if(i % step === 0) labels += `<text x="${(x + (bw - gap) / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle">${esc(d.date.slice(5))}</text>`;
+  });
+  const grid = [0, .5, 1].map(f => { const v = Math.round(max * f); return `<line class="axis" x1="${padL}" x2="${W}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke-dasharray="${f ? '2 4' : ''}"/><text x="${padL - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">${v}</text>`; }).join('');
+  return `<svg class="rp-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="每日活動">${grid}${bars}${labels}</svg>
+    <div class="rp-legend"><span><i style="background:var(--signal)"></i>部署</span><span><i style="background:var(--text-3)"></i>擴縮、換映像檔等操作</span><span><i style="background:var(--caution)"></i>審查擋下</span><span><i style="background:var(--pass)"></i>自動修復</span></div>`;
+}
+function rpHBars(pairs, color, empty){
+  if(!pairs || !pairs.length) return `<p class="rp-none">${esc(empty)}</p>`;
+  const max = Math.max(...pairs.map(p => p[1]));
+  return `<div class="rp-hbars">${pairs.map((p, i) => `<div class="rp-hbar" style="--i:${i};--hc:${color}"><span class="lbl" title="${esc(p[0])}">${esc(p[0])}</span><b>${esc(p[1])}</b><div class="track"><div class="fill" style="width:${Math.max(4, Math.round(p[1] / max * 100))}%"></div></div></div>`).join('')}</div>`;
+}
+function rpTime(ts){
+  const d = new Date(ts * 1000);
+  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+W.report = {
+  summary: d => `分析報告：${d.period.start} 到 ${d.period.end}`,
+  head: d => `<h2>分析報告</h2><span class="meta"><span>${esc(d.period.start)} 到 ${esc(d.period.end)}</span><span>${esc(d.at || '')} 產生</span></span>
+    <div class="filters"><div class="rp-period" role="group" aria-label="報告期間">${RP_DAYS.map(([n, l]) => `<button type="button" class="chip ${d.period.days === n ? 'on' : 'ghost'}" data-act="report-days" data-days="${n}" aria-pressed="${d.period.days === n}">${l}</button>`).join('')}</div>
+    <button type="button" class="chip ghost" data-act="report-pdf">下載 PDF</button></div>`,
+  body: d => {
+    const dp = d.deploys, rv = d.reviews, hl = d.heals, inc = d.incidents, live = d.live || {};
+    const kpis = [
+      ['部署成功', rpCount(dp.ok), dp.failed ? `另有 ${dp.failed} 次失敗` : `共 ${dp.apps} 個服務`, 'var(--signal)'],
+      ['審查擋下', rpCount(rv.block), rv.total ? `共審查 ${rv.total} 次` : '還沒有審查紀錄', 'var(--caution)'],
+      ['自動修復', rpCount(hl.total), hl.total ? `修好 ${hl.ok} 次` : '期間內沒有狀況', 'var(--pass)'],
+      ['連續無狀況', inc.days_without_incident == null ? '<b>未知</b>' : rpCount(inc.days_without_incident), inc.last_incident ? `上次是 ${inc.last_incident}` : '天', 'var(--pass)'],
+      ['目前服務', live.services == null ? '<b>未知</b>' : rpCount(live.services), live.monthly_usd != null ? `估計每月 $${live.monthly_usd}` : (live.unhealthy ? `${live.unhealthy} 個 Pod 不正常` : ''), 'var(--signal)'],
+    ];
+    const cats = Object.entries(rv.block_by_category || {});
+    const ai = d.ai;
+    let aiHTML;
+    if(!d.has_data) aiHTML = '<p class="rp-none">期間內沒有紀錄，所以沒有產生 AI 解讀。</p>';
+    else if(!ai || ai.unavailable) aiHTML = '<p class="rp-none">AI 解讀這次沒有產生（AI 服務沒有回應）。上面的統計和系統觀察不受影響。</p>';
+    else aiHTML = `<div class="rp-ai">${ai.sentences.length ? ai.sentences.map(x => `<p>${esc(x)}</p>`).join('') : '<p>AI 寫的句子都提到統計裡沒有的數字，全部刪掉了。</p>'}
+        ${ai.dropped ? `<p class="note">有 ${ai.dropped} 句提到統計裡查不到的數字，已經刪掉，避免讓你看到沒有根據的說法。</p>` : ''}</div>`;
+    return `<div class="rp">
+      <div class="print-title">ZeroTouch 分析報告</div>
+      <div class="rp-kpis">${kpis.map((k, i) => `<div class="rp-kpi" style="--i:${i};--kc:${k[3]}"><span>${k[0]}</span>${k[1]}<small>${esc(k[2])}</small></div>`).join('')}</div>
+      <section class="rp-sec"><h3>每日活動<span class="rp-tag fact">統計</span></h3>${rpDaily(d.series)}</section>
+      <section class="rp-sec"><h3>部署前把關<span class="rp-tag fact">統計</span></h3>
+        <div class="rp-cols"><div><h4>擋下的原因</h4>${rpHBars(cats, 'var(--caution)', '期間內沒有被擋下的部署。')}
+          ${rv.blocked_cost_usd ? `<p class="rp-foot" style="margin-top:8px">因為成本或叢集容量被擋下的部署，如果上線估計每月要 $${esc(rv.blocked_cost_usd)}。</p>` : ''}</div>
+          <div><h4>最常出現的審查提醒</h4>${rpHBars(rv.top_warnings, 'var(--signal)', '期間內沒有審查提醒。')}</div></div></section>
+      <section class="rp-sec"><h3>自動修復<span class="rp-tag fact">統計</span></h3>
+        <div class="rp-cols"><div><h4>原因</h4>${rpHBars(hl.top_causes, 'var(--pass)', '期間內 Healer 沒有處理任何狀況。')}</div>
+          <div><h4>出狀況的服務</h4>${rpHBars(hl.top_apps, 'var(--stop)', '沒有。')}</div></div></section>
+      <section class="rp-sec"><h3>系統觀察<span class="rp-tag rule">依統計規則產生</span></h3>
+        ${(d.observations || []).length ? `<ul class="rp-obs">${d.observations.map((o, i) => `<li class="${esc(o.level)}" style="--i:${i}">${esc(o.text)}</li>`).join('')}</ul>` : '<p class="rp-none">沒有特別需要注意的地方。</p>'}</section>
+      <section class="rp-sec"><h3>AI 解讀<span class="rp-tag ai">AI 根據上面的統計撰寫，數字已核對</span></h3>${aiHTML}</section>
+      <section class="rp-sec"><h3>最近的紀錄<span class="rp-tag fact">統計</span></h3>
+        ${(d.recent || []).length ? `<ol class="rp-tl">${d.recent.slice(0, 12).map(r => `<li><time>${rpTime(r.ts)}</time><span class="k ${r.outcome === 'fail' || r.outcome === 'block' ? 'fail' : ''}">${esc(RP_KIND[r.kind] || r.kind)}</span><span>${r.app ? `<span class="app">${esc(r.app)}</span>` : ''}${esc(r.detail || '')}</span></li>`).join('')}</ol>` : '<p class="rp-none">期間內沒有紀錄。</p>'}</section>
+      <p class="rp-foot">資料來源：平台自己的操作紀錄${d.period.records_since ? `（從 ${esc(d.period.records_since)} 開始累積）` : ''}，只包含你自己帳號的服務。費用依公有雲牌價估算，放在你自己的電腦或學校叢集不另外收費。</p>
+      <p class="rp-pdf-hint" role="status">列印視窗打開後，「目的地」選「另存為 PDF」再按儲存。</p>
+    </div>`;
+  },
+};
+
 // 重新整理：重新抓資料，保留目前的篩選與頁碼
 const W_LOAD = {
+  report: async (old) => Object.assign(await getJSON('/api/report?' + (old && old.period ? 'days=' + old.period.days : 'q=' + encodeURIComponent((old && old.q) || ''))), {at:nowHM()}),
   pods: async () => ({items:((await getJSON('/api/pods')).pods || []).map(slimPod), at:nowHM()}),
   deployments: async () => ({items:(await getJSON('/api/deployments')).deployments || [], at:nowHM()}),
   gitops: async () => ({items:(await getJSON('/api/gitops')).commits || [], at:nowHM()}),
@@ -3458,6 +3614,50 @@ async function refreshWidget(el){
     if(btn){ btn.disabled = false; btn.textContent = '重新整理失敗，再試一次'; }
   }
 }
+// 報告存成 PDF：複製到專用的列印容器，切淺色主題後打開瀏覽器的列印視窗，印完還原
+function printReport(w){
+  const hint = w.querySelector('.rp-pdf-hint');
+  if(hint) hint.classList.add('on');
+  let host = document.getElementById('print-host');
+  if(!host){ host = document.createElement('div'); host.id = 'print-host'; document.body.appendChild(host); }
+  host.innerHTML = '';
+  const clone = w.cloneNode(true);
+  clone.querySelectorAll('.count-up').forEach(el => { el.textContent = el.dataset.dec > 0 ? Number(el.dataset.to).toFixed(el.dataset.dec) : el.dataset.to; });
+  host.appendChild(clone);
+  const root = document.documentElement;
+  const prevTheme = root.getAttribute('data-theme');
+  root.setAttribute('data-theme', 'light');
+  document.body.classList.add('print-report');
+  const prevTitle = document.title;
+  const data = decState(w.dataset.wData) || {};
+  document.title = 'ZeroTouch 分析報告 ' + ((data.period && data.period.start) || '') + ' 到 ' + ((data.period && data.period.end) || '');
+  const restore = () => {
+    document.body.classList.remove('print-report');
+    if(prevTheme) root.setAttribute('data-theme', prevTheme); else root.removeAttribute('data-theme');
+    document.title = prevTitle;
+    host.innerHTML = '';
+    window.removeEventListener('afterprint', restore);
+  };
+  window.addEventListener('afterprint', restore);
+  setTimeout(() => { window.print(); setTimeout(() => { if(document.body.classList.contains('print-report')) restore(); }, 1500); }, 60);
+}
+// 數字從 0 跳到目標值；新插入的元素自動處理，不用每個地方各自呼叫
+function runCountUps(scope){
+  (scope || document).querySelectorAll('.count-up:not([data-done])').forEach(el => {
+    el.setAttribute('data-done', '1');
+    const to = Number(el.dataset.to) || 0, dec = Number(el.dataset.dec) || 0;
+    if(!to || window.matchMedia('(prefers-reduced-motion: reduce)').matches){ el.textContent = to.toFixed(dec); return; }
+    const t0 = performance.now(), dur = 900;
+    const tick = now => {
+      const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = (to * e).toFixed(dec);
+      if(k < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+new MutationObserver(() => runCountUps()).observe(document.documentElement, {childList:true, subtree:true});
+
 function appendWidget(kind, data, state, lead){
   appendMsg('assistant', (lead ? `<div class="w-lead">${esc(lead)}</div>` : '') + widgetHTML(kind, data, state));
 }
@@ -3477,6 +3677,12 @@ async function runReadAction(action){
       const data = await W_LOAD.deployments();
       removeTyping();
       appendWidget('deployments', data, {p:1}, data.items.length ? `你目前有 ${data.items.length} 個服務。點任一列可以擴縮、更新映像檔、回滾或刪除。` : '');
+    } else if(action === 'report'){
+      const data = await W_LOAD.report({q:args.q || ''});
+      removeTyping();
+      appendWidget('report', data, {}, data.has_data
+        ? `這是 ${data.period.start} 到 ${data.period.end} 的分析報告。數字都是從平台紀錄算出來的，AI 解讀另外標示。`
+        : '這段期間還沒有紀錄。平台會從現在開始累積，部署、審查、修復之後就會出現在報告裡。');
     } else if(action === 'gitops_log'){
       const data = await W_LOAD.gitops();
       removeTyping();
@@ -3665,6 +3871,15 @@ document.addEventListener('click', function(e){
   if(act === 'filter' && w){ rerenderWidget(w, {f:t.dataset.f, p:1}); return; }
   if(act === 'sort' && w){ const st = decState(w.dataset.wState) || {}; const k = t.dataset.k; rerenderWidget(w, {k, dir:st.k === k ? -(st.dir || 1) : 1, p:1}); return; }
   if(act === 'refresh' && w){ refreshWidget(w); return; }
+  if(act === 'report-days' && w){
+    const old = decState(w.dataset.wData) || {};
+    w.querySelectorAll('[data-act="report-days"]').forEach(b => b.disabled = true);
+    t.textContent = '產生中';
+    W_LOAD.report({period:{days:parseInt(t.dataset.days, 10) || 30}}).then(data => rerenderWidget(w, {}, data))
+      .catch(() => { t.textContent = '產生失敗，再試一次'; w.querySelectorAll('[data-act="report-days"]').forEach(b => b.disabled = false); });
+    return;
+  }
+  if(act === 'report-pdf' && w){ printReport(w); return; }
   if(act === 'open-pod'){ openPodDrawer(t.dataset.name); return; }
   if(act === 'open-dep'){ openDepDrawer(t.dataset.name); return; }
   if(act === 'diagnose'){ openPodDrawer(t.dataset.name, true); return; }
@@ -4534,6 +4749,15 @@ def agent_report():
         return jsonify({"error": "invalid report"}), 400
     CLUSTERS.store_report(username, report)
     _record_remote_history(username, report)
+    try:
+        from gitops.tenant_repo import tenant_slug
+        _record_snapshot(tenant_slug(username), [
+            {"phase": p.get("phase") or "Unknown",
+             "restarts": sum(c.get("restart_count", 0) for c in p.get("containers") or []),
+             "ready": sum(1 for c in p.get("containers") or [] if c.get("ready")),
+             "total": len(p.get("containers") or [])} for p in report.get("pods") or []])
+    except Exception:
+        pass
     return "", 204
 
 
@@ -4656,6 +4880,7 @@ def _rag_fallback_context(message: str, history: list = None) -> tuple:
 # ── Chat 意圖辨識：規則層（前端規則的 Python 對應，當安全網）──────────
 # 每條 (action, compiled_regex, group->arg 對應)。第一條命中即回傳。
 _INTENT_RULES = [
+    ("report", re.compile(r"^(?!.*(?:部署|deploy|起一個|開一個)).*(?:分析報告|報告|報表|週報|周報|月報|\breport\b)", re.I), {}),
     ("list_pods", re.compile(r"^(list|show|查看|顯示|列出)\s*(all\s*|所有|全部)?\s*(pods?|容器)", re.I), {}),
     ("list_deployments", re.compile(r"^(list|show|查看|顯示|列出)\s*(all\s*|所有|全部)?\s*(deploy(ment)?s?|部署)", re.I), {}),
     ("gitops_log", re.compile(r"^(gitops|deploy history|git ?log)|部署(紀錄|歷史|記錄)", re.I), {}),
@@ -6209,6 +6434,7 @@ def _healer_background_loop(interval: int = 30):
         # 自動修復邏輯。查全叢集所有 Pod（不是只有問題 Pod），所有帳號都要有趨勢圖。
         try:
             core = k8s_client.CoreV1Api()
+            per_ns = {}
             for pod in core.list_pod_for_all_namespaces().items:
                 app_key = pod.metadata.labels.get("app") if pod.metadata.labels else None
                 key = f"{pod.metadata.namespace}/{app_key or _app_key_for_pod_name(pod.metadata.name)}"
@@ -6217,6 +6443,11 @@ def _healer_background_loop(interval: int = 30):
                     hist = _pod_history.setdefault(key, [])
                     hist.append(snap)
                     del hist[:-_POD_HISTORY_MAX_SAMPLES]
+                if pod.metadata.namespace.startswith("user-"):
+                    per_ns.setdefault(pod.metadata.namespace, []).append(snap)
+            # 分析報告用的資源快照（每個帳號 10 分鐘最多一筆，見 _record_snapshot）
+            for ns_name, lights in per_ns.items():
+                _record_snapshot(ns_name, lights)
         except Exception:
             pass
 
@@ -6822,6 +7053,174 @@ def _remote_healer_loop(interval: int = 30):
             seen &= now_keys
         except Exception as e:
             print(f"[remote healer] loop error: {e}")
+
+
+
+# ── 事件紀錄與分析報告（2026-10-10）──────────────────────────────────
+# 部署、審查判決、擴縮、換映像檔、刪除、回滾、Healer 修復、資源快照都寫進 data/events.db，
+# 分析報告（agents/report.py）才能回答「過去這段時間發生了什麼」。紀錄一律帶 namespace，
+# 查詢也只查目前登入帳號自己的 namespace（_session_ns()），沿用既有的多租戶隔離。
+from core import event_store as _events
+_events.init()
+
+_EVENT_ROUTES = {"/api/deploy/parse", "/api/deploy", "/api/scale", "/api/update", "/api/delete", "/api/rollback"}
+
+
+def _review_event_data(review: dict, extra: dict = None) -> dict:
+    review = review or {}
+    agents = ((review.get("agents") or {}).get("agents") or {})
+    issues = []
+    for key in ("security", "cost", "perf"):
+        for i in (agents.get(key) or {}).get("issues") or []:
+            if i.get("message") and i.get("severity") in ("critical", "high", "medium"):
+                issues.append(str(i["message"])[:200])
+    est = ((agents.get("cost") or {}).get("cost_estimate") or {})
+    d = {"blockers": [str(b)[:300] for b in (review.get("blockers") or [])][:6],
+         "issues": issues[:8], "monthly_usd": est.get("estimated_usd")}
+    d.update(extra or {})
+    return d
+
+
+@app.after_request
+def _record_events(resp):
+    """操作結束後依回應內容記一筆。任何錯誤都吞掉，紀錄不能影響操作本身。"""
+    try:
+        if request.method != "POST" or request.path not in _EVENT_ROUTES or "username" not in session:
+            return resp
+        out = resp.get_json(silent=True) or {}
+        body = request.get_json(silent=True) or {}
+        ns, user = _session_ns(), session.get("username")
+        path = request.path
+        if path in ("/api/deploy/parse", "/api/deploy"):
+            review = out.get("review")
+            spec = out.get("raw") or out.get("parsed") or body.get("parsed") or {}
+            app_name = spec.get("app_name") or (spec.get("output") or {}).get("app_name")
+            rejected = bool(out.get("rejected"))
+            # 審查：在「審查」那一步（帶著使用者確認過的規格）記一次；任何階段被擋下也記
+            if review and (rejected or (path == "/api/deploy/parse" and body.get("parsed"))):
+                _events.record(ns, "review", app_name, review.get("decision") or ("block" if rejected else None),
+                               _review_event_data(review, {"image": spec.get("image"), "pods": spec.get("pods")}),
+                               username=user)
+            if path == "/api/deploy" and not rejected and resp.status_code < 400:
+                kd = out.get("k8s_deploy") or {}
+                ok = kd.get("ok") is not False and (out.get("gitops") or {}).get("ok", True) is not False
+                rs = out.get("resource_summary") or {}
+                _events.record(ns, "deploy", app_name, "ok" if ok else "fail",
+                               {"image": spec.get("image"), "pods": spec.get("pods"), "port": spec.get("port"),
+                                "monthly_usd": rs.get("monthly_usd"),
+                                "error": None if ok else (kd.get("message") or (out.get("gitops") or {}).get("message"))},
+                               username=user)
+            elif path == "/api/deploy" and resp.status_code >= 400 and not rejected and out.get("error"):
+                _events.record(ns, "deploy", app_name, "fail", {"error": str(out.get("error"))[:300]}, username=user)
+            return resp
+        kind = path.rsplit("/", 1)[-1]
+        ok = bool(out.get("success")) and resp.status_code < 400
+        name = (body.get("name") or body.get("app_name") or "").strip()[:100]
+        data = {"error": None if ok else str(out.get("error") or out.get("message") or "")[:300]}
+        if kind == "scale":
+            data["replicas"] = body.get("replicas")
+        if kind == "update":
+            data["image"] = body.get("image")
+            data["previous_image"] = out.get("previous_image")
+        _events.record(ns, kind, name, "ok" if ok else "fail", data, username=user)
+    except Exception as e:
+        print(f"[事件紀錄] 略過：{e}")
+    return resp
+
+
+# Healer：手動修復、一鍵修復、背景自動修復最後都呼叫全域的 _real_heal_pod，在最外層包一層記錄
+_real_heal_pod_unrecorded = _real_heal_pod
+_HEAL_ACTION_LABEL = {"restart_pod": "重新啟動", "increase_memory": "調高記憶體上限",
+                      "rollback": "回到上一版", "restore_previous_image": "換回上一個映像檔",
+                      "restart_app": "重新啟動", "set_memory_limit": "調高記憶體上限", "revert_app": "回到上一版"}
+
+
+def _real_heal_pod(pod_name, namespace="default"):
+    result = _real_heal_pod_unrecorded(pod_name, namespace)
+    try:
+        action = (result or {}).get("action")
+        if action and action not in ("none", "in_progress"):
+            _events.record(namespace, "heal", _app_key_for_pod_name(pod_name),
+                           "ok" if result.get("ok") else "fail",
+                           {"pod": pod_name, "action": action, "action_label": _HEAL_ACTION_LABEL.get(action, action),
+                            "root_cause": result.get("root_cause"), "message": str(result.get("message") or "")[:300]})
+    except Exception as e:
+        print(f"[事件紀錄] Healer 紀錄略過：{e}")
+    return result
+
+
+# 資源快照：每個 namespace 每 10 分鐘最多記一次（Pod 數、異常數、累計重啟）
+_SNAPSHOT_EVERY = 600
+_snapshot_last = {}
+
+
+def _record_snapshot(namespace: str, lights: list):
+    now = _time.time()
+    if not namespace or now - _snapshot_last.get(namespace, 0) < _SNAPSHOT_EVERY:
+        return
+    _snapshot_last[namespace] = now
+    unhealthy = sum(1 for x in lights if x.get("phase") != "Succeeded"
+                    and not (x.get("phase") == "Running" and x.get("total") and x.get("ready") == x.get("total")))
+    _events.record(namespace, "snapshot", None, None,
+                   {"pods": len(lights), "unhealthy": unhealthy, "restarts": sum(int(x.get("restarts") or 0) for x in lights)})
+
+
+def _report_live(ns: str) -> dict:
+    live = {}
+    try:
+        pods = k8s_get_pods(namespace=ns) or []
+        live["pods"] = len(pods)
+        def _bad(p):
+            if p.get("phase") == "Succeeded":
+                return False
+            ready = any(c.get("type") == "Ready" and c.get("status") == "True" for c in p.get("conditions") or [])
+            return p.get("phase") != "Running" or not ready
+        live["unhealthy"] = sum(1 for p in pods if _bad(p))
+    except Exception:
+        pass
+    try:
+        dash = _dashboard_summary(ns)
+        live["services"] = len(dash.get("my_deployments") or [])
+        live["cpu_cores"] = dash.get("my_total_cpu_cores")
+        live["mem_gib"] = dash.get("my_total_mem_gib")
+        live["monthly_usd"] = dash.get("my_monthly_usd")
+    except Exception:
+        pass
+    return live
+
+
+def _build_user_report(ns: str, days: int, with_ai: bool = True) -> dict:
+    from agents.report import build_report, validate_narrative, facts_for_model
+    since = _time.time() - days * 86400
+    facts = build_report(_events.query(ns, since=since), days, live=_report_live(ns),
+                         first_record_ts=_events.first_ts(ns))
+    facts["ai"] = None
+    if with_ai and facts["has_data"]:
+        try:
+            from core.gemini_client import gemini_report_narrative
+            text = gemini_report_narrative(facts_for_model(facts))
+        except Exception:
+            text = None
+        if text:
+            facts["ai"] = validate_narrative(text, facts)
+        else:
+            facts["ai"] = {"sentences": [], "dropped": 0, "unavailable": True}
+    facts["generated_at"] = _utc_now_iso()
+    facts["namespace"] = ns
+    return facts
+
+
+@app.route("/api/report")
+def api_report():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    from agents.report import parse_period, MAX_DAYS
+    try:
+        days = int(request.args.get("days") or 0)
+    except ValueError:
+        days = 0
+    days = max(1, min(MAX_DAYS, days)) if days else parse_period(request.args.get("q", ""))
+    return jsonify(_build_user_report(_session_ns(), days, with_ai=request.args.get("ai", "1") != "0"))
 
 
 if __name__ == "__main__":

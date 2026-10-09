@@ -11,3 +11,7 @@ core/config.py 匯入時會讀 .env，但只補「環境變數裡還沒有的」
 import os
 
 os.environ["CUSTOMER_CLUSTER_MODE"] = "0"
+
+# 事件紀錄（core/event_store.py）寫到暫存檔，不要混進開發者 data/events.db 的真實紀錄
+import tempfile
+os.environ["ZT_EVENTS_DB"] = os.path.join(tempfile.mkdtemp(prefix="zt-events-"), "events.db")

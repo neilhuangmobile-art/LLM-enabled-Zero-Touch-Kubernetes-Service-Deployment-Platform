@@ -242,3 +242,24 @@ def gemini_extract_scenario(text: str) -> Optional[dict]:
         return data if isinstance(data, dict) else None
     except Exception:
         return None
+
+
+# ── 分析報告的 AI 解讀（2026-10-10）───────────────────────────────
+# 只拿 agents/report.py 算好的統計結果當輸入。回來的句子會由 agents/report.validate_narrative()
+# 核對：句子裡的數字在統計結果裡找不到就整句刪掉。
+_REPORT_SYSTEM = (
+    "You write the interpretation section of an operations report for a Kubernetes hosting "
+    "platform. The reader is a beginner who does not know Kubernetes. Input is a JSON object of "
+    "statistics that were computed from logs. Write 3 to 5 short sentences in Traditional Chinese "
+    "(Taiwan), one per line, no bullets, no markdown, no emoji. Explain what the numbers mean for "
+    "the reader and give concrete next steps they can do inside the platform's chat (for example "
+    "asking it to scan problem pods, scale a service, or change an image). Never tell them to run "
+    "kubectl or any command. Use ONLY numbers that appear in the JSON, copied exactly; do not "
+    "compute new totals, percentages or projections; do not guess causes that are not in the data. "
+    "If there is little data, say so briefly."
+)
+
+
+def gemini_report_narrative(facts: dict) -> Optional[str]:
+    import json
+    return _generate(_REPORT_SYSTEM, json.dumps(facts, ensure_ascii=False, default=str), "報告解讀")
