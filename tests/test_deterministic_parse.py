@@ -261,3 +261,17 @@ def test_chinese_input_keeps_image_and_tag_2026_10_09(text, image, app):
 def test_port_and_time_are_not_mistaken_for_images_2026_10_09():
     assert llama_client._deterministic_deploy_parse("run myrepo/app:v1.2 named api port:8080")["port"] == 8080
     assert llama_client._deterministic_deploy_parse("10:30 部署 2 個 nginx")["image"] == "nginx:latest"
+
+
+# 2026-10-09 前端改版實測抓到：「開 8088 port」被解析成 80。中文常把數字放在 port 前面，
+# 原本只認「port 8088」的順序，抓不到就靜默套用預設值 80，使用者不一定會發現。
+@pytest.mark.parametrize("text,port", [
+    ("部署 2 個 nginx:1.27，開 8088 port", 8088),
+    ("部署 nginx，8088 埠", 8088),
+    ("部署 nginx，埠號 9000", 9000),
+    ("部署 nginx:1.27，port 8088", 8088),
+    ("部署 2 個 nginx:1.27", 80),
+    ("部署 nginx:1.27 記憶體 512Mi", 80),
+])
+def test_port_number_before_keyword_2026_10_09(text, port):
+    assert llama_client._deterministic_deploy_parse(text)["port"] == port

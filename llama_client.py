@@ -414,7 +414,12 @@ def _deterministic_deploy_parse(prompt_text: str) -> Optional[dict]:
             app_name = 'auto-app'
 
     port = 80
-    pm = re.search(r'(?:port|端口|連接埠)\s*(?:=|:|為|是)?\s*(\d{1,5})', raw, re.IGNORECASE)
+    pm = re.search(r'(?:port|端口|連接埠|埠)\s*(?:號)?\s*(?:=|:|為|是|開)?\s*(\d{1,5})', raw, re.IGNORECASE)
+    if not pm:
+        # 2026-10-09：中文常把數字放在前面（「開 8088 port」「8088 埠」），原本只認
+        # 「port 8088」的順序，抓不到就靜默套用預設值 80。前面不能接數字、小數點或冒號，
+        # 避免把映像檔版本（nginx:1.27）或記憶體數字誤當成 port。
+        pm = re.search(r'(?<![\d.:])(\d{1,5})\s*(?:port|埠|端口|連接埠)', raw, re.IGNORECASE)
     if pm:
         port = int(pm.group(1))
         if not (1 <= port <= 65535):

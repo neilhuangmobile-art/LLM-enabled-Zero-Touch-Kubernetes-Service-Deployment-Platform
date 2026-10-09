@@ -380,3 +380,22 @@ class TestRateLimit2026_10_09:
 
     def test_login_page_get_is_never_limited(self, client):
         assert all(client.get("/").status_code == 200 for _ in range(30))
+
+
+def test_legacy_string_user_does_not_crash_every_request(client):
+    """2026-10-09：users.json 裡的舊格式帳號只存一個雜湊字串（不是 dict），封鎖檢查對字串
+    呼叫 .get() 直接拋例外，這個帳號的每一個請求都回 500。"""
+    web_demo.USERS["legacy-user"] = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"
+    with client.session_transaction() as sess:
+        sess["username"] = "legacy-user"
+    resp = client.get("/api/status")
+    assert resp.status_code != 500
+
+
+def test_question_starting_with_deployment_is_not_a_deploy_command():
+    """2026-10-09：部署規則原本是「開頭是 deploy」，問題「Deployment 跟 Service 差在哪？」
+    也被當成部署指令，使用者問概念卻跳出部署單。"""
+    r = web_demo._rule_intent("Deployment 跟 Service 差在哪？")
+    assert r is None or r["action"] != "deploy"
+    assert web_demo._rule_intent("deploy 3 nginx pods for web-frontend")["action"] == "deploy"
+    assert web_demo._rule_intent("run nginx with 2 replicas")["action"] == "deploy"

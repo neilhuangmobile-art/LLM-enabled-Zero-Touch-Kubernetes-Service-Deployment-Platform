@@ -1583,6 +1583,264 @@ tbody tr:hover td{background:var(--signal-soft)}
 .court-verdict{display:none}
 .court-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:12px}
 
+
+/* ══ 對話互動模組（第二階段） ══ */
+.msg.ai .msg-bubble{flex:1;min-width:0}
+.id{font-family:var(--f-id);font-size:.92em}
+.dim{color:var(--text-2)}
+.t-stop{color:var(--stop)}
+.t-warn{color:var(--caution)}
+.w-lead{margin-bottom:10px}
+.md{max-width:74ch}
+.md p{margin:0 0 .6em}
+.md p:last-child{margin-bottom:0}
+.md ul,.md ol{margin:.2em 0 .7em;padding-left:1.4em}
+.md li{margin:.15em 0}
+.md li::marker{color:var(--signal)}
+.md h4{font-size:15.5px;font-weight:700;margin:.8em 0 .3em}
+.md code{background:var(--panel-2);border:1px solid var(--grid);border-radius:4px;padding:0 5px;color:var(--signal)}
+.md pre code{background:none;border:0;padding:0;color:var(--text)}
+.md strong{color:var(--text);font-weight:700}
+
+.zt-w,.flow{padding:0;width:100%}
+.module-head{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:12px 18px;border-bottom:1px solid var(--grid)}
+.module-head h2{margin:0;font-size:15.5px;font-weight:700}
+.module-head .meta{color:var(--text-3);font-size:13.5px;display:flex;gap:10px;flex-wrap:wrap}
+.module-head .meta b{font-weight:500}
+.filters{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--grid-2);background:transparent;color:var(--text-2);border-radius:999px;padding:3px 12px;font-size:13.5px;transition:background .15s,border-color .15s,color .15s}
+.chip:hover{border-color:var(--signal);color:var(--text)}
+.chip[aria-pressed="true"]{background:var(--signal);border-color:var(--signal);color:var(--on-signal)}
+.chip.ghost{border-style:dashed}
+.zt-w .table-wrap,.flow .table-wrap{border:0;border-radius:0;background:transparent}
+.zt-w th{background:transparent}
+.zt-w th button{background:none;border:0;padding:0;color:inherit;font:inherit;display:inline-flex;align-items:center;gap:4px}
+.zt-w th button:hover{color:var(--text)}
+.zt-w th[aria-sort] button{color:var(--signal)}
+.zt-w th[aria-sort="ascending"] button::after{content:"";border:4px solid transparent;border-bottom-color:currentColor;margin-top:-4px}
+.zt-w th[aria-sort="descending"] button::after{content:"";border:4px solid transparent;border-top-color:currentColor;margin-top:4px}
+.zt-w td{white-space:nowrap}
+.zt-w td.wrap{white-space:normal}
+.zt-w tbody tr[data-act]{cursor:pointer}
+.zt-w tbody tr[data-act]:hover td:first-child,.zt-w tbody tr[data-act]:focus-visible td:first-child{box-shadow:inset 2px 0 0 var(--signal)}
+.zt-w tbody tr:focus-visible{outline:none}
+.zt-w tbody tr:focus-visible td{background:var(--signal-soft)}
+td.r,th.r{text-align:right}
+tr.enter{animation:rowIn .3s ease both}
+@keyframes rowIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+.state{display:inline-flex;align-items:center;gap:7px;font-size:14px}
+.state i{width:7px;height:7px;border-radius:50%;flex:none}
+.s-run{color:var(--pass)} .s-run i{background:var(--pass);animation:beat 2.4s ease-out infinite}
+.s-done{color:var(--text-2)} .s-done i{background:var(--text-3)}
+.s-pend,.s-warn{color:var(--caution)} .s-pend i,.s-warn i{background:var(--caution)}
+.s-fail{color:var(--stop)} .s-fail i{background:var(--stop)}
+.zt-w .pager{padding:10px 18px;border-top:1px solid var(--grid);justify-content:flex-end;gap:6px}
+.zt-w .pager .info{margin-right:auto}
+.zt-w .pager button{min-width:32px;height:30px;padding:0 6px;border:1px solid var(--grid-2);background:transparent;border-radius:5px;font-family:var(--f-display);font-size:14px;color:var(--text-2);display:inline-grid;place-items:center}
+.zt-w .pager button:hover:not(:disabled){border-color:var(--signal);color:var(--text)}
+.zt-w .pager button[aria-current]{background:var(--signal);border-color:var(--signal);color:var(--on-signal)}
+.zt-w .pager button:disabled{opacity:.35;cursor:default}
+.zt-w .pager .gap{color:var(--text-3);padding:0 2px}
+.w-empty{padding:28px 18px;text-align:center;color:var(--text-2)}
+.w-empty b{display:block;color:var(--text);font-size:15.5px;margin-bottom:4px}
+.w-empty .btn{margin-top:12px}
+.reps{display:inline-flex;gap:3px;vertical-align:middle;margin-right:8px}
+.reps i{width:7px;height:14px;border-radius:2px;background:var(--grid-2)}
+.reps i.on{background:var(--pass)}
+.reps.short i.on{background:var(--caution)}
+
+/* 時間軸（部署紀錄） */
+.timeline{list-style:none;margin:0;padding:6px 18px 4px}
+.timeline li{position:relative;display:grid;grid-template-columns:120px minmax(0,1fr) auto;gap:4px 16px;align-items:center;padding:10px 0 10px 18px;border-left:1px solid var(--grid)}
+.timeline li::before{content:"";position:absolute;left:-4px;top:17px;width:7px;height:7px;border-radius:50%;background:var(--signal);box-shadow:0 0 0 3px var(--panel)}
+.timeline time{font-family:var(--f-display);font-size:13.5px;color:var(--text-3)}
+.timeline .what{min-width:0;overflow-wrap:anywhere}
+.timeline .app{display:inline-block;font-family:var(--f-id);font-size:13px;border:1px solid var(--signal-line);color:var(--signal);border-radius:4px;padding:0 6px;margin-right:8px}
+.timeline .hash{font-family:var(--f-id);font-size:12.5px;color:var(--text-3);margin-left:8px}
+
+/* 問題清單（自動修復） */
+.issues{list-style:none;margin:0;padding:0}
+.issues li{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 18px;border-bottom:1px solid color-mix(in srgb,var(--grid) 65%,transparent)}
+.issues li:last-child{border-bottom:0}
+.issues .what{flex:1;min-width:200px}
+.issues .what .id{display:block}
+.radar{width:42px;height:42px;margin:0 auto 10px;border-radius:50%;border:1px solid var(--pass);position:relative;overflow:hidden}
+.radar::before{content:"";position:absolute;inset:0;background:conic-gradient(from 0deg,transparent 0deg,color-mix(in srgb,var(--pass) 45%,transparent) 60deg,transparent 61deg);animation:spin 2.4s linear infinite}
+.radar::after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:var(--pass)}
+
+/* 用量儀表 */
+.gauges{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0}
+.gauge-cell{display:flex;align-items:center;gap:16px;padding:16px 18px;border-right:1px solid var(--grid)}
+.gauge-cell:last-child{border-right:0}
+.ring{width:84px;height:84px;flex:none}
+.ring circle{fill:none;stroke-width:8}
+.ring .track{stroke:var(--panel-3)}
+.ring .val{stroke:var(--signal);stroke-linecap:round;transform:rotate(-90deg);transform-origin:50% 50%;animation:ringIn .9s cubic-bezier(.2,.8,.2,1) both}
+.ring.hot .val{stroke:var(--caution)} .ring.full .val{stroke:var(--stop)}
+.ring text{fill:var(--text);font-family:var(--f-display);font-size:19px;font-weight:600}
+@keyframes ringIn{from{stroke-dashoffset:226}}
+.gauge-cell .lbl{color:var(--text-3);font-size:13px}
+.gauge-cell .big{font-family:var(--f-display);font-size:20px;font-weight:600}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--grid)}
+.facts div{padding:12px 18px;border-right:1px solid var(--grid)}
+.facts div:last-child{border-right:0}
+.facts dt{font-size:13px;color:var(--text-3)}
+.facts dd{margin:0;font-family:var(--f-display);font-size:18px;font-weight:600}
+.w-note{padding:10px 18px;border-top:1px solid var(--grid);font-size:13px;color:var(--text-3)}
+
+/* 詳情（抽屜與對話內共用） */
+.pd{display:flex;flex-direction:column;gap:16px}
+.pd-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px;margin:0}
+.kv dt{font-size:13px;color:var(--text-3)}
+.kv dd{margin:0;font-size:14.5px;overflow-wrap:anywhere}
+.bar-g{display:flex;flex-direction:column;gap:5px;font-size:13.5px}
+.bar-g .row{display:flex;justify-content:space-between;color:var(--text-2)}
+.bar-g .bar{height:6px;border-radius:3px;background:var(--panel-3);overflow:hidden}
+.bar-g .bar span{display:block;height:100%;background:var(--signal);width:0;transition:width .8s cubic-bezier(.2,.8,.2,1)}
+.sec-t{font-size:13px;color:var(--text-3);margin-bottom:8px}
+.ctrs{display:flex;flex-direction:column;gap:8px}
+.ctr{border:1px solid var(--grid);border-radius:4px;padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px}
+.ctr .id{overflow-wrap:anywhere}
+.ctr .msgline{grid-column:1 / -1;color:var(--text-2);font-size:13.5px;overflow-wrap:anywhere}
+.events{list-style:none;margin:0;padding:0;border-left:1px solid var(--grid);display:flex;flex-direction:column;gap:12px}
+.events li{position:relative;padding-left:16px;font-size:14px;overflow-wrap:anywhere}
+.events li::before{content:"";position:absolute;left:-4px;top:8px;width:7px;height:7px;border-radius:50%;background:var(--text-3)}
+.events li.bad::before{background:var(--stop)}
+.events b{font-weight:500;margin-right:6px}
+.events .cnt{color:var(--text-3);font-size:12.5px;margin-left:6px}
+.diag{border:1px solid color-mix(in srgb,var(--caution) 50%,transparent);background:var(--caution-soft);border-radius:4px;padding:12px 14px;font-size:14.5px;display:flex;flex-direction:column;gap:4px}
+.diag b{color:var(--caution)}
+.diag .fix{color:var(--text-2)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn.danger{border-color:color-mix(in srgb,var(--stop) 55%,transparent);color:var(--stop);background:transparent}
+.inline-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.inline-form input{width:auto;flex:1;min-width:120px;padding:7px 10px;font-size:14px}
+.inline-form input[type=number]{flex:0 0 90px;min-width:0}
+.form-err{color:var(--stop);font-size:13.5px;min-height:1em}
+.zt-w .pd{padding:16px 18px}
+.pd + .pd{border-top:1px solid var(--grid)}
+.mini-list{display:flex;flex-direction:column;border:1px solid var(--grid);border-radius:4px}
+.mini-list button{display:flex;align-items:center;gap:10px;justify-content:space-between;text-align:left;background:none;border:0;border-bottom:1px solid var(--grid);padding:9px 12px;color:var(--text)}
+.mini-list button:last-child{border-bottom:0}
+.mini-list button:hover{background:var(--signal-soft)}
+.mini-list .id{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+
+/* 抽屜 */
+.zt-scrim{position:fixed;inset:0;background:var(--scrim);z-index:180;opacity:0;pointer-events:none;transition:opacity .2s}
+.zt-scrim.open{opacity:1;pointer-events:auto}
+.zt-drawer{position:fixed;top:0;right:0;bottom:0;width:min(480px,100%);background:var(--panel);border-left:1px solid var(--signal);box-shadow:var(--shadow-pop);z-index:190;transform:translateX(102%);transition:transform .3s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px)}
+.zt-drawer.open{transform:none}
+.zt-drawer header{display:flex;align-items:flex-start;gap:12px;padding:18px 20px;border-bottom:1px solid var(--grid)}
+.zt-drawer header .k{font-size:13px;color:var(--text-3)}
+.zt-drawer header h3{margin:2px 0 0;font-family:var(--f-id);font-size:15.5px;font-weight:500;overflow-wrap:anywhere}
+.zt-drawer header button{margin-left:auto;flex:none}
+.zt-drawer .body{flex:1;overflow-y:auto;padding:18px 20px 28px}
+.skeleton{display:flex;flex-direction:column;gap:12px}
+.skeleton i{display:block;height:14px;border-radius:4px;background:linear-gradient(90deg,var(--panel-2),var(--panel-3),var(--panel-2));background-size:200% 100%;animation:shimmer 1.2s linear infinite}
+.skeleton i:nth-child(2){width:70%}.skeleton i:nth-child(3){width:85%}.skeleton i:nth-child(4){width:55%}
+@keyframes shimmer{to{background-position:-200% 0}}
+
+/* 部署單與流程卡 */
+.steps{list-style:none;display:flex;gap:6px;margin:0 0 0 auto;padding:0;font-size:13px;color:var(--text-3)}
+.steps li{display:flex;align-items:center;gap:6px}
+.steps li + li::before{content:"";width:16px;height:1px;background:var(--grid-2)}
+.steps li.on{color:var(--signal)}
+.steps li.done{color:var(--text-2)}
+.flow .body{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.flow .lead{color:var(--text-2);font-size:14.5px}
+.fgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px}
+.fgrid label{display:block;font-size:13px;color:var(--text-3);margin-bottom:5px}
+.fgrid input{font-family:var(--f-id);font-size:14px;padding:8px 10px}
+.fgrid .hint{font-size:12.5px;color:var(--text-3);margin-top:4px}
+.flow .err{display:none;border:1px solid color-mix(in srgb,var(--stop) 55%,transparent);background:var(--stop-soft);border-radius:4px;padding:9px 12px;font-size:14px}
+.flow .foot{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;padding:12px 18px;border-top:1px solid var(--grid);background:color-mix(in srgb,var(--panel-2) 60%,transparent)}
+.spec{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-bottom:1px solid var(--grid);margin:0}
+.spec div{padding:12px 18px;border-right:1px solid var(--grid);min-width:0}
+.spec div:last-child{border-right:0}
+.spec dt{font-size:13px;color:var(--text-3)}
+.spec dd{margin:2px 0 0;font-size:21px;font-family:var(--f-display);font-weight:600;overflow-wrap:anywhere}
+.spec dd small{font-size:13.5px;font-weight:400;color:var(--text-2);margin-left:4px;font-family:var(--f-body)}
+.review{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.reviewer{position:relative;padding:14px 18px;border-right:1px solid var(--grid);overflow:hidden;min-height:112px}
+.reviewer:last-child{border-right:0}
+.reviewer .role{font-size:13px;color:var(--text-3)}
+.reviewer .verdict{font-weight:700;display:flex;align-items:center;gap:7px;margin-top:2px}
+.reviewer .verdict i{width:8px;height:8px;border-radius:2px}
+.reviewer p{margin:4px 0 0;font-size:14px;color:var(--text-2)}
+.reviewer.ok .verdict{color:var(--pass)} .reviewer.ok .verdict i{background:var(--pass)}
+.reviewer.warn .verdict{color:var(--caution)} .reviewer.warn .verdict i{background:var(--caution)}
+.reviewer.stop .verdict{color:var(--stop)} .reviewer.stop .verdict i{background:var(--stop)}
+.reviewer .scan{position:absolute;inset:0;background:linear-gradient(180deg,transparent 0%,var(--signal-soft) 80%,var(--signal) 100%);transform:translateY(-100%);opacity:0;pointer-events:none}
+.flow.replay .reviewer.waiting .verdict,.flow.replay .reviewer.waiting p,.flow.replay .reviewer.scanning .verdict,.flow.replay .reviewer.scanning p{opacity:0}
+.flow.replay .reviewer.waiting::after,.flow.replay .reviewer.scanning::after{content:"審查中";position:absolute;left:18px;top:40px;color:var(--text-3);font-size:13.5px}
+.flow.replay .reviewer.scanning .scan{animation:scan .7s ease-in-out both}
+@keyframes scan{0%{transform:translateY(-100%);opacity:1}100%{transform:translateY(0);opacity:0}}
+.reviewer .verdict,.reviewer p{transition:opacity .25s}
+.res-line{display:flex;flex-wrap:wrap;gap:6px 22px;padding:12px 18px;border-top:1px solid var(--grid);font-size:14px;color:var(--text-2)}
+.res-line b{font-family:var(--f-display);color:var(--text);font-weight:600}
+.res-line .neg{color:var(--stop)}
+.decision{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:14px 18px;border-top:1px solid var(--grid)}
+.decision .say{flex:1;min-width:220px}
+.decision .say b{display:block;font-size:16px}
+.decision .say ul{margin:4px 0 0;padding-left:1.2em;color:var(--text-2);font-size:14px}
+.seal{width:76px;height:76px;flex:none;color:var(--pass)}
+.seal.warn{color:var(--caution)} .seal.stop{color:var(--stop)}
+.seal svg{width:100%;height:100%;overflow:visible}
+.seal .ring-o{fill:none;stroke:currentColor;stroke-width:2.5;stroke-dasharray:227;stroke-dashoffset:0}
+.seal .ticks{fill:none;stroke:currentColor;stroke-width:1;stroke-dasharray:2 5;opacity:.7;transform-origin:38px 38px;animation:spin 14s linear infinite}
+.seal text{fill:currentColor;font-family:var(--f-body);font-weight:700;font-size:19px;transform-origin:38px 38px}
+.flow.replay .seal.armed .ring-o{stroke-dashoffset:227}
+.flow.replay .seal.armed .ticks,.flow.replay .seal.armed text{opacity:0}
+.flow.replay .seal.on .ring-o{animation:draw .6s ease-out forwards}
+.flow.replay .seal.on .ticks{animation:fadeT .3s .45s both,spin 14s linear .45s infinite}
+.flow.replay .seal.on text{animation:pop .35s .5s cubic-bezier(.2,1.6,.4,1) both}
+.flow.replay .seal.on{animation:flash .9s .5s ease-out}
+@keyframes draw{from{stroke-dashoffset:227}to{stroke-dashoffset:0}}
+@keyframes fadeT{from{opacity:0}to{opacity:.7}}
+@keyframes pop{0%{opacity:0;transform:scale(1.6)}100%{opacity:1;transform:scale(1)}}
+@keyframes flash{30%{filter:drop-shadow(0 0 14px currentColor)}}
+.busy{display:flex;align-items:center;gap:14px;padding:18px}
+.busy .scanbar{flex:1;height:3px;border-radius:2px;background:var(--panel-3);overflow:hidden;position:relative}
+.busy .scanbar::after{content:"";position:absolute;inset:0;width:35%;background:linear-gradient(90deg,transparent,var(--signal),transparent);animation:slide 1.2s ease-in-out infinite}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(300%)}}
+.delta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:15px}
+.delta .from{color:var(--text-2);text-decoration:line-through;text-decoration-color:var(--text-3)}
+.delta .to{font-family:var(--f-display);font-size:22px;font-weight:600}
+.delta .arrow{width:28px;height:2px;background:var(--signal);position:relative}
+.delta .arrow::after{content:"";position:absolute;right:-1px;top:-4px;border:5px solid transparent;border-left-color:var(--signal);border-right:0}
+.flow.danger{border-color:color-mix(in srgb,var(--stop) 60%,transparent)}
+.flow.danger::before,.flow.danger::after{border-color:var(--stop)}
+.flow.done-card::before,.flow.done-card::after{border-color:var(--pass)}
+.flow.fail-card::before,.flow.fail-card::after{border-color:var(--stop)}
+.legs-wrap{position:relative;padding:18px 18px 16px}
+.legs{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.legs-line{position:absolute;left:25px;right:25px;top:24px;height:2px;background:var(--grid-2)}
+.legs-line span{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--signal),color-mix(in srgb,var(--signal) 40%,transparent));box-shadow:0 0 10px var(--signal);transition:width .8s ease}
+.legs li{position:relative;z-index:1;padding-top:22px;font-size:14px;color:var(--text-3);padding-right:8px}
+.legs li::before{content:"";position:absolute;top:0;left:0;width:14px;height:14px;border-radius:50%;background:var(--panel);border:2px solid var(--grid-2)}
+.legs li.done{color:var(--text)} .legs li.done::before{background:var(--signal);border-color:var(--signal)}
+.legs li.now{color:var(--text);font-weight:700} .legs li.now::before{border-color:var(--signal);animation:ping 1.6s ease-out infinite}
+.legs li.bad{color:var(--stop);font-weight:700} .legs li.bad::before{border-color:var(--stop);background:var(--stop)}
+.legs li span{display:block;font-weight:400;font-size:13px;color:var(--text-3)}
+@keyframes ping{0%{box-shadow:0 0 0 0 var(--signal)}100%{box-shadow:0 0 0 8px transparent}}
+@media (max-width:760px){
+  .spec,.facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .spec div:nth-child(2){border-right:0}
+  .spec div:nth-child(-n+2){border-bottom:1px solid var(--grid)}
+  .review,.gauges{grid-template-columns:1fr}
+  .reviewer,.gauge-cell{border-right:0;border-bottom:1px solid var(--grid)}
+  .legs{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:14px}
+  .legs-line{display:none}
+  .fgrid{grid-template-columns:1fr}
+  .timeline li{grid-template-columns:1fr}
+  .steps{margin-left:0;width:100%}
+}
+
+details.why{margin-top:10px;border-top:1px solid var(--grid);padding-top:8px;font-size:14px}
+details.why summary{cursor:pointer;color:var(--text-3)}
+details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
+
 @media (max-width:900px){
   .sidebar{width:216px}
   .page{padding:22px 18px 40px}
@@ -2156,6 +2414,14 @@ tbody tr:hover td{background:var(--signal-soft)}
     <div class="modal-body" id="modal-pod-body"></div>
   </div>
 </div>
+
+<!-- 對話模組點進去的詳情抽屜（2026-10-09 改版第二階段） -->
+<div class="zt-scrim" id="zt-scrim" data-act="close-drawer"></div>
+<aside class="zt-drawer" id="zt-drawer" aria-hidden="true" aria-labelledby="zt-drawer-title">
+  <header><div style="min-width:0"><div class="k" id="zt-drawer-kind"></div><h3 id="zt-drawer-title"></h3></div>
+    <button type="button" class="btn btn-sm" data-act="close-drawer">關閉</button></header>
+  <div class="body" id="zt-drawer-body"></div>
+</aside>
 
 {% endif %}
 
@@ -3777,22 +4043,6 @@ function persistFlowCard(id){
 }
 
 // 重整頁面後：非終態的流程一律標記失效（記憶體狀態已消失，按鈕會指向死 id）
-function hydrateChatFlows(){
-  const ch = currentChat();
-  if(!ch) return;
-  ch.messages.forEach(m => {
-    if(m.role!=='assistant') return;
-    const mm = String(m.content||'').match(/data-flow-state="([^"]*)"/);
-    if(!mm) return;
-    let st; try { st = JSON.parse(decodeURIComponent(mm[1])); } catch(e){ return; }
-    if(['done','error','cancelled'].includes(st.step)) return;   // 終態卡照存的樣子
-    st.step = 'expired';
-    chatFlows[st.id] = st;
-    m.content = renderFlowCard(st);
-  });
-  saveChats();
-}
-
 function _chatsKey(){ return 'k8s_chats_' + CURRENT_USER; }
 function _currentChatKey(){ return 'k8s_current_chat_' + CURRENT_USER; }
 
@@ -3889,7 +4139,7 @@ function renderMessages(){
     </div>`;
     return;
   }
-  msgs.innerHTML = ch.messages.map(m=>renderMsgHTML(m.role, m.content, m.sources)).join('');
+  msgs.innerHTML = ch.messages.map(m=>renderMsgHTML(m.role, m.content, m.sources, m.fmt)).join('');
   msgs.scrollTop = msgs.scrollHeight;
 }
 
@@ -3908,44 +4158,8 @@ function renderSourcesHTML(sources){
   </details>`;
 }
 
-function renderMsgHTML(role, content, sources){
-  if(role==='user'){
-    return `<div class="msg user"><div class="msg-bubble">${escHtml(content)}</div></div>`;
-  }
-  return `<div class="msg ai"><div class="msg-bubble" style="white-space:pre-wrap">${content}${renderSourcesHTML(sources)}</div></div>`;
-}
-
 function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function appendMsg(role, content, sources){
-  const ch = currentChat();
-  if(!ch) return;
-  ch.messages.push({role, content, sources});
-  if(ch.messages.length===1 && role==='user'){
-    ch.title = content.slice(0,30) + (content.length>30?'...':'');
-  }
-  saveChats();
-  renderChatList();
-  const msgs = document.getElementById('chat-messages');
-  msgs.insertAdjacentHTML('beforeend', renderMsgHTML(role, content, sources));
-  const added = msgs.lastElementChild; if(added) added.classList.add('enter');
-  msgs.scrollTop = msgs.scrollHeight;
-}
-
-function appendTyping(label){
-  const msgs = document.getElementById('chat-messages');
-  let div = document.getElementById('typing-indicator');
-  if(!div){
-    div = document.createElement('div');
-    div.className = 'msg ai'; div.id = 'typing-indicator';
-    msgs.appendChild(div);
-  }
-  const txt = label || 'Thinking';
-  div.innerHTML = '<div class="think-row">'+
-    '<div class="spinner"></div><span data-role="think-label">'+escHtml(txt)+'</span>'+
-    '<span class="think-dots"><span>.</span><span>.</span><span>.</span></span></div>';
-  msgs.scrollTop = msgs.scrollHeight;
-}
 // 更新「思考中」文字但不重建元素（沒有 indicator 就建一個）
 function setTyping(label){ appendTyping(label); }
 
@@ -4106,7 +4320,7 @@ function matchClientRule(text){
     return {action, args, source:'rule'};
   }
   // deploy\uff1a\u6cbf\u7528\u539f\u672c\u7684\u8907\u5408\u5224\u65b7
-  if(/^(deploy|start|launch|run|spin\s+up|\u90e8\u7f72|\u4f48\u7f72|\u90e8\u5c6c|\u8d77\s)/i.test(t) ||
+  if(/^((?:deploy|start|launch|run)\b|spin\s+up|\u90e8\u7f72|\u4f48\u7f72|\u90e8\u5c6c|\u8d77\s)/i.test(t) ||
      ((/\u5e6b\u6211|\u8acb/i.test(t)) && /(deploy|\u90e8\u7f72|\u4f48\u7f72|\u90e8\u5c6c|pods?|pod|\u8d77)/i.test(t) &&
       (/\d+\s*(pods?|replicas?|\u500b|\u526f\u672c)/i.test(t) || /(nginx|redis|postgres|node|python|golang|image|\u6620\u50cf|\u93e1\u50cf)/i.test(t)))){
     return {action:'deploy', args:{}, source:'rule'};
@@ -4117,262 +4331,9 @@ function matchClientRule(text){
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 //  \u591a\u6b65\u6d41\u7a0b\u5361\u7247 renderer\uff08HTML \u5b57\u4e32\uff0c\u5b58\u9032 message.content\uff09
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-function flowStateAttrs(flow){
-  const st = {id:flow.id, seq:flow.seq, kind:flow.kind, step:flow.step,
-             originalText:flow.originalText, spec:flow.spec, review:flow.review, resource:flow.resource};
-  return `data-flow-id="${flow.id}" data-flow-seq="${flow.seq}" data-flow-step="${flow.step}" `+
-         `data-flow-state="${encodeURIComponent(JSON.stringify(st))}"`;
-}
-function flowShell(flow, inner){
-  return `<div class="deploy-confirm" ${flowStateAttrs(flow)}>${inner}</div>`;
-}
-function esc(v){ return escHtml(String(v==null?'':v)); }
-
-function renderFlowCard(flow){
-  if(flow.step==='expired'){
-    return flowShell(flow, `<div class="deploy-confirm-head"><div>
-      <div class="deploy-confirm-title">\u6b64\u8acb\u6c42\u5df2\u5931\u6548 / Request expired</div>
-      <div class="deploy-confirm-sub">\u9801\u9762\u91cd\u65b0\u6574\u7406\u5f8c\u6d41\u7a0b\u72c0\u614b\u5df2\u907a\u5931\uff0c\u5982\u4ecd\u9700\u8981\u8acb\u91cd\u65b0\u8f38\u5165\u3002<br>The flow state was lost on reload \u2014 please resend if you still need it.</div>
-      </div><span class="badge failed">Expired</span></div>`);
-  }
-  if(flow.kind==='deploy'){
-    if(flow.step==='spec') return renderSpecCard(flow);
-    if(flow.step==='review') return renderReviewCard(flow);
-    if(flow.step==='executing') return renderBusyCard(flow, 'Deploying');
-    if(flow.step==='done') return renderDoneCard(flow);
-    if(flow.step==='error') return renderErrorCard(flow);
-  } else {
-    if(flow.step==='spec') return renderDestructiveCard(flow);
-    if(flow.step==='executing') return renderBusyCard(flow, 'Working');
-    if(flow.step==='done') return renderActionDoneCard(flow);
-    if(flow.step==='error') return renderErrorCard(flow);
-  }
-  return flowShell(flow, '<div class="deploy-confirm-sub">\u2026</div>');
-}
-
-function renderBusyCard(flow, label){
-  return flowShell(flow, `<div class="deploy-confirm-head">
-    <div style="display:flex;align-items:center;gap:10px">
-      <div class="spinner"></div>
-      <div>
-        <div class="deploy-confirm-title">${esc(label)}</div>
-      </div>
-    </div>
-    <span class="badge pending">Working</span></div>`);
-}
-
-// \u2500\u2500 B1 \u898f\u683c\u78ba\u8a8d\u5361\uff08\u90e8\u7f72\u7b2c 1 \u6b65\uff09\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-function renderSpecCard(flow){
-  const s = flow.spec || {};
-  const out = s.output || s;
-  const g = (k)=> esc(out[k] != null ? out[k] : (s[k] != null ? s[k] : ''));
-  const disabled = '';
-  return flowShell(flow, `
-    <div class="deploy-confirm-head"><div>
-      <div class="deploy-confirm-title">\u9019\u662f\u4f60\u60f3\u8981\u7684\u90e8\u7f72\u55ce\uff1f / Is this what you want to deploy?</div>
-      <div class="deploy-confirm-sub">\u6709\u932f\u5c31\u76f4\u63a5\u6539\uff0c\u7136\u5f8c\u6309\u300c\u4e0b\u4e00\u6b65\u300d\u770b\u8cc7\u6e90\u7528\u91cf\u8207\u5be9\u67e5\u3002<br>Edit anything wrong, then continue to the resource &amp; review step.</div>
-    </div><span class="badge pending">Step 1 / 3</span></div>
-    <div class="deploy-confirm-grid">
-      <div class="deploy-confirm-field"><label>App name</label><input data-field="app_name" value="${g('app_name')}" placeholder="my-app" ${disabled}>
-        <div class="field-hint">必須小寫英文字母開頭，只能用小寫字母/數字/連字號，例如 <code>app-123</code> / Must start with a lowercase letter, e.g. <code>app-123</code></div>
-      </div>
-      <div class="deploy-confirm-field"><label>Image</label><input data-field="image" value="${g('image')}" placeholder="nginx:latest" ${disabled}></div>
-      <div class="deploy-confirm-field"><label>Pods</label><input data-field="pods" type="number" min="1" max="100" value="${g('pods')||1}" ${disabled}></div>
-      <div class="deploy-confirm-field"><label>Port</label><input data-field="port" type="number" min="1" max="65535" value="${g('port')||80}" ${disabled}></div>
-      <div class="deploy-confirm-field"><label>Memory / pod</label><input data-field="memory" value="${g('memory')}" placeholder="\u9078\u586b e.g. 128Mi" ${disabled}></div>
-      <div class="deploy-confirm-field"><label>CPU / pod</label><input data-field="cpu" value="${g('cpu')}" placeholder="\u9078\u586b e.g. 100m" ${disabled}></div>
-    </div>
-    <div class="deploy-confirm-error" data-role="error"></div>
-    <div class="deploy-confirm-actions">
-      <button class="deploy-confirm-btn" onclick="cancelFlow('${flow.id}')">\u53d6\u6d88 / Cancel</button>
-      <button class="deploy-confirm-btn primary" onclick="flowToReview('${flow.id}')">\u4e0b\u4e00\u6b65\uff1a\u6aa2\u8996\u8cc7\u6e90 / Next</button>
-    </div>`);
-}
-function readSpecCard(id){
-  const root = document.querySelector(`[data-flow-id="${id}"]`);
-  if(!root) return null;
-  const get = f => (root.querySelector(`[data-field="${f}"]`)?.value||'').trim();
-  const spec = { app_name:get('app_name'), image:get('image'),
-                 pods:parseInt(get('pods'),10), port:parseInt(get('port'),10) };
-  const mem = get('memory'), cpu = get('cpu');
-  if(mem) spec.memory = mem;
-  if(cpu) spec.cpu = cpu;
-  return {root, spec};
-}
-
-// \u2500\u2500 B2 \u8cc7\u6e90 + \u4e09\u65b9\u5be9\u67e5\u5361\uff08\u90e8\u7f72\u7b2c 2 \u6b65\uff09\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-function resourceRow(label, val){
-  return `<tr><td style="padding:4px 10px 4px 0;color:var(--text3)">${esc(label)}</td>
-          <td style="padding:4px 0;font-family:'DM Mono',monospace">${esc(val)}</td></tr>`;
-}
-function resourceTableHTML(rs){
-  if(!rs) return '';
-  const nb = rs.node_bound ? `\uff08\u53d7${rs.node_bound==='cpu'?'CPU':'\u8a18\u61b6\u9ad4'}\u9650\u5236 / ${rs.node_bound}-bound\uff09` : '';
-  const src = rs.node_source==='llm' ? '\u6a21\u578b\u5224\u65b7 / from model' : '\u975c\u614b\u5bb9\u91cf\u4f30\u7b97 / static-capacity estimate';
-  let clusterHTML = '';
-  if(rs.cluster_capacity){
-    const cc = rs.cluster_capacity, cu = rs.cluster_used, cr = rs.cluster_remaining_after;
-    const remCpuColor = cr.cpu_cores < 0 ? 'var(--red)' : 'var(--text)';
-    const remMemColor = cr.mem_gib < 0 ? 'var(--red)' : 'var(--text)';
-    clusterHTML = `<div style="font-size:11px;font-weight:700;color:var(--text3);margin-top:6px;text-transform:uppercase;letter-spacing:.04em">\u53e2\u96c6\u7a7a\u9593 / Cluster headroom\uff08\u5305\u542b\u5176\u4ed6\u4f7f\u7528\u8005\uff09</div>
-    <table style="border-collapse:collapse;font-size:12px;margin:2px 0 10px">
-      ${resourceRow('\u7bc0\u9ede\u7e3d\u5bb9\u91cf / Node capacity', cc.cpu_cores+' cores / '+cc.mem_gib+' GiB')}
-      ${resourceRow('\u53e2\u96c6\u73fe\u6709\u7528\u91cf / Currently in use', cu.cpu_cores+' cores / '+cu.mem_gib+' GiB')}
-      ${resourceRow('\u9019\u6b21\u90e8\u7f72\u9700\u8981 / This deploy needs', (rs.total_cpu_cores!=null?rs.total_cpu_cores:'\u2014')+' cores / '+(rs.total_mem_gib!=null?rs.total_mem_gib:'\u2014')+' GiB')}
-      <tr><td style="padding:4px 10px 4px 0;color:var(--text3)">\u90e8\u7f72\u5f8c\u5269\u9918 / Remaining after</td>
-          <td style="padding:4px 0;font-family:'DM Mono',monospace;font-weight:700;color:${remCpuColor}">${cr.cpu_cores} cores</td></tr>
-      <tr><td></td><td style="padding:0 0 4px;font-family:'DM Mono',monospace;font-weight:700;color:${remMemColor}">${cr.mem_gib} GiB</td></tr>
-    </table>`;
-  } else if(k8sEnabled){
-    clusterHTML = `<div style="font-size:11px;color:var(--text3);margin:4px 0 10px">\u53e2\u96c6\u5bb9\u91cf\u76ee\u524d\u7121\u6cd5\u53d6\u5f97 / Cluster capacity unavailable right now</div>`;
-  }
-  return `<table style="border-collapse:collapse;font-size:12px;margin:4px 0 10px">
-    ${resourceRow('\u526f\u672c\u6578 / Replicas', rs.replicas)}
-    ${resourceRow('\u6bcf\u500b Pod \u8a18\u61b6\u9ad4 / Mem per pod', rs.per_pod_mem)}
-    ${resourceRow('\u6bcf\u500b Pod CPU / CPU per pod', rs.per_pod_cpu)}
-    ${resourceRow('\u7e3d\u8a18\u61b6\u9ad4\uff08\u526f\u672c\u00d7\u6bcf\u500b\uff09/ Total mem', rs.total_mem_gib!=null ? rs.total_mem_gib+' GiB' : '\u2014')}
-    ${resourceRow('\u7e3d CPU / Total CPU', rs.total_cpu_cores!=null ? rs.total_cpu_cores+' cores' : '\u2014')}
-    ${resourceRow('\u9810\u4f30\u7bc0\u9ede\u6578 / Est. nodes', (rs.node_count!=null ? rs.node_count : '\u2014') + ' ' + nb)}
-    ${resourceRow('\u7bc0\u9ede\u6578\u4f86\u6e90 / Node est. source', src)}
-    ${resourceRow('\u9810\u4f30\u6bcf\u6708\u6210\u672c / Est. monthly', rs.monthly_usd!=null ? ('$'+rs.monthly_usd+' USD') : '\u2014')}
-  </table>${clusterHTML}`;
-}
-function agentMiniCard(title, badge, issues, summary){
-  const pills = (issues||[]).map(i=>{
-    const sev = (i.severity||'info');
-    const cls = ['critical','high'].includes(sev)?'complex':(sev==='medium'?'medium':'simple');
-    return `<span class="pill ${cls}">${esc(sev)}: ${esc(i.message||'')}</span>`;
-  }).join(' ');
-  return `<div style="border:1px solid var(--border);border-radius:9px;padding:8px 10px;margin:4px 0">
-    <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700">
-      <span>${esc(title)}</span><span style="color:var(--text3)">${esc(badge||'')}</span></div>
-    <div style="margin:4px 0">${pills}</div>
-    <div style="font-size:11.5px;color:var(--text2)">${esc(summary||'')}</div></div>`;
-}
-function agentTrioHTML(review){
-  const a = review && review.agents && review.agents.agents;
-  if(!a) return '<div class="deploy-confirm-sub">\uff08\u5be9\u67e5\u8cc7\u6599\u4e0d\u5b8c\u6574 / review data incomplete\uff09</div>';
-  const s=a.security||{}, c=a.cost||{}, p=a.perf||{};
-  const cEst = c.cost_estimate && c.cost_estimate.estimated_usd;
-  return agentMiniCard('\u5b89\u5168 Security', (typeof s.score==='number'?s.score+'/100':''), s.issues, s.summary)
-       + agentMiniCard('\u6210\u672c Cost', (cEst!=null?('$'+cEst+'/mo'):''), c.issues, c.summary)
-       + agentMiniCard('\u6548\u80fd Performance', (p.hpa_yaml?'\u5efa\u8b70 HPA / HPA suggested':''), p.issues, p.summary);
-}
-function renderReviewCard(flow){
-  const rv = flow.review || {};
-  const decision = rv.decision || 'block';
-  let banner, actions;
-  if(decision==='approve'){
-    banner = `<div class="result-box court-verdict success">\u2713 \u901a\u904e / Approved \u2014 ${esc(rv.reason||'\u4e09\u65b9\u6aa2\u67e5\u5168\u90e8\u901a\u904e')}</div>`;
-    actions = `<button class="deploy-confirm-btn" onclick="cancelFlow('${flow.id}')">\u53d6\u6d88 / Cancel</button>
-      <button class="deploy-confirm-btn primary" onclick="flowExecuteDeploy('${flow.id}')">\u78ba\u8a8d\u90e8\u7f72 / Deploy</button>`;
-  } else if(decision==='warn'){
-    const ws = (rv.warnings||[]).map(w=>'\u00b7 '+esc(w)).join('<br>');
-    banner = `<div class="result-box court-verdict warn">\u26a0 \u8b66\u544a / Warning \u2014 ${esc(rv.reason||'')}<br>${ws}</div>`;
-    actions = `<button class="deploy-confirm-btn" onclick="cancelFlow('${flow.id}')">\u53d6\u6d88 / Cancel</button>
-      <button class="deploy-confirm-btn primary" onclick="flowExecuteDeploy('${flow.id}')">\u4ecd\u8981\u90e8\u7f72 / Deploy anyway</button>`;
-  } else {
-    const bs = (rv.blockers||[]).map(b=>'\u00b7 '+esc(b)).join('<br>');
-    banner = `<div class="result-box court-verdict error">\u2717 \u963b\u64cb / Blocked \u2014 ${esc(rv.reason||'')}<br>${bs}</div>`;
-    actions = `<button class="deploy-confirm-btn" onclick="cancelFlow('${flow.id}')">\u95dc\u9589 / Close</button>`;
-  }
-  return flowShell(flow, `
-    <div class="deploy-confirm-head"><div>
-      <div class="deploy-confirm-title">\u8cc7\u6e90\u7528\u91cf\u8207\u4e09\u65b9\u5be9\u67e5 / Resources &amp; review</div>
-      <div class="deploy-confirm-sub">${esc(flow.spec.app_name||'')} \u00b7 ${esc(flow.spec.image||'')}</div>
-    </div><span class="badge pending">Step 2 / 3</span></div>
-    ${resourceTableHTML(flow.resource)}
-    ${agentTrioHTML(flow.review)}
-    <div style="margin:10px 0">${banner}</div>
-    <div class="deploy-confirm-actions">${actions}</div>`);
-}
-
-// \u2500\u2500 B3 \u7834\u58de\u6027\u64cd\u4f5c\u78ba\u8a8d\u5361 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-function destructiveSummary(flow){
-  const a = flow.spec || {};
-  if(flow.kind==='scale') return `${esc(a.name)}\uff1a${a.current!=null?a.current:'?'} \u2192 ${esc(a.replicas)} \u526f\u672c / replicas`;
-  if(flow.kind==='update_image') return `${esc(a.name)} image\uff1a${esc(a.current||'?')} \u2192 ${esc(a.image)}`;
-  if(flow.kind==='rollback') return `${esc(a.name)} \u2192 \u56de\u6efe\u5230\u4e0a\u4e00\u7248 / roll back to previous version`;
-  if(flow.kind==='delete') return `\u522a\u9664 Deployment\u300c${esc(a.name)}\u300d+ \u5176 Service\uff08\u4e0d\u53ef\u5fa9\u539f / cannot be undone\uff09`;
-  if(flow.kind==='healer_fix') return `\u522a\u9664 Pod\u300c${esc(a.pod_name)}\u300d\u8b93 ReplicaSet \u91cd\u5efa`;
-  if(flow.kind==='healer_auto_fix') return `\u522a\u9664\u6240\u6709\u7570\u5e38 Pod\uff08CrashLoopBackOff / OOMKilled / ImagePull\u2026 \uff09\u8b93\u5176\u91cd\u5efa`;
-  return '';
-}
-function renderDestructiveCard(flow){
-  const k8sOff = (flow.kind==='scale'||flow.kind==='update_image') && k8sEnabled===false;
-  return flowShell(flow, `
-    <div class="deploy-confirm-head"><div>
-      <div class="deploy-confirm-title">\u78ba\u8a8d\u64cd\u4f5c / Confirm action</div>
-      <div class="deploy-confirm-sub">${destructiveSummary(flow)}</div>
-    </div><span class="badge pending">Confirm</span></div>
-    <div class="deploy-confirm-error" data-role="error"></div>
-    ${k8sOff ? '<div class="deploy-confirm-note">K8s \u672a\u9023\u7dda\uff0c\u9019\u500b\u64cd\u4f5c\u7121\u6cd5\u57f7\u884c / K8s not connected \u2014 this action cannot run.</div>' : ''}
-    <div class="deploy-confirm-actions">
-      <button class="deploy-confirm-btn" onclick="cancelFlow('${flow.id}')">\u53d6\u6d88 / Cancel</button>
-      <button class="deploy-confirm-btn primary" onclick="flowExecuteAction('${flow.id}')" ${k8sOff?'disabled':''}>\u78ba\u8a8d / Confirm</button>
-    </div>`);
-}
-
-// \u2500\u2500 B4 \u5b8c\u6210 / \u932f\u8aa4\u5361 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-function navBtn(page, label){
-  return `<button class="deploy-confirm-btn" onclick="showPage('${page}')">${esc(label)}</button>`;
-}
-function renderDoneCard(flow){
-  const p = flow.spec || {};
-  return flowShell(flow, `
-    <div class="deploy-confirm-head"><div>
-      <div class="deploy-confirm-title">\u2713 \u90e8\u7f72\u5b8c\u6210 / Deployed</div>
-      <div class="deploy-confirm-sub">${esc(p.app_name)} \u00b7 Pods ${esc(p.pods)} \u00b7 ${esc(p.image)}${p.port?(' \u00b7 Port '+esc(p.port)):''}</div>
-    </div><span class="badge success">Done</span></div>
-    <div class="deploy-confirm-note">\u53ef\u5230\u4ee5\u4e0b\u5206\u9801\u67e5\u770b\u525b\u525b\u90e8\u7f72\u7684\u5167\u5bb9 / Check what was just deployed:</div>
-    <div class="deploy-confirm-actions" style="justify-content:flex-start">
-      ${navBtn('pods','\u524d\u5f80 Pods')} ${navBtn('deployments','\u524d\u5f80 Deployments')} ${navBtn('gitops','GitOps \u7d00\u9304')}
-    </div>`);
-}
-function renderActionDoneCard(flow){
-  return flowShell(flow, `
-    <div class="deploy-confirm-head"><div>
-      <div class="deploy-confirm-title">\u2713 \u5b8c\u6210 / Done</div>
-      <div class="deploy-confirm-sub">${esc(flow.resultMsg || destructiveSummary(flow))}</div>
-    </div><span class="badge success">Done</span></div>
-    <div class="deploy-confirm-actions" style="justify-content:flex-start">
-      ${navBtn('pods','\u524d\u5f80 Pods')} ${navBtn('deployments','\u524d\u5f80 Deployments')}
-    </div>`);
-}
-function renderErrorCard(flow){
-  const e = flow.errorMsg || '\u64cd\u4f5c\u5931\u6557 / action failed';
-  const list = (flow.blockers||[]).map(b=>'\u00b7 '+esc(b)).join('<br>');
-  return flowShell(flow, `
-    <div class="deploy-confirm-head"><div>
-      <div class="deploy-confirm-title">\u2717 \u672a\u5b8c\u6210 / Not completed</div>
-      <div class="deploy-confirm-sub">${esc(e)}<br>${list}</div>
-    </div><span class="badge failed">Failed</span></div>
-    <div class="deploy-confirm-actions">
-      <button class="deploy-confirm-btn" onclick="cancelFlow('${flow.id}')">\u95dc\u9589 / Close</button>
-      ${flow.retryStep ? `<button class="deploy-confirm-btn primary" onclick="retryFlow('${flow.id}')">\u91cd\u8a66 / Retry</button>` : ''}
-    </div>`);
-}
-
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 //  \u6d41\u7a0b\u9a45\u52d5
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-function cancelFlow(id){
-  const flow = chatFlows[id];
-  if(!flow) return;
-  flow.step = 'cancelled';
-  flow.errorMsg = '\u5df2\u53d6\u6d88 / Cancelled';
-  flow.retryStep = null;
-  const html = flowShell(flow, `<div class="deploy-confirm-head"><div>
-      <div class="deploy-confirm-title">\u5df2\u53d6\u6d88 / Cancelled</div></div>
-      <span class="badge failed">Cancelled</span></div>`);
-  const ch = currentChat();
-  if(ch){
-    const msg = ch.messages.find(m => m.role==='assistant' && String(m.content||'').includes('data-flow-id="'+id+'"'));
-    if(msg){ msg.content = html; saveChats(); }
-  }
-  const dom = document.querySelector('[data-flow-id="'+id+'"]');
-  if(dom){ const w=document.createElement('div'); w.innerHTML=html; dom.replaceWith(w.firstElementChild); }
-}
 function retryFlow(id){
   const flow = chatFlows[id];
   if(!flow || !flow.retryStep) return;
@@ -4380,11 +4341,6 @@ function retryFlow(id){
   flow.errorMsg = null; flow.blockers = null;
   persistFlowCard(id);
 }
-function setFlowError(root, msg){
-  const el = root && root.querySelector('[data-role="error"]');
-  if(el){ el.style.display = msg?'block':'none'; el.textContent = msg||''; }
-}
-
 async function flowToReview(id){
   const flow = chatFlows[id];
   if(!flowAlive(flow)) return;
@@ -4392,7 +4348,7 @@ async function flowToReview(id){
   if(!data) return;
   const {root, spec} = data;
   setFlowError(root, '');
-  if(!spec.app_name || !spec.image){ setFlowError(root, 'App name \u548c image \u5fc5\u586b / required.'); return; }
+  if(!spec.app_name || !spec.image){ setFlowError(root, '請填寫服務名稱和映像檔。'); return; }
   // 2026-10-03\uff1aapp_name \u4e00\u5b9a\u8981\u5b57\u6bcd\u958b\u982d\u2014\u2014\u7cfb\u7d71\u6703\u53e6\u5916\u5efa\u4e00\u500b\u300c<app_name>-svc\u300d\u7684
   // Service\uff0cService \u540d\u7a31\u898f\u5247\u6bd4 Deployment \u66f4\u56b4\u683c\uff08DNS-1035\uff0c\u4e00\u5b9a\u8981\u5b57\u6bcd\u958b\u982d\uff09\uff0c
   // \u5728\u9019\u88e1\u5148\u64cb\uff0c\u4f7f\u7528\u8005\u4e0d\u7528\u7b49\u9001\u51fa\u53bb\u624d\u77e5\u9053\u3002\u8ddf\u5f8c\u7aef _prepare_deploy() \u540c\u4e00\u689d\u898f\u5247\u3002
@@ -4400,12 +4356,12 @@ async function flowToReview(id){
     setFlowError(root,
       `App name\u300c${spec.app_name}\u300d\u683c\u5f0f\u4e0d\u7b26\u5408 K8s \u547d\u540d\u898f\u5247\uff1a\u5fc5\u9808\u4ee5\u5c0f\u5beb\u82f1\u6587\u5b57\u6bcd\u958b\u982d\uff0c\u53ea\u80fd\u5305\u542b\u5c0f\u5beb\u5b57\u6bcd\u3001\u6578\u5b57\u3001` +
       `\u9023\u5b57\u865f\uff08-\uff09\uff0c\u7d50\u5c3e\u4e0d\u80fd\u662f\u9023\u5b57\u865f\uff08\u7cfb\u7d71\u6703\u81ea\u52d5\u5efa\u7acb\u5c0d\u61c9\u7684 Service\uff0c\u540d\u7a31\u898f\u5247\u6bd4 Deployment \u66f4\u56b4\u683c\uff09\u3002` +
-      `\u4f8b\u5982\u300c123\u300d\u8981\u6539\u6210\u300capp-123\u300d\u3002 / App name must start with a lowercase letter.`);
+      `\u4f8b\u5982\u300c123\u300d\u8981\u6539\u6210\u300capp-123\u300d\u3002`);
     return;
   }
-  if(!Number.isInteger(spec.pods) || spec.pods<1 || spec.pods>100){ setFlowError(root, 'Pods \u5fc5\u9808\u5728 1\u2013100 \u4e4b\u9593.'); return; }
-  if(!Number.isInteger(spec.port) || spec.port<1 || spec.port>65535){ setFlowError(root, 'Port \u5fc5\u9808\u5728 1\u201365535 \u4e4b\u9593.'); return; }
-  if(spec.memory && !/^\d+(Mi|Gi|Ki|M|G)$/.test(spec.memory)){ setFlowError(root, 'Memory \u683c\u5f0f\u9808\u5982 128Mi \u6216 1Gi.'); return; }
+  if(!Number.isInteger(spec.pods) || spec.pods<1 || spec.pods>100){ setFlowError(root, '副本數要在 1 到 100 之間。'); return; }
+  if(!Number.isInteger(spec.port) || spec.port<1 || spec.port>65535){ setFlowError(root, 'Port 要在 1 到 65535 之間。'); return; }
+  if(spec.memory && !/^\d+(Mi|Gi|Ki|M|G)$/.test(spec.memory)){ setFlowError(root, '記憶體的寫法要像 128Mi 或 1Gi。'); return; }
 
   // 名稱已存在 / port 被佔用：在第一步就先問清楚，不是等審查跑完才在一堆警告裡看到。
   try{
@@ -4447,7 +4403,7 @@ async function flowToReview(id){
     if(!flowAlive(flow)) return;
     if(d.error || d.rejected){
       flow.step='error';
-      flow.errorMsg = d.error || d.reason || '\u5be9\u67e5\u672a\u901a\u904e / review failed';
+      flow.errorMsg = d.error || d.reason || '審查沒有通過。';
       flow.blockers = (d.review && d.review.blockers) || [];
       flow.retryStep = 'spec';
     } else {
@@ -4458,9 +4414,10 @@ async function flowToReview(id){
     }
   }catch(e){
     if(!flowAlive(flow)) return;
-    flow.step='error'; flow.errorMsg='\u9023\u7dda\u932f\u8aa4 / network error: '+e; flow.retryStep='spec';
+    flow.step='error'; flow.errorMsg='連線失敗，請確認網路後再試一次。（'+e+'）'; flow.retryStep='spec';
   }
   persistFlowCard(id);
+  if(flow.step === 'review') playReview(id);
 }
 
 async function flowExecuteDeploy(id){
@@ -4474,23 +4431,26 @@ async function flowExecuteDeploy(id){
     const d = await r.json();
     if(!flowAlive(flow)) return;
     if(d.error || d.rejected){
-      flow.step='error'; flow.errorMsg = d.error || d.reason || '\u90e8\u7f72\u88ab\u963b\u64cb / blocked';
+      flow.step='error'; flow.errorMsg = d.error || d.reason || '部署被擋下了。';
       flow.blockers = (d.review && d.review.blockers) || []; flow.retryStep='review';
     } else if(d.k8s_deploy && d.k8s_deploy.ok === false){
       flow.step='error';
-      flow.errorMsg = 'GitOps \u5df2\u63d0\u4ea4\uff0c\u4f46 K8s \u5be6\u969b\u90e8\u7f72\u5931\u6557 / GitOps committed but K8s deploy failed\uff1a'+d.k8s_deploy.message;
+      flow.errorMsg = '部署紀錄已經寫入，但叢集實際部署失敗：'+d.k8s_deploy.message;
       flow.retryStep='review';
     } else {
       flow.step='done';
+      flow.pendingSync = !!(d.k8s_deploy && d.k8s_deploy.pending_sync);
+      flow.rollout = {state:'syncing'};
       if(d.parsed) flow.spec = Object.assign({}, flow.spec, {
         app_name:d.parsed.app_name, image:d.parsed.image, pods:d.parsed.pods, port:d.parsed.port});
       loadStats && loadStats();
     }
   }catch(e){
     if(!flowAlive(flow)) return;
-    flow.step='error'; flow.errorMsg='\u9023\u7dda\u932f\u8aa4 / network error: '+e; flow.retryStep='review';
+    flow.step='error'; flow.errorMsg='連線失敗，請確認網路後再試一次。（'+e+'）'; flow.retryStep='review';
   }
   persistFlowCard(id);
+  if(flow.step === 'done') trackRollout(id);
 }
 
 async function startDestructiveFlow(kind, args){
@@ -4525,14 +4485,15 @@ async function flowExecuteAction(id){
     const ok = (d.success !== false) && !d.error;
     if(ok){
       flow.step='done';
-      flow.resultMsg = d.message || (flow.kind==='healer_auto_fix' ? `\u5df2\u8655\u7406 ${d.fixed||0} \u500b Pod` : destructiveSummary(flow));
+      flow.pendingSync = !!d.pending_sync;
+      flow.resultMsg = d.message || (flow.kind==='healer_auto_fix' ? `已處理 ${d.fixed||0} 個 Pod。` : '已完成：' + destructiveSummary(flow) + '。');
       loadStats && loadStats();
     } else {
-      flow.step='error'; flow.errorMsg = d.error || d.message || '\u64cd\u4f5c\u5931\u6557 / failed'; flow.retryStep='spec';
+      flow.step='error'; flow.errorMsg = d.error || d.message || '操作失敗。'; flow.retryStep='spec';
     }
   }catch(e){
     if(!flowAlive(flow)) return;
-    flow.step='error'; flow.errorMsg='\u9023\u7dda\u932f\u8aa4 / network error: '+e; flow.retryStep='spec';
+    flow.step='error'; flow.errorMsg='連線失敗，請確認網路後再試一次。（'+e+'）'; flow.retryStep='spec';
   }
   persistFlowCard(id);
 }
@@ -4542,7 +4503,7 @@ async function startDeployFlow(text){
     const r = await fetch('/api/deploy/parse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:text})});
     const d = await r.json();
     if(d.error || d.rejected){
-      appendMsg('assistant', '\u7121\u6cd5\u90e8\u7f72 / Cannot deploy\uff1a' + (d.error || d.reason || 'blocked'));
+      appendMsg('assistant', '沒辦法部署：' + (d.error || d.reason || '審查沒有通過。'), null, 'text');
       return;
     }
     const raw = d.raw || d.parsed || {};
@@ -4554,164 +4515,8 @@ async function startDeployFlow(text){
     flow.resource = d.resource_summary || null;
     appendMsg('assistant', renderFlowCard(flow));
   }catch(e){
-    appendMsg('assistant', '\u89e3\u6790\u90e8\u7f72\u9700\u6c42\u6642\u9023\u7dda\u932f\u8aa4 / network error: ' + e);
+    appendMsg('assistant', '解析部署需求時連線失敗，請再試一次。（' + e + '）', null, 'text');
   }
-}
-
-async function runReadAction(action){
-  const map = {
-    list_pods:['/api/pods', d=>{
-      const ps=d.pods||[]; return ps.length ? '\u57f7\u884c\u4e2d\u7684 Pods / Running Pods:\n'+ps.map(p=>`- ${p.name} [${p.phase}] ${(p.containers&&p.containers[0]&&p.containers[0].image)||''}`).join('\n') : '\u76ee\u524d\u6c92\u6709 Pod / No pods.';
-    }],
-    list_deployments:['/api/deployments', d=>{
-      const ds=d.deployments||[]; return ds.length ? 'Deployments:\n'+ds.map(x=>`- ${x.name}  ${x.ready}/${x.replicas} ready  ${x.image||''}`).join('\n') : '\u76ee\u524d\u6c92\u6709 Deployment / None.';
-    }],
-    gitops_log:['/api/gitops', d=>{
-      const cs=d.commits||[]; return cs.length ? '\u90e8\u7f72\u7d00\u9304 / GitOps log:\n'+cs.map(c=>`- ${c.time}  ${c.app||''}  ${c.message}`).join('\n') : '\u6c92\u6709\u7d00\u9304 / No commits.';
-    }],
-    cluster_metrics:['/api/metrics', d=>{
-      const m=d.metrics||{}; return `\u53e2\u96c6\u6307\u6a19 / Cluster metrics:\n- Prometheus: ${d.connected?'online':'offline'}\n- Pods: ${m.pod_count!=null?m.pod_count:'?'} (running ${m.running_pods!=null?m.running_pods:'?'})`;
-    }],
-    healer_scan:['/api/healer/scan', d=>{
-      const is=d.issues||[]; return is.length ? `Healer \u6383\u5230 ${is.length} \u500b\u554f\u984c / issues:\n`+is.map(i=>`- ${i.pod_name||i.pod} : ${i.reason||i.status}`).join('\n') : '\u6c92\u6709\u7570\u5e38 Pod / No unhealthy pods.';
-    }],
-  };
-  // \u9700\u8981\u53c3\u6578\u7684\u55ae\u4e00\u7269\u4ef6\u67e5\u8a62
-  if(action==='describe_pod' || action==='pod_health' || action==='describe_deployment'){
-    const name = (window.__lastIntentArgs && window.__lastIntentArgs.name) || '';
-    if(!name){ appendMsg('assistant','\u8981\u67e5\u54ea\u4e00\u500b\uff1f\u8acb\u8b1b\u6e05\u695a\u540d\u7a31 / which one? give a name.'); return; }
-    try{
-      if(action==='describe_deployment'){
-        const r = await fetch('/api/deployments/'+encodeURIComponent(name));
-        const d = await r.json();
-        if(!d.found){ appendMsg('assistant', d.message || ('\u627e\u4e0d\u5230 '+name)); return; }
-        appendMsg('assistant', fmtDeployDetail(d.deployment));
-      } else {
-        const url = '/api/pods/'+encodeURIComponent(name) + (action==='pod_health'?'?diagnose=1':'');
-        const r = await fetch(url);
-        const d = await r.json();
-        if(!d.found || !(d.pods||[]).length){
-          let msg = d.message || ('\u627e\u4e0d\u5230\u7b26\u5408 '+name+' \u7684 pod');
-          if(d.deployment) msg += '\n\n' + fmtDeployDetail(d.deployment);
-          appendMsg('assistant', msg); return;
-        }
-        appendMsg('assistant', (action==='pod_health'?fmtPodHealth:fmtPodDetail)(d.pods, name));
-      }
-    }catch(e){ appendMsg('assistant', 'Error: '+e); }
-    return;
-  }
-  const entry = map[action];
-  if(!entry){ appendMsg('assistant', '\uff08\u672a\u652f\u63f4\u7684\u67e5\u8a62 / unsupported\uff09'); return; }
-  try{
-    const r = await fetch(entry[0]); const d = await r.json();
-    appendMsg('assistant', entry[1](d));
-  }catch(e){ appendMsg('assistant', 'Error: '+e); }
-}
-
-function _contLine(c){
-  // c.message \u662f\u5bb9\u5668\u72c0\u614b\u8a0a\u606f\uff0cK8s \u5bb9\u8a31 terminationMessagePath \u8b93\u5bb9\u5668\u81ea\u5df1\u5beb\u5165\u4efb\u610f
-  // \u6587\u5b57\u2014\u2014\u7406\u8ad6\u4e0a\u4f7f\u7528\u8005\u81ea\u5df1\u7684 Pod \u53ef\u4ee5\u585e\u9032\u60e1\u610f\u5167\u5bb9\uff0c\u9019\u6bb5\u6587\u5b57\u6700\u5f8c\u6703\u539f\u5c01\u4e0d\u52d5\u585e\u9032
-  // appendMsg('assistant', ...)\uff08renderMsgHTML \u5c0d assistant \u5167\u5bb9\u4e0d\u6703 escHtml\uff09\uff0c
-  // \u4e00\u5b9a\u8981\u904e escHtml() \u624d\u80fd\u653e\u9032\u53bb\uff0c\u4e0d\u7136\u7b49\u65bc\u81ea\u5df1\u958b\u4e00\u500b XSS \u7d66\u81ea\u5df1\uff08\u6216\u65e5\u5f8c\u6709\u7ba1\u7406\u54e1
-  // \u89d2\u8272\u770b\u5230\u5225\u4eba Pod \u7684\u8a73\u60c5\u6642\uff0c\u8b8a\u6210\u770b\u5f97\u5230\u5225\u4eba Pod \u7684\u8de8\u4f7f\u7528\u8005 XSS\uff09\u3002
-  return `  \u00b7 ${escHtml(c.name)} [${escHtml(c.state)}${c.reason?'/'+escHtml(c.reason):''}] ready=${c.ready?'yes':'no'} restarts=${c.restart_count}`
-    + (c.message?`\n    ${escHtml(String(c.message).slice(0,160))}`:'');
-}
-function fmtPodDetail(pods, name){
-  return pods.map(p=>{
-    const evs = (p.events||[]).slice(0,3).map(e=>`  event ${escHtml(e.reason)}: ${escHtml(String(e.message).slice(0,120))}`).join('\n');
-    return `Pod ${escHtml(p.name)}\n`
-      + `phase: ${escHtml(p.phase)}   node: ${escHtml(p.node||'-')}   ip: ${escHtml(p.ip||'-')}   age: ${escHtml(p.age)}   restarts: ${p.restarts}\n`
-      + `health: ${p.healthy?'\u2705 \u6b63\u5e38':'\u274c '+escHtml(p.health_summary)}\n`
-      + `containers:\n${(p.containers||[]).map(_contLine).join('\n')}`
-      + (evs?`\nrecent events:\n${evs}`:'');
-  }).join('\n\n');
-}
-function fmtPodHealth(pods, name){
-  const bad = pods.filter(p=>!p.healthy);
-  const head = bad.length
-    ? `\u274c ${escHtml(name)}\uff1a${bad.length}/${pods.length} \u500b pod \u6709\u554f\u984c`
-    : `\u2705 ${escHtml(name)}\uff1a${pods.length} \u500b pod \u90fd\u6b63\u5e38\u904b\u884c`;
-  const lines = pods.map(p=>{
-    let s = `  - ${escHtml(p.name)}: ${p.healthy?'\u6b63\u5e38':escHtml(p.health_summary)}\uff08\u91cd\u555f ${p.restarts} \u6b21\uff09`;
-    if(!p.healthy){
-      const ev = (p.events||[])[0];
-      if(ev) s += `\n    \u6700\u8fd1\u4e8b\u4ef6: ${escHtml(ev.reason)} \u2014 ${escHtml(String(ev.message).slice(0,140))}`;
-      if(p.diagnosis){
-        const dg = p.diagnosis;
-        // dg.root_cause/suggestion \u662f\u76e3\u63a7\u5c0f\u6a21\u578b\u6839\u64da\u9019\u500b Pod \u7684\u65e5\u8a8c\u751f\u6210\u7684\u6587\u5b57\u2014\u2014
-        // \u65e5\u8a8c\u672c\u8eab\u53ef\u80fd\u88ab\u60e1\u610f\u5bb9\u5668\u523b\u610f\u585e\u9032\u985e\u4f3c\u63d0\u793a\u6ce8\u5165\u7684\u5167\u5bb9\uff0c\u6a21\u578b\u8f38\u51fa\u4e0d\u53ef\u4fe1\u4efb\uff0c
-        // \u4e00\u5b9a\u8981 escHtml()\uff0c\u8ddf model_server.py /diagnose \u7aef\u9ede\u5c0d pod \u65e5\u8a8c\u505a\u6587\u5b57
-        // \u6de8\u5316\u662f\u540c\u4e00\u500b\u5a01\u8105\u6a21\u578b\uff08\u898b core/model_server.py \u7684\u5c0d\u61c9\u8a3b\u89e3\uff09\u3002
-        s += `\n    \ud83d\udd0e \u6839\u56e0: ${escHtml(dg.root_cause||'-')}`;
-        if(dg.suggestion) s += `\n    \ud83d\udca1 \u5efa\u8b70: ${escHtml(dg.suggestion)}`;
-        if(dg.llm_raw_guess) s += `\n    \uff08AI \u539f\u672c\u4ee5\u70ba\uff1a${escHtml(dg.llm_raw_guess)}\uff0c\u8b49\u64da\u4e0d\u8db3\u672a\u63a1\u7528\uff09`;
-      }
-    }
-    return s;
-  }).join('\n');
-  return head + '\n' + lines;
-}
-function fmtDeployDetail(d){
-  const conds = (d.conditions||[]).map(c=>`  \u00b7 ${escHtml(c.type)}=${escHtml(c.status)}${c.reason?' ('+escHtml(c.reason)+')':''}`).join('\n');
-  return `Deployment ${escHtml(d.name)}\n`
-    + `health: ${d.healthy?'\u2705 ':'\u274c '}${escHtml(d.health_summary)}\n`
-    + `replicas: ${d.ready}/${d.replicas} ready, ${d.available} available, ${d.updated} updated\n`
-    + `image: ${escHtml(d.image)}   age: ${escHtml(d.age)}`
-    + (conds?`\nconditions:\n${conds}`:'');
-}
-
-function renderClarifyReasonHTML(intent){
-  // \u8fd1\u5931\u4e8b\u4ef6\u53ef\u898b\u5316\uff082026-10-07\uff09\uff1aAI \u539f\u672c\u60f3\u505a\u4ec0\u9ebc\u3001\u7cfb\u7d71\u70ba\u4ec0\u9ebc\u6c92\u6709\u63a1\u4fe1\uff0c\u6524\u958b\u7d66\u4f7f\u7528\u8005\u770b\uff0c
-  // \u4e0d\u662f\u53ea\u6709\u4e00\u53e5\u901a\u7528\u7684\u300c\u6211\u4e0d\u78ba\u5b9a\u300d\u3002\u6240\u6709\u52d5\u614b\u5b57\u4e32\u90fd\u904e escHtml()\u2014\u2014ungrounded_values \u88e1\u7684
-  // value \u662f\u6a21\u578b\u8f38\u51fa\uff0c\u4e0d\u80fd\u76f4\u63a5\u585e\u9032 innerHTML\u3002
-  const reasons = intent.clarify_reasons || [];
-  const ungrounded = intent.ungrounded_values || [];
-  const proposedArgs = Object.assign({}, intent.args || {});
-  delete proposedArgs.guess;
-  if(!reasons.length) return '';
-
-  const confPct = Math.round((Number(intent.confidence) || 0) * 100);
-  const reasonLabels = {
-    low_confidence: `AI \u56de\u5831\u7684\u4fe1\u5fc3\u53ea\u6709 ${confPct}%\uff0c\u4f4e\u65bc 75% \u7684\u57f7\u884c\u9580\u6abb / AI's self-reported confidence was only ${confPct}%, below the 75% execution threshold`,
-    missing_args: `\u7f3a\u5c11\u9019\u500b\u52d5\u4f5c\u9700\u8981\u7684\u5fc5\u8981\u53c3\u6578 / Missing required parameters for this action`,
-    ungrounded_args: ungrounded.length
-      ? `AI \u731c\u7684\u300c${ungrounded.map(u=>escHtml(String(u.value))).join('\u3001')}\u300d\u6c92\u6709\u51fa\u73fe\u5728\u4f60\u7684\u8a0a\u606f\u88e1\uff0c\u53ef\u80fd\u662f\u6191\u7a7a\u731c\u7684 / `+
-        `The value${ungrounded.length>1?'s':''} "${ungrounded.map(u=>escHtml(String(u.value))).join(', ')}" that AI guessed `+
-        `${ungrounded.length>1?'don\u2019t':'doesn\u2019t'} appear in your message \u2014 likely fabricated`
-      : `AI \u731c\u7684\u5167\u5bb9\u6c92\u6709\u51fa\u73fe\u5728\u4f60\u7684\u8a0a\u606f\u88e1\uff0c\u53ef\u80fd\u662f\u6191\u7a7a\u731c\u7684 / The value AI guessed doesn't appear in your message`,
-  };
-  const lines = reasons.map(r => '- ' + (reasonLabels[r] || escHtml(r))).join('<br>');
-  const argsText = Object.keys(proposedArgs).length
-    ? escHtml(JSON.stringify(proposedArgs)) : '';
-
-  return `<details style="margin-top:10px;font-size:12px;border-top:1px solid var(--border);padding-top:8px">
-    <summary style="cursor:pointer;color:var(--text3)">\u70ba\u4ec0\u9ebc\u7cfb\u7d71\u6c92\u6709\u76f4\u63a5\u57f7\u884c / Why this wasn't executed directly</summary>
-    <div style="margin-top:6px">
-      <div style="color:var(--text2)">AI \u539f\u672c\u7684\u5224\u65b7\uff1a${escHtml(intent.action||'')}${argsText ? ' ' + argsText : ''}</div>
-      <div style="margin-top:4px;color:var(--text3)">${lines}</div>
-    </div>
-  </details>`;
-}
-
-function startClarify(intent){
-  const g = (intent.args && intent.args.guess) || intent.action;
-  const label = {scale:'\u64f4\u7e2e\u526f\u672c',update_image:'\u66f4\u65b0\u6620\u50cf',rollback:'\u56de\u6efe',delete:'\u522a\u9664',
-                 healer_fix:'\u4fee\u5fa9 Pod',healer_auto_fix:'\u81ea\u52d5\u4fee\u5fa9'}[g] || g;
-  appendMsg('assistant', `\u6211\u4e0d\u592a\u78ba\u5b9a\u4f60\u662f\u8981\u300c${escHtml(label)}\u300d\u9084\u662f\u53ea\u662f\u5728\u554f\u554f\u984c\u3002\u5982\u679c\u8981\u57f7\u884c\uff0c\u8acb\u8b1b\u6e05\u695a\u4e00\u9ede\uff0c\u4f8b\u5982\uff1a\n`+
-    `- scale <deployment> to <\u6578\u91cf>\n- delete <deployment>\n- rollback <deployment>\n`+
-    `I'm not sure if you want to run "${escHtml(g)}" or just asking \u2014 please phrase it as an explicit command.`+
-    renderClarifyReasonHTML(intent));
-}
-
-async function runQA(text){
-  setTyping('Thinking');
-  try{
-    const hist = (currentChat()?.messages||[]).slice(-10).map(m=>({role:m.role==='assistant'?'assistant':'user',content:m.content}));
-    const r = await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text, history:hist})});
-    const d = await r.json();
-    appendMsg('assistant', d.reply||d.error||'No response', d.sources);
-  }catch(e){ appendMsg('assistant','Connection error: '+e); }
 }
 
 async function sendChat(){
@@ -4741,12 +4546,977 @@ async function sendChat(){
     else if(DESTRUCTIVE_KINDS.includes(action)){ setTyping('Preparing'); await startDestructiveFlow(action, intent.args||{}); }
     else { await runQA(text); }
   }catch(e){
-    appendMsg('assistant','\u8655\u7406\u6642\u767c\u751f\u932f\u8aa4 / error: '+e);
+    appendMsg('assistant','處理的時候發生錯誤：'+e, null, 'text');
   }finally{
     removeTyping();
   }
 }
 
+
+
+// ══════════════════════════════════════════════════════════════════
+//  對話互動模組（2026-10-09 改版第二階段）
+//  系統相關的回答不再是純文字：Pod、服務、部署紀錄、自動修復、資源用量都變成可以
+//  篩選、排序、換頁、點進去看詳情的模組。模組的資料與狀態（頁碼、篩選）存在 HTML 的
+//  data 屬性裡，跟訊息一起寫進 localStorage，重新整理後照樣能操作；所有點擊都用
+//  事件委派處理，不靠綁在元素上的函式，所以重新渲染不會失效。
+//  動態只用在兩種地方：回應使用者的操作，以及反映真實狀態（審查、部署進度）。
+// ══════════════════════════════════════════════════════════════════
+const TYPING_LABELS = {Thinking:'思考中', Understanding:'理解你的需求', Fetching:'查詢中', Parsing:'解析部署需求',
+  Preparing:'準備中', Reviewing:'安全、成本、效能三項審查進行中', Deploying:'正在部署', Working:'處理中'};
+const W_PER = 10;
+const CHEV_L = '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const CHEV_R = '<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function encState(o){ return encodeURIComponent(JSON.stringify(o == null ? null : o)); }
+function decState(s){ try { return JSON.parse(decodeURIComponent(s || '')); } catch(e){ return null; } }
+function zUid(p){ return p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function nowHM(){ return new Date().toLocaleTimeString('zh-TW', {hour12:false, hour:'2-digit', minute:'2-digit'}); }
+function reducedMotion(){ return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+function isHtmlContent(c){ return /^\s*</.test(String(c == null ? '' : c)); }
+
+async function getJSON(url){
+  const r = await fetch(url);
+  if(r.status === 401) throw new Error('登入已經過期，請重新整理頁面後再登入。');
+  let d = null;
+  try { d = await r.json(); } catch(e){ throw new Error('伺服器回應格式不正確（HTTP ' + r.status + '），請稍後再試。'); }
+  if(r.status >= 500) throw new Error((d && (d.error || d.message)) || ('伺服器發生錯誤（HTTP ' + r.status + '）'));
+  return d;
+}
+
+// ── 一般問答：先跳脫再排版（模型輸出不能直接當 HTML，否則等於 XSS） ──
+function mdInline(s){
+  return escHtml(String(s))
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+}
+function mdToHtml(src){
+  const lines = String(src == null ? '' : src).replace(/\r/g, '').split('\n');
+  const out = []; let inCode = false, code = [], list = null;
+  const closeList = () => { if(list){ out.push('</' + list + '>'); list = null; } };
+  for(const ln of lines){
+    if(/^\s*```/.test(ln)){
+      if(inCode){ out.push('<pre><code>' + escHtml(code.join('\n')) + '</code></pre>'); code = []; inCode = false; }
+      else { closeList(); inCode = true; }
+      continue;
+    }
+    if(inCode){ code.push(ln); continue; }
+    let m;
+    if((m = ln.match(/^\s*[-*•·]\s+(.*)/))){ if(list !== 'ul'){ closeList(); out.push('<ul>'); list = 'ul'; } out.push('<li>' + mdInline(m[1]) + '</li>'); continue; }
+    if((m = ln.match(/^\s*\d+[.)、]\s*(.*)/))){ if(list !== 'ol'){ closeList(); out.push('<ol>'); list = 'ol'; } out.push('<li>' + mdInline(m[1]) + '</li>'); continue; }
+    closeList();
+    if((m = ln.match(/^\s*#{1,4}\s+(.*)/))){ out.push('<h4>' + mdInline(m[1]) + '</h4>'); continue; }
+    if(!ln.trim()) continue;
+    out.push('<p>' + mdInline(ln) + '</p>');
+  }
+  if(inCode) out.push('<pre><code>' + escHtml(code.join('\n')) + '</code></pre>');
+  closeList();
+  return '<div class="md">' + out.join('') + '</div>';
+}
+// 給 /api/chat 的對話紀錄用：模組只送一行摘要，不把整段 HTML 和資料丟給模型
+function msgPlainText(c){
+  const s = String(c == null ? '' : c);
+  if(!isHtmlContent(s)) return s.slice(0, 600);
+  const m = s.match(/data-summary="([^"]*)"/);
+  const div = document.createElement('div'); div.innerHTML = s;
+  const lead = div.querySelector('.w-lead');
+  const head = lead ? lead.textContent.trim() : '';
+  if(m){ const t = document.createElement('textarea'); t.innerHTML = m[1]; return (head ? head + ' ' : '') + '[' + t.value + ']'; }
+  return (div.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+}
+
+function renderMsgHTML(role, content, sources, fmt){
+  if(role === 'user') return `<div class="msg user"><div class="msg-bubble">${escHtml(String(content == null ? '' : content))}</div></div>`;
+  const body = (fmt !== 'text' && isHtmlContent(content)) ? content : mdToHtml(content);
+  return `<div class="msg ai"><div class="msg-bubble">${body}${renderSourcesHTML(sources)}</div></div>`;
+}
+function appendMsg(role, content, sources, fmt){
+  const ch = currentChat();
+  if(!ch) return;
+  const m = {role, content, sources};
+  if(fmt) m.fmt = fmt;
+  ch.messages.push(m);
+  if(ch.messages.length === 1 && role === 'user'){
+    ch.title = content.slice(0, 30) + (content.length > 30 ? '...' : '');
+  }
+  saveChats();
+  renderChatList();
+  const msgs = document.getElementById('chat-messages');
+  if(ch.messages.length === 1) msgs.innerHTML = '';
+  msgs.insertAdjacentHTML('beforeend', renderMsgHTML(role, content, sources, fmt));
+  const added = msgs.lastElementChild;
+  if(added) added.classList.add('enter');
+  msgs.scrollTop = msgs.scrollHeight;
+}
+function appendTyping(label){
+  const msgs = document.getElementById('chat-messages');
+  let div = document.getElementById('typing-indicator');
+  if(!div){
+    div = document.createElement('div');
+    div.className = 'msg ai'; div.id = 'typing-indicator';
+    msgs.appendChild(div);
+  }
+  const txt = TYPING_LABELS[label] || label || '思考中';
+  div.innerHTML = '<div class="think-row"><div class="spinner"></div><span data-role="think-label">' + escHtml(txt) + '</span></div>';
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+async function runQA(text){
+  setTyping('Thinking');
+  try{
+    const hist = (currentChat()?.messages || []).slice(-10).map(m => ({role: m.role === 'assistant' ? 'assistant' : 'user', content: msgPlainText(m.content)}));
+    const r = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:text, history:hist})});
+    const d = await r.json();
+    removeTyping();
+    appendMsg('assistant', d.reply || d.error || '沒有收到回覆，請再問一次。', d.sources, 'text');
+  }catch(e){ removeTyping(); appendMsg('assistant', '連線失敗，請確認網路後再試一次。（' + e + '）', null, 'text'); }
+}
+
+// ── 狀態判讀 ──
+function podState(p){
+  const phase = p.phase || 'Unknown';
+  const ready = (p.conditions || []).find(c => c.type === 'Ready');
+  if(phase === 'Running' && (!ready || ready.status === 'True')){
+    return p.restarts >= 5 ? {cls:'warn', label:'執行中，曾重啟 ' + p.restarts + ' 次', attn:true} : {cls:'run', label:'執行中', attn:false};
+  }
+  if(phase === 'Running') return {cls:'fail', label:'執行中但還沒準備好', attn:true};
+  if(phase === 'Pending') return {cls:'pend', label:'等待中', attn:true};
+  if(phase === 'Succeeded') return {cls:'done', label:'已完成', attn:false};
+  if(phase === 'Failed') return {cls:'fail', label:'失敗', attn:true};
+  return {cls:'pend', label:'狀態不明', attn:true};
+}
+function stateTag(s){ return `<span class="state s-${s.cls}"><i></i>${esc(s.label)}</span>`; }
+function healthTag(pd){
+  if(pd.healthy) return stateTag({cls:'run', label:'健康'});
+  if((pd.phase || '') === 'Pending') return stateTag({cls:'pend', label:'等待中'});
+  return stateTag({cls:'fail', label:'有狀況'});
+}
+function slimPod(p){
+  const c0 = (p.containers || [])[0] || {};
+  return {name:p.name, app:p.app || '', phase:p.phase || 'Unknown', restarts:p.restarts || 0, age:p.age || '',
+          image:c0.image || '', node:p.node || '', conditions:(p.conditions || []).filter(c => c.type === 'Ready')};
+}
+function cleanCommitMsg(m){ return String(m || '').replace(/^gitops:\s*/i, '').replace(/\s*\[[^\]]*\]\s*$/, ''); }
+
+function esc(v){ return escHtml(String(v==null?'':v)); }
+
+// ── 共用版面零件 ──
+function pagerHTML(total, page, per){
+  const pages = Math.max(1, Math.ceil(total / per));
+  page = Math.min(Math.max(1, page), pages);
+  if(total <= per) return '';
+  const from = (page - 1) * per + 1, to = Math.min(page * per, total);
+  const show = new Set([1, pages, page - 1, page, page + 1]);
+  let nums = '', last = 0;
+  for(let i = 1; i <= pages; i++){
+    if(!show.has(i)) continue;
+    if(i - last > 1) nums += '<span class="gap">…</span>';
+    nums += `<button type="button" data-act="page" data-p="${i}" ${i === page ? 'aria-current="page"' : ''} aria-label="第 ${i} 頁">${i}</button>`;
+    last = i;
+  }
+  return `<nav class="pager" aria-label="換頁"><span class="info">第 ${from} 到 ${to} 筆，共 ${total} 筆</span>
+    <button type="button" data-act="page" data-p="${page - 1}" ${page <= 1 ? 'disabled' : ''} aria-label="上一頁">${CHEV_L}</button>${nums}
+    <button type="button" data-act="page" data-p="${page + 1}" ${page >= pages ? 'disabled' : ''} aria-label="下一頁">${CHEV_R}</button></nav>`;
+}
+function sortTh(st, key, label, cls){
+  const aria = st.k === key ? `aria-sort="${(st.dir || 1) > 0 ? 'ascending' : 'descending'}"` : '';
+  return `<th scope="col" class="${cls || ''}" ${aria}><button type="button" data-act="sort" data-k="${key}">${label}</button></th>`;
+}
+function filterChips(st, opts){
+  const f = st.f || 'all';
+  return opts.map(([k, l]) => `<button type="button" class="chip" data-act="filter" data-f="${k}" aria-pressed="${f === k}">${l}</button>`).join('');
+}
+function pageSlice(arr, st){
+  const pages = Math.max(1, Math.ceil(arr.length / W_PER));
+  const p = Math.min(Math.max(1, st.p || 1), pages);
+  return arr.slice((p - 1) * W_PER, p * W_PER);
+}
+function sortBy(arr, key, dir){
+  return arr.slice().sort((a, b) => {
+    const x = a[key], y = b[key];
+    return (x > y ? 1 : x < y ? -1 : 0) * (dir || 1);
+  });
+}
+function flowBtn(kind, args, label, cls){
+  return `<button type="button" class="btn ${cls || ''}" data-act="flow" data-kind="${kind}" data-args="${encState(args)}">${label}</button>`;
+}
+function emptyBlock(title, desc, actionHtml){
+  return `<div class="w-empty"><b>${esc(title)}</b>${esc(desc || '')}${actionHtml || ''}</div>`;
+}
+function exampleBtn(text, label){
+  return `<button type="button" class="btn" data-act="example" data-text="${esc(text)}">${esc(label)}</button>`;
+}
+
+// ── 模組定義 ──
+const W = {};
+W.pods = {
+  summary: d => `Pod 清單：共 ${d.items.length} 個，${d.items.filter(p => podState(p).attn).length} 個需要注意`,
+  head: (d, st) => {
+    const a = d.items.filter(p => podState(p).attn).length;
+    return `<h2>Pod</h2><span class="meta"><span>共 ${d.items.length} 個</span>${a ? `<b class="t-warn">${a} 個需要注意</b>` : ''}<span>${esc(d.at)} 的資料</span></span>
+      <div class="filters" role="group" aria-label="依狀態篩選">${filterChips(st, [['all','全部'], ['ok','正常'], ['attn','需要注意']])}
+      <button type="button" class="chip ghost" data-act="refresh">重新整理</button></div>`;
+  },
+  body: (d, st) => {
+    if(!d.items.length) return emptyBlock('目前沒有任何 Pod。', '部署一個服務之後，它的 Pod 會出現在這裡。', exampleBtn('部署 2 個 nginx:1.27，開 80 port', '部署一個試試看'));
+    let rows = d.items.map(p => Object.assign({}, p, {attnKey:(podState(p).attn ? '0' : '1') + p.name}));
+    if(st.f === 'ok') rows = rows.filter(p => !podState(p).attn);
+    if(st.f === 'attn') rows = rows.filter(p => podState(p).attn);
+    if(!rows.length) return emptyBlock(st.f === 'attn' ? '沒有需要注意的 Pod。' : '沒有符合條件的 Pod。', '');
+    rows = sortBy(rows, st.k || 'attnKey', st.dir || 1);
+    const slice = pageSlice(rows, st);
+    return `<div class="table-wrap"><table><thead><tr>${sortTh(st, 'name', '名稱')}<th scope="col">狀態</th><th scope="col">映像檔</th>${sortTh(st, 'restarts', '重啟次數', 'r')}${sortTh(st, 'age', '建立時間', 'r')}</tr></thead><tbody>
+      ${slice.map((p, i) => `<tr class="enter" style="animation-delay:${i * 25}ms" tabindex="0" data-act="open-pod" data-name="${esc(p.name)}">
+        <td class="id">${esc(p.name)}</td><td>${stateTag(podState(p))}</td><td class="id dim">${esc(p.image)}</td>
+        <td class="r num ${p.restarts >= 5 ? 't-stop' : ''}">${p.restarts}</td><td class="r dim">${esc(p.age)}</td></tr>`).join('')}
+      </tbody></table></div>${pagerHTML(rows.length, st.p || 1, W_PER)}`;
+  },
+};
+function repsHTML(ready, replicas){
+  const n = Math.min(replicas, 12);
+  return `<span class="reps ${ready < replicas ? 'short' : ''}" aria-hidden="true">${Array.from({length:n}, (_, i) => `<i class="${i < ready ? 'on' : ''}"></i>`).join('')}</span><span class="num">${ready}/${replicas}</span>`;
+}
+W.deployments = {
+  summary: d => `服務清單：共 ${d.items.length} 個`,
+  head: (d, st) => {
+    const short = d.items.filter(x => (x.ready || 0) < (x.replicas || 0)).length;
+    return `<h2>服務</h2><span class="meta"><span>共 ${d.items.length} 個</span>${short ? `<b class="t-warn">${short} 個還沒全部就緒</b>` : ''}<span>${esc(d.at)} 的資料</span></span>
+      <div class="filters"><button type="button" class="chip ghost" data-act="refresh">重新整理</button></div>`;
+  },
+  body: (d, st) => {
+    if(!d.items.length) return emptyBlock('目前沒有任何服務。', '用一句話描述你想部署的東西就可以開始。', exampleBtn('部署 2 個 nginx:1.27，開 80 port', '部署一個試試看'));
+    const rows = sortBy(d.items, st.k || 'name', st.dir || 1);
+    const slice = pageSlice(rows, st);
+    return `<div class="table-wrap"><table><thead><tr>${sortTh(st, 'name', '名稱')}<th scope="col">就緒的副本</th><th scope="col">映像檔</th>${sortTh(st, 'updated', '最後更新', 'r')}</tr></thead><tbody>
+      ${slice.map((x, i) => `<tr class="enter" style="animation-delay:${i * 25}ms" tabindex="0" data-act="open-dep" data-name="${esc(x.name)}">
+        <td class="id">${esc(x.name)}</td><td>${repsHTML(x.ready || 0, x.replicas || 0)}</td><td class="id dim">${esc(x.image || '')}</td>
+        <td class="r dim">${esc(x.updated || x.age || '')}</td></tr>`).join('')}
+      </tbody></table></div>${pagerHTML(rows.length, st.p || 1, W_PER)}`;
+  },
+};
+W.gitops = {
+  summary: d => `部署紀錄：共 ${d.items.length} 筆`,
+  head: d => `<h2>部署紀錄</h2><span class="meta"><span>共 ${d.items.length} 筆</span><span>${esc(d.at)} 的資料</span></span>
+    <div class="filters"><button type="button" class="chip ghost" data-act="refresh">重新整理</button></div>`,
+  body: (d, st) => {
+    if(!d.items.length) return emptyBlock('還沒有任何部署紀錄。', '每一次部署、擴縮、回滾都會在這裡留下一筆。');
+    const firstIdx = {};
+    d.items.forEach((c, i) => { if(c.app && firstIdx[c.app] == null) firstIdx[c.app] = i; });
+    const pages = Math.max(1, Math.ceil(d.items.length / W_PER));
+    const p = Math.min(Math.max(1, st.p || 1), pages);
+    const base = (p - 1) * W_PER;
+    const slice = d.items.slice(base, base + W_PER);
+    return `<ol class="timeline">${slice.map((c, i) => `<li class="enter" style="animation-delay:${i * 30}ms">
+        <time>${esc(c.time || '')}</time>
+        <div class="what">${c.app ? `<span class="app">${esc(c.app)}</span>` : ''}${esc(cleanCommitMsg(c.message))}<span class="hash">${esc(c.hash || '')}</span></div>
+        <div>${(c.app && firstIdx[c.app] === base + i) ? flowBtn('rollback', {name:c.app}, '回滾到上一版', 'btn-sm') : ''}</div></li>`).join('')}</ol>
+      ${pagerHTML(d.items.length, p, W_PER)}`;
+  },
+};
+W.healer = {
+  summary: d => d.items.length ? `Healer 掃描：${d.items.length} 個 Pod 需要修復` : ((d.watch || []).length ? `Healer 掃描：沒有需要自動修復的，但有 ${(d.watch || []).length} 個 Pod 狀態不正常` : 'Healer 掃描：全部正常'),
+  head: d => `<h2>Healer 掃描結果</h2><span class="meta"><span>${esc(d.at)} 掃描</span></span>
+    <div class="filters">${d.items.length > 1 ? flowBtn('healer_auto_fix', {}, '全部修復', 'btn-sm') : ''}<button type="button" class="chip ghost" data-act="refresh">重新掃描</button></div>`,
+  body: (d, st) => {
+    const watch = d.watch || [];
+    const watchHtml = watch.length ? `<ul class="issues">${watch.slice(0, W_PER).map(w => `<li><div class="what"><span class="id">${esc(w.name)}</span><span class="t-warn">${esc(w.label)}</span></div>
+        <button type="button" class="btn btn-sm" data-act="open-pod" data-name="${esc(w.name)}">看詳情</button></li>`).join('')}</ul>` : '';
+    if(!d.items.length && watch.length) return `<div class="w-empty"><b>沒有需要自動修復的 Pod，但有 ${watch.length} 個狀態不正常。</b>它們可能剛啟動、或剛開始出狀況，還沒達到 Healer 自動修復的條件（例如重啟 3 次以上）。Healer 每 30 秒會再檢查一次，你也可以先看詳情。</div>${watchHtml}`;
+    if(!d.items.length) return `<div class="w-empty"><div class="radar" aria-hidden="true"></div><b>所有 Pod 都正常。</b>Healer 每 30 秒會在背景自動掃描一次，有狀況會自動修復。</div>`;
+    const slice = pageSlice(d.items, st);
+    return `<ul class="issues">${slice.map((it, i) => {
+      const pod = it.pod_name || it.pod || '';
+      return `<li class="enter" style="animation-delay:${i * 30}ms"><div class="what"><span class="id">${esc(pod)}</span><span class="t-stop">${esc(it.reason || it.status || '狀態異常')}</span></div>
+        <button type="button" class="btn btn-sm" data-act="open-pod" data-name="${esc(pod)}">看詳情</button>${flowBtn('healer_fix', {pod_name:pod}, '讓 Healer 修復', 'primary btn-sm')}</li>`;
+    }).join('')}</ul>${pagerHTML(d.items.length, st.p || 1, W_PER)}`;
+  },
+};
+function ringHTML(pct){
+  const p = Math.max(0, Math.min(100, Number(pct) || 0));
+  const C = 226.2;
+  const cls = p >= 100 ? 'full' : p >= 80 ? 'hot' : '';
+  return `<svg class="ring ${cls}" viewBox="0 0 84 84" aria-hidden="true"><circle class="track" cx="42" cy="42" r="36"/><circle class="val" cx="42" cy="42" r="36" stroke-dasharray="${C}" stroke-dashoffset="${(C * (1 - p / 100)).toFixed(1)}"/><text x="42" y="48" text-anchor="middle">${Math.round(p)}%</text></svg>`;
+}
+W.resources = {
+  summary: d => {
+    const cap = d.cluster_capacity || {}, used = d.cluster_used || {};
+    return `叢集資源：CPU 已用 ${used.cpu_cores ?? '?'} / ${cap.cpu_cores ?? '?'} 核，記憶體已用 ${used.mem_gib ?? '?'} / ${cap.mem_gib ?? '?'} GiB`;
+  },
+  head: d => `<h2>叢集資源</h2><span class="meta"><span>${esc(d.at)} 的資料</span></span>
+    <div class="filters"><button type="button" class="chip ghost" data-act="refresh">重新整理</button></div>`,
+  body: d => {
+    const cap = d.cluster_capacity, used = d.cluster_used || {}, rem = d.cluster_remaining || {};
+    if(!cap) return emptyBlock('目前讀不到叢集容量。', d.k8s_enabled === false ? 'Kubernetes 沒有連線，請先確認 Docker Desktop 的 Kubernetes 已經啟動。' : '請稍後按「重新整理」再試一次。');
+    const cpuPct = cap.cpu_cores ? used.cpu_cores / cap.cpu_cores * 100 : 0;
+    const memPct = cap.mem_gib ? used.mem_gib / cap.mem_gib * 100 : 0;
+    const usedNote = d.cluster_used_source && d.cluster_used_source.cpu === 'requests' ? 'CPU 以預留量計算' : '';
+    return `<div class="gauges">
+        <div class="gauge-cell">${ringHTML(cpuPct)}<div><div class="lbl">CPU</div><div class="big">${used.cpu_cores} / ${cap.cpu_cores} 核</div><div class="dim">還剩 ${rem.cpu_cores} 核</div></div></div>
+        <div class="gauge-cell">${ringHTML(memPct)}<div><div class="lbl">記憶體</div><div class="big">${used.mem_gib} / ${cap.mem_gib} GiB</div><div class="dim">還剩 ${rem.mem_gib} GiB</div></div></div>
+      </div>
+      <dl class="facts">
+        <div><dt>我的服務</dt><dd>${(d.my_deployments || []).length} 個</dd></div>
+        <div><dt>我佔用的資源</dt><dd>${d.my_total_cpu_cores ?? 0} 核 / ${d.my_total_mem_gib ?? 0} GiB</dd></div>
+        <div><dt>依公有雲牌價估算</dt><dd>每月 $${d.my_monthly_usd ?? 0}</dd></div>
+      </dl>
+      ${usedNote ? `<div class="w-note">${usedNote}，記憶體以實際用量計算。</div>` : ''}`;
+  },
+};
+W.poddetail = {
+  summary: d => `Pod 詳情：${d.name}，${d.pods.map(p => p.healthy ? '健康' : (p.health_summary || '有狀況')).join('；')}`,
+  head: d => `<h2>Pod 詳情</h2><span class="meta"><span class="id">${esc(d.name)}</span><span>${esc(d.at)} 的資料</span></span>
+    <div class="filters"><button type="button" class="chip ghost" data-act="refresh">重新整理</button></div>`,
+  body: d => d.pods.map(pd => podDetailHTML(pd, {inline:true})).join(''),
+};
+W.depdetail = {
+  summary: d => `服務詳情：${d.dep.name}，${d.dep.ready}/${d.dep.replicas} 個副本就緒`,
+  head: d => `<h2>服務詳情</h2><span class="meta"><span class="id">${esc(d.dep.name)}</span><span>${esc(d.at)} 的資料</span></span>
+    <div class="filters"><button type="button" class="chip ghost" data-act="refresh">重新整理</button></div>`,
+  body: d => depDetailHTML(d.dep, null, {inline:true}),
+};
+
+// 重新整理：重新抓資料，保留目前的篩選與頁碼
+const W_LOAD = {
+  pods: async () => ({items:((await getJSON('/api/pods')).pods || []).map(slimPod), at:nowHM()}),
+  deployments: async () => ({items:(await getJSON('/api/deployments')).deployments || [], at:nowHM()}),
+  gitops: async () => ({items:(await getJSON('/api/gitops')).commits || [], at:nowHM()}),
+  healer: async () => {
+    // 同時看 Pod 狀態：Healer 只把達到自動修復門檻的列出來（例如重啟 3 次以上），
+    // 剛開始出狀況的 Pod 不在清單裡，不能因此跟使用者說「全部正常」
+    const [scan, pods] = await Promise.all([getJSON('/api/healer/scan'), getJSON('/api/pods').catch(() => ({pods:[]}))]);
+    const items = scan.issues || [];
+    const listed = new Set(items.map(i => i.pod_name || i.pod));
+    const watch = (pods.pods || []).map(slimPod).filter(p => podState(p).attn && !listed.has(p.name)).map(p => ({name:p.name, label:podState(p).label}));
+    return {items, watch, at:nowHM()};
+  },
+  resources: async () => Object.assign(await getJSON('/api/dashboard'), {at:nowHM()}),
+  poddetail: async (old) => { const d = await getJSON('/api/pods/' + encodeURIComponent(old.name)); return {name:old.name, pods:(d.pods || []).slice(0, 3), at:nowHM()}; },
+  depdetail: async (old) => { const d = await getJSON('/api/deployments/' + encodeURIComponent(old.dep.name)); if(!d.found) throw new Error(d.message || '找不到這個服務，可能已經被刪除。'); return {dep:d.deployment, at:nowHM()}; },
+};
+
+function widgetHTML(kind, data, state, wid){
+  const def = W[kind];
+  wid = wid || zUid('w');
+  const st = state || {};
+  return `<section class="module zt-w" data-w="${kind}" data-wid="${wid}" data-w-data="${encState(data)}" data-w-state="${encState(st)}" data-summary="${esc(def.summary(data))}">
+    <div class="module-head">${def.head(data, st)}</div><div class="zt-w-body">${def.body(data, st)}</div></section>`;
+}
+function persistWidget(wid, html){
+  const ch = currentChat(); if(!ch) return;
+  const msg = ch.messages.find(m => m.role === 'assistant' && String(m.content || '').includes('data-wid="' + wid + '"'));
+  if(!msg) return;
+  const c = String(msg.content);
+  const at = c.indexOf('<section class="module zt-w"');
+  msg.content = (at > 0 ? c.slice(0, at) : '') + html;
+  saveChats();
+}
+function rerenderWidget(el, patch, newData){
+  const kind = el.dataset.w;
+  const data = newData || decState(el.dataset.wData);
+  const st = Object.assign(decState(el.dataset.wState) || {}, patch || {});
+  const html = widgetHTML(kind, data, st, el.dataset.wid);
+  persistWidget(el.dataset.wid, html);
+  const tmp = document.createElement('div'); tmp.innerHTML = html;
+  const neu = tmp.firstElementChild;
+  el.replaceWith(neu);
+  return neu;
+}
+async function refreshWidget(el){
+  const kind = el.dataset.w;
+  const btn = el.querySelector('[data-act="refresh"]');
+  if(btn){ btn.disabled = true; btn.textContent = '讀取中'; }
+  try{
+    const data = await W_LOAD[kind](decState(el.dataset.wData) || {});
+    rerenderWidget(el, {}, data);
+  }catch(e){
+    if(btn){ btn.disabled = false; btn.textContent = '重新整理失敗，再試一次'; }
+  }
+}
+function appendWidget(kind, data, state, lead){
+  appendMsg('assistant', (lead ? `<div class="w-lead">${esc(lead)}</div>` : '') + widgetHTML(kind, data, state));
+}
+
+// ── Chat 的系統查詢：全部改成互動模組 ──
+async function runReadAction(action){
+  const args = window.__lastIntentArgs || {};
+  try{
+    if(action === 'list_pods'){
+      const data = await W_LOAD.pods();
+      const a = data.items.filter(p => podState(p).attn).length;
+      removeTyping();
+      appendWidget('pods', data, {f:'all', p:1}, data.items.length
+        ? `你目前有 ${data.items.length} 個 Pod${a ? `，其中 ${a} 個需要注意，已經排在最前面` : '，全部正常'}。點任一列可以看詳情。`
+        : '');
+    } else if(action === 'list_deployments'){
+      const data = await W_LOAD.deployments();
+      removeTyping();
+      appendWidget('deployments', data, {p:1}, data.items.length ? `你目前有 ${data.items.length} 個服務。點任一列可以擴縮、更新映像檔、回滾或刪除。` : '');
+    } else if(action === 'gitops_log'){
+      const data = await W_LOAD.gitops();
+      removeTyping();
+      appendWidget('gitops', data, {p:1}, data.items.length ? '這是最近的部署紀錄，最新的在最上面。' : '');
+    } else if(action === 'healer_scan'){
+      const data = await W_LOAD.healer();
+      removeTyping();
+      appendWidget('healer', data, {p:1}, data.items.length ? `Healer 找到 ${data.items.length} 個有狀況的 Pod。` : '');
+    } else if(action === 'cluster_metrics'){
+      const data = await W_LOAD.resources();
+      removeTyping();
+      appendWidget('resources', data, {}, '');
+    } else if(action === 'describe_pod' || action === 'pod_health'){
+      const name = args.name || '';
+      if(!name){ removeTyping(); appendMsg('assistant', '要查哪一個 Pod？請告訴我名稱，例如「web-frontend 的狀態」。', null, 'text'); return; }
+      const d = await getJSON('/api/pods/' + encodeURIComponent(name) + (action === 'pod_health' ? '?diagnose=1' : ''));
+      removeTyping();
+      if(!d.found || !(d.pods || []).length){
+        if(d.deployment){ appendWidget('depdetail', {dep:d.deployment, at:nowHM()}, {}, (d.message || '') + ' 下面是這個服務的狀態。'); return; }
+        appendMsg('assistant', d.message || ('找不到名稱符合「' + name + '」的 Pod。可以先說「列出我所有的 Pod」看看有哪些。'), null, 'text');
+        return;
+      }
+      const pods = d.pods.slice(0, 3);
+      const bad = pods.filter(p => !p.healthy);
+      const lead = action === 'pod_health'
+        ? (bad.length ? `「${name}」有 ${bad.length} 個 Pod 有狀況。` : `「${name}」目前正常。`)
+        : `「${name}」的詳細狀態：`;
+      appendWidget('poddetail', {name, pods, at:nowHM()}, {}, lead);
+    } else if(action === 'describe_deployment'){
+      const name = args.name || '';
+      if(!name){ removeTyping(); appendMsg('assistant', '要查哪一個服務？請告訴我名稱。', null, 'text'); return; }
+      const d = await getJSON('/api/deployments/' + encodeURIComponent(name));
+      removeTyping();
+      if(!d.found){ appendMsg('assistant', d.message || ('找不到名稱是「' + name + '」的服務。'), null, 'text'); return; }
+      appendWidget('depdetail', {dep:d.deployment, at:nowHM()}, {}, '');
+    } else {
+      removeTyping();
+      appendMsg('assistant', '這個查詢目前還不支援。', null, 'text');
+    }
+  }catch(e){
+    removeTyping();
+    appendMsg('assistant', '查詢失敗：' + (e.message || e), null, 'text');
+  }
+}
+
+// ── 詳情內容（抽屜與對話內共用） ──
+function parseMi(v){
+  if(v == null) return null;
+  const m = String(v).match(/^([\d.]+)\s*(Ki|Mi|Gi|K|M|G)?$/);
+  if(!m) return null;
+  const n = parseFloat(m[1]), u = m[2] || '';
+  return u === 'Gi' || u === 'G' ? n * 1024 : (u === 'Ki' || u === 'K') ? n / 1024 : (u ? n : n / 1048576);
+}
+function parseCores(v){
+  if(v == null) return null;
+  const s = String(v);
+  if(s.endsWith('m')) return parseFloat(s) / 1000;
+  const n = parseFloat(s); return isNaN(n) ? null : n;
+}
+function barG(label, valText, pct){
+  const p = pct == null ? null : Math.max(0, Math.min(100, pct));
+  return `<div class="bar-g"><div class="row"><span>${label}</span><span class="num">${valText}</span></div>${p == null ? '' : `<div class="bar"><span data-w="${p.toFixed(0)}"></span></div>`}</div>`;
+}
+function ctrStateText(c){
+  if(c.state === 'running') return c.ready ? stateTag({cls:'run', label:'執行中'}) : stateTag({cls:'pend', label:'執行中，尚未就緒'});
+  if(c.state === 'waiting') return stateTag({cls:(c.reason === 'ContainerCreating' || c.reason === 'PodInitializing') ? 'pend' : 'fail', label:'等待中' + (c.reason ? '：' + c.reason : '')});
+  if(c.state === 'terminated') return stateTag({cls:'fail', label:'已終止' + (c.reason ? '：' + c.reason : '')});
+  return stateTag({cls:'pend', label:'狀態不明'});
+}
+function diagHTML(dg){
+  if(!dg) return '';
+  const rc = dg.root_cause || dg.summary || '';
+  const fix = dg.suggestion || dg.action || '';
+  if(!rc && !fix) return '';
+  return `<div class="diag"><div><b>Healer 診斷</b></div>${rc ? `<div>${esc(rc)}</div>` : ''}${fix ? `<div class="fix">建議：${esc(fix)}</div>` : ''}</div>`;
+}
+function podDetailHTML(pd, opts){
+  opts = opts || {};
+  const ctrs = pd.containers || [];
+  const lim = (ctrs[0] && ctrs[0].limits) || {};
+  const u = pd.real_usage || {};
+  let usage = '';
+  if(u.available){
+    const memLim = parseMi(lim.memory), cpuLim = parseCores(lim.cpu);
+    usage = barG('CPU', (u.cpu_cores != null ? Number(u.cpu_cores).toFixed(3) + ' 核' : '目前讀不到') + (cpuLim ? ' / ' + cpuLim + ' 核' : ''), cpuLim && u.cpu_cores != null ? u.cpu_cores / cpuLim * 100 : null)
+          + barG('記憶體', (u.memory_mi != null ? Math.round(u.memory_mi) + ' Mi' : '目前讀不到') + (memLim ? ' / ' + Math.round(memLim) + ' Mi' : ''), memLim && u.memory_mi != null ? u.memory_mi / memLim * 100 : null);
+  } else if(pd.real_usage){
+    usage = '<div class="dim">即時用量暫時讀不到（監控元件沒有回應）。</div>';
+  }
+  const evs = (pd.events || []).map(e => `<li class="${e.type === 'Warning' ? 'bad' : ''}"><b>${esc(e.reason || '')}</b>${esc(e.message || '')}${e.count > 1 ? `<span class="cnt">共 ${e.count} 次</span>` : ''}</li>`).join('');
+  const actions = [];
+  if(!pd.healthy && !pd.diagnosis) actions.push(`<button type="button" class="btn" data-act="diagnose" data-name="${esc(pd.name)}">請 Healer 診斷</button>`);
+  if(!pd.healthy) actions.push(flowBtn('healer_fix', {pod_name:pd.name}, '讓 Healer 修復', 'primary'));
+  if(opts.inline) actions.push(`<button type="button" class="btn" data-act="open-pod" data-name="${esc(pd.name)}">在側邊看完整詳情</button>`);
+  return `<div class="pd">
+    <div class="pd-top">${healthTag(pd)}<span class="dim">${esc(pd.health_summary || '')}</span>${opts.inline ? `<span class="id dim">${esc(pd.name)}</span>` : ''}</div>
+    ${diagHTML(pd.diagnosis)}
+    <dl class="kv">
+      <div><dt>所屬服務</dt><dd class="id">${esc(pd.app || '無')}</dd></div>
+      <div><dt>重啟次數</dt><dd class="num">${pd.restarts ?? 0}</dd></div>
+      <div><dt>節點</dt><dd class="id">${esc(pd.node || '尚未排程')}</dd></div>
+      <div><dt>建立時間</dt><dd>${esc(pd.age || '')}</dd></div>
+    </dl>
+    ${usage ? `<div><div class="sec-t">即時用量</div><div class="ctrs">${usage}</div></div>` : ''}
+    <div><div class="sec-t">容器</div><div class="ctrs">${ctrs.map(c => `<div class="ctr"><span class="id">${esc(c.image || c.name)}</span><span>${ctrStateText(c)}</span>
+      ${c.message ? `<span class="msgline">${esc(String(c.message).slice(0, 200))}</span>` : ''}${c.note ? `<span class="msgline">${esc(c.note)}</span>` : ''}</div>`).join('') || '<div class="dim">沒有容器資訊。</div>'}</div></div>
+    ${evs ? `<div><div class="sec-t">最近事件</div><ol class="events">${evs}</ol></div>` : ''}
+    ${actions.length ? `<div class="actions">${actions.join('')}</div>` : ''}
+  </div>`;
+}
+function depDetailHTML(dep, pods, opts){
+  opts = opts || {};
+  const conds = (dep.conditions || []).filter(c => c.status !== 'True' && c.message).map(c => `<li class="bad"><b>${esc(c.type)}</b>${esc(c.message)}</li>`).join('');
+  const podList = pods && pods.length ? `<div><div class="sec-t">這個服務的 Pod</div><div class="mini-list">${pods.map(p => `<button type="button" data-act="open-pod" data-name="${esc(p.name)}"><span class="id">${esc(p.name)}</span>${healthTag(p)}</button>`).join('')}</div></div>` : '';
+  const n = esc(dep.name);
+  const manage = opts.inline
+    ? `<div class="actions"><button type="button" class="btn primary" data-act="open-dep" data-name="${n}">管理這個服務</button></div>`
+    : `<div><div class="sec-t">擴縮副本</div><div class="inline-form"><input type="number" id="dr-replicas" min="0" max="50" value="${dep.replicas}" aria-label="副本數"><button type="button" class="btn" data-act="do-scale" data-name="${n}">套用</button></div></div>
+       <div><div class="sec-t">更新映像檔</div><div class="inline-form"><input type="text" id="dr-image" value="${esc(dep.image || '')}" aria-label="新的映像檔"><button type="button" class="btn" data-act="do-image" data-name="${n}">更新</button></div></div>
+       <div class="form-err" id="dr-err" role="alert"></div>
+       <div class="actions">${flowBtn('rollback', {name:dep.name}, '回滾到上一版')}${flowBtn('delete', {name:dep.name}, '刪除這個服務', 'danger')}</div>
+       <div class="dim">每個操作都會先在對話裡請你確認，不會直接執行。</div>`;
+  return `<div class="pd">
+    <div class="pd-top">${dep.healthy ? stateTag({cls:'run', label:'健康'}) : stateTag({cls:'warn', label:'還沒全部就緒'})}<span class="dim">${esc(dep.health_summary || '')}</span>${opts.inline ? `<span class="id dim">${n}</span>` : ''}</div>
+    <dl class="kv">
+      <div><dt>映像檔</dt><dd class="id">${esc(dep.image || '')}</dd></div>
+      <div><dt>就緒的副本</dt><dd>${repsHTML(dep.ready || 0, dep.replicas || 0)}</dd></div>
+      <div><dt>建立時間</dt><dd>${esc(dep.age || '')}</dd></div>
+      <div><dt>無法使用的副本</dt><dd class="num ${dep.unavailable ? 't-stop' : ''}">${dep.unavailable ?? 0}</dd></div>
+    </dl>
+    ${conds ? `<div><div class="sec-t">需要注意</div><ol class="events">${conds}</ol></div>` : ''}
+    ${podList}
+    ${manage}
+  </div>`;
+}
+
+// ── 側邊抽屜 ──
+let _drawerLastFocus = null, _drawerSeq = 0;
+function openDrawerShell(kindLabel, title){
+  const dr = document.getElementById('zt-drawer');
+  _drawerLastFocus = document.activeElement;
+  document.getElementById('zt-drawer-kind').textContent = kindLabel;
+  document.getElementById('zt-drawer-title').textContent = title;
+  document.getElementById('zt-drawer-body').innerHTML = '<div class="skeleton" aria-label="讀取中"><i></i><i></i><i></i><i></i></div>';
+  dr.classList.add('open'); dr.setAttribute('aria-hidden', 'false');
+  document.getElementById('zt-scrim').classList.add('open');
+  setTimeout(() => dr.querySelector('header button')?.focus(), 50);
+  return ++_drawerSeq;
+}
+function fillDrawer(seq, html){
+  if(seq !== _drawerSeq) return;
+  const body = document.getElementById('zt-drawer-body');
+  body.innerHTML = html;
+  requestAnimationFrame(() => requestAnimationFrame(() => body.querySelectorAll('.bar span[data-w]').forEach(s => { s.style.width = s.dataset.w + '%'; })));
+}
+function closeDrawer(){
+  const dr = document.getElementById('zt-drawer');
+  if(!dr || !dr.classList.contains('open')) return;
+  dr.classList.remove('open'); dr.setAttribute('aria-hidden', 'true');
+  document.getElementById('zt-scrim').classList.remove('open');
+  _drawerSeq++;
+  if(_drawerLastFocus && document.contains(_drawerLastFocus)) _drawerLastFocus.focus();
+}
+async function openPodDrawer(name, diagnose){
+  const seq = openDrawerShell('Pod 詳情', name);
+  if(diagnose) fillDrawer(seq, '<div class="busy"><div class="spinner"></div><div>Healer 正在診斷原因，最久可能需要一到兩分鐘。</div></div>');
+  try{
+    const d = await getJSON('/api/pods/' + encodeURIComponent(name) + (diagnose ? '?diagnose=1' : ''));
+    if(!d.found || !(d.pods || []).length){ fillDrawer(seq, emptyBlock('找不到這個 Pod。', '它可能已經被重新建立或刪除，請重新查詢一次清單。')); return; }
+    fillDrawer(seq, d.pods.slice(0, 3).map(p => podDetailHTML(p)).join(''));
+  }catch(e){ fillDrawer(seq, emptyBlock('讀取失敗。', e.message || String(e))); }
+}
+async function openDepDrawer(name){
+  const seq = openDrawerShell('服務詳情', name);
+  try{
+    const [d, pd] = await Promise.all([getJSON('/api/deployments/' + encodeURIComponent(name)), getJSON('/api/pods/' + encodeURIComponent(name)).catch(() => null)]);
+    if(!d.found){ fillDrawer(seq, emptyBlock('找不到這個服務。', d.message || '它可能已經被刪除。')); return; }
+    fillDrawer(seq, depDetailHTML(d.deployment, (pd && pd.pods) || []));
+  }catch(e){ fillDrawer(seq, emptyBlock('讀取失敗。', e.message || String(e))); }
+}
+function goChatAndStart(kind, args){
+  closeDrawer();
+  if(!document.getElementById('page-chat')?.classList.contains('active')) showPage('chat');
+  startDestructiveFlow(kind, args);
+}
+
+// ── 事件委派：模組、抽屜、流程卡上的所有按鈕 ──
+document.addEventListener('click', function(e){
+  const t = e.target.closest('[data-act]');
+  if(!t || t.disabled) return;
+  const act = t.dataset.act;
+  const w = t.closest('.zt-w');
+  if(act === 'page' && w){ rerenderWidget(w, {p:parseInt(t.dataset.p, 10) || 1}); return; }
+  if(act === 'filter' && w){ rerenderWidget(w, {f:t.dataset.f, p:1}); return; }
+  if(act === 'sort' && w){ const st = decState(w.dataset.wState) || {}; const k = t.dataset.k; rerenderWidget(w, {k, dir:st.k === k ? -(st.dir || 1) : 1, p:1}); return; }
+  if(act === 'refresh' && w){ refreshWidget(w); return; }
+  if(act === 'open-pod'){ openPodDrawer(t.dataset.name); return; }
+  if(act === 'open-dep'){ openDepDrawer(t.dataset.name); return; }
+  if(act === 'diagnose'){ openPodDrawer(t.dataset.name, true); return; }
+  if(act === 'close-drawer'){ closeDrawer(); return; }
+  if(act === 'flow'){ goChatAndStart(t.dataset.kind, decState(t.dataset.args) || {}); return; }
+  if(act === 'example'){
+    if(!document.getElementById('page-chat')?.classList.contains('active')) showPage('chat');
+    const inp = document.getElementById('chat-input'); inp.value = t.dataset.text || ''; inp.focus(); return;
+  }
+  if(act === 'do-scale' || act === 'do-image'){
+    const err = document.getElementById('dr-err');
+    if(act === 'do-scale'){
+      const v = parseInt(document.getElementById('dr-replicas').value, 10);
+      if(!Number.isInteger(v) || v < 0 || v > 50){ err.textContent = '副本數要是 0 到 50 之間的整數。'; return; }
+      goChatAndStart('scale', {name:t.dataset.name, replicas:v});
+    } else {
+      const v = (document.getElementById('dr-image').value || '').trim();
+      if(!v || /\s/.test(v)){ err.textContent = '請輸入映像檔名稱，例如 nginx:1.27，中間不能有空白。'; return; }
+      goChatAndStart('update_image', {name:t.dataset.name, image:v});
+    }
+    return;
+  }
+});
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape') closeDrawer();
+  if((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('tr[data-act]')){ e.preventDefault(); e.target.click(); }
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  部署單與操作確認卡（取代舊的 B1～B4 卡片；流程邏輯與按鈕行為不變）
+// ══════════════════════════════════════════════════════════════════
+function flowStateAttrs(flow){
+  const st = {id:flow.id, seq:flow.seq, kind:flow.kind, step:flow.step, originalText:flow.originalText,
+              spec:flow.spec, review:flow.review, resource:flow.resource, rollout:flow.rollout || null,
+              resultMsg:flow.resultMsg || null, errorMsg:flow.errorMsg || null, blockers:flow.blockers || null,
+              retryStep:flow.retryStep || null, pendingSync:!!flow.pendingSync};
+  return `data-flow-id="${flow.id}" data-flow-seq="${flow.seq}" data-flow-step="${flow.step}" data-flow-state="${encodeURIComponent(JSON.stringify(st))}" data-summary="${esc(flowSummary(flow))}"`;
+}
+function flowSummary(flow){
+  const s = flow.spec || {};
+  if(flow.kind === 'deploy') return `部署單 ${s.app_name || ''}（${s.image || ''}），狀態：${flow.step}`;
+  return `操作確認：${destructiveSummary(flow)}，狀態：${flow.step}`;
+}
+function flowShell(flow, inner, cls){
+  return `<div class="module flow ${cls || ''}" ${flowStateAttrs(flow)}>${inner}</div>`;
+}
+function stepsHTML(n){
+  const names = ['確認規格', '審查', '部署'];
+  return `<ol class="steps" aria-label="部署步驟">${names.map((x, i) => `<li class="${i + 1 === n ? 'on' : i + 1 < n ? 'done' : ''}" ${i + 1 === n ? 'aria-current="step"' : ''}>${x}</li>`).join('')}</ol>`;
+}
+function flowHead(title, right){ return `<div class="module-head"><h2>${title}</h2>${right || ''}</div>`; }
+
+function renderFlowCard(flow){
+  if(flow.step === 'expired'){
+    return flowShell(flow, flowHead('這個請求已經失效', '') + `<div class="body"><div class="lead">重新整理頁面後，進行到一半的流程沒辦法接著做。需要的話，請再說一次你想做的事。</div></div>`);
+  }
+  if(flow.step === 'cancelled') return renderCancelledCard(flow);
+  if(flow.kind === 'deploy'){
+    if(flow.step === 'spec') return renderSpecCard(flow);
+    if(flow.step === 'review') return renderReviewCard(flow);
+    if(flow.step === 'executing') return renderBusyCard(flow, 'Deploying');
+    if(flow.step === 'done') return renderDoneCard(flow);
+    if(flow.step === 'error') return renderErrorCard(flow);
+  } else {
+    if(flow.step === 'spec') return renderDestructiveCard(flow);
+    if(flow.step === 'executing') return renderBusyCard(flow, 'Working');
+    if(flow.step === 'done') return renderActionDoneCard(flow);
+    if(flow.step === 'error') return renderErrorCard(flow);
+  }
+  return flowShell(flow, '<div class="busy"><div class="spinner"></div></div>');
+}
+function renderCancelledCard(flow){
+  return flowShell(flow, flowHead('已取消', '') + `<div class="body"><div class="lead">${flow.kind === 'deploy' ? '這次部署沒有執行。' : '這個操作沒有執行。'}</div></div>`);
+}
+function renderBusyCard(flow, label){
+  const txt = TYPING_LABELS[label] || label;
+  const sub = label === 'Reviewing' ? '會檢查有沒有安全風險、要花多少資源、效能設定合不合理。'
+            : label === 'Deploying' ? '正在寫入部署紀錄，並把設定送到叢集。' : '';
+  return flowShell(flow, flowHead(flow.kind === 'deploy' ? '部署單' : '執行中', flow.kind === 'deploy' ? stepsHTML(label === 'Deploying' ? 3 : 2) : '')
+    + `<div class="busy"><div class="spinner"></div><div style="min-width:0"><div>${esc(txt)}</div>${sub ? `<div class="dim">${sub}</div>` : ''}</div><div class="scanbar" aria-hidden="true"></div></div>`);
+}
+
+function renderSpecCard(flow){
+  const s = flow.spec || {};
+  const out = s.output || s;
+  const g = k => esc(out[k] != null ? out[k] : (s[k] != null ? s[k] : ''));
+  return flowShell(flow, flowHead('部署單', stepsHTML(1)) + `<div class="body">
+    <div class="lead">我照你的描述整理成下面的規格。有不對的地方直接改，再按「下一步」。</div>
+    <div class="fgrid">
+      <div><label for="${flow.id}-app">服務名稱</label><input id="${flow.id}-app" data-field="app_name" value="${g('app_name')}" placeholder="my-app"><div class="hint">小寫英文字母開頭，只能用小寫字母、數字和連字號，例如 web-frontend</div></div>
+      <div><label for="${flow.id}-img">映像檔</label><input id="${flow.id}-img" data-field="image" value="${g('image')}" placeholder="nginx:1.27"></div>
+      <div><label for="${flow.id}-pods">副本數</label><input id="${flow.id}-pods" data-field="pods" type="number" min="1" max="100" value="${g('pods') || 1}"></div>
+      <div><label for="${flow.id}-port">Port</label><input id="${flow.id}-port" data-field="port" type="number" min="1" max="65535" value="${g('port') || 80}"></div>
+      <div><label for="${flow.id}-mem">每個副本的記憶體（選填）</label><input id="${flow.id}-mem" data-field="memory" value="${g('memory')}" placeholder="例如 256Mi"></div>
+      <div><label for="${flow.id}-cpu">每個副本的 CPU（選填）</label><input id="${flow.id}-cpu" data-field="cpu" value="${g('cpu')}" placeholder="例如 100m"></div>
+    </div>
+    <div class="err" data-role="error" role="alert"></div></div>
+    <div class="foot"><button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button>
+      <button type="button" class="btn primary" onclick="flowToReview('${flow.id}')">下一步：審查</button></div>`);
+}
+function readSpecCard(id){
+  const root = document.querySelector(`[data-flow-id="${id}"]`);
+  if(!root) return null;
+  const get = f => (root.querySelector(`[data-field="${f}"]`)?.value || '').trim();
+  const spec = {app_name:get('app_name'), image:get('image'), pods:parseInt(get('pods'), 10), port:parseInt(get('port'), 10)};
+  const mem = get('memory'), cpu = get('cpu');
+  if(mem) spec.memory = mem;
+  if(cpu) spec.cpu = cpu;
+  return {root, spec};
+}
+function setFlowError(root, msg){
+  const el = root && root.querySelector('[data-role="error"]');
+  if(el){ el.style.display = msg ? 'block' : 'none'; el.textContent = msg || ''; }
+}
+
+function splitImage(img){
+  const s = String(img || '');
+  const at = s.lastIndexOf(':');
+  if(at > 0 && !s.slice(at).includes('/')) return [s.slice(0, at), s.slice(at + 1)];
+  return [s, ''];
+}
+// 審查訊息拿掉程式內部的前綴，例如「[0] Deployment/nginx: 」
+function cleanIssue(m){
+  return String(m || '')
+    .replace(/^\s*(?:\[[^\]]*\]\s*)+/, '')
+    .replace(/^[A-Za-z]+\/[\w.-]+:\s*/, '')
+    .replace(/'([^']+)'/g, '$1');
+}
+const SEV_RANK = {critical:0, high:1, medium:2, low:3, info:4};
+function reviewerOf(title, a, extra, tag, rv){
+  a = a || {};
+  const blocked = ((rv && rv.blockers) || []).some(b => String(b).startsWith('[' + tag + ']'));
+  const issues = (a.issues || []).slice().sort((x, y) => (SEV_RANK[x.severity] ?? 5) - (SEV_RANK[y.severity] ?? 5));
+  // 「擋下」以 orchestrator 實際列出的阻斷原因為準（致命問題或安全分數過低），
+  // 卡片上的每一項才會跟最終判定一致；其他中高嚴重度的問題只算提醒
+  const worst = blocked ? 'stop' : issues.some(i => ['critical', 'high', 'medium'].includes(i.severity)) ? 'warn' : 'ok';
+  const verdict = {ok:'通過', warn:'提醒', stop:'擋下'}[worst];
+  const lines = issues.filter(i => i.message).slice(0, 2).map(i => esc(cleanIssue(i.message)));
+  const text = lines.length ? lines.join('<br>') : esc(a.summary || extra || '沒有發現問題。');
+  return `<div class="reviewer ${worst}"><i class="scan" aria-hidden="true"></i><span class="role">${title}</span><span class="verdict"><i></i>${verdict}</span><p>${text}</p></div>`;
+}
+function renderReviewCard(flow){
+  const rv = flow.review || {};
+  const decision = rv.decision || 'block';
+  const s = flow.spec || {};
+  const [imgName, imgTag] = splitImage(s.image);
+  const a = (rv.agents && rv.agents.agents) || {};
+  const cEst = a.cost && a.cost.cost_estimate && a.cost.cost_estimate.estimated_usd;
+  const rs = flow.resource;
+  let res = '';
+  if(rs){
+    const parts = [];
+    if(rs.total_cpu_cores != null || rs.total_mem_gib != null) parts.push(`總共需要 <b>${rs.total_cpu_cores ?? '?'}</b> 核、<b>${rs.total_mem_gib ?? '?'}</b> GiB`);
+    if(rs.cluster_remaining_after){
+      const r = rs.cluster_remaining_after;
+      parts.push(`部署後叢集還剩 <b class="${r.cpu_cores < 0 ? 'neg' : ''}">${r.cpu_cores}</b> 核、<b class="${r.mem_gib < 0 ? 'neg' : ''}">${r.mem_gib}</b> GiB`);
+    }
+    if(rs.monthly_usd != null) parts.push(`依公有雲牌價估算每月 <b>$${rs.monthly_usd}</b>`);
+    if(parts.length) res = `<div class="res-line">${parts.map(p => `<span>${p}</span>`).join('')}</div>`;
+  }
+  const seal = {approve:['ok', '放行'], warn:['warn', '注意'], block:['stop', '退回']}[decision] || ['stop', '退回'];
+  let say, actions;
+  if(decision === 'approve'){
+    say = `<b>可以部署</b><span class="dim">三項審查都通過了。</span>`;
+    actions = `<button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button><button type="button" class="btn primary" onclick="flowExecuteDeploy('${flow.id}')">開始部署</button>`;
+  } else if(decision === 'warn'){
+    const ws = (rv.warnings || []).slice(0, 4).map(w => `<li>${esc(cleanIssue(w))}</li>`).join('');
+    say = `<b>可以部署，但有幾點要注意</b>${ws ? `<ul>${ws}</ul>` : ''}`;
+    actions = `<button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button><button type="button" class="btn primary" onclick="flowExecuteDeploy('${flow.id}')">我了解，仍要部署</button>`;
+  } else {
+    const bs = (rv.blockers || []).slice(0, 5).map(b => `<li>${esc(cleanIssue(b))}</li>`).join('');
+    say = `<b>這次部署被擋下了</b>${bs ? `<ul>${bs}</ul>` : `<span class="dim">${esc(rv.reason || '')}</span>`}<span class="dim">修改規格後可以重新送審。</span>`;
+    actions = `<button type="button" class="btn" onclick="cancelFlow('${flow.id}')">關閉</button><button type="button" class="btn primary" onclick="flowBackToSpec('${flow.id}')">修改規格</button>`;
+  }
+  return flowShell(flow, flowHead(`<span class="id">${esc(s.app_name || '')}</span>`, stepsHTML(2)) + `
+    <dl class="spec">
+      <div><dt>映像檔</dt><dd>${esc(imgName)}${imgTag ? `<small>${esc(imgTag)}</small>` : ''}</dd></div>
+      <div><dt>副本</dt><dd>${esc(s.pods ?? '')}<small>個</small></dd></div>
+      <div><dt>Port</dt><dd>${esc(s.port ?? '')}</dd></div>
+      <div><dt>每個副本的記憶體</dt><dd>${s.memory ? esc(String(s.memory).replace(/(Mi|Gi)$/, '')) + `<small>${esc((String(s.memory).match(/(Mi|Gi)$/) || [''])[0])}</small>` : '<small>系統預設</small>'}</dd></div>
+    </dl>
+    <div class="review">
+      ${reviewerOf('安全審查', a.security, '', '安全', rv)}
+      ${reviewerOf('成本審查', a.cost, cEst != null ? `依公有雲牌價估算每月約 $${cEst}。` : '', '成本', rv)}
+      ${reviewerOf('效能審查', a.perf, '', '效能', rv)}
+    </div>
+    ${res}
+    <div class="decision">
+      <div class="seal ${seal[0]}" aria-hidden="true"><svg viewBox="0 0 76 76"><circle class="ring-o" cx="38" cy="38" r="36"/><circle class="ticks" cx="38" cy="38" r="30"/><text x="38" y="45" text-anchor="middle">${seal[1]}</text></svg></div>
+      <div class="say">${say}</div>
+      <div class="actions">${actions}</div>
+    </div>`, decision === 'block' ? 'danger' : '');
+}
+function flowBackToSpec(id){
+  const flow = chatFlows[id];
+  if(!flow) return;
+  flow.step = 'spec'; flow.errorMsg = null; flow.blockers = null;
+  persistFlowCard(id);
+}
+// 審查結果出來時播一次：三項依序掃描，最後蓋上封印。重新整理後只顯示最終結果，不重播。
+function playReview(id){
+  if(reducedMotion()) return;
+  const el = document.querySelector(`[data-flow-id="${id}"]`);
+  if(!el) return;
+  const reviewers = [...el.querySelectorAll('.reviewer')];
+  const seal = el.querySelector('.seal');
+  el.classList.add('replay');
+  reviewers.forEach(r => r.classList.add('waiting'));
+  if(seal) seal.classList.add('armed');
+  reviewers.forEach((r, i) => {
+    setTimeout(() => { r.classList.remove('waiting'); void r.offsetWidth; r.classList.add('scanning'); }, 250 + i * 480);
+    setTimeout(() => r.classList.remove('scanning'), 250 + i * 480 + 700);
+  });
+  setTimeout(() => { if(seal){ seal.classList.remove('armed'); void seal.offsetWidth; seal.classList.add('on'); } }, 250 + reviewers.length * 480 + 300);
+  setTimeout(() => el.classList.remove('replay'), 250 + reviewers.length * 480 + 1600);
+}
+
+function destructiveSummary(flow){
+  const a = flow.spec || {};
+  if(flow.kind === 'scale') return `把「${a.name}」的副本從 ${a.current != null ? a.current : '?'} 個調成 ${a.replicas} 個`;
+  if(flow.kind === 'update_image') return `把「${a.name}」的映像檔換成 ${a.image}`;
+  if(flow.kind === 'rollback') return `把「${a.name}」回滾到上一版設定`;
+  if(flow.kind === 'delete') return `刪除服務「${a.name}」和它的 Service`;
+  if(flow.kind === 'healer_fix') return `讓 Healer 診斷並修復 Pod「${a.pod_name}」`;
+  if(flow.kind === 'healer_auto_fix') return '讓 Healer 修復所有有狀況的 Pod';
+  return '';
+}
+function renderDestructiveCard(flow){
+  const a = flow.spec || {};
+  const k8sOff = (flow.kind === 'scale' || flow.kind === 'update_image') && k8sEnabled === false;
+  const titles = {scale:'調整副本數', update_image:'更新映像檔', rollback:'回滾', delete:'刪除服務', healer_fix:'修復 Pod', healer_auto_fix:'全部自動修復'};
+  const confirmLabel = {scale:'確認調整', update_image:'確認更新', rollback:'確認回滾', delete:'確認刪除', healer_fix:'開始修復', healer_auto_fix:'開始修復'}[flow.kind] || '確認';
+  let detail;
+  if(flow.kind === 'scale') detail = `<div class="delta"><span class="id">${esc(a.name)}</span><span class="from num">${a.current != null ? esc(a.current) : '?'} 個</span><span class="arrow" aria-hidden="true"></span><span class="to">${esc(a.replicas)} 個副本</span></div>`;
+  else if(flow.kind === 'update_image') detail = `<div class="delta"><span class="id">${esc(a.name)}</span><span class="from id">${esc(a.current || '目前版本')}</span><span class="arrow" aria-hidden="true"></span><span class="to id">${esc(a.image)}</span></div>`;
+  else if(flow.kind === 'delete') detail = `<div class="lead">${esc(destructiveSummary(flow))}。<b class="t-stop">刪除之後沒辦法復原</b>，服務上的流量會中斷。</div>`;
+  else if(flow.kind === 'healer_fix') detail = `<div class="lead">${esc(destructiveSummary(flow))}。Healer 會先判斷原因，再套用對應的修復，例如調高記憶體上限或恢復上一個能用的映像檔。</div>`;
+  else detail = `<div class="lead">${esc(destructiveSummary(flow))}。</div>`;
+  return flowShell(flow, flowHead(titles[flow.kind] || '確認操作', '<span class="meta">執行前請確認</span>') + `<div class="body">
+    ${detail}
+    <div class="err" data-role="error" role="alert"></div>
+    ${k8sOff ? '<div class="err" style="display:block">Kubernetes 目前沒有連線，這個操作沒辦法執行。</div>' : ''}</div>
+    <div class="foot"><button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button>
+      <button type="button" class="btn ${flow.kind === 'delete' ? 'danger' : 'primary'}" onclick="flowExecuteAction('${flow.id}')" ${k8sOff ? 'disabled' : ''}>${confirmLabel}</button></div>`,
+    flow.kind === 'delete' ? 'danger' : '');
+}
+
+// 部署之後的進度：每一步都要等系統真的回報才往前走
+function legsHTML(flow){
+  const ro = flow.rollout || {};
+  const s = flow.spec || {};
+  const legs = [
+    {t:'審查通過', d:'done'},
+    {t:'寫入部署紀錄', d:'done'},
+    {t:flow.pendingSync ? '你的叢集同步中' : '叢集建立中', d:ro.state === 'running' ? 'done' : ro.state === 'timeout' ? 'bad' : 'now',
+     sub:ro.state === 'running' ? '' : ro.state === 'timeout' ? '等太久了' : (flow.pendingSync ? '約 30 到 60 秒' : (ro.replicas ? `${ro.ready || 0}/${ro.replicas} 個副本就緒` : '確認中'))},
+    {t:'運作中', d:ro.state === 'running' ? 'done' : '', sub:ro.state === 'running' ? `${ro.ready}/${ro.replicas} 個副本就緒` : '等待中'},
+  ];
+  const pct = ro.state === 'running' ? 100 : 66;
+  return `<div class="legs-wrap"><div class="legs-line" aria-hidden="true"><span style="width:${pct}%"></span></div>
+    <ol class="legs">${legs.map(l => `<li class="${l.d}">${l.t}<span>${l.sub || ''}</span></li>`).join('')}</ol></div>`;
+}
+function renderDoneCard(flow){
+  const s = flow.spec || {};
+  const ro = flow.rollout || {};
+  let note = '';
+  if(ro.state === 'timeout') note = `<div class="err" style="display:block">已經等了 5 分鐘，副本還沒全部就緒。可能是映像檔下載太慢或啟動失敗，點「查看服務」看原因，或說「${esc(s.app_name)} 有沒有壞」請 Healer 檢查。</div>`;
+  return flowShell(flow, flowHead(`<span class="id">${esc(s.app_name || '')}</span>`, ro.state === 'running' ? '<span class="meta"><b class="state s-run"><i></i>部署完成</b></span>' : stepsHTML(3)) + legsHTML(flow) + `
+    <div class="body" style="padding-top:0">${note}<div class="dim">${esc(s.image || '')}，${esc(s.pods ?? '')} 個副本${s.port ? `，Port ${esc(s.port)}` : ''}</div></div>
+    <div class="foot" style="justify-content:flex-start">
+      <button type="button" class="btn" data-act="open-dep" data-name="${esc(s.app_name || '')}">查看服務</button>
+      ${ro.state && ro.state !== 'running' && !chatFlows[flow.id]?._tracking ? `<button type="button" class="btn" onclick="trackRollout('${flow.id}')">重新檢查進度</button>` : ''}
+      <button type="button" class="btn" onclick="showPage('gitops')">部署紀錄</button>
+    </div>`, ro.state === 'running' ? 'done-card' : '');
+}
+async function trackRollout(id){
+  const flow = chatFlows[id];
+  if(!flow || flow._tracking) return;
+  const name = (flow.spec || {}).app_name;
+  if(!name) return;
+  flow._tracking = true;
+  const started = Date.now();
+  flow.rollout = Object.assign({}, flow.rollout || {}, {state:'syncing'});
+  persistFlowCard(id);
+  try{
+    while(Date.now() - started < 5 * 60 * 1000){
+      await new Promise(r => setTimeout(r, 3000));
+      if(!chatFlows[id] || chatFlows[id] !== flow) return;
+      try{
+        const d = await getJSON('/api/deployments/' + encodeURIComponent(name));
+        if(d.found){
+          const dep = d.deployment;
+          const changed = dep.ready !== flow.rollout.ready || dep.replicas !== flow.rollout.replicas;
+          flow.rollout = {state:(dep.replicas > 0 && dep.ready >= dep.replicas) ? 'running' : 'syncing', ready:dep.ready || 0, replicas:dep.replicas || 0};
+          if(flow.rollout.state === 'running'){ flow._tracking = false; persistFlowCard(id); return; }
+          if(changed) persistFlowCard(id);
+        }
+      }catch(e){ /* 暫時讀不到就下一輪再試 */ }
+    }
+    flow.rollout = Object.assign({}, flow.rollout, {state:'timeout'});
+  } finally {
+    flow._tracking = false;
+    persistFlowCard(id);
+  }
+}
+function renderActionDoneCard(flow){
+  return flowShell(flow, flowHead('完成', '<span class="meta"><b class="state s-run"><i></i>已執行</b></span>') + `<div class="body">
+    <div class="lead">${esc(flow.resultMsg || destructiveSummary(flow))}</div>
+    ${flow.pendingSync ? '<div class="dim">變更已經送出，你的叢集大約 30 到 60 秒內會同步完成。</div>' : ''}</div>
+    <div class="foot" style="justify-content:flex-start">${(flow.spec || {}).name && flow.kind !== 'delete' ? `<button type="button" class="btn" data-act="open-dep" data-name="${esc(flow.spec.name)}">查看服務</button>` : ''}
+      <button type="button" class="btn" onclick="showPage('gitops')">部署紀錄</button></div>`, 'done-card');
+}
+function renderErrorCard(flow){
+  const list = (flow.blockers || []).slice(0, 6).map(b => `<li>${esc(b)}</li>`).join('');
+  return flowShell(flow, flowHead('沒有完成', '<span class="meta"><b class="state s-fail"><i></i>失敗</b></span>') + `<div class="body">
+    <div class="lead">${esc(flow.errorMsg || '操作失敗。')}</div>${list ? `<ul class="dim" style="margin:0;padding-left:1.2em">${list}</ul>` : ''}</div>
+    <div class="foot"><button type="button" class="btn" onclick="cancelFlow('${flow.id}')">關閉</button>
+      ${flow.retryStep ? `<button type="button" class="btn primary" onclick="retryFlow('${flow.id}')">再試一次</button>` : ''}</div>`, 'fail-card');
+}
+function cancelFlow(id){
+  const flow = chatFlows[id];
+  if(!flow) return;
+  flow.step = 'cancelled'; flow.retryStep = null;
+  persistFlowCard(id);
+}
+
+// 重新整理後：進行中的流程標成失效；部署完成但還沒確認運作中的，自動接著追進度
+function hydrateChatFlows(){
+  const ch = currentChat();
+  if(!ch) return;
+  const resume = [];
+  ch.messages.forEach(m => {
+    if(m.role !== 'assistant') return;
+    const mm = String(m.content || '').match(/data-flow-state="([^"]*)"/);
+    if(!mm) return;
+    let st; try { st = JSON.parse(decodeURIComponent(mm[1])); } catch(e){ return; }
+    if(st.kind === 'deploy' && st.step === 'done' && (!st.rollout || st.rollout.state !== 'running') && st.rollout?.state !== 'timeout'){
+      chatFlows[st.id] = st; resume.push(st.id); return;
+    }
+    if(['done', 'error', 'cancelled', 'expired'].includes(st.step)) return;
+    st.step = 'expired';
+    chatFlows[st.id] = st;
+    m.content = renderFlowCard(st);
+  });
+  saveChats();
+  if(resume.length) setTimeout(() => resume.forEach(id => trackRollout(id)), 500);
+}
+
+// 不太確定使用者要不要執行時的追問
+function renderClarifyReasonHTML(intent){
+  const reasons = intent.clarify_reasons || [];
+  if(!reasons.length) return '';
+  const ungrounded = intent.ungrounded_values || [];
+  const proposed = Object.assign({}, intent.args || {}); delete proposed.guess;
+  const confPct = Math.round((Number(intent.confidence) || 0) * 100);
+  const labels = {
+    low_confidence:`AI 對這個判斷的信心只有 ${confPct}%，低於 75% 的執行門檻`,
+    missing_args:'少了執行這個動作需要的資訊',
+    ungrounded_args:ungrounded.length ? `AI 猜的「${ungrounded.map(u => escHtml(String(u.value))).join('、')}」沒有出現在你的訊息裡，可能是憑空猜的` : 'AI 猜的內容沒有出現在你的訊息裡，可能是憑空猜的',
+  };
+  const lines = reasons.map(r => `<li>${labels[r] || escHtml(r)}</li>`).join('');
+  const argsText = Object.keys(proposed).length ? escHtml(JSON.stringify(proposed)) : '';
+  return `<details class="why"><summary>為什麼沒有直接執行</summary><div class="dim">AI 原本的判斷：${escHtml(intent.action || '')} ${argsText}</div><ul>${lines}</ul></details>`;
+}
+function startClarify(intent){
+  const g = (intent.args && intent.args.guess) || intent.action;
+  const label = {scale:'調整副本數', update_image:'更新映像檔', rollback:'回滾', delete:'刪除', healer_fix:'修復 Pod', healer_auto_fix:'全部自動修復'}[g] || g;
+  appendMsg('assistant', `<div class="md"><p>我不太確定你是要「${escHtml(label)}」，還是只是在問問題。如果要執行，請講得具體一點，例如：</p>
+    <ul><li><code>把 web-frontend 擴到 3 個</code></li><li><code>刪除 web-frontend</code></li><li><code>web-frontend 回滾</code></li></ul>${renderClarifyReasonHTML(intent)}</div>`);
+}
 
 window.addEventListener('DOMContentLoaded', function(){
   if(loggedIn){
@@ -4958,7 +5728,8 @@ def _enforce_ban():
         # 每次請求都重新算一次 is_admin（而不是只在登入當下算），讓 ADMIN_EMAILS
         # 允許清單異動（例如之後加組員）在下一次請求就生效，不用使用者重新登入。
         session["is_admin"] = _is_admin_user(username)
-    if username and USERS.get(username, {}).get("banned"):
+    _u = USERS.get(username) if username else None
+    if isinstance(_u, dict) and _u.get("banned"):
         session.clear()
         if request.path.startswith("/api/"):
             return jsonify({"error": "This account has been banned for repeated malicious behavior. / 此帳號因累積多次惡意行為已被封鎖。"}), 403
@@ -5234,7 +6005,7 @@ _INTENT_RULES = [
     ("rollback", re.compile(r"rollback\s+(\S+)", re.I), {1: "name"}),
     ("rollback", re.compile(r"(\S+)\s*(?:回滾|回復|還原)", re.I), {1: "name"}),
     # deploy：前端有更完整的複合 regex，這裡只當 server 端安全網（args 交給 /api/deploy/parse 解析）
-    ("deploy", re.compile(r"^(deploy|start|launch|run|spin\s+up|部署|佈署|部屬)", re.I), {}),
+    ("deploy", re.compile(r"^((?:deploy|start|launch|run)\b|spin\s+up|部署|佈署|部屬)", re.I), {}),
     ("deploy", re.compile(r"(?:幫我|請).{0,6}(?:deploy|部署|佈署|部屬|跑|起).{0,8}(?:\d+\s*(?:個|pods?|副本)|nginx|redis|postgres|mysql|node|python|image|映像|鏡像)", re.I), {}),
 ]
 _INTENT_INT_ARGS = {"replicas", "pods", "port"}
