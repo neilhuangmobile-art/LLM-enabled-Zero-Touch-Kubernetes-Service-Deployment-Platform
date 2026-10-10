@@ -1115,3 +1115,17 @@ Playwright 截圖檢查登入、對話、自動修復、深淺色。各頁內容
 **驗證**：實測 0.5 核 nginx 的 worker 數 32 → 1；真實叢集上擴到 100 個回 409 並說明「目前 39 個、最多 110 個」，部署 100 個副本的審查也被擋下；
 新增 `tests/test_stress_findings.py` 15 項，`pytest` 全過。（commit `928bd3f` 與後續）
 
+### 13:10 — 修正：自動健康檢查、對外 port 與容器 port 分開、常見服務預設 port
+**為什麼**：極限測試第 1 項（Pod 卡住偵測不到），使用者選「依類型自動加」。動手時發現兩個既有 bug：
+「部署 redis」會拿到 port 80（redis 聽 6379）；「nginx 開 8085 port」會把容器 port 也設成 8085（nginx 只聽 80），
+這兩種服務其實一直連不上，畫面卻顯示部署完成、副本就緒。加了健康檢查後會直接露出來，所以一起修。
+**改了什麼**：
+- `recommended_probes()`：nginx、httpd 用 HTTP 檢查（卡住約 10 秒停止分流量、超過 30 秒才重啟）；其他映像檔只加連線檢查、不設重啟條件。
+- `container_port()`：使用者講的 port 是對外的 port，已知映像檔在容器裡用它實際監聽的 port，Service 轉過去；不認識的映像檔照舊。
+- 使用者沒講 port 時，redis、postgres、mysql 等用自己的預設 port。
+- 以上都由審查、本機部署、Git 設定三處共用。
+**驗證**：真實叢集：nginx 對外 8085 → 容器 80，連線 200（修正前連不上）；redis 沒講 port 拿到 6379 並就緒；
+重現組員測試（暫停一個 Pod 的 worker 25 秒、每 0.2 秒一次請求）：失敗率 11.8%（組員測得 43.5%，但壓測方式不同），
+第 11 秒移出流量，恢復後自動回到就緒、沒有被重啟。`tests/test_stress_findings.py` 增至 23 項，`pytest` 全過。（commit `8c2f9e9`、`a8a7ad4`）
+既有部署要重新部署才會套用（例如 user-showcase/nginx 仍是 8080 → 8080）。
+
