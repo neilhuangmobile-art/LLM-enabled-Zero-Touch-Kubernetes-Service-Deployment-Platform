@@ -392,7 +392,11 @@ def _deterministic_deploy_parse(prompt_text: str) -> Optional[dict]:
         # 實測發現）：「node:20-alpine 作為 api-gateway」這種句型，"作為" 後面
         # 接的才是使用者真正想取的名字，原本不在這份前綴清單裡，"api-gateway"
         # 整段被漏接，app_name 退回用 image 基底名稱（node）頂替。
-        r'(?:for|named|name|給|叫做|名稱|作為|當作|当作|当成)[ \t]+([a-zA-Z0-9][A-Za-z0-9-]{1,50})',
+        # 2026-10-10：「名稱叫 rpt-cache」「叫 my-web」「名字是 x」「命名為 x」原本都抓不到（關鍵字後面規定要空白，
+        # 「叫」「名字」「命名為」也不在清單裡）。中文關鍵字後面可以直接接名稱，也可以先接「是／為／叫／：」；
+        # 英文關鍵字要有單字邊界，免得「information」裡的 for 被當成關鍵字。
+        r'(?:\b(?:for|named|name)\b|給|叫做|叫|名稱|名字|命名為|命名|取名為|取名|名為|稱為|作為|當作|当作|当成)'
+        r'[ \t]*(?:是|為|为|叫做|叫|:|：|=)?[ \t]*([a-zA-Z0-9][A-Za-z0-9-]{1,50})',
         r'([a-zA-Z0-9][A-Za-z0-9-]{1,50})[ \t]*(?:service|app|deployment|服務)',
     ]
     _quantity_like = re.compile(r'^\d+(?:\.\d+)?(?:mi|gi|ki|m|g)?$', re.IGNORECASE)
@@ -736,6 +740,21 @@ def _parse_error_response(deterministic: dict) -> Optional[dict]:
     return {"error": "解析失敗", "raw": str(deterministic)}
 
 
+def _overlay_stated_fields(result: dict, stated: Optional[dict]) -> dict:
+    """把 Gemini 抓到的「使用者有講的欄位」蓋到解析結果上。映像檔只在名稱不同時才蓋，
+    保留解析器補上的版本標籤（redis → redis:latest）。"""
+    if not stated or not isinstance(result, dict) or "error" in result:
+        return result
+    out = dict(result)
+    for k in ("app_name", "port", "memory", "cpu", "pods"):
+        if stated.get(k) not in (None, ""):
+            out[k] = stated[k]
+    img = stated.get("image")
+    if img and str(out.get("image") or "").split(":")[0] != str(img).split(":")[0]:
+        out["image"] = img
+    return out
+
+
 def ask_llama(prompt_text: str) -> dict:
     """
     呼叫 LLM 推論（優先順序）：
@@ -765,6 +784,7 @@ def ask_llama(prompt_text: str) -> dict:
         #    Gemini 只負責「聽懂」，沒講的欄位一律留白不猜。spec 齊全就直接回傳（零 GPU），
         #    不齊全就把 spec 當作模型輸入。Gemini 不可用時 fallback 回原始輸入。
         model_input = prompt_text
+        gemini_partial = None
         if os.environ.get("USE_LLM_NORMALIZE") == "1":
             try:
                 from core.gemini_client import gemini_normalize_deploy_request, is_available as gemini_available
@@ -775,6 +795,12 @@ def ask_llama(prompt_text: str) -> dict:
                         spec = parse_deploy_spec(spec_block)
                         if spec and _validate(spec):
                             return spec
+                        # 不完整（通常是沒講副本數）時，不能整份丟掉：Gemini 只會寫使用者真的講過的欄位，
+                        # 這些欄位要蓋過後面規則或模型補出來的值。2026-10-10 實測「部署 redis，名稱叫 rpt-cache」
+                        # Gemini 抓到 app_name，但原本整份被丟掉，名稱變回 redis。
+                        gemini_partial = dict(spec or {})
+                        if not re.search(r"^\s*app_name\s*:", spec_block, re.MULTILINE):
+                            gemini_partial.pop("app_name", None)   # 那是 parse_deploy_spec 用映像檔名稱補的
                         model_input = spec_block
             except Exception as e:
                 print(f"[Gemini 翻譯層] 正規化失敗，改用原始輸入：{e}")
@@ -791,7 +817,7 @@ def ask_llama(prompt_text: str) -> dict:
             return deterministic_error
         if deterministic and _validate(deterministic):
             print("[Parser] deterministic deployment parse")
-            return deterministic
+            return _overlay_stated_fields(deterministic, gemini_partial)
 
         # ── 3. Claude API（opt-in）──
         if os.environ.get("USE_CLAUDE_API") == "1":
@@ -801,7 +827,7 @@ def ask_llama(prompt_text: str) -> dict:
                     result = claude_parse_k8s(model_input)
                     if result is not None:
                         print("[Claude API] 解析成功")
-                        return result
+                        return _overlay_stated_fields(result, gemini_partial)
             except Exception:
                 pass
 
@@ -812,10 +838,10 @@ def ask_llama(prompt_text: str) -> dict:
 
         server_result = _try_server(model_input, examples=examples)
         if server_result is not None:
-            return server_result
+            return _overlay_stated_fields(server_result, gemini_partial)
 
         # ── 5. Fallback：本地直接載入 ──
-        return _local_infer(model_input)
+        return _overlay_stated_fields(_local_infer(model_input), gemini_partial)
 
     except Exception as e:
         return {"error": "解析失敗", "raw": str(e)}

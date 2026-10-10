@@ -275,3 +275,25 @@ def test_port_and_time_are_not_mistaken_for_images_2026_10_09():
 ])
 def test_port_number_before_keyword_2026_10_09(text, port):
     assert llama_client._deterministic_deploy_parse(text)["port"] == port
+
+
+@pytest.mark.parametrize("text,name", [
+    ("幫我部署 redis，名稱叫 rpt-cache", "rpt-cache"),
+    ("部署 nginx 叫 my-web", "my-web"),
+    ("部署 nginx，名字是 shop-front", "shop-front"),
+    ("部署 redis 命名為 sess-store", "sess-store"),
+    ("deploy nginx named web-a with information page", "web-a"),
+])
+def test_chinese_naming_phrases_2026_10_10(text, name):
+    """「名稱叫」「叫」「名字是」「命名為」原本都抓不到（關鍵字後面規定要空白）。"""
+    r = _deterministic_deploy_parse(text)
+    assert r and r["app_name"] == name
+
+
+def test_gemini_stated_fields_survive_incomplete_spec_2026_10_10():
+    """Gemini 正規化不完整（沒講副本數）時，它抓到的使用者欄位要保留，不能整份丟掉。"""
+    from llama_client import _overlay_stated_fields
+    base = {"pods": 1, "image": "redis:latest", "app_name": "redis", "port": 80}
+    out = _overlay_stated_fields(base, {"image": "redis", "app_name": "rpt-cache"})
+    assert out["app_name"] == "rpt-cache" and out["image"] == "redis:latest" and out["pods"] == 1
+    assert _overlay_stated_fields({"error": "x"}, {"app_name": "a"}) == {"error": "x"}
