@@ -184,7 +184,39 @@ def _check_pod(pod) -> Optional[dict]:
                 "description" : WATCH_REASONS.get(state.terminated.reason, ""),
             }
 
+        # ── 檢查「上一次」為什麼結束（2026-10-10 組員極限測試：記憶體超過上限被砍掉後
+        # 3 秒就自動重啟，掃描時容器已經是 Running，Healer 完全沒發現這次 OOM）。
+        # 只看 30 分鐘內的，避免很久以前的一次 OOM 一直被翻出來處理。
+        last = cs.last_state.terminated if cs.last_state else None
+        if last and last.reason == "OOMKilled" and _recent(last.finished_at, minutes=30):
+            return {
+                "pod_name"    : pod_name,
+                "namespace"   : namespace,
+                "container"   : cs.name,
+                "reason"      : "OOMKilled",
+                "message"     : last.message or "",
+                "restart_count": cs.restart_count,
+                "exit_code"   : last.exit_code,
+                "phase"       : phase,
+                "detected_at" : datetime.utcnow().isoformat(),
+                "description" : WATCH_REASONS.get("OOMKilled", "記憶體不足被系統終止") + "（已自動重啟，但剛發生過）",
+            }
+
     return None
+
+
+def _recent(ts, minutes: int) -> bool:
+    """ts 是 K8s 回傳的 datetime（帶時區）；沒有時間就當作不是最近。"""
+    if not ts:
+        return False
+    try:
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return (now - ts).total_seconds() <= minutes * 60
+    except Exception:
+        return False
 
 
 # 讀日誌的 API 沒丟例外、但其實沒拿到日誌時回的訊息

@@ -106,6 +106,23 @@ def recommended_resources(image: str, app_name: str = "", memory: str = None, cp
     }
 
 
+_NGINX_AUTOTUNE_IMAGES = {"nginx", "nginx-unprivileged"}
+
+
+def recommended_env(image: str) -> dict:
+    """部署時自動加上的環境變數，三處部署設定共用（同 recommended_resources）。
+
+    2026-10-10 組員極限測試：官方 nginx 預設依「整台機器」的 CPU 數開 worker（實測 32 個），
+    但容器上限只有 0.5 核，CPU 一直被限速、少數請求特別慢。官方映像檔內建的開關
+    NGINX_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE 會改成依容器的 CPU 上限決定（實測 0.5 核 → 1 個）。
+    """
+    # 「localhost:5000/nginxinc/nginx-unprivileged:1.27@sha256:…」→ 最後一段去掉標籤 →「nginx-unprivileged」
+    name = (image or "").split("@")[0].rsplit("/", 1)[-1].split(":")[0].lower()
+    if name in _NGINX_AUTOTUNE_IMAGES:
+        return {"NGINX_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE": "1"}
+    return {}
+
+
 def _detect_app_type(image: str, app_name: str = "") -> str:
     """根據映像名稱和 app_name 推測應用程式類型。"""
     text = f"{image} {app_name}".lower()

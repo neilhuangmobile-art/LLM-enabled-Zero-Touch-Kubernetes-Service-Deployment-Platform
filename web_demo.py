@@ -385,13 +385,14 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
         # 改成套用 agents/cost_agent 既有的「依 image 類型推薦資源」規則（跟審查卡上顯示
         # 給使用者看的建議是同一份 profile，不會兩邊數字不一致）；使用者有指定的維度就照使用者的，
         # 沒指定的維度才補預設值。
-        from agents.cost_agent import recommended_resources
+        from agents.cost_agent import recommended_resources, recommended_env
         _res = recommended_resources(image, app_name, memory, cpu)
         resources = k8s_client.V1ResourceRequirements(requests=_res["requests"], limits=_res["limits"])
         container = k8s_client.V1Container(
             name=app_name, image=image,
             ports=[k8s_client.V1ContainerPort(container_port=port)],
             resources=resources,
+            env=[k8s_client.V1EnvVar(name=k, value=v) for k, v in recommended_env(image).items()] or None,
             # 安全性最低硬化：擋掉容器內程序取得比父程序更高的權限。不強制 runAsNonRoot/
             # 丟棄 capabilities，因為這個平台常部署的官方 image（nginx 綁 80 port 等）預設
             # 用 root 執行，硬上非 root 反而會讓現有 demo 流程直接壞掉。
@@ -698,6 +699,35 @@ def _sum_cluster_resource_requests(exclude_name: str = None, exclude_namespace: 
     return total_cpu_mc, total_mem_b
 
 
+def _pod_slots():
+    """回傳 (叢集可放的 Pod 總數, 目前已佔用的 Pod 數)；查不到回 (None, None)。
+
+    2026-10-10 組員極限測試發現：要求 100 個副本只排得下 95 個，剩下 5 個卡在 Pending
+    （Too many pods），平台卻沒有任何警告。原因是 CPU、記憶體檢查都過了，但每個節點能放的
+    Pod 數量也有上限（Docker Desktop 預設 110 個，包含系統元件），原本完全沒算。"""
+    if not K8S_ENABLED:
+        return None, None
+    try:
+        core = k8s_client.CoreV1Api()
+        nodes = core.list_node().items
+        total = 0
+        for n in nodes:
+            ready = any(c.type == "Ready" and c.status == "True" for c in (n.status.conditions or []))
+            if ready and not n.spec.unschedulable:
+                total += int((n.status.allocatable or {}).get("pods", "0") or 0)
+        used = sum(1 for p in core.list_pod_for_all_namespaces().items
+                   if (p.status.phase or "") not in ("Succeeded", "Failed"))
+        return (total or None), used
+    except Exception:
+        return None, None
+
+
+def _pod_slot_message(extra: int, total: int, used: int) -> str:
+    return (f"叢集的 Pod 位置不夠：目前已經有 {used} 個 Pod（包含系統元件），這次要再增加 {extra} 個，"
+            f"但叢集最多只能放 {total} 個。多出來的 Pod 會卡在 Pending 排不進去，畫面不會顯示錯誤。"
+            f"請減少副本數，或先刪除不用的服務。")
+
+
 def _check_scale_risk(name: str, new_replicas: int, namespace: str = None):
     """在真的調整 replicas 前先檢查：整個叢集（所有 namespace 的所有 Deployment 加總）
     在套用這個新 replicas 之後，資源需求會不會超出最大節點的容量。跟部署時的單一 Pod
@@ -726,6 +756,11 @@ def _check_scale_risk(name: str, new_replicas: int, namespace: str = None):
         target_req = {}
         try:
             target = apps_api.read_namespaced_deployment(name, namespace)
+            # Pod 位置：只算這次「多出來」的 Pod
+            slots, used = _pod_slots()
+            extra = new_replicas - int(target.spec.replicas or 0)
+            if slots and used is not None and extra > 0 and used + extra > slots:
+                return True, _pod_slot_message(extra, slots, used)
             containers = target.spec.template.spec.containers if target.spec.template.spec else []
             if containers and containers[0].resources and containers[0].resources.requests:
                 target_req = containers[0].resources.requests
@@ -1104,7 +1139,7 @@ def _build_agent_manifest(parsed):
     memory = parsed.get("memory")
     cpu = parsed.get("cpu")
     # 審查看的必須是實際會部署的那一份：資源預設值與安全設定跟 k8s_deploy／Git 設定相同
-    from agents.cost_agent import recommended_resources
+    from agents.cost_agent import recommended_resources, recommended_env
     container = {
         "name": app_name,
         "image": image,
@@ -1112,6 +1147,9 @@ def _build_agent_manifest(parsed):
         "resources": recommended_resources(image, app_name, memory, cpu),
         "securityContext": {"allowPrivilegeEscalation": False},
     }
+    env = recommended_env(image)
+    if env:
+        container["env"] = [{"name": k, "value": v} for k, v in env.items()]
     return {
         "apiVersion": "apps/v1",
         "kind": "Deployment",
@@ -5626,6 +5664,24 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
     except Exception as e:
         review["node_estimate"] = None
         review.setdefault("warnings", []).append(f"node_estimate failed: {e}")
+    # Pod 位置（2026-10-10 組員極限測試）：CPU、記憶體都夠，節點能放的 Pod 數量也可能不夠。
+    # 只檢查平台自己的叢集；客戶叢集的帳號看的是平台叢集的數字，不準，跳過。
+    try:
+        ns = _session_ns() if has_request_context() and "username" in session else None
+        if K8S_ENABLED and ns and not _is_remote_ns(ns):
+            slots, used = _pod_slots()
+            existing = 0
+            try:
+                existing = int(k8s_client.AppsV1Api().read_namespaced_deployment(parsed["app_name"], ns).spec.replicas or 0)
+            except Exception:
+                existing = 0
+            extra = int(parsed.get("pods") or 1) - existing
+            if slots and used is not None and extra > 0 and used + extra > slots:
+                review["decision"] = "block"
+                review["reason"] = "叢集的 Pod 位置不夠"
+                review.setdefault("blockers", []).append("資源需求超出叢集容量：" + _pod_slot_message(extra, slots, used))
+    except Exception:
+        pass
     if review["decision"] == "block":
         return parsed, enriched, review, ({
             "parsed": enriched,
