@@ -39,3 +39,6 @@ reports/*.pptx
 
 # 執行期資料：客戶 repo 本機工作副本、連線紀錄（2026-10-09，客戶自帶叢集）
 data/
+
+# scripts/start_services.ps1 的輸出
+logs/

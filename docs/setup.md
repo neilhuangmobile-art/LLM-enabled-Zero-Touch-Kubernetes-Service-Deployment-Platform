@@ -121,6 +121,19 @@ python train_local.py
 
 ## 6. 啟動 Model Server
 
+**建議用一鍵啟動腳本**（Windows），模型伺服器和網站都用獨立程序執行，關掉終端機或對話也不會停：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start_services.ps1           # 已經在跑的不會重複啟動
+powershell -ExecutionPolicy Bypass -File scripts\start_services.ps1 -Restart  # 改了程式要重新啟動時
+```
+
+輸出記在 `logs\model_server.log`、`logs\web.log`（錯誤在 `.err`）。2026-10-10 曾發生模型伺服器在
+AI 助理的背景工作裡啟動、對話重新開啟時跟著被結束，網站頂端出現「AI 模型伺服器沒有在執行」的紅色橫幅；
+用這個腳本啟動就不會有這個問題。
+
+只想手動跑單一個：
+
 ```bash
 python core/model_server.py
 ```
