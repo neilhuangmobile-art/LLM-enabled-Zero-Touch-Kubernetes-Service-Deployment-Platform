@@ -142,13 +142,15 @@ def default_port(image: str):
 _LISTEN_PORTS = {**KNOWN_PORTS, "nginx": 80, "httpd": 80, "nginx-unprivileged": 8080}
 
 
-def container_port(image: str, port: int) -> int:
+def container_port(image: str, port: int, explicit: int = None) -> int:
     """容器裡程式實際監聽的 port。使用者講的 port 是「對外的 port」（Service），兩者不一定一樣。
 
     2026-10-10 發現：原本 Service 的 port 跟容器 port 都設成使用者講的數字，「nginx 開 8085 port」
     就把流量送到容器的 8085，但 nginx 只聽 80，服務其實一直連不上，畫面卻顯示部署完成、副本就緒。
     已知映像檔用它自己的 port，Service 負責轉過去；不認識的映像檔維持使用者講的 port。
     """
+    if explicit:   # docker-compose 的「8080:3000」直接講了容器 port，以它為準
+        return int(explicit)
     return _LISTEN_PORTS.get(_image_name(image)) or int(port)
 
 

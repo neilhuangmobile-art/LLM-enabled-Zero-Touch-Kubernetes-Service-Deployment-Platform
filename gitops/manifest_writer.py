@@ -124,7 +124,7 @@ def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
     port      = int(llm_result.get("port", 80))
     # 資源設定跟本機部署、部署前審查共用同一套規則（agents/cost_agent.recommended_resources）
     from agents.cost_agent import recommended_resources, recommended_env, recommended_probes, container_port
-    cport     = container_port(image, port)   # 容器裡實際監聽的 port（nginx 是 80），見 container_port 說明
+    cport     = container_port(image, port, llm_result.get("container_port"))   # 容器實際監聽的 port，見 container_port 說明
     resources = recommended_resources(image, app_name, llm_result.get("memory"), llm_result.get("cpu"))
     # 平台自動加的（例如 nginx 依 CPU 上限調整 worker 數）先放，使用者自己指定的同名變數優先
     env_vars  = {**recommended_env(image), **(llm_result.get("env") or {})}
@@ -176,7 +176,11 @@ def _build_service_yaml(llm_result: dict, namespace: str) -> Optional[str]:
     app_name = _sanitize_name(llm_result.get("app_name", "app"))
     port     = int(port)
     from agents.cost_agent import container_port
-    cport    = container_port(llm_result.get("image", ""), port)
+    cport    = container_port(llm_result.get("image", ""), port, llm_result.get("container_port"))
+    # 對外 port 跟容器 port 不同時兩個都開：compose 的服務彼此用容器 port 連（web:80），對外用 port（8080）
+    ports = [{"name": "app", "protocol": "TCP", "port": cport, "targetPort": cport}]
+    if port != cport:
+        ports.append({"name": "external", "protocol": "TCP", "port": port, "targetPort": cport})
 
     doc = {
         "apiVersion": "v1",
@@ -188,7 +192,7 @@ def _build_service_yaml(llm_result: dict, namespace: str) -> Optional[str]:
         },
         "spec": {
             "selector": {"app": app_name},
-            "ports"   : [{"protocol": "TCP", "port": port, "targetPort": cport}],
+            "ports"   : ports,
             "type"    : "ClusterIP",
         },
     }

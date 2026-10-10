@@ -144,6 +144,8 @@ def test_external_port_maps_to_real_container_port():
     dep = yaml.safe_load(_build_deployment_yaml(spec, "u"))
     svc = yaml.safe_load(_build_service_yaml(spec, "u"))
     assert dep["spec"]["template"]["spec"]["containers"][0]["ports"][0]["containerPort"] == 80
-    assert svc["spec"]["ports"][0] == {"protocol": "TCP", "port": 8085, "targetPort": 80}
+    # 對外 8085 → 容器 80；內部另外開 80（compose 的服務彼此用容器 port 連）
+    assert {"name": "external", "protocol": "TCP", "port": 8085, "targetPort": 80} in svc["spec"]["ports"]
+    assert {"name": "app", "protocol": "TCP", "port": 80, "targetPort": 80} in svc["spec"]["ports"]
     assert container_port("redis:7", 7000) == 6379
     assert container_port("ghcr.io/me/my-api:1.0", 3000) == 3000   # 不認識的映像檔照使用者講的

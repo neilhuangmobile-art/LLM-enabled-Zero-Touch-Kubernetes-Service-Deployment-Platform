@@ -366,7 +366,11 @@ def _fmt_k8s_time(ts):
         return str(ts)[:16]
 
 
-def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namespace=None):
+def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namespace=None,
+               env=None, container_port_override=None, expose=True, dns_alias=False):
+    """env／container_port_override／expose／dns_alias 是 docker-compose 匯入用的（2026-10-10）：
+    環境變數、容器實際監聽的 port、要不要對外開放（compose 沒寫 ports 的服務只給內部連）、
+    另外建一個跟服務同名的內部連線入口（其他服務才能照 compose 的寫法用「db:5432」連過來）。"""
     namespace = namespace or NS
     if not K8S_ENABLED:
         return False, "K8s 未連線（模擬模式）"
@@ -387,7 +391,7 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
         # 沒指定的維度才補預設值。
         from agents.cost_agent import recommended_resources, recommended_env, recommended_probes, container_port
         # 使用者講的 port 是對外的 port；容器裡用映像檔實際監聽的 port（nginx 是 80），Service 負責轉過去
-        cport = container_port(image, port)
+        cport = container_port(image, port, container_port_override)
         _res = recommended_resources(image, app_name, memory, cpu)
         resources = k8s_client.V1ResourceRequirements(requests=_res["requests"], limits=_res["limits"])
         # 健康檢查用 dict 傳給 client（序列化時原樣送出，欄位名稱就是 K8s 的 camelCase）
@@ -396,7 +400,8 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
             name=app_name, image=image,
             ports=[k8s_client.V1ContainerPort(container_port=cport)],
             resources=resources,
-            env=[k8s_client.V1EnvVar(name=k, value=v) for k, v in recommended_env(image).items()] or None,
+            env=[k8s_client.V1EnvVar(name=k, value=str(v))
+                 for k, v in {**recommended_env(image), **(env or {})}.items()] or None,
             readiness_probe=_probes.get("readinessProbe"),
             liveness_probe=_probes.get("livenessProbe"),
             # 安全性最低硬化：擋掉容器內程序取得比父程序更高的權限。不強制 runAsNonRoot/
@@ -422,9 +427,17 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
             spec=k8s_client.V1ServiceSpec(
                 selector={"app": app_name},
                 ports=[k8s_client.V1ServicePort(port=port, target_port=cport)],
-                type="LoadBalancer",
+                type="LoadBalancer" if expose else "ClusterIP",
             ),
         )
+        alias = None
+        if dns_alias:
+            alias = k8s_client.V1Service(
+                api_version="v1", kind="Service",
+                metadata=k8s_client.V1ObjectMeta(name=app_name, labels={"zerotouch/alias-of": app_name}),
+                spec=k8s_client.V1ServiceSpec(selector={"app": app_name}, type="ClusterIP",
+                                              ports=[k8s_client.V1ServicePort(port=cport, target_port=cport)]),
+            )
         try:
             api.replace_namespaced_deployment(app_name, namespace, deploy, _request_timeout=(5, 10))
         except Exception:
@@ -433,6 +446,11 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
             core.replace_namespaced_service(f"{app_name}-svc", namespace, svc, _request_timeout=(5, 10))
         except Exception:
             core.create_namespaced_service(namespace, svc, _request_timeout=(5, 10))
+        if alias is not None:
+            try:
+                core.replace_namespaced_service(app_name, namespace, alias, _request_timeout=(5, 10))
+            except Exception:
+                core.create_namespaced_service(namespace, alias, _request_timeout=(5, 10))
         os.makedirs(YAML_DIR, exist_ok=True)
         path = os.path.join(YAML_DIR, f"{app_name}.yaml")
         with open(path, "w", encoding="utf-8") as f:
@@ -1146,7 +1164,7 @@ def _build_agent_manifest(parsed):
     cpu = parsed.get("cpu")
     # 審查看的必須是實際會部署的那一份：資源預設值與安全設定跟 k8s_deploy／Git 設定相同
     from agents.cost_agent import recommended_resources, recommended_env, recommended_probes, container_port
-    cport = container_port(image, port)
+    cport = container_port(image, port, parsed.get("container_port"))
     container = {
         "name": app_name,
         "image": image,
@@ -1155,9 +1173,9 @@ def _build_agent_manifest(parsed):
         "securityContext": {"allowPrivilegeEscalation": False},
         **recommended_probes(image, cport),
     }
-    env = recommended_env(image)
+    env = {**recommended_env(image), **(parsed.get("env") or {})}
     if env:
-        container["env"] = [{"name": k, "value": v} for k, v in env.items()]
+        container["env"] = [{"name": k, "value": str(v)} for k, v in env.items()]
     return {
         "apiVersion": "apps/v1",
         "kind": "Deployment",
@@ -1581,6 +1599,45 @@ tbody tr:hover td{background:var(--signal-soft)}
 .composer-hint.voice-err{color:var(--caution)}
 @media (prefers-reduced-motion:reduce){.chat-mic.listening::before,.chat-mic.listening::after,.mic-meter i{animation:none}}
 
+
+/* ── docker-compose 匯入 ── */
+.chat-attach{flex:none;width:40px;height:40px;border:1px solid var(--grid-2);border-radius:7px;background:var(--panel-2);color:var(--text-2);display:grid;place-items:center;transition:color .15s,border-color .15s}
+.chat-attach svg{width:18px;height:18px}
+.chat-attach:hover{color:var(--signal);border-color:var(--signal-line)}
+.cp-order{display:flex;flex-wrap:wrap;align-items:center;gap:0;margin:2px 0 14px;counter-reset:cp}
+.cp-order li{list-style:none;display:flex;align-items:center;gap:8px;padding:6px 12px;border:1px solid var(--grid-2);border-radius:20px;background:var(--panel-2);font-family:var(--f-id);font-size:13px;color:var(--text);animation:popIn .35s both;animation-delay:calc(var(--i,0)*90ms)}
+.cp-order li::before{counter-increment:cp;content:counter(cp);display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--signal);color:var(--on-signal);font-size:11px}
+.cp-order li.blocked{opacity:.55;border-style:dashed}
+.cp-order li.blocked::before{background:var(--stop)}
+.cp-order li+li{margin-left:26px;position:relative}
+.cp-order li+li::after{content:"";position:absolute;left:-23px;top:50%;width:20px;height:1px;background:var(--grid-2)}
+.cp-svc{border:1px solid var(--grid);border-radius:6px;background:var(--panel-2);margin-bottom:10px;overflow:hidden;animation:rowIn .35s both;animation-delay:calc(var(--i,0)*70ms)}
+.cp-svc>summary{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.6fr) minmax(0,1fr) 72px auto;gap:12px;align-items:center;padding:10px 14px;cursor:pointer;list-style:none;font-size:13.5px;color:var(--text-2)}
+.cp-svc>summary::-webkit-details-marker{display:none}
+.cp-svc>summary:hover{background:var(--panel-3)}
+.cp-svc .nm{font-family:var(--f-id);color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cp-svc .im{font-family:var(--f-id);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cp-svc .pt b{font-family:var(--f-id);color:var(--text);font-weight:500}
+.cp-pill{justify-self:end;font-size:12px;padding:2px 9px;border-radius:10px;border:1px solid var(--grid-2);color:var(--text-3);white-space:nowrap}
+.cp-pill.ok{color:var(--pass);border-color:color-mix(in srgb,var(--pass) 45%,transparent)}
+.cp-pill.warn{color:var(--caution);border-color:color-mix(in srgb,var(--caution) 50%,transparent)}
+.cp-pill.stop{color:var(--stop);border-color:color-mix(in srgb,var(--stop) 50%,transparent)}
+.cp-pill.run{color:var(--signal);border-color:var(--signal-line)}
+.cp-body{padding:4px 14px 14px;border-top:1px solid var(--grid)}
+.cp-kv{display:flex;flex-wrap:wrap;gap:6px 18px;margin:10px 0;font-size:13px;color:var(--text-3)}
+.cp-kv b{font-family:var(--f-id);font-weight:500;color:var(--text-2)}
+.cp-env{font-family:var(--f-id);font-size:12.5px;color:var(--text-2);background:var(--panel);border:1px solid var(--grid);border-radius:5px;padding:8px 10px;margin:0 0 10px;max-height:150px;overflow:auto}
+.cp-env span{display:block;white-space:nowrap}
+.cp-probs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.cp-probs li{position:relative;padding-left:16px;font-size:13.5px;line-height:1.6;color:var(--text-2)}
+.cp-probs li::before{content:"";position:absolute;left:1px;top:.62em;width:7px;height:7px;border-radius:50%;background:var(--text-3)}
+.cp-probs li.warn::before{background:var(--caution)}
+.cp-probs li.block::before{background:var(--stop)}
+.cp-verdicts{display:flex;gap:6px;justify-self:end}
+.cp-review{margin-top:10px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.cp-prog{height:3px;background:var(--panel-3);border-radius:2px;overflow:hidden;margin:4px 0 12px}
+.cp-prog i{display:block;height:100%;background:var(--signal);transition:width .4s}
+@media (max-width:760px){.cp-svc>summary{grid-template-columns:minmax(0,1fr) auto}.cp-svc .im,.cp-svc .pt,.cp-svc .rp{display:none}.cp-review{grid-template-columns:1fr}}
 
 /* ── 分析報告 ── */
 .rp{display:flex;flex-direction:column;gap:18px;padding:16px 18px 18px}
@@ -2144,6 +2201,8 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
           <div class="composer-box">
             <label for="chat-input" style="position:absolute;left:-9999px">輸入訊息</label>
             <textarea class="chat-input" id="chat-input" placeholder="說說你想部署什麼，或問服務的狀況" rows="1" oninput="autoGrowChatInput(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
+            <input type="file" id="compose-file" accept=".yml,.yaml,text/yaml,application/x-yaml" hidden onchange="onComposeFile(this)">
+            <button class="chat-attach" type="button" onclick="document.getElementById('compose-file').click()" aria-label="上傳 docker-compose 檔" title="上傳 docker-compose 檔"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.5 12.6 20.9a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg></button>
             <span class="mic-meter" id="mic-meter" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
             <button class="chat-mic" type="button" id="chat-mic" onclick="toggleVoice()" aria-label="語音輸入" title="語音輸入"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
             <button class="chat-send" type="button" onclick="sendChat()" id="chat-send-txt">送出</button>
@@ -3152,6 +3211,12 @@ async function sendChat(){
   inp.style.height = '';
   if(!currentChatId) newChat();
   appendMsg('user', text);
+  // 貼上的是 docker-compose 內容：直接走匯入流程
+  if(looksLikeCompose(text)){
+    try{ await startComposeFlow(text, '貼上的內容'); }
+    finally{ removeTyping(); }
+    return;
+  }
   appendTyping('Understanding');
 
   let intent = matchClientRule(text);
@@ -3962,12 +4027,14 @@ function flowStateAttrs(flow){
   const st = {id:flow.id, seq:flow.seq, kind:flow.kind, step:flow.step, originalText:flow.originalText,
               spec:flow.spec, review:flow.review, resource:flow.resource, rollout:flow.rollout || null,
               resultMsg:flow.resultMsg || null, errorMsg:flow.errorMsg || null, blockers:flow.blockers || null,
-              retryStep:flow.retryStep || null, pendingSync:!!flow.pendingSync, scenario:flow.scenario || null};
+              retryStep:flow.retryStep || null, pendingSync:!!flow.pendingSync, scenario:flow.scenario || null,
+              compose:flow.compose || null, source:flow.source || null};
   return `data-flow-id="${flow.id}" data-flow-seq="${flow.seq}" data-flow-step="${flow.step}" data-flow-state="${encodeURIComponent(JSON.stringify(st))}" data-summary="${esc(flowSummary(flow))}"`;
 }
 function flowSummary(flow){
   const s = flow.spec || {};
   if(flow.kind === 'deploy') return `部署單 ${s.app_name || ''}（${s.image || ''}），狀態：${flow.step}`;
+  if(flow.kind === 'compose') return `docker-compose 匯入：${((flow.compose || {}).services || []).map(x => x.app_name).join('、')}，狀態：${flow.step}`;
   return `操作確認：${destructiveSummary(flow)}，狀態：${flow.step}`;
 }
 function flowShell(flow, inner, cls){
@@ -3984,6 +4051,7 @@ function renderFlowCard(flow){
     return flowShell(flow, flowHead('這個請求已經失效', '') + `<div class="body"><div class="lead">重新整理頁面後，進行到一半的流程沒辦法接著做。需要的話，請再說一次你想做的事。</div></div>`);
   }
   if(flow.step === 'cancelled') return renderCancelledCard(flow);
+  if(flow.kind === 'compose') return renderComposeCard(flow);
   if(flow.kind === 'deploy'){
     if(flow.step === 'spec') return renderSpecCard(flow);
     if(flow.step === 'review') return renderReviewCard(flow);
@@ -3998,8 +4066,172 @@ function renderFlowCard(flow){
   }
   return flowShell(flow, '<div class="busy"><div class="spinner"></div></div>');
 }
+
+// ── docker-compose 匯入：檢視服務 → 審查 → 部署 → 完成 ──
+// 每個服務都送進跟一句話部署相同的 /api/deploy/parse、/api/deploy，沒有任何服務能繞過把關。
+function looksLikeCompose(text){
+  return /(^|\n)services\s*:\s*\n/.test(text) && /\n\s+image\s*:|\n\s+build\s*:/.test(text);
+}
+async function onComposeFile(input){
+  const f = input.files && input.files[0];
+  input.value = '';
+  if(!f) return;
+  if(f.size > 100000){ setComposerHint('檔案太大，docker-compose 檔上限 100 KB。', 'voice-err'); return; }
+  let text = '';
+  try{ text = await f.text(); }catch(e){ setComposerHint('讀不到這個檔案，請再選一次。', 'voice-err'); return; }
+  if(!currentChatId) newChat();
+  appendMsg('user', `上傳 ${f.name}`, null, 'text');
+  await startComposeFlow(text, f.name);
+}
+async function startComposeFlow(text, source){
+  appendTyping('Parsing');
+  try{
+    const r = await fetch('/api/compose/parse', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})});
+    const d = await r.json();
+    removeTyping();
+    if(d.error){ appendMsg('assistant', '沒辦法匯入這份檔案：' + d.error, null, 'text'); return; }
+    const flow = newFlow('compose', source || '', {});
+    flow.step = 'list';
+    flow.source = source || '';
+    flow.compose = {services: d.services.map(s => Object.assign(s, {state:'', review:null, error:null})), problems: d.problems || []};
+    appendMsg('assistant', renderFlowCard(flow));
+  }catch(e){
+    removeTyping();
+    appendMsg('assistant', '匯入時連線失敗，請再試一次。（' + e + '）', null, 'text');
+  }
+}
+const cpBlocked = s => (s.problems || []).some(p => p.level === 'block');
+const cpSpec = s => ({app_name:s.app_name, image:s.image, pods:s.pods, port:s.port, memory:s.memory || undefined, cpu:s.cpu || undefined,
+                      env:s.env, container_port:s.container_port, expose:s.expose, dns_alias:s.dns_alias});
+const CP_LV = {ok:'通過', warn:'提醒', stop:'擋下'};
+function cpVerdicts(rv){
+  if(!rv) return '';
+  const ag = (rv.agents && rv.agents.agents) || {};
+  const one = (tag, key) => {
+    const blocked = (rv.blockers || []).some(b => String(b).startsWith('[' + tag + ']'));
+    const issues = (ag[key] && ag[key].issues) || [];
+    const lv = blocked ? 'stop' : issues.some(i => ['critical', 'high', 'medium'].includes(i.severity)) ? 'warn' : 'ok';
+    return `<span class="cp-pill ${lv}">${tag}${CP_LV[lv]}</span>`;
+  };
+  return `<span class="cp-verdicts">${one('安全', 'security')}${one('成本', 'cost')}${one('效能', 'perf')}</span>`;
+}
+function cpStatePill(s){
+  if(cpBlocked(s)) return '<span class="cp-pill stop">無法部署</span>';
+  const map = {reviewing:['run', '審查中'], approve:['ok', '審查通過'], warn:['warn', '通過但有提醒'], block:['stop', '審查擋下'],
+               deploying:['run', '部署中'], deployed:['ok', '已部署'], failed:['stop', '失敗'], skipped:['', '略過']};
+  const [c, t] = map[s.state] || ['', '待審查'];
+  return `<span class="cp-pill ${c}">${t}</span>`;
+}
+function renderComposeCard(flow){
+  const cp = flow.compose || {services:[], problems:[]};
+  const svcs = cp.services;
+  const ready = svcs.filter(s => !cpBlocked(s));
+  const reviewedOk = svcs.filter(s => ['approve', 'warn'].includes(s.state));
+  const stepN = {list:1, reviewing:2, review:2, deploying:3, done:3, error:3}[flow.step] || 1;
+  const steps = `<ol class="steps" aria-label="匯入步驟">${['檢視服務', '審查', '部署'].map((x, i) => `<li class="${i + 1 === stepN ? 'on' : i + 1 < stepN ? 'done' : ''}">${x}</li>`).join('')}</ol>`;
+  const order = `<ol class="cp-order" aria-label="部署順序">${svcs.map((s, i) => `<li class="${cpBlocked(s) ? 'blocked' : ''}" style="--i:${i}">${esc(s.app_name)}</li>`).join('')}</ol>`;
+  const rows = svcs.map((s, i) => {
+    const envKeys = Object.keys(s.env || {});
+    const body = `<div class="cp-body">
+      <div class="cp-kv"><span>映像檔 <b>${esc(s.image || '未指定')}</b></span><span>副本 <b>${esc(s.pods)}</b></span>
+        <span>${s.expose ? `對外 port <b>${esc(s.port)}</b>，容器 <b>${esc(s.container_port)}</b>` : `只給內部連線，port <b>${esc(s.container_port)}</b>`}</span>
+        ${s.memory ? `<span>記憶體 <b>${esc(s.memory)}</b></span>` : ''}${s.cpu ? `<span>CPU <b>${esc(s.cpu)}</b></span>` : ''}
+        ${(s.depends_on || []).length ? `<span>依賴 <b>${esc(s.depends_on.join('、'))}</b></span>` : ''}
+        <span>其他服務用 <b>${esc(s.app_name)}:${esc(s.container_port)}</b> 連它</span></div>
+      ${envKeys.length ? `<div class="cp-env" aria-label="環境變數">${envKeys.map(k => `<span>${esc(k)} = ${/PASS|SECRET|TOKEN|KEY|CREDENTIAL|PRIVATE/i.test(k) ? '********' : esc(s.env[k])}</span>`).join('')}</div>` : ''}
+      ${(s.problems || []).length ? `<ul class="cp-probs">${s.problems.map(p => `<li class="${esc(p.level)}">${esc(p.text)}</li>`).join('')}</ul>` : ''}
+      ${s.error ? `<ul class="cp-probs"><li class="block">${esc(s.error)}</li></ul>` : ''}
+      ${s.review ? `<div class="cp-review">${reviewerOf('安全', (s.review.agents || {}).agents ? s.review.agents.agents.security : null, '', '安全', s.review)}${reviewerOf('成本', (s.review.agents || {}).agents ? s.review.agents.agents.cost : null, '', '成本', s.review)}${reviewerOf('效能', (s.review.agents || {}).agents ? s.review.agents.agents.perf : null, '', '效能', s.review)}</div>` : ''}
+    </div>`;
+    return `<details class="cp-svc" style="--i:${i}" ${cpBlocked(s) || s.state === 'block' || s.state === 'failed' ? 'open' : ''}>
+      <summary><span class="nm">${esc(s.app_name)}</span><span class="im">${esc(s.image || '未指定映像檔')}</span>
+        <span class="pt">${s.expose ? `對外 <b>${esc(s.port)}</b>` : '只給內部'}</span>
+        <span class="rp">${esc(s.pods)} 個副本</span>${s.review && flow.step !== 'deploying' && flow.step !== 'done' ? cpVerdicts(s.review) : cpStatePill(s)}</summary>${body}</details>`;
+  }).join('');
+  const top = (cp.problems || []).length ? `<ul class="cp-probs" style="margin-bottom:12px">${cp.problems.map(p => `<li class="${esc(p.level)}">${esc(p.text)}</li>`).join('')}</ul>` : '';
+  let lead = '', foot = '', prog = '';
+  if(flow.step === 'list'){
+    lead = `從${esc(flow.source || '檔案')}讀到 ${svcs.length} 個服務，會照下面的順序部署（被依賴的先部署）。點任一個服務可以看完整設定和注意事項。`
+      + (ready.length < svcs.length ? ` 有 ${svcs.length - ready.length} 個服務沒辦法部署，原因寫在該服務裡。` : '');
+    foot = `<button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button>
+      <button type="button" class="btn primary" onclick="composeReview('${flow.id}')" ${ready.length ? '' : 'disabled'}>審查 ${ready.length} 個服務</button>`;
+  } else if(flow.step === 'reviewing' || flow.step === 'deploying'){
+    const pool = flow.step === 'reviewing' ? ready : reviewedOk.concat(svcs.filter(s => ['deploying', 'deployed', 'failed'].includes(s.state)));
+    const done = svcs.filter(s => flow.step === 'reviewing' ? ['approve', 'warn', 'block', 'failed'].includes(s.state) : ['deployed', 'failed'].includes(s.state)).length;
+    const total = flow.step === 'reviewing' ? ready.length : svcs.filter(s => ['deploying', 'deployed', 'failed'].includes(s.state) || s.queued).length;
+    lead = flow.step === 'reviewing' ? '每個服務都會經過安全、成本、效能三方審查，跟一句話部署完全一樣。' : '照順序一個一個部署，前一個完成才會開始下一個。';
+    prog = `<div class="cp-prog" role="progressbar" aria-valuenow="${done}" aria-valuemax="${total}"><i style="width:${total ? Math.round(done / total * 100) : 0}%"></i></div>`;
+    foot = `<div class="busy" style="padding:0"><div class="spinner"></div><div>${flow.step === 'reviewing' ? '審查中' : '部署中'}，${done}／${total}</div></div>`;
+  } else if(flow.step === 'review'){
+    const blocked = svcs.filter(s => s.state === 'block').length;
+    lead = `審查完成：${reviewedOk.length} 個可以部署` + (blocked ? `，${blocked} 個被擋下（展開看原因）` : '') + '。'
+      + (reviewedOk.length < svcs.length ? ' 只會部署可以部署的服務；被略過的服務如果是別人依賴的，那些服務部署後可能連不上它。' : '');
+    foot = `<button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button>
+      <button type="button" class="btn primary" onclick="composeDeploy('${flow.id}')" ${reviewedOk.length ? '' : 'disabled'}>部署 ${reviewedOk.length} 個服務</button>`;
+  } else if(flow.step === 'done'){
+    const ok = svcs.filter(s => s.state === 'deployed').length, bad = svcs.filter(s => s.state === 'failed').length;
+    lead = `部署完成：${ok} 個成功` + (bad ? `，${bad} 個失敗（展開看原因）` : '') + '。服務要等映像檔下載完、通過健康檢查才會開始接流量，通常需要幾十秒。';
+    foot = `<button type="button" class="btn" onclick="showPage('services')">查看我的服務</button>`;
+  }
+  const title = 'docker-compose 匯入';
+  return flowShell(flow, flowHead(title, steps) + `<div class="body"><div class="lead">${lead}</div>${prog}${order}${top}${rows}</div>`
+    + (foot ? `<div class="foot">${foot}</div>` : ''));
+}
+async function composeReview(id){
+  const flow = chatFlows[id];
+  if(!flowAlive(flow)) return;
+  flow.step = 'reviewing';
+  const svcs = flow.compose.services;
+  svcs.forEach(s => { if(!cpBlocked(s)){ s.state = 'reviewing'; s.review = null; s.error = null; } });
+  persistFlowCard(id);
+  for(const s of svcs){
+    if(cpBlocked(s)) continue;
+    try{
+      const r = await fetch('/api/deploy/parse', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({parsed:cpSpec(s)})});
+      const d = await r.json();
+      if(!flowAlive(flow)) return;
+      s.review = d.review || null;
+      if(d.error){ s.state = 'block'; s.error = d.error; }
+      else s.state = (d.review && d.review.decision) || (d.rejected ? 'block' : 'approve');
+    }catch(e){
+      if(!flowAlive(flow)) return;
+      s.state = 'failed'; s.error = '連線失敗，請再試一次。（' + e + '）';
+    }
+    persistFlowCard(id);
+  }
+  flow.step = 'review';
+  persistFlowCard(id);
+}
+async function composeDeploy(id){
+  const flow = chatFlows[id];
+  if(!flowAlive(flow)) return;
+  flow.step = 'deploying';
+  const svcs = flow.compose.services;
+  svcs.forEach(s => { s.queued = ['approve', 'warn'].includes(s.state); if(!s.queued && !cpBlocked(s) && s.state !== 'block') s.state = 'skipped'; });
+  persistFlowCard(id);
+  for(const s of svcs){
+    if(!s.queued) continue;
+    s.state = 'deploying';
+    persistFlowCard(id);
+    try{
+      const r = await fetch('/api/deploy', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({parsed:cpSpec(s)})});
+      const d = await r.json();
+      if(!flowAlive(flow)) return;
+      const ok = !d.error && !d.rejected && !(d.k8s_deploy && d.k8s_deploy.ok === false);
+      s.state = ok ? 'deployed' : 'failed';
+      if(!ok) s.error = d.error || d.reason || (d.k8s_deploy && d.k8s_deploy.message) || '部署失敗。';
+    }catch(e){
+      if(!flowAlive(flow)) return;
+      s.state = 'failed'; s.error = '連線失敗。（' + e + '）';
+    }
+    persistFlowCard(id);
+  }
+  flow.step = 'done';
+  persistFlowCard(id);
+}
+
 function renderCancelledCard(flow){
-  return flowShell(flow, flowHead('已取消', '') + `<div class="body"><div class="lead">${flow.kind === 'deploy' ? '這次部署沒有執行。' : '這個操作沒有執行。'}</div></div>`);
+  return flowShell(flow, flowHead('已取消', '') + `<div class="body"><div class="lead">${flow.kind === 'deploy' || flow.kind === 'compose' ? '這次部署沒有執行。' : '這個操作沒有執行。'}</div></div>`);
 }
 function renderBusyCard(flow, label){
   const txt = TYPING_LABELS[label] || label;
@@ -5503,6 +5735,25 @@ def _sanitize_deploy_payload(raw: dict) -> dict:
             pass
     if parsed.get("_parser"):
         clean["_parser"] = parsed.get("_parser")
+    # docker-compose 匯入帶來的欄位（2026-10-10）：一律檢查格式與數量，不合格的直接丟掉
+    env = parsed.get("env")
+    if isinstance(env, dict) and env:
+        clean_env = {}
+        for k, v in list(env.items())[:50]:
+            if isinstance(k, str) and re.match(r"^[A-Za-z_][A-Za-z0-9_.-]{0,100}$", k) and v is not None:
+                clean_env[k] = str(v)[:4096]
+        if clean_env:
+            clean["env"] = clean_env
+    try:
+        cp = int(parsed.get("container_port") or 0)
+        if 1 <= cp <= 65535:
+            clean["container_port"] = cp
+    except (TypeError, ValueError):
+        pass
+    if parsed.get("expose") is False:
+        clean["expose"] = False
+    if parsed.get("dns_alias") is True:
+        clean["dns_alias"] = True
     return clean
 
 
@@ -5819,6 +6070,21 @@ def api_deploy_conflicts():
                     "port_conflict_other_account": port_conflict_other_account})
 
 
+@app.route("/api/compose/parse", methods=["POST"])
+def api_compose_parse():
+    """docker-compose 匯入第一步：只轉換成服務清單，不審查、不部署（2026-10-10）。
+    審查與部署由前端對每個服務呼叫 /api/deploy/parse、/api/deploy，跟一句話部署走完全相同的把關。"""
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    from agents.compose_import import parse_compose, ComposeError
+    from agents.cost_agent import default_port
+    text = (request.get_json() or {}).get("text") or ""
+    try:
+        return jsonify(parse_compose(text, default_port))
+    except ComposeError as e:
+        return jsonify({"error": str(e)}), 400
+
+
 @app.route("/api/deploy/parse", methods=["POST"])
 def api_deploy_parse():
     if "username" not in session:
@@ -5899,7 +6165,9 @@ def api_deploy():
     # k8s_deploy() 內部四個 API 呼叫都已加上 _request_timeout=(5,10) 且 retries=0，不會無限期卡住這個 request。
     k8s_deploy_result = None
     if K8S_ENABLED:
-        ok, message = k8s_deploy(parsed["app_name"], parsed["image"], parsed["pods"], parsed.get("port", 80), parsed.get("memory"), parsed.get("cpu"), namespace=user_ns)
+        ok, message = k8s_deploy(parsed["app_name"], parsed["image"], parsed["pods"], parsed.get("port", 80), parsed.get("memory"), parsed.get("cpu"), namespace=user_ns,
+                                 env=parsed.get("env"), container_port_override=parsed.get("container_port"),
+                                 expose=parsed.get("expose", True), dns_alias=parsed.get("dns_alias", False))
         k8s_deploy_result = {"ok": ok, "message": message}
         if not ok:
             review.setdefault("warnings", []).append(f"K8s 部署失敗：{message}")
