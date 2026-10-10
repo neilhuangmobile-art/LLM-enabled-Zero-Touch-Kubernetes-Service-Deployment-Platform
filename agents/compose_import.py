@@ -32,6 +32,29 @@ class ComposeError(ValueError):
     """整份檔案無法處理（格式錯、太大、沒有服務）。"""
 
 
+MAX_EXPANDED_NODES = 20_000
+
+
+def _expanded_size_ok(obj, budget: int = MAX_EXPANDED_NODES) -> bool:
+    """YAML 的別名（&a / *a）讀進來是共用同一個物件，看起來很小，但後面任何走訪或轉成字串
+    都會整個展開。2026-10-10 背景安全審查：100 KB 的上限擋不住「一層參照十個、疊九層」這種
+    寫法，展開後是天文數字，一個請求就能拖垮伺服器。這裡照「展開後」的節點數算，超過就拒絕；
+    compose 常見的 x-common: &common 共用設定遠低於這個上限。"""
+    remaining = [budget]
+
+    def walk(o, depth):
+        remaining[0] -= 1
+        if remaining[0] < 0 or depth > 40:
+            return False
+        if isinstance(o, dict):
+            return all(walk(k, depth + 1) and walk(v, depth + 1) for k, v in o.items())
+        if isinstance(o, (list, tuple)):
+            return all(walk(v, depth + 1) for v in o)
+        return True
+
+    return walk(obj, 0)
+
+
 def _k8s_name(name: str) -> str:
     """compose 服務名稱轉成 K8s 能用的名稱：小寫、底線換連字號、字母開頭，最長 40 字。"""
     n = re.sub(r"[^a-z0-9-]+", "-", str(name).lower()).strip("-")
@@ -151,6 +174,10 @@ def parse_compose(text: str, default_port_fn=None) -> Dict:
     except yaml.YAMLError as e:
         line = getattr(getattr(e, "problem_mark", None), "line", None)
         raise ComposeError("看不懂這份 YAML" + (f"，第 {line + 1} 行附近格式有誤" if line is not None else "") + "。")
+    except RecursionError:
+        raise ComposeError("這份 YAML 的巢狀層數太深。")
+    if not _expanded_size_ok(doc):
+        raise ComposeError("這份 YAML 展開後內容過大（大量使用 & 與 * 別名互相參照），為了保護平台不予處理。")
     if not isinstance(doc, dict) or not isinstance(doc.get("services"), dict) or not doc["services"]:
         raise ComposeError("這不是 docker-compose 檔，找不到 services 區塊。")
     if len(doc["services"]) > MAX_SERVICES:

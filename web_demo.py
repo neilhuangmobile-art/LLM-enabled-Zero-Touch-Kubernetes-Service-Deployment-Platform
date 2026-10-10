@@ -366,6 +366,19 @@ def _fmt_k8s_time(ts):
         return str(ts)[:16]
 
 
+def _k8s_env(app_name, env):
+    from gitops.manifest_writer import env_entries
+    out = []
+    for e in env_entries(app_name, env):
+        if "valueFrom" in e:
+            ref = e["valueFrom"]["secretKeyRef"]
+            out.append(k8s_client.V1EnvVar(name=e["name"], value_from=k8s_client.V1EnvVarSource(
+                secret_key_ref=k8s_client.V1SecretKeySelector(name=ref["name"], key=ref["key"]))))
+        else:
+            out.append(k8s_client.V1EnvVar(name=e["name"], value=e["value"]))
+    return out
+
+
 def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namespace=None,
                env=None, container_port_override=None, expose=True, dns_alias=False):
     """env／container_port_override／expose／dns_alias 是 docker-compose 匯入用的（2026-10-10）：
@@ -400,8 +413,8 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
             name=app_name, image=image,
             ports=[k8s_client.V1ContainerPort(container_port=cport)],
             resources=resources,
-            env=[k8s_client.V1EnvVar(name=k, value=str(v))
-                 for k, v in {**recommended_env(image), **(env or {})}.items()] or None,
+            # 密碼類環境變數從 Secret 讀（值不寫進設定檔與 Git），其他的直接寫
+            env=_k8s_env(app_name, {**recommended_env(image), **(env or {})}) or None,
             readiness_probe=_probes.get("readinessProbe"),
             liveness_probe=_probes.get("livenessProbe"),
             # 安全性最低硬化：擋掉容器內程序取得比父程序更高的權限。不強制 runAsNonRoot/
@@ -451,6 +464,16 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
                 core.replace_namespaced_service(app_name, namespace, alias, _request_timeout=(5, 10))
             except Exception:
                 core.create_namespaced_service(namespace, alias, _request_timeout=(5, 10))
+        from gitops.manifest_writer import split_secret_env, secret_name
+        _secret_vals = split_secret_env(env or {})[1]
+        if _secret_vals:
+            sec = k8s_client.V1Secret(api_version="v1", kind="Secret", type="Opaque",
+                                      metadata=k8s_client.V1ObjectMeta(name=secret_name(app_name)),
+                                      string_data=_secret_vals)
+            try:
+                core.replace_namespaced_secret(secret_name(app_name), namespace, sec, _request_timeout=(5, 10))
+            except Exception:
+                core.create_namespaced_secret(namespace, sec, _request_timeout=(5, 10))
         os.makedirs(YAML_DIR, exist_ok=True)
         path = os.path.join(YAML_DIR, f"{app_name}.yaml")
         with open(path, "w", encoding="utf-8") as f:
@@ -1150,6 +1173,19 @@ def k8s_delete_deployment(app_name, namespace=None):
             core.delete_namespaced_service(f"{app_name}-svc", namespace)
         except Exception:
             pass
+        # docker-compose 匯入建立的同名連線入口與密碼 Secret 也要一起刪（Secret 裡有密碼，不能留著）。
+        # 連線入口只刪平台自己建的（有標籤），使用者自己同名的 Service 不動。
+        try:
+            alias = core.read_namespaced_service(app_name, namespace)
+            if (alias.metadata.labels or {}).get("zerotouch/alias-of") == app_name:
+                core.delete_namespaced_service(app_name, namespace)
+        except Exception:
+            pass
+        try:
+            from gitops.manifest_writer import secret_name
+            core.delete_namespaced_secret(secret_name(app_name), namespace)
+        except Exception:
+            pass
         return True, f"已刪除 {app_name}"
     except Exception as e:
         return False, str(e)
@@ -1175,7 +1211,8 @@ def _build_agent_manifest(parsed):
     }
     env = {**recommended_env(image), **(parsed.get("env") or {})}
     if env:
-        container["env"] = [{"name": k, "value": str(v)} for k, v in env.items()]
+        from gitops.manifest_writer import env_entries
+        container["env"] = env_entries(app_name, env)
     return {
         "apiVersion": "apps/v1",
         "kind": "Deployment",
@@ -1612,12 +1649,13 @@ tbody tr:hover td{background:var(--signal-soft)}
 .cp-order li+li{margin-left:26px;position:relative}
 .cp-order li+li::after{content:"";position:absolute;left:-23px;top:50%;width:20px;height:1px;background:var(--grid-2)}
 .cp-svc{border:1px solid var(--grid);border-radius:6px;background:var(--panel-2);margin-bottom:10px;overflow:hidden;animation:rowIn .35s both;animation-delay:calc(var(--i,0)*70ms)}
-.cp-svc>summary{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.6fr) minmax(0,1fr) 72px auto;gap:12px;align-items:center;padding:10px 14px;cursor:pointer;list-style:none;font-size:13.5px;color:var(--text-2)}
+.cp-svc>summary{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.6fr) minmax(0,1fr) 90px auto;gap:12px;align-items:center;padding:10px 14px;cursor:pointer;list-style:none;font-size:13.5px;color:var(--text-2)}
 .cp-svc>summary::-webkit-details-marker{display:none}
 .cp-svc>summary:hover{background:var(--panel-3)}
 .cp-svc .nm{font-family:var(--f-id);color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cp-svc .im{font-family:var(--f-id);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cp-svc .pt b{font-family:var(--f-id);color:var(--text);font-weight:500}
+.cp-svc .rp,.cp-svc .pt{white-space:nowrap}
 .cp-pill{justify-self:end;font-size:12px;padding:2px 9px;border-radius:10px;border:1px solid var(--grid-2);color:var(--text-3);white-space:nowrap}
 .cp-pill.ok{color:var(--pass);border-color:color-mix(in srgb,var(--pass) 45%,transparent)}
 .cp-pill.warn{color:var(--caution);border-color:color-mix(in srgb,var(--caution) 50%,transparent)}

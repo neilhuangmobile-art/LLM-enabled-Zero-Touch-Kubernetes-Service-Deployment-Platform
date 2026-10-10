@@ -116,6 +116,42 @@ def write_manifest(
 # YAML 生成
 # ══════════════════════════════════════════════════════════════════
 
+# 名稱像密碼、金鑰的環境變數（2026-10-10，docker-compose 匯入）：值不寫進部署設定檔與 Git，
+# 改存在 Kubernetes Secret「<服務>-secrets」，設定檔只寫「去哪個 Secret 拿」。
+_SECRET_ENV_RE = re.compile(r"PASS|SECRET|TOKEN|KEY|CREDENTIAL|PRIVATE", re.IGNORECASE)
+
+
+def split_secret_env(env: dict):
+    """回傳 (一般環境變數, 密碼類環境變數)。"""
+    plain, secret = {}, {}
+    for k, v in (env or {}).items():
+        (secret if _SECRET_ENV_RE.search(str(k)) else plain)[str(k)] = str(v)
+    return plain, secret
+
+
+def secret_name(app_name: str) -> str:
+    return f"{_sanitize_name(app_name)}-secrets"
+
+
+def env_entries(app_name: str, env: dict) -> list:
+    """Deployment 的 env 欄位：一般的直接寫值，密碼類改成從 Secret 讀。"""
+    plain, secret = split_secret_env(env)
+    out = [{"name": k, "value": v} for k, v in plain.items()]
+    out += [{"name": k, "valueFrom": {"secretKeyRef": {"name": secret_name(app_name), "key": k}}} for k in secret]
+    return out
+
+
+def build_secret_yaml(llm_result: dict, namespace: str) -> Optional[str]:
+    """客戶叢集用：平台連不進客戶叢集，Secret 只能放進客戶自己的私有 repo 由 Flux 套用。"""
+    _, secret = split_secret_env(llm_result.get("env") or {})
+    if not secret:
+        return None
+    doc = {"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
+           "metadata": {"name": secret_name(llm_result.get("app_name", "app")), "namespace": namespace},
+           "stringData": secret}
+    return "---\n" + yaml.dump(doc, allow_unicode=True, default_flow_style=False)
+
+
 def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
     """從 LLM 結果生成 Deployment YAML 字串。"""
     app_name  = _sanitize_name(llm_result.get("app_name", "app"))
@@ -154,10 +190,7 @@ def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
                         "resources": resources,
                         "securityContext": {"allowPrivilegeEscalation": False},
                         **recommended_probes(image, cport),
-                        "env": [
-                            {"name": k, "value": str(v)}
-                            for k, v in env_vars.items()
-                        ],
+                        "env": env_entries(app_name, env_vars),
                     }],
                 },
             },

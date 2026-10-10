@@ -32,7 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import yaml
 
-from gitops.manifest_writer import _build_deployment_yaml, _build_service_yaml, _sanitize_name
+from gitops.manifest_writer import _build_deployment_yaml, _build_service_yaml, _sanitize_name, build_secret_yaml
 from gitops.rollback import is_valid_k8s_name
 
 APPS_DIR = "apps"
@@ -290,6 +290,13 @@ class TenantRepo:
                 svc_path.write_text(svc, encoding="utf-8")
             elif svc_path.exists():
                 svc_path.unlink()
+            # 密碼類環境變數：Deployment 只寫「去 Secret 拿」，Secret 本身放在客戶自己的私有 repo
+            sec = build_secret_yaml(parsed, self.namespace)
+            sec_path = d / "secret.yaml"
+            if sec:
+                sec_path.write_text(sec, encoding="utf-8")
+            elif sec_path.exists():
+                sec_path.unlink()
             sha = self._commit_push(self._msg(f"deploy {app} ({doc['spec']['replicas']}x {parsed.get('image')})"))
         return {"app": app, "commit": sha, "namespace": self.namespace}
 

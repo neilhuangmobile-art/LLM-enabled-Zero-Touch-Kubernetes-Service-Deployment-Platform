@@ -128,3 +128,51 @@ def test_sanitize_keeps_compose_fields_and_drops_bad_ones():
     m = web_demo._build_agent_manifest(clean)
     c = m["spec"]["template"]["spec"]["containers"][0]
     assert c["ports"][0]["containerPort"] == 3000 and {"name": "OK_1", "value": "a"} in c["env"]
+
+
+def test_yaml_alias_bomb_is_rejected_quickly():
+    """「十億笑聲」：十層、每層參照上一層十次，原始檔不到 1 KB，展開後是 10^10 個節點。"""
+    import time
+    lines = ['a0: &a0 ["x","x","x","x","x","x","x","x","x","x"]']
+    for i in range(1, 10):
+        lines.append(f"a{i}: &a{i} [" + ",".join([f"*a{i-1}"] * 10) + "]")
+    bomb = "\n".join(lines) + "\nservices:\n  web:\n    image: nginx\n    environment: *a9\n"
+    t = time.perf_counter()
+    with pytest.raises(ComposeError, match="展開後內容過大"):
+        parse_compose(bomb)
+    assert time.perf_counter() - t < 1
+
+
+def test_normal_yaml_anchors_still_work():
+    r = parse_compose("""
+x-common: &common
+  environment: {TZ: Asia/Taipei}
+  deploy: {replicas: 2}
+services:
+  web: {<<: *common, image: nginx:1.27, ports: ["8080:80"]}
+  api: {<<: *common, image: traefik/whoami:v1.10}
+""")
+    s = _by_name(r)
+    assert s["web"]["env"] == {"TZ": "Asia/Taipei"} and s["api"]["pods"] == 2
+
+
+def test_secret_env_values_never_reach_git_manifest():
+    """密碼類環境變數的值不能寫進部署設定檔（會 commit 進 Git），只能寫「去哪個 Secret 拿」。"""
+    from gitops.manifest_writer import _build_deployment_yaml, build_secret_yaml
+    spec = {"app_name": "api", "image": "x:1", "port": 80,
+            "env": {"DB_HOST": "db", "DB_PASSWORD": "s3cret-value", "API_TOKEN": "tok-123"}}
+    text = _build_deployment_yaml(spec, "u")
+    assert "s3cret-value" not in text and "tok-123" not in text
+    env = {e["name"]: e for e in yaml.safe_load(text)["spec"]["template"]["spec"]["containers"][0]["env"]}
+    assert env["DB_HOST"]["value"] == "db"
+    assert env["DB_PASSWORD"]["valueFrom"]["secretKeyRef"] == {"name": "api-secrets", "key": "DB_PASSWORD"}
+    sec = yaml.safe_load(build_secret_yaml(spec, "zt-carol"))
+    assert sec["kind"] == "Secret" and sec["stringData"] == {"DB_PASSWORD": "s3cret-value", "API_TOKEN": "tok-123"}
+    assert build_secret_yaml({"app_name": "a", "env": {"X": "1"}}, "u") is None
+
+
+def test_review_manifest_has_no_secret_values():
+    web_demo = pytest.importorskip("web_demo")
+    m = web_demo._build_agent_manifest({"app_name": "api", "image": "x:1", "pods": 1, "port": 80,
+                                        "env": {"DB_PASSWORD": "s3cret-value"}})
+    assert "s3cret-value" not in str(m)
