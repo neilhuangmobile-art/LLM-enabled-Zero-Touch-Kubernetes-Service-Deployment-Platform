@@ -116,11 +116,51 @@ def recommended_env(image: str) -> dict:
     但容器上限只有 0.5 核，CPU 一直被限速、少數請求特別慢。官方映像檔內建的開關
     NGINX_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE 會改成依容器的 CPU 上限決定（實測 0.5 核 → 1 個）。
     """
-    # 「localhost:5000/nginxinc/nginx-unprivileged:1.27@sha256:…」→ 最後一段去掉標籤 →「nginx-unprivileged」
-    name = (image or "").split("@")[0].rsplit("/", 1)[-1].split(":")[0].lower()
-    if name in _NGINX_AUTOTUNE_IMAGES:
+    if _image_name(image) in _NGINX_AUTOTUNE_IMAGES:
         return {"NGINX_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE": "1"}
     return {}
+
+
+def _image_name(image: str) -> str:
+    """「localhost:5000/library/redis:7@sha256:…」→「redis」"""
+    return (image or "").split("@")[0].rsplit("/", 1)[-1].split(":")[0].lower()
+
+
+# 常見服務的預設 port：使用者沒講 port 時用這個，不要一律給 80
+# （2026-10-10 發現「部署 redis」會拿到 port 80，但 redis 實際聽 6379，服務其實連不上）
+KNOWN_PORTS = {
+    "redis": 6379, "postgres": 5432, "mysql": 3306, "mariadb": 3306, "mongo": 27017,
+    "rabbitmq": 5672, "memcached": 11211, "elasticsearch": 9200,
+}
+
+
+def default_port(image: str):
+    return KNOWN_PORTS.get(_image_name(image))
+
+
+# 根路徑一定回 200 的網頁伺服器，才用 HTTP 檢查；其他程式的根路徑可能回 404，會被誤判成壞掉
+_HTTP_PROBE_IMAGES = {"nginx", "nginx-unprivileged", "httpd"}
+
+
+def recommended_probes(image: str, port: int) -> dict:
+    """部署時自動加的健康檢查，三處部署設定共用（同 recommended_resources）。
+
+    2026-10-10 組員極限測試：暫停 nginx 的 worker 25 秒（程式還在、但不回應），43.5% 請求逾時，
+    K8s 仍顯示 Ready。網頁伺服器加 HTTP 檢查：卡住約 10 秒就不再分流量給它，超過 30 秒才重啟
+    （短暫卡頓不會被誤殺）。其他程式只加連線檢查判斷能不能接流量，不設重啟條件，
+    避免 port 設錯時陷入一直重啟的循環。
+    """
+    if not port:
+        return {}
+    if _image_name(image) in _HTTP_PROBE_IMAGES:
+        http = {"path": "/", "port": int(port)}
+        return {
+            "readinessProbe": {"httpGet": http, "periodSeconds": 5, "timeoutSeconds": 2, "failureThreshold": 2},
+            "livenessProbe": {"httpGet": http, "initialDelaySeconds": 10, "periodSeconds": 10,
+                              "timeoutSeconds": 3, "failureThreshold": 3},
+        }
+    return {"readinessProbe": {"tcpSocket": {"port": int(port)}, "initialDelaySeconds": 5,
+                               "periodSeconds": 10, "timeoutSeconds": 2, "failureThreshold": 3}}
 
 
 def _detect_app_type(image: str, app_name: str = "") -> str:

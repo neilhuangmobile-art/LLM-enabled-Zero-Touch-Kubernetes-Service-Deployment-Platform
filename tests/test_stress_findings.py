@@ -92,3 +92,45 @@ def test_scale_limit_matches_deploy_policy():
     assert r.status_code in (400, 503)
     if r.status_code == 400:
         assert str(max_replicas()) in r.get_json()["error"]
+
+
+def test_probes_by_image_type():
+    """網頁伺服器用 HTTP 檢查（偵測得到卡住）；其他程式只用連線檢查、不設重啟條件。"""
+    from agents.cost_agent import recommended_probes
+    p = recommended_probes("nginx:1.27", 80)
+    assert p["readinessProbe"]["httpGet"]["port"] == 80 and "livenessProbe" in p
+    # 卡住超過 30 秒才重啟，短暫卡頓（組員測試的 25 秒）只會先停止分流量
+    lv = p["livenessProbe"]
+    assert lv["periodSeconds"] * lv["failureThreshold"] >= 30
+    r = recommended_probes("redis:7", 6379)
+    assert r["readinessProbe"]["tcpSocket"]["port"] == 6379 and "livenessProbe" not in r
+    assert recommended_probes("python:3.12", 0) == {}
+
+
+def test_probes_same_in_review_and_git():
+    from gitops.manifest_writer import _build_deployment_yaml
+    from agents.cost_agent import recommended_probes
+    web_demo = pytest.importorskip("web_demo")
+    spec = {"app_name": "web", "image": "nginx:1.27", "pods": 2, "port": 8080}
+    review_c = web_demo._build_agent_manifest(spec)["spec"]["template"]["spec"]["containers"][0]
+    git_c = yaml.safe_load(_build_deployment_yaml(spec, "u"))["spec"]["template"]["spec"]["containers"][0]
+    want = recommended_probes("nginx:1.27", 8080)
+    for c in (review_c, git_c):
+        assert c["readinessProbe"] == want["readinessProbe"] and c["livenessProbe"] == want["livenessProbe"]
+
+
+@pytest.mark.parametrize("text,image,parsed_port,expected", [
+    ("幫我部署 redis", "redis:latest", 80, 6379),
+    ("部署 postgres:16", "postgres:16", 80, 5432),
+    ("部署 redis，開 8080 port", "redis:latest", 8080, 8080),
+    ("部署 redis port 80", "redis:latest", 80, 80),
+    ("部署 nginx", "nginx:latest", 80, 80),
+])
+def test_known_service_default_port(monkeypatch, text, image, parsed_port, expected):
+    web_demo = pytest.importorskip("web_demo")
+    monkeypatch.setattr(web_demo, "ask_llama", lambda t: {"app_name": "svc", "image": image, "pods": 1, "port": parsed_port})
+    monkeypatch.setattr(web_demo, "_apply_scenario", lambda t, p: None)
+    monkeypatch.setattr(web_demo, "_review_deployment", lambda p: {"decision": "approve"})
+    monkeypatch.setattr(web_demo, "K8S_ENABLED", False, raising=False)
+    parsed, _, _, err = web_demo._prepare_deploy(text)
+    assert err is None and parsed["port"] == expected

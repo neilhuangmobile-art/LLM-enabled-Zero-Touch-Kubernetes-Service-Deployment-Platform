@@ -123,7 +123,7 @@ def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
     replicas  = int(llm_result.get("replicas", llm_result.get("pods", 1)))
     port      = int(llm_result.get("port", 80))
     # 資源設定跟本機部署、部署前審查共用同一套規則（agents/cost_agent.recommended_resources）
-    from agents.cost_agent import recommended_resources, recommended_env
+    from agents.cost_agent import recommended_resources, recommended_env, recommended_probes
     resources = recommended_resources(image, app_name, llm_result.get("memory"), llm_result.get("cpu"))
     # 平台自動加的（例如 nginx 依 CPU 上限調整 worker 數）先放，使用者自己指定的同名變數優先
     env_vars  = {**recommended_env(image), **(llm_result.get("env") or {})}
@@ -152,6 +152,7 @@ def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
                         "ports": [{"containerPort": port}],
                         "resources": resources,
                         "securityContext": {"allowPrivilegeEscalation": False},
+                        **recommended_probes(image, port),
                         "env": [
                             {"name": k, "value": str(v)}
                             for k, v in env_vars.items()

@@ -385,14 +385,18 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
         # 改成套用 agents/cost_agent 既有的「依 image 類型推薦資源」規則（跟審查卡上顯示
         # 給使用者看的建議是同一份 profile，不會兩邊數字不一致）；使用者有指定的維度就照使用者的，
         # 沒指定的維度才補預設值。
-        from agents.cost_agent import recommended_resources, recommended_env
+        from agents.cost_agent import recommended_resources, recommended_env, recommended_probes
         _res = recommended_resources(image, app_name, memory, cpu)
         resources = k8s_client.V1ResourceRequirements(requests=_res["requests"], limits=_res["limits"])
+        # 健康檢查用 dict 傳給 client（序列化時原樣送出，欄位名稱就是 K8s 的 camelCase）
+        _probes = recommended_probes(image, port)
         container = k8s_client.V1Container(
             name=app_name, image=image,
             ports=[k8s_client.V1ContainerPort(container_port=port)],
             resources=resources,
             env=[k8s_client.V1EnvVar(name=k, value=v) for k, v in recommended_env(image).items()] or None,
+            readiness_probe=_probes.get("readinessProbe"),
+            liveness_probe=_probes.get("livenessProbe"),
             # 安全性最低硬化：擋掉容器內程序取得比父程序更高的權限。不強制 runAsNonRoot/
             # 丟棄 capabilities，因為這個平台常部署的官方 image（nginx 綁 80 port 等）預設
             # 用 root 執行，硬上非 root 反而會讓現有 demo 流程直接壞掉。
@@ -1139,13 +1143,14 @@ def _build_agent_manifest(parsed):
     memory = parsed.get("memory")
     cpu = parsed.get("cpu")
     # 審查看的必須是實際會部署的那一份：資源預設值與安全設定跟 k8s_deploy／Git 設定相同
-    from agents.cost_agent import recommended_resources, recommended_env
+    from agents.cost_agent import recommended_resources, recommended_env, recommended_probes
     container = {
         "name": app_name,
         "image": image,
         "ports": [{"containerPort": port}],
         "resources": recommended_resources(image, app_name, memory, cpu),
         "securityContext": {"allowPrivilegeEscalation": False},
+        **recommended_probes(image, port),
     }
     env = recommended_env(image)
     if env:
@@ -5508,6 +5513,10 @@ def _mentions_node_capacity(text: str) -> bool:
     return bool(_NODE_CAPACITY_HINT_RE.search(text or ""))
 
 
+# 句子裡有沒有講到 port（「port 8080」「開 8080 埠」）。不認「:數字」，那多半是映像檔版本（postgres:16）
+_PORT_MENTION_RE = re.compile(r"(?:port|埠|端口|連接埠)\s*[:：=]?\s*\d{2,5}|\d{2,5}\s*(?:port|埠|端口|連接埠)",
+                              re.IGNORECASE)
+
 # 情境線索：句子裡沒有明確人數或天數，但看得出是在描述使用情境，才值得多問 Gemini 一次
 _SCENARIO_CUE_RE = re.compile(r"活動|社團|課程|比賽|期末|展示|報名|投票|班上|全班|營隊|workshop|event|class|party|hackathon",
                               re.IGNORECASE)
@@ -5549,6 +5558,12 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
             scenario = None
         if scenario:
             parsed["_scenario"] = scenario
+        # 使用者沒講 port 時，常見服務用它自己的預設 port（redis 6379 等），不要一律給 80。
+        # 2026-10-10：加上健康檢查後，port 錯了服務會一直停在未就緒；原本則是看起來正常、其實連不上。
+        from agents.cost_agent import default_port
+        _known = default_port(parsed.get("image"))
+        if _known and int(parsed.get("port") or 80) == 80 and not _PORT_MENTION_RE.search(user_input):
+            parsed["port"] = _known
 
     enriched = enrich_parsed_result(user_input, parsed)
     if not enriched["is_k8s"]:
