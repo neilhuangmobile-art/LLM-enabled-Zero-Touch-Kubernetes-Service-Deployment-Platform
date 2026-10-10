@@ -1137,3 +1137,20 @@ Playwright 截圖檢查登入、對話、自動修復、深淺色。各頁內容
 本機規則補上「叫／名字／命名為／取名／名為」，名稱前可接「是／為／：」，英文關鍵字加單字邊界。
 **驗證**：四種說法在有 Gemini 與只用規則兩種情況下都抓到名稱；「給 500 人用」不會被誤當名稱；新增 6 項測試，`pytest` 全過。
 
+### 13:40 — 新功能：上傳或貼上 docker-compose 檔，一次部署多個服務
+**為什麼**：平台原本一次只能部署一個服務；很多開源專案和作業範本附的是 docker-compose.yml，新手得自己拆成好幾句話，
+還要處理服務之間怎麼連線，做不到。
+**改了什麼**：
+- `agents/compose_import.py`：轉換 ports（對外／容器）、environment、depends_on（決定部署順序、偵測循環）、deploy.replicas、
+  資源上限；不支援的設定（build、本機資料夾、volume、privileged、host 網路、command、env_file）逐條說明，build 的服務直接擋下。
+- 每個服務都送進既有的 `/api/deploy/parse`、`/api/deploy`，三方審查、紀錄、客戶叢集模式都不繞過。
+- 部署流程新增欄位：環境變數、容器實際監聽的 port、是否對外（沒寫 ports 的只給內部）、同名內部連線入口
+  （其他服務照 compose 寫法用 `db:5432` 連）。審查、本機部署、Git 設定三處一致。
+- 名稱像密碼、金鑰的環境變數存成 Kubernetes Secret，部署設定與 Git 只寫「去哪個 Secret 拿」；
+  客戶叢集模式放進客戶自己的私有 repo。刪除服務時一併刪除平台建立的連線入口與 Secret。
+- Chat 輸入框加上傳按鈕，直接貼 compose 內容也會辨識。流程卡：檢視服務、審查、部署；被頻率限制擋下會自動等待重送。
+- 背景安全審查抓到並修好：YAML 別名展開炸彈（改算展開後的節點數）、全站沒有請求大小上限（改成 1 MB，Flask 與 waitress 兩層）。
+**驗證**：4 個服務的範例（nginx、whoami、redis、需要 build 的服務）實際上傳部署：順序 cp-cache、cp-api、cp-web，build 的被擋下；
+對外 8090／8091 可連；redis 沒有對外開放；從 cp-web 用 `cp-api`、`cp-cache:6379` 互連成功（redis 回 PONG）；
+API_TOKEN 改從 Secret 讀、部署紀錄 commit 裡出現 0 次；刪除後沒有殘留。新增 `tests/test_compose_import.py` 21 項，`pytest` 全過。
+

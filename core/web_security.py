@@ -22,6 +22,7 @@ RULES = (
     ("chat",    "/api/chat",       None,      20, 20 / 60, "user"),   # 吃 GPU + Gemini
     ("intent",  "/api/intent",     None,      30, 30 / 60, "user"),
     ("deploy",  "/api/deploy",     ("POST",), 10, 10 / 60, "user"),   # 含 /api/deploy/parse
+    ("compose", "/api/compose/",   ("POST",), 10, 10 / 60, "user"),   # 解析 YAML 比一般 API 重
     ("api",     "/api/",           None,     120, 2.0,     "user"),   # 其他 API 的總上限
 )
 

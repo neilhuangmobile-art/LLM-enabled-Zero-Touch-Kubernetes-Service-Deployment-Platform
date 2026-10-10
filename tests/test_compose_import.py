@@ -176,3 +176,24 @@ def test_review_manifest_has_no_secret_values():
     m = web_demo._build_agent_manifest({"app_name": "api", "image": "x:1", "pods": 1, "port": 80,
                                         "env": {"DB_PASSWORD": "s3cret-value"}})
     assert "s3cret-value" not in str(m)
+
+
+def test_oversized_requests_rejected_before_parsing():
+    """請求大小上限：先擋下過大的請求，不能讀完 1 GB 才發現超過 compose 的 100 KB 上限。"""
+    web_demo = pytest.importorskip("web_demo")
+    c = web_demo.app.test_client()
+    with c.session_transaction() as s:
+        s["username"] = "size-check"
+    assert web_demo.app.config["MAX_CONTENT_LENGTH"] == 1024 * 1024
+    big = '{"text": "' + "x" * (2 * 1024 * 1024) + '"}'
+    assert c.post("/api/compose/parse", data=big, content_type="application/json").status_code == 413
+    mid = '{"text": "' + "x" * 300_000 + '"}'   # 低於全站上限、高於 compose 上限
+    r = c.post("/api/compose/parse", data=mid, content_type="application/json")
+    assert r.status_code == 413 and "太大" in r.get_json()["error"]
+    ok = c.post("/api/compose/parse", json={"text": "services:\n  web: {image: nginx:1.27}\n"})
+    assert ok.status_code == 200 and ok.get_json()["services"][0]["app_name"] == "web"
+
+
+def test_compose_route_is_rate_limited():
+    from core.web_security import match_rule
+    assert match_rule("/api/compose/parse", "POST")[0] == "compose"

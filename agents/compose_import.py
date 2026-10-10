@@ -7,7 +7,7 @@ docker-compose 匯入（2026-10-10）：把 docker-compose.yml 轉成平台的�
 轉換規則：
 - ports "8080:80"：對外 8080、容器 80；沒寫 ports 的服務只給內部連（不對外開放）。
 - 每個服務另外建一個跟 compose 服務同名的內部連線入口，後端照樣用「db:5432」連資料庫。
-- environment 照搬；名稱像密碼、金鑰的會提醒（會寫進部署紀錄）。
+- environment 照搬；名稱像密碼、金鑰的另外存成 Kubernetes Secret，不寫進部署紀錄（見 manifest_writer.split_secret_env）。
 - deploy.replicas、deploy.resources.limits、mem_limit、cpus 轉成副本數與資源。
 - depends_on 決定部署順序（被依賴的先部署），有循環就擋下。
 
@@ -225,7 +225,8 @@ def parse_compose(text: str, default_port_fn=None) -> Dict:
         secret_keys = [k for k in env if _SECRET_KEY_RE.search(k)]
         if secret_keys:
             probs.append({"level": "warn", "text": "環境變數 " + "、".join(secret_keys[:5]) +
-                          " 看起來是密碼或金鑰，會一起寫進部署紀錄（Git），正式環境請改用其他方式保管"})
+                          " 看起來是密碼或金鑰，會另外存成 Kubernetes Secret，不會寫進部署紀錄。"
+                          "使用客戶叢集模式時，會放在你自己的私有設定 repo 裡"})
         if len(env) > MAX_ENV:
             env = dict(list(env.items())[:MAX_ENV])
             probs.append({"level": "warn", "text": f"環境變數太多，只保留前 {MAX_ENV} 個"})

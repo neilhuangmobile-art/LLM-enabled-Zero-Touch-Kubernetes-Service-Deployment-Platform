@@ -236,6 +236,10 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     # 對外網址是 https 時 cookie 只走 https（瀏覽器把 http://localhost 視為安全來源，本機測試不受影響）
     SESSION_COOKIE_SECURE=PUBLIC_BASE_URL.startswith("https://"),
+    # 請求大小上限（2026-10-10 背景安全審查）：原本沒有設定，任何 API 都會先把整個請求讀進記憶體
+    # 才檢查自己的上限（例如 compose 的 100 KB），送 1 GB 的請求就能拖垮伺服器。
+    # 目前最大的合法請求是客戶回報器的 256 KB。
+    MAX_CONTENT_LENGTH=1024 * 1024,
 )
 # 代理標頭（X-Forwarded-*）由 waitress 的 trusted_proxy 處理，見檔尾 __main__：只有
 # 「只綁 127.0.0.1、前面一定是本機通道程式」時才信任，否則區網任何人都能偽造
@@ -4199,7 +4203,7 @@ function renderComposeCard(flow){
     const total = flow.step === 'reviewing' ? ready.length : svcs.filter(s => ['deploying', 'deployed', 'failed'].includes(s.state) || s.queued).length;
     lead = flow.step === 'reviewing' ? '每個服務都會經過安全、成本、效能三方審查，跟一句話部署完全一樣。' : '照順序一個一個部署，前一個完成才會開始下一個。';
     prog = `<div class="cp-prog" role="progressbar" aria-valuenow="${done}" aria-valuemax="${total}"><i style="width:${total ? Math.round(done / total * 100) : 0}%"></i></div>`;
-    foot = `<div class="busy" style="padding:0"><div class="spinner"></div><div>${flow.step === 'reviewing' ? '審查中' : '部署中'}，${done}／${total}</div></div>`;
+    foot = `<div class="busy" style="padding:0"><div class="spinner"></div><div>${flow.step === 'reviewing' ? '審查中' : '部署中'}，${done}／${total}${flow.waitNote ? `<div class="dim">${esc(flow.waitNote)}</div>` : ''}</div></div>`;
   } else if(flow.step === 'review'){
     const blocked = svcs.filter(s => s.state === 'block').length;
     lead = `審查完成：${reviewedOk.length} 個可以部署` + (blocked ? `，${blocked} 個被擋下（展開看原因）` : '') + '。'
@@ -4215,6 +4219,21 @@ function renderComposeCard(flow){
   return flowShell(flow, flowHead(title, steps) + `<div class="body"><div class="lead">${lead}</div>${prog}${order}${top}${rows}</div>`
     + (foot ? `<div class="foot">${foot}</div>` : ''));
 }
+// 部署相關的請求有頻率限制（每分鐘 10 次，core/web_security.py）。compose 一次送很多個，
+// 被擋下（429）時照伺服器給的秒數等一下再送，不要直接算失敗。
+async function cpFetch(flow, url, body){
+  for(let attempt = 0; attempt < 8; attempt++){
+    const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    if(r.status !== 429) return r.json();
+    const wait = Math.min(30, Math.max(1, parseInt(r.headers.get('Retry-After') || '6', 10)));
+    flow.waitNote = `為了保護平台，部署請求每分鐘有次數上限，${wait} 秒後自動繼續。`;
+    persistFlowCard(flow.id);
+    await new Promise(res => setTimeout(res, wait * 1000));
+    if(!flowAlive(flow)) throw new Error('cancelled');
+    flow.waitNote = null;
+  }
+  throw new Error('請求次數太多，請稍後再試。');
+}
 async function composeReview(id){
   const flow = chatFlows[id];
   if(!flowAlive(flow)) return;
@@ -4225,8 +4244,7 @@ async function composeReview(id){
   for(const s of svcs){
     if(cpBlocked(s)) continue;
     try{
-      const r = await fetch('/api/deploy/parse', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({parsed:cpSpec(s)})});
-      const d = await r.json();
+      const d = await cpFetch(flow, '/api/deploy/parse', {parsed:cpSpec(s)});
       if(!flowAlive(flow)) return;
       s.review = d.review || null;
       if(d.error){ s.state = 'block'; s.error = d.error; }
@@ -4252,8 +4270,7 @@ async function composeDeploy(id){
     s.state = 'deploying';
     persistFlowCard(id);
     try{
-      const r = await fetch('/api/deploy', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({parsed:cpSpec(s)})});
-      const d = await r.json();
+      const d = await cpFetch(flow, '/api/deploy', {parsed:cpSpec(s)});
       if(!flowAlive(flow)) return;
       const ok = !d.error && !d.rejected && !(d.k8s_deploy && d.k8s_deploy.ok === false);
       s.state = ok ? 'deployed' : 'failed';
@@ -6114,9 +6131,14 @@ def api_compose_parse():
     審查與部署由前端對每個服務呼叫 /api/deploy/parse、/api/deploy，跟一句話部署走完全相同的把關。"""
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    from agents.compose_import import parse_compose, ComposeError
+    from agents.compose_import import parse_compose, ComposeError, MAX_COMPOSE_BYTES
     from agents.cost_agent import default_port
-    text = (request.get_json() or {}).get("text") or ""
+    # 讀內容之前先看大小（JSON 包裝後會比原文大一些，留兩倍空間）
+    if (request.content_length or 0) > MAX_COMPOSE_BYTES * 2:
+        return jsonify({"error": f"檔案太大（上限 {MAX_COMPOSE_BYTES // 1000} KB）。"}), 413
+    text = (request.get_json(silent=True) or {}).get("text") or ""
+    if not isinstance(text, str):
+        return jsonify({"error": "格式不對。"}), 400
     try:
         return jsonify(parse_compose(text, default_port))
     except ComposeError as e:
@@ -7644,7 +7666,7 @@ if __name__ == "__main__":
             # 只信任本機通道程式送來的代理標頭，取得真實客戶端 IP（頻率限制用）與 https
             _proxy = dict(trusted_proxy="127.0.0.1", trusted_proxy_count=1,
                           trusted_proxy_headers={"x-forwarded-for", "x-forwarded-proto", "x-forwarded-host"})
-        serve(app, host=_bind, port=WEB_PORT, threads=8, **_proxy)
+        serve(app, host=_bind, port=WEB_PORT, threads=8, max_request_body_size=1024 * 1024, **_proxy)
     except ImportError:
         print("  Server: Flask 開發伺服器（未安裝 waitress，不要直接對外開放）")
         app.run(host=_bind, port=WEB_PORT, debug=False)
