@@ -4264,7 +4264,9 @@ function renderComposeCard(flow){
       <button type="button" class="btn primary" onclick="composeDeploy('${flow.id}')" ${reviewedOk.length ? '' : 'disabled'}>部署 ${reviewedOk.length} 個服務</button>`;
   } else if(flow.step === 'done'){
     const ok = svcs.filter(s => s.state === 'deployed').length, bad = svcs.filter(s => s.state === 'failed').length;
-    lead = `部署完成：${ok} 個成功` + (bad ? `，${bad} 個失敗（展開看原因）` : '') + '。服務要等映像檔下載完、通過健康檢查才會開始接流量，通常需要幾十秒。';
+    lead = flow.pendingSync
+      ? `已經把 ${ok} 個服務的設定送到你的叢集` + (bad ? `，${bad} 個失敗（展開看原因）` : '') + '。你叢集裡的 Flux 大約 30 到 60 秒內會套用，之後到「我的服務」就看得到。'
+      : `部署完成：${ok} 個成功` + (bad ? `，${bad} 個失敗（展開看原因）` : '') + '。服務要等映像檔下載完、通過健康檢查才會開始接流量，通常需要幾十秒。';
     foot = `<button type="button" class="btn" onclick="showPage('services')">查看我的服務</button>`;
   }
   const title = 'docker-compose 匯入';
@@ -4326,6 +4328,7 @@ async function composeDeploy(id){
       if(!flowAlive(flow)) return;
       const ok = !d.error && !d.rejected && !(d.k8s_deploy && d.k8s_deploy.ok === false);
       s.state = ok ? 'deployed' : 'failed';
+      if(ok && d.k8s_deploy && d.k8s_deploy.pending_sync) flow.pendingSync = true;
       if(!ok) s.error = d.error || d.reason || (d.k8s_deploy && d.k8s_deploy.message) || '部署失敗。';
     }catch(e){
       if(!flowAlive(flow)) return;

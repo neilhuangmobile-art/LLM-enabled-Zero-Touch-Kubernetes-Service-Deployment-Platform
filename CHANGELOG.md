@@ -1154,3 +1154,21 @@ Playwright 截圖檢查登入、對話、自動修復、深淺色。各頁內容
 對外 8090／8091 可連；redis 沒有對外開放；從 cp-web 用 `cp-api`、`cp-cache:6379` 互連成功（redis 回 PONG）；
 API_TOKEN 改從 Secret 讀、部署紀錄 commit 裡出現 0 次；刪除後沒有殘留。新增 `tests/test_compose_import.py` 21 項，`pytest` 全過。
 
+### 14:00 — compose 補上啟動指令與保存空間、帳號保存空間上限、客戶叢集模式實測、模型伺服器停掉的原因
+**為什麼**：使用者要求把上一輪留下的三件事處理掉。
+**改了什麼**：
+- **模型伺服器停掉**：紀錄檔沒有任何錯誤，是被外部終止。它當初是在 AI 助理的背景工作裡啟動的，對話重新開啟時跟著被結束。
+  新增 `scripts/start_services.ps1`，用獨立程序啟動模型伺服器與網站、輸出記在 `logs/`；`docs/setup.md` 改成建議用這個腳本。
+- **command／entrypoint**：轉成容器的 args／command（不經過 shell，跟 compose 一樣）。
+- **具名 volume**：建立 1Gi 的保存空間（PVC），容器重開資料還在；匿名 volume 與 tmpfs 用暫存空間；本機資料夾仍不支援。
+  刪除服務時保存空間一起刪除，刪除確認卡寫明。客戶叢集模式寫進客戶 repo 的 `pvc.yaml`。
+- **帳號保存空間上限**（背景安全審查）：namespace 加 ResourceQuota（10 個、10Gi）由叢集強制，部署前另外計算並在審查擋下。
+- 客戶叢集模式的 compose 完成訊息改成說明「設定已送到你的叢集，Flux 約 30 到 60 秒內套用」。
+**驗證**：
+- 本機：redis `--appendonly yes` 生效；寫入資料後刪 Pod，新 Pod 讀回同一筆資料；刪除服務後 PVC 一併清掉。
+- **客戶叢集模式實測**（用這台的 Docker Desktop 當客戶叢集，跟之前客戶功能的測法相同）：註冊測試帳號、同意書、貼安裝指令、連線檢查全部通過；
+  上傳含密碼、保存空間、啟動指令的 compose：客戶 repo 的部署設定裡密碼出現 0 次，密碼只在客戶自己 repo 的 `secret.yaml`；
+  Flux 部署後服務就緒、互連成功（redis 回 PONG）、Pod 重建後資料還在、平台畫面透過回報器看得到；刪除後 Flux 清掉所有資源。
+  測試帳號、GitHub repo、namespace、權限設定、連線紀錄都已清除。
+- `pytest` 全過（新增保存空間、啟動指令、配額測試）。
+
