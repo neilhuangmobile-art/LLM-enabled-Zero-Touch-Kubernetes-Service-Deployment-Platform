@@ -4047,7 +4047,7 @@ function renderSpecCard(flow){
     <div class="fgrid">
       <div><label for="${flow.id}-app">服務名稱</label><input id="${flow.id}-app" data-field="app_name" value="${g('app_name')}" placeholder="my-app"><div class="hint">小寫英文字母開頭，只能用小寫字母、數字和連字號，例如 web-frontend</div></div>
       <div><label for="${flow.id}-img">映像檔</label><input id="${flow.id}-img" data-field="image" value="${g('image')}" placeholder="nginx:1.27"></div>
-      <div><label for="${flow.id}-pods">副本數</label><input id="${flow.id}-pods" data-field="pods" type="number" min="1" max="100" value="${g('pods') || 1}"></div>
+      <div><label for="${flow.id}-pods">副本數</label><input id="${flow.id}-pods" data-field="pods" type="number" min="1" max="50" value="${g('pods') || 1}"></div>
       <div><label for="${flow.id}-port">Port</label><input id="${flow.id}-port" data-field="port" type="number" min="1" max="65535" value="${g('port') || 80}"></div>
       <div><label for="${flow.id}-mem">每個副本的記憶體（選填）</label><input id="${flow.id}-mem" data-field="memory" value="${g('memory')}" placeholder="例如 256Mi"></div>
       <div><label for="${flow.id}-cpu">每個副本的 CPU（選填）</label><input id="${flow.id}-cpu" data-field="cpu" value="${g('cpu')}" placeholder="例如 100m"></div>
@@ -6017,8 +6017,9 @@ def api_scale():
         return jsonify({"success": False, "error": "replicas must be an integer"}), 400
     if not name:
         return jsonify({"success": False, "error": "Name required"}), 400
-    if not 1 <= replicas <= 100:
-        return jsonify({"success": False, "error": "replicas must be between 1 and 100"}), 400
+    from guardian.yaml_validator import max_replicas
+    if not 1 <= replicas <= max_replicas():
+        return jsonify({"success": False, "error": f"副本數要在 1 到 {max_replicas()} 之間"}), 400
     user_ns = _session_ns()
     blocked, risk_msg = _check_scale_risk(name, replicas, user_ns)
     if blocked:
@@ -6838,8 +6839,9 @@ def _remote_scale(data):
         return jsonify({"success": False, "error": "replicas must be an integer"}), 400
     if not name:
         return jsonify({"success": False, "error": "Name required"}), 400
-    if not 1 <= replicas <= 100:
-        return jsonify({"success": False, "error": "replicas must be between 1 and 100"}), 400
+    from guardian.yaml_validator import max_replicas
+    if not 1 <= replicas <= max_replicas():
+        return jsonify({"success": False, "error": f"副本數要在 1 到 {max_replicas()} 之間"}), 400
     blocked, risk_msg = _check_scale_risk(name, replicas, ns)
     if blocked:
         return jsonify({"success": False, "error": risk_msg, "blocked_reason": "resource_exceeded"}), 409

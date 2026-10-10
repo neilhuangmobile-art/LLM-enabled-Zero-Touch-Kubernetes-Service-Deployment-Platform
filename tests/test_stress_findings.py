@@ -79,3 +79,16 @@ def test_scale_blocked_when_pod_slots_run_out(monkeypatch):
     assert blocked and "Pod 位置不夠" in msg and "110" in msg
     blocked, _ = web_demo._check_scale_risk("nginx", 50, "user-aaa")
     assert not blocked
+
+
+def test_scale_limit_matches_deploy_policy():
+    """擴展的副本數上限跟部署審查用同一個設定值（policy_rules.yaml），組員原本能直接擴到 100 個。"""
+    from guardian.yaml_validator import max_replicas
+    web_demo = pytest.importorskip("web_demo")
+    c = web_demo.app.test_client()
+    with c.session_transaction() as s:
+        s["username"] = "limit-check"
+    r = c.post("/api/scale", json={"name": "web", "replicas": max_replicas() + 1})
+    assert r.status_code in (400, 503)
+    if r.status_code == 400:
+        assert str(max_replicas()) in r.get_json()["error"]

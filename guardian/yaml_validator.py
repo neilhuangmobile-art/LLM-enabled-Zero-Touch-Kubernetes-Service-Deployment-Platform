@@ -94,6 +94,15 @@ def validate_yaml(
     }
 
 
+def max_replicas(policy_file: str = None) -> int:
+    """副本數上限（policy_rules.yaml 的 resources.max_replicas）。部署審查跟擴展都用這個，
+    2026-10-10 之前擴展寫死 1～100、部署是 50，兩邊不一致，組員因此能直接擴到 100 個。"""
+    try:
+        return int(_load_policy(policy_file or str(_POLICY_FILE)).get("resources", {}).get("max_replicas", 50))
+    except Exception:
+        return 50
+
+
 def check_image(image: str, policy_file: str = None) -> list:
     """
     只檢查一個映像名稱，回傳阻斷原因清單（空清單＝允許）。

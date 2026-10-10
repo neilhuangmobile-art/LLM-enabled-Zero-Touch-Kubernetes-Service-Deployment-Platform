@@ -280,7 +280,10 @@ def test_update_to_miner_image_is_blocked_before_git(remote):
 
 
 def test_scale_over_customer_capacity_is_blocked(remote):
-    r = remote.post("/api/scale", json={"name": "web", "replicas": 100})
+    # 副本數上限是 50（policy_rules.yaml），要在上限內超出容量：節點縮成 2Gi，20 × 128Mi 放不下
+    _, rep = web_demo.CLUSTERS.latest_report("carol")
+    rep["nodes"][0]["memory"] = "2Gi"
+    r = remote.post("/api/scale", json={"name": "web", "replicas": 20})
     assert r.status_code == 409 and "容量" in r.get_json()["error"]
     assert not any(c[0] == "scale" for c in remote.repo.calls)
 

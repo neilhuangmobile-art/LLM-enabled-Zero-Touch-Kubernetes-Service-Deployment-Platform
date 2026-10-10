@@ -1103,3 +1103,15 @@ Playwright 截圖檢查登入、對話、自動修復、深淺色。各頁內容
 **驗證**：對實際的 orders-api Pod 重跑：拿到真正日誌、判成依賴服務無法連線、處理方式改成檢查相依服務（不刪 Pod）。
 新增 `tests/test_healer_logs.py` 6 項；`pytest` 全過。
 
+### 12:55 — 修正：組員極限測試（user-aaa nginx）發現的問題
+**為什麼**：組員對 2 副本 nginx 做存活與極限測試（13 項，結果有 passed 判定），找出 5 個問題。
+**改了什麼**：
+- 擴展與部署前檢查加上叢集 Pod 位置（節點 allocatable pods）。原本要求 100 個副本只排得下 95 個，其餘卡在 Pending 卻沒有警告。
+- 擴展的副本數上限改成跟部署審查同一個設定值（policy_rules.yaml 的 50）。原本擴展寫死 1～100，組員因此能直接擴到 100。
+- Healer 也看容器上一次結束的原因：30 分鐘內 OOMKilled 但已自動重啟的也會抓到（原本 3 秒恢復的 OOM 完全沒發現）。
+- nginx 映像檔自動加 `NGINX_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE=1`，依 CPU 上限決定 worker 數；審查、本機部署、Git 設定三處共用 `recommended_env()`。
+- 報告的第 5 項「Git 100m/128Mi 跟叢集 500m/256Mi 不一致」：最新版已統一（14817eb），兩個數字分別是需求量與上限，請學校那台更新後再確認。
+- 第 1 項「Pod 卡住偵測不到（缺探針）」影響所有部署，做法待決定。
+**驗證**：實測 0.5 核 nginx 的 worker 數 32 → 1；真實叢集上擴到 100 個回 409 並說明「目前 39 個、最多 110 個」，部署 100 個副本的審查也被擋下；
+新增 `tests/test_stress_findings.py` 15 項，`pytest` 全過。（commit `928bd3f` 與後續）
+
