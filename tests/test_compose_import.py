@@ -65,7 +65,7 @@ def test_problems_are_reported():
     assert not r["deployable"]
     assert any(p["level"] == "block" and "build" in p["text"] for p in s["worker"]["problems"])
     texts = " ".join(p["text"] for p in s["db"]["problems"])
-    assert "本機資料夾" in texts and "資料不會保留" in texts and "POSTGRES_PASSWORD" in texts
+    assert "本機資料夾" in texts and "保存空間" in texts and "POSTGRES_PASSWORD" in texts
     assert any("web-front" in p["text"] for p in s["web-front"]["problems"])   # 改名要告知
 
 
@@ -80,7 +80,8 @@ services:
     command: ["sh", "-c", "rm -rf /"]
 """)
     s = r["services"][0]
-    assert {"privileged", "network_mode", "cap_add", "command"}.isdisjoint(s)
+    assert {"privileged", "network_mode", "cap_add"}.isdisjoint(s)
+    assert s["args"] == ["sh", "-c", "rm -rf /"]   # 啟動指令照轉：它只在使用者自己的容器裡執行，跟映像檔本身一樣
     assert sum(1 for p in s["problems"] if p["level"] == "warn") >= 3
 
 
@@ -197,3 +198,61 @@ def test_oversized_requests_rejected_before_parsing():
 def test_compose_route_is_rate_limited():
     from core.web_security import match_rule
     assert match_rule("/api/compose/parse", "POST")[0] == "compose"
+
+
+def test_command_and_volumes_are_converted():
+    r = parse_compose("""
+services:
+  cache:
+    image: redis:7.2
+    command: redis-server --appendonly yes
+    volumes: ["cachedata:/data", "/scratch", "./conf:/etc/redis:ro"]
+  tool:
+    image: alpine:3.20
+    entrypoint: ["sh", "-c"]
+    command: ["echo hi && sleep 3600"]
+    volumes:
+      - {type: tmpfs, target: /tmp/work}
+      - {type: volume, source: shared, target: /shared, read_only: true}
+volumes: {cachedata: {}, shared: {}}
+""")
+    s = _by_name(r)
+    assert s["cache"]["args"] == ["redis-server", "--appendonly", "yes"] and s["cache"]["command"] is None
+    assert s["tool"]["command"] == ["sh", "-c"] and s["tool"]["args"] == ["echo hi && sleep 3600"]
+    vols = {v["mount"]: v for v in s["cache"]["volumes"]}
+    assert vols["/data"]["kind"] == "pvc" and vols["/data"]["size"] == "1Gi" and vols["/scratch"]["kind"] == "empty"
+    assert "/etc/redis" not in vols   # 本機資料夾不轉
+    t = {v["mount"]: v for v in s["tool"]["volumes"]}
+    assert t["/tmp/work"]["kind"] == "empty" and t["/shared"]["read_only"] is True
+    assert any("刪除這個服務時資料會一起刪除" in p["text"] for p in s["cache"]["problems"])
+
+
+def test_volumes_flow_into_git_manifest_and_pvc():
+    from gitops.manifest_writer import _build_deployment_yaml, build_pvc_yaml
+    spec = {"app_name": "db", "image": "postgres:16", "port": 5432, "args": ["postgres", "-c", "max_connections=50"],
+            "volumes": [{"name": "pgdata", "mount": "/var/lib/postgresql/data", "kind": "pvc", "size": "1Gi"},
+                        {"name": "tmp0", "mount": "/tmp/x", "kind": "empty"}]}
+    pod = yaml.safe_load(_build_deployment_yaml(spec, "u"))["spec"]["template"]["spec"]
+    c = pod["containers"][0]
+    assert c["args"] == ["postgres", "-c", "max_connections=50"]
+    assert {"name": "pgdata", "mountPath": "/var/lib/postgresql/data"} in c["volumeMounts"]
+    assert {"name": "pgdata", "persistentVolumeClaim": {"claimName": "db-pgdata"}} in pod["volumes"]
+    assert {"name": "tmp0", "emptyDir": {}} in pod["volumes"]
+    pvc = yaml.safe_load(build_pvc_yaml(spec, "u"))
+    assert pvc["kind"] == "PersistentVolumeClaim" and pvc["metadata"]["labels"]["zerotouch/app"] == "db"
+    assert pvc["spec"]["resources"]["requests"]["storage"] == "1Gi"
+
+
+@pytest.mark.parametrize("vol,kept", [
+    ({"name": "data", "mount": "/data", "kind": "pvc", "size": "1Gi"}, True),
+    ({"name": "data", "mount": "/", "kind": "pvc", "size": "1Gi"}, False),          # 掛到根目錄
+    ({"name": "data", "mount": "/a/../etc", "kind": "pvc", "size": "1Gi"}, False),  # 路徑跳脫
+    ({"name": "data", "mount": "data", "kind": "pvc", "size": "1Gi"}, False),       # 不是絕對路徑
+    ({"name": "data", "mount": "/data", "kind": "pvc", "size": "500Gi"}, False),    # 超過大小上限
+    ({"name": "data", "mount": "/data", "kind": "hostPath", "size": "1Gi"}, False), # 不認識的種類
+    ({"name": "Bad_Name", "mount": "/data", "kind": "pvc", "size": "1Gi"}, False),
+])
+def test_sanitize_volumes(vol, kept):
+    web_demo = pytest.importorskip("web_demo")
+    clean = web_demo._sanitize_deploy_payload({"app_name": "a", "image": "x:1", "volumes": [vol]})
+    assert ("volumes" in clean) is kept

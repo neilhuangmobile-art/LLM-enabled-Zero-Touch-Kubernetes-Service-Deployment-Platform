@@ -384,7 +384,8 @@ def _k8s_env(app_name, env):
 
 
 def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namespace=None,
-               env=None, container_port_override=None, expose=True, dns_alias=False):
+               env=None, container_port_override=None, expose=True, dns_alias=False,
+               command=None, args=None, volumes=None):
     """env／container_port_override／expose／dns_alias 是 docker-compose 匯入用的（2026-10-10）：
     環境變數、容器實際監聽的 port、要不要對外開放（compose 沒寫 ports 的服務只給內部連）、
     另外建一個跟服務同名的內部連線入口（其他服務才能照 compose 的寫法用「db:5432」連過來）。"""
@@ -413,6 +414,8 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
         resources = k8s_client.V1ResourceRequirements(requests=_res["requests"], limits=_res["limits"])
         # 健康檢查用 dict 傳給 client（序列化時原樣送出，欄位名稱就是 K8s 的 camelCase）
         _probes = recommended_probes(image, cport)
+        from gitops.manifest_writer import pod_volumes, build_pvc_docs
+        _pod_vols, _vol_mounts = pod_volumes(app_name, volumes)
         container = k8s_client.V1Container(
             name=app_name, image=image,
             ports=[k8s_client.V1ContainerPort(container_port=cport)],
@@ -421,6 +424,8 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
             env=_k8s_env(app_name, {**recommended_env(image), **(env or {})}) or None,
             readiness_probe=_probes.get("readinessProbe"),
             liveness_probe=_probes.get("livenessProbe"),
+            command=command or None, args=args or None,
+            volume_mounts=_vol_mounts or None,
             # 安全性最低硬化：擋掉容器內程序取得比父程序更高的權限。不強制 runAsNonRoot/
             # 丟棄 capabilities，因為這個平台常部署的官方 image（nginx 綁 80 port 等）預設
             # 用 root 執行，硬上非 root 反而會讓現有 demo 流程直接壞掉。
@@ -434,7 +439,7 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
                 selector=k8s_client.V1LabelSelector(match_labels={"app": app_name}),
                 template=k8s_client.V1PodTemplateSpec(
                     metadata=k8s_client.V1ObjectMeta(labels={"app": app_name}),
-                    spec=k8s_client.V1PodSpec(containers=[container]),
+                    spec=k8s_client.V1PodSpec(containers=[container], volumes=_pod_vols or None),
                 ),
             ),
         )
@@ -455,6 +460,12 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
                 spec=k8s_client.V1ServiceSpec(selector={"app": app_name}, type="ClusterIP",
                                               ports=[k8s_client.V1ServicePort(port=cport, target_port=cport)]),
             )
+        # 保存空間要先建好，Pod 才掛得上；已經存在的不動（PVC 建立後大部分欄位不能改，也不能動到資料）
+        for _pvc in build_pvc_docs({"app_name": app_name, "volumes": volumes}, namespace):
+            try:
+                core.read_namespaced_persistent_volume_claim(_pvc["metadata"]["name"], namespace, _request_timeout=(5, 10))
+            except Exception:
+                core.create_namespaced_persistent_volume_claim(namespace, _pvc, _request_timeout=(5, 10))
         try:
             api.replace_namespaced_deployment(app_name, namespace, deploy, _request_timeout=(5, 10))
         except Exception:
@@ -1190,7 +1201,16 @@ def k8s_delete_deployment(app_name, namespace=None):
             core.delete_namespaced_secret(secret_name(app_name), namespace)
         except Exception:
             pass
-        return True, f"已刪除 {app_name}"
+        # 保存空間（compose 的具名 volume）：刪除確認卡已經說明資料會一起刪除
+        removed_data = 0
+        try:
+            for pvc in core.list_namespaced_persistent_volume_claim(
+                    namespace, label_selector=f"zerotouch/app={app_name}").items:
+                core.delete_namespaced_persistent_volume_claim(pvc.metadata.name, namespace)
+                removed_data += 1
+        except Exception:
+            pass
+        return True, f"已刪除 {app_name}" + ("，連同它保存的資料" if removed_data else "")
     except Exception as e:
         return False, str(e)
 
@@ -1217,6 +1237,13 @@ def _build_agent_manifest(parsed):
     if env:
         from gitops.manifest_writer import env_entries
         container["env"] = env_entries(app_name, env)
+    from gitops.manifest_writer import pod_volumes
+    _pod_vols, _mounts = pod_volumes(app_name, parsed.get("volumes"))
+    if _mounts:
+        container["volumeMounts"] = _mounts
+    for key in ("command", "args"):
+        if parsed.get(key):
+            container[key] = list(parsed[key])
     return {
         "apiVersion": "apps/v1",
         "kind": "Deployment",
@@ -1226,7 +1253,7 @@ def _build_agent_manifest(parsed):
             "selector": {"matchLabels": {"app": app_name}},
             "template": {
                 "metadata": {"labels": {"app": app_name}},
-                "spec": {"containers": [container]},
+                "spec": {"containers": [container], **({"volumes": _pod_vols} if _pod_vols else {})},
             },
         },
     }
@@ -4144,7 +4171,8 @@ async function startComposeFlow(text, source){
 }
 const cpBlocked = s => (s.problems || []).some(p => p.level === 'block');
 const cpSpec = s => ({app_name:s.app_name, image:s.image, pods:s.pods, port:s.port, memory:s.memory || undefined, cpu:s.cpu || undefined,
-                      env:s.env, container_port:s.container_port, expose:s.expose, dns_alias:s.dns_alias});
+                      env:s.env, container_port:s.container_port, expose:s.expose, dns_alias:s.dns_alias,
+                      command:s.command || undefined, args:s.args || undefined, volumes:s.volumes || undefined});
 const CP_LV = {ok:'通過', warn:'提醒', stop:'擋下'};
 function cpVerdicts(rv){
   if(!rv) return '';
@@ -4179,7 +4207,9 @@ function renderComposeCard(flow){
         <span>${s.expose ? `對外 port <b>${esc(s.port)}</b>，容器 <b>${esc(s.container_port)}</b>` : `只給內部連線，port <b>${esc(s.container_port)}</b>`}</span>
         ${s.memory ? `<span>記憶體 <b>${esc(s.memory)}</b></span>` : ''}${s.cpu ? `<span>CPU <b>${esc(s.cpu)}</b></span>` : ''}
         ${(s.depends_on || []).length ? `<span>依賴 <b>${esc(s.depends_on.join('、'))}</b></span>` : ''}
-        <span>其他服務用 <b>${esc(s.app_name)}:${esc(s.container_port)}</b> 連它</span></div>
+        <span>其他服務用 <b>${esc(s.app_name)}:${esc(s.container_port)}</b> 連它</span>
+        ${(s.command || s.args) ? `<span>啟動指令 <b>${esc([].concat(s.command || [], s.args || []).join(' '))}</b></span>` : ''}
+        ${(s.volumes || []).length ? `<span>資料空間 <b>${esc(s.volumes.map(v => v.mount + (v.kind === 'pvc' ? '（保存 ' + v.size + '）' : '（暫存）')).join('、'))}</b></span>` : ''}</div>
       ${envKeys.length ? `<div class="cp-env" aria-label="環境變數">${envKeys.map(k => `<span>${esc(k)} = ${/PASS|SECRET|TOKEN|KEY|CREDENTIAL|PRIVATE/i.test(k) ? '********' : esc(s.env[k])}</span>`).join('')}</div>` : ''}
       ${(s.problems || []).length ? `<ul class="cp-probs">${s.problems.map(p => `<li class="${esc(p.level)}">${esc(p.text)}</li>`).join('')}</ul>` : ''}
       ${s.error ? `<ul class="cp-probs"><li class="block">${esc(s.error)}</li></ul>` : ''}
@@ -4493,7 +4523,7 @@ function renderDestructiveCard(flow){
   let detail;
   if(flow.kind === 'scale') detail = `<div class="delta"><span class="id">${esc(a.name)}</span><span class="from num">${a.current != null ? esc(a.current) : '?'} 個</span><span class="arrow" aria-hidden="true"></span><span class="to">${esc(a.replicas)} 個副本</span></div>`;
   else if(flow.kind === 'update_image') detail = `<div class="delta"><span class="id">${esc(a.name)}</span><span class="from id">${esc(a.current || '目前版本')}</span><span class="arrow" aria-hidden="true"></span><span class="to id">${esc(a.image)}</span></div>`;
-  else if(flow.kind === 'delete') detail = `<div class="lead">${esc(destructiveSummary(flow))}。<b class="t-stop">刪除之後沒辦法復原</b>，服務上的流量會中斷。</div>`;
+  else if(flow.kind === 'delete') detail = `<div class="lead">${esc(destructiveSummary(flow))}。<b class="t-stop">刪除之後沒辦法復原</b>，服務上的流量會中斷；如果這個服務有保存資料（例如從 docker-compose 匯入的資料庫），資料也會一起刪除。</div>`;
   else if(flow.kind === 'healer_fix') detail = `<div class="lead">${esc(destructiveSummary(flow))}。Healer 會先判斷原因，再套用對應的修復，例如調高記憶體上限或恢復上一個能用的映像檔。</div>`;
   else detail = `<div class="lead">${esc(destructiveSummary(flow))}。</div>`;
   return flowShell(flow, flowHead(titles[flow.kind] || '確認操作', '<span class="meta">執行前請確認</span>') + `<div class="body">
@@ -5809,6 +5839,23 @@ def _sanitize_deploy_payload(raw: dict) -> dict:
         clean["expose"] = False
     if parsed.get("dns_alias") is True:
         clean["dns_alias"] = True
+    for key in ("command", "args"):
+        val = parsed.get(key)
+        if isinstance(val, list) and val and all(isinstance(x, (str, int, float)) for x in val):
+            clean[key] = [str(x)[:1000] for x in val[:50]]
+    vols = []
+    for v in (parsed.get("volumes") or [])[:5] if isinstance(parsed.get("volumes"), list) else []:
+        if not isinstance(v, dict):
+            continue
+        name, mount = str(v.get("name") or ""), str(v.get("mount") or "")
+        size = str(v.get("size") or "1Gi")
+        if (re.match(r"^[a-z0-9]([-a-z0-9]{0,30}[a-z0-9])?$", name) and mount.startswith("/") and mount != "/"
+                and ".." not in mount.split("/") and len(mount) <= 200 and v.get("kind") in ("pvc", "empty")
+                and re.match(r"^[1-5]Gi$", size) and name not in {x["name"] for x in vols}):
+            vols.append({"name": name, "mount": mount, "kind": v["kind"], "read_only": bool(v.get("read_only")),
+                         "size": size if v["kind"] == "pvc" else None})
+    if vols:
+        clean["volumes"] = vols
     return clean
 
 
@@ -6227,7 +6274,8 @@ def api_deploy():
     if K8S_ENABLED:
         ok, message = k8s_deploy(parsed["app_name"], parsed["image"], parsed["pods"], parsed.get("port", 80), parsed.get("memory"), parsed.get("cpu"), namespace=user_ns,
                                  env=parsed.get("env"), container_port_override=parsed.get("container_port"),
-                                 expose=parsed.get("expose", True), dns_alias=parsed.get("dns_alias", False))
+                                 expose=parsed.get("expose", True), dns_alias=parsed.get("dns_alias", False),
+                                 command=parsed.get("command"), args=parsed.get("args"), volumes=parsed.get("volumes"))
         k8s_deploy_result = {"ok": ok, "message": message}
         if not ok:
             review.setdefault("warnings", []).append(f"K8s 部署失敗：{message}")

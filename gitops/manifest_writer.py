@@ -73,6 +73,8 @@ def write_manifest(
 
     deploy_path  = manifest_dir / "deployment.yaml"
     service_path = manifest_dir / "service.yaml"
+    pvc_yaml     = build_pvc_yaml(llm_result, namespace)
+    pvc_path     = manifest_dir / "pvc.yaml"
 
     written = []
 
@@ -91,6 +93,9 @@ def write_manifest(
     if service_yaml:
         service_path.write_text(service_yaml, encoding="utf-8")
         written.append(str(service_path))
+    if pvc_yaml:
+        pvc_path.write_text(pvc_yaml, encoding="utf-8")
+        written.append(str(pvc_path))
 
     print(f"📝 已寫入 {len(written)} 個檔案：")
     for f in written:
@@ -152,6 +157,42 @@ def build_secret_yaml(llm_result: dict, namespace: str) -> Optional[str]:
     return "---\n" + yaml.dump(doc, allow_unicode=True, default_flow_style=False)
 
 
+def pvc_name(app_name: str, vol_name: str) -> str:
+    return f"{_sanitize_name(app_name)}-{vol_name}"[:63].rstrip("-")
+
+
+def pod_volumes(app_name: str, volumes: list):
+    """回傳 (Pod 的 volumes, 容器的 volumeMounts)。保存空間用 PVC，暫存空間用 emptyDir。"""
+    vols, mounts = [], []
+    for v in volumes or []:
+        if v.get("kind") == "pvc":
+            vols.append({"name": v["name"], "persistentVolumeClaim": {"claimName": pvc_name(app_name, v["name"])}})
+        else:
+            vols.append({"name": v["name"], "emptyDir": {}})
+        m = {"name": v["name"], "mountPath": v["mount"]}
+        if v.get("read_only"):
+            m["readOnly"] = True
+        mounts.append(m)
+    return vols, mounts
+
+
+def build_pvc_docs(llm_result: dict, namespace: str) -> list:
+    """保存空間（PVC）的設定，一個 volume 一份。標上 zerotouch/app，刪除服務時用它找。"""
+    app = _sanitize_name(llm_result.get("app_name", "app"))
+    return [{"apiVersion": "v1", "kind": "PersistentVolumeClaim",
+             "metadata": {"name": pvc_name(app, v["name"]), "namespace": namespace,
+                          "labels": {"app": app, "zerotouch/app": app}},
+             "spec": {"accessModes": ["ReadWriteOnce"], "resources": {"requests": {"storage": v.get("size") or "1Gi"}}}}
+            for v in (llm_result.get("volumes") or []) if v.get("kind") == "pvc"]
+
+
+def build_pvc_yaml(llm_result: dict, namespace: str) -> Optional[str]:
+    docs = build_pvc_docs(llm_result, namespace)
+    if not docs:
+        return None
+    return "".join("---\n" + yaml.dump(d, allow_unicode=True, default_flow_style=False) for d in docs)
+
+
 def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
     """從 LLM 結果生成 Deployment YAML 字串。"""
     app_name  = _sanitize_name(llm_result.get("app_name", "app"))
@@ -164,6 +205,14 @@ def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
     resources = recommended_resources(image, app_name, llm_result.get("memory"), llm_result.get("cpu"))
     # 平台自動加的（例如 nginx 依 CPU 上限調整 worker 數）先放，使用者自己指定的同名變數優先
     env_vars  = {**recommended_env(image), **(llm_result.get("env") or {})}
+    _vols, _mounts = pod_volumes(app_name, llm_result.get("volumes"))
+    _extra = {}
+    if llm_result.get("command"):
+        _extra["command"] = list(llm_result["command"])
+    if llm_result.get("args"):
+        _extra["args"] = list(llm_result["args"])
+    if _mounts:
+        _extra["volumeMounts"] = _mounts
 
     doc = {
         "apiVersion": "apps/v1",
@@ -190,8 +239,10 @@ def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
                         "resources": resources,
                         "securityContext": {"allowPrivilegeEscalation": False},
                         **recommended_probes(image, cport),
+                        **_extra,
                         "env": env_entries(app_name, env_vars),
                     }],
+                    **({"volumes": _vols} if _vols else {}),
                 },
             },
         },

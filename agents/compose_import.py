@@ -11,11 +11,15 @@ docker-compose 匯入（2026-10-10）：把 docker-compose.yml 轉成平台的�
 - deploy.replicas、deploy.resources.limits、mem_limit、cpus 轉成副本數與資源。
 - depends_on 決定部署順序（被依賴的先部署），有循環就擋下。
 
-不支援、會明確告知的：build（不從原始碼建置映像檔，安全取捨）、掛載本機資料夾與具名 volume
-（資料不會保留）、privileged、host 網路、cap_add、command/entrypoint、env_file。
+- command／entrypoint 轉成容器的啟動指令（compose 的 command 對應 K8s 的 args，entrypoint 對應 command）。
+- 具名 volume 轉成 1Gi 的保存空間（PVC），容器重開資料還在；匿名 volume 與 tmpfs 用暫存空間。
+
+不支援、會明確告知的：build（不從原始碼建置映像檔，安全取捨）、掛載本機資料夾（電腦上的檔案沒有上傳）、
+privileged、host 網路、cap_add、env_file。
 """
 
 import re
+import shlex
 from typing import Dict, List, Optional
 
 import yaml
@@ -126,6 +130,80 @@ def _env(raw) -> Dict[str, str]:
         if not _ENV_KEY_RE.match(k) or v is None:
             continue   # 沒有值的（「A」這種從主機帶入的寫法）平台拿不到主機的值，略過
         out[k] = str(v)[:4096]
+    return out
+
+
+DEFAULT_VOLUME_SIZE = "1Gi"
+MAX_VOLUMES = 5
+MAX_CMD_ITEMS = 50
+
+
+def _cmd(raw) -> Optional[List[str]]:
+    """「redis-server --appendonly yes」或 ["sh", "-c", "..."] → 字串清單。不經過 shell，跟 compose 一樣。"""
+    if raw is None or raw == "" or raw == []:
+        return None
+    if isinstance(raw, str):
+        try:
+            parts = shlex.split(raw)
+        except ValueError:
+            parts = raw.split()
+    elif isinstance(raw, list):
+        parts = [str(x) for x in raw]
+    else:
+        return None
+    return [p[:1000] for p in parts[:MAX_CMD_ITEMS]] or None
+
+
+def _is_host_path(src: str) -> bool:
+    return src.startswith((".", "/", "~")) or bool(re.match(r"^[A-Za-z]:[\\/]", src))
+
+
+def _volumes(raw, probs: List[Dict]) -> List[Dict]:
+    """compose volumes → [{"name", "mount", "kind": "pvc"|"empty", "read_only", "size"}]。本機資料夾不轉。"""
+    out, binds, seen = [], [], set()
+    for v in raw or []:
+        if isinstance(v, dict):
+            vtype = str(v.get("type") or "volume")
+            src, target, ro = str(v.get("source") or ""), str(v.get("target") or ""), bool(v.get("read_only"))
+            if vtype == "bind":
+                binds.append(f"{src}:{target}")
+                continue
+            kind = "empty" if vtype == "tmpfs" or not src else "pvc"
+        else:
+            parts = str(v).split(":")
+            # Windows 路徑「C:\data:/x」的磁碟機代號會被冒號切開，接回去
+            if len(parts) >= 3 and re.fullmatch(r"[A-Za-z]", parts[0]):
+                parts = [parts[0] + ":" + parts[1]] + parts[2:]
+            if len(parts) == 1:
+                src, target, ro, kind = "", parts[0], False, "empty"
+            else:
+                src, target = parts[0], parts[1]
+                ro = len(parts) > 2 and "ro" in parts[2].split(",")
+                if _is_host_path(src):
+                    binds.append(f"{src}:{target}")
+                    continue
+                kind = "pvc"
+        if not target.startswith("/") or target == "/" or ".." in target.split("/"):
+            probs.append({"level": "warn", "text": f"資料空間的掛載位置「{target}」不合法，不會套用"})
+            continue
+        name = re.sub(r"[^a-z0-9-]+", "-", (src or f"tmp{len(out)}").lower()).strip("-")[:30] or f"v{len(out)}"
+        if name in seen:
+            name = f"{name}-{len(out)}"
+        seen.add(name)
+        out.append({"name": name, "mount": target[:200], "kind": kind, "read_only": ro,
+                    "size": DEFAULT_VOLUME_SIZE if kind == "pvc" else None})
+    if binds:
+        probs.append({"level": "warn", "text": "掛載本機資料夾（" + "、".join(binds[:2]) + "）不會套用，"
+                                               "你電腦上的檔案不會一起上傳"})
+    if len(out) > MAX_VOLUMES:
+        probs.append({"level": "warn", "text": f"資料空間太多，只保留前 {MAX_VOLUMES} 個"})
+        out = out[:MAX_VOLUMES]
+    pvcs = [v for v in out if v["kind"] == "pvc"]
+    if pvcs:
+        probs.append({"level": "info", "text": "資料會存在保存空間（每個 " + DEFAULT_VOLUME_SIZE + "）：" +
+                      "、".join(v["mount"] for v in pvcs) + "。容器重新啟動資料還在；刪除這個服務時資料會一起刪除"})
+    if any(v["kind"] == "empty" for v in out):
+        probs.append({"level": "info", "text": "沒有名字的資料空間用暫存空間，容器重新啟動後內容會清空"})
     return out
 
 
@@ -242,14 +320,10 @@ def parse_compose(text: str, default_port_fn=None) -> Dict:
         memory = _memory(limits.get("memory") or svc.get("mem_limit"))
         cpu = _cpu(limits.get("cpus") or svc.get("cpus"))
 
-        vols = svc.get("volumes") or []
-        if vols:
-            binds = [str(v) for v in vols if isinstance(v, str) and (v.startswith((".", "/", "~")) or re.match(r"^[A-Za-z]:[\\/]", v))]
-            if binds:
-                probs.append({"level": "warn", "text": "掛載本機資料夾（" + "、".join(binds[:2]) + "）不會套用，"
-                                                       "你電腦上的檔案不會一起上傳"})
-            if len(binds) < len(vols):
-                probs.append({"level": "warn", "text": "具名 volume 不會套用，容器重新啟動後資料不會保留"})
+        volumes = _volumes(svc.get("volumes"), probs)
+        if pods > 1 and any(v["kind"] == "pvc" for v in volumes):
+            probs.append({"level": "warn", "text": f"{pods} 個副本會共用同一份保存空間，只有單一節點的叢集能這樣用；"
+                                                   "資料庫這類服務請維持 1 個副本"})
         for key, label in (("privileged", "特權模式"), ("cap_add", "額外的系統權限（cap_add）"),
                            ("devices", "主機裝置（devices）")):
             if svc.get(key):
@@ -257,13 +331,12 @@ def parse_compose(text: str, default_port_fn=None) -> Dict:
         for key in ("network_mode", "pid", "ipc"):
             if str(svc.get(key) or "") == "host":
                 probs.append({"level": "warn", "text": f"{key}: host 會直接使用主機的資源，在共用平台上不安全，不會套用"})
-        if svc.get("command") or svc.get("entrypoint"):
-            probs.append({"level": "warn", "text": "command／entrypoint 目前不會套用，會用映像檔預設的啟動指令"})
 
         services[str(raw_name)] = {
             "service": str(raw_name), "app_name": name, "image": image, "pods": max(1, pods),
             "port": int(port), "container_port": int(cport), "expose": expose, "dns_alias": True,
             "env": env, "memory": memory, "cpu": cpu, "depends_on": _depends(svc.get("depends_on")),
+            "command": _cmd(svc.get("entrypoint")), "args": _cmd(svc.get("command")), "volumes": volumes,
             "problems": probs,
         }
 

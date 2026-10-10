@@ -32,7 +32,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import yaml
 
-from gitops.manifest_writer import _build_deployment_yaml, _build_service_yaml, _sanitize_name, build_secret_yaml
+from gitops.manifest_writer import (_build_deployment_yaml, _build_service_yaml, _sanitize_name, build_secret_yaml,
+                                    build_pvc_yaml)
 from gitops.rollback import is_valid_k8s_name
 
 APPS_DIR = "apps"
@@ -297,6 +298,10 @@ class TenantRepo:
                 sec_path.write_text(sec, encoding="utf-8")
             elif sec_path.exists():
                 sec_path.unlink()
+            # 保存空間：只新增、不在重新部署時刪掉（刪了資料就沒了）；刪除服務時整個資料夾一起刪
+            pvc = build_pvc_yaml(parsed, self.namespace)
+            if pvc:
+                (d / "pvc.yaml").write_text(pvc, encoding="utf-8")
             sha = self._commit_push(self._msg(f"deploy {app} ({doc['spec']['replicas']}x {parsed.get('image')})"))
         return {"app": app, "commit": sha, "namespace": self.namespace}
 
