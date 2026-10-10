@@ -256,3 +256,38 @@ def test_sanitize_volumes(vol, kept):
     web_demo = pytest.importorskip("web_demo")
     clean = web_demo._sanitize_deploy_payload({"app_name": "a", "image": "x:1", "volumes": [vol]})
     assert ("volumes" in clean) is kept
+
+
+def test_storage_quota_blocks_before_deploy(monkeypatch):
+    """每個帳號的保存空間有上限；超過時在審查就擋下並說明，不要等到部署才失敗。"""
+    from types import SimpleNamespace as NS
+    web_demo = pytest.importorskip("web_demo")
+    existing = [NS(metadata=NS(name=f"old-{i}"), spec=NS(resources=NS(requests={"storage": "1Gi"}))) for i in range(8)]
+
+    class _Core:
+        def list_namespaced_persistent_volume_claim(self, ns):
+            return NS(items=existing)
+
+    class _Apps:
+        def read_namespaced_deployment(self, name, ns):
+            raise Exception("not found")
+
+    monkeypatch.setattr(web_demo, "K8S_ENABLED", True, raising=False)
+    monkeypatch.setattr(web_demo.k8s_client, "CoreV1Api", lambda *a: _Core())
+    monkeypatch.setattr(web_demo.k8s_client, "AppsV1Api", lambda *a: _Apps())
+    monkeypatch.setattr(web_demo, "_pod_slots", lambda: (110, 10))
+    monkeypatch.setattr(web_demo, "k8s_get_node_capacity", lambda *a, **k: None)
+    monkeypatch.setattr(web_demo, "_review_deployment", lambda p: {"decision": "approve", "blockers": []})
+    c = web_demo.app.test_client()
+    spec = {"app_name": "db", "image": "postgres:16", "pods": 1, "port": 5432,
+            "volumes": [{"name": f"v{i}", "mount": f"/d{i}", "kind": "pvc", "size": "1Gi"} for i in range(3)]}
+    with web_demo.app.test_request_context():
+        web_demo.session["username"] = "quota-check"
+        monkeypatch.setattr(web_demo, "_session_ns", lambda: "user-quota-check")
+        _, _, review, err = web_demo._prepare_deploy("x", spec)
+    assert review["decision"] == "block" and any("保存空間超過上限" in b for b in review["blockers"])
+    spec["volumes"] = spec["volumes"][:2]   # 8 + 2 = 10 個、10Gi，剛好在上限內
+    with web_demo.app.test_request_context():
+        web_demo.session["username"] = "quota-check"
+        _, _, review, err = web_demo._prepare_deploy("x", spec)
+    assert review["decision"] == "approve"

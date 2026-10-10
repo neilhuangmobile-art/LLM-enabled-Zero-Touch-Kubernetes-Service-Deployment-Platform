@@ -681,6 +681,27 @@ def _namespace_taken(username: str) -> bool:
                for u in USERS if u != username)
 
 
+# 每個帳號的保存空間上限（2026-10-10 背景安全審查）：compose 的具名 volume 會建 PVC，原本只限制
+# 「每個服務最多 5 個、每個最多 5Gi」，沒限制一個帳號總共能建多少，一直部署就能把主機硬碟吃光。
+# 用 K8s ResourceQuota 讓叢集本身強制執行（就算繞過平台也一樣），部署前另外先算給使用者看。
+STORAGE_QUOTA_PVCS = 10
+STORAGE_QUOTA_GI = 10
+
+
+def _ensure_storage_quota(core, namespace: str):
+    quota = k8s_client.V1ResourceQuota(
+        metadata=k8s_client.V1ObjectMeta(name="zerotouch-storage"),
+        spec=k8s_client.V1ResourceQuotaSpec(hard={
+            "persistentvolumeclaims": str(STORAGE_QUOTA_PVCS), "requests.storage": f"{STORAGE_QUOTA_GI}Gi"}))
+    try:
+        core.replace_namespaced_resource_quota("zerotouch-storage", namespace, quota)
+    except Exception:
+        try:
+            core.create_namespaced_resource_quota(namespace, quota)
+        except Exception:
+            pass
+
+
 def _ensure_user_namespace(namespace: str):
     """namespace 不存在就建立；已存在直接跳過。刻意設計成「隨時呼叫都安全」而不是
     只在註冊時做一次——即使註冊當下 K8s 剛好斷線，之後第一次真的要部署時還是會
@@ -695,6 +716,7 @@ def _ensure_user_namespace(namespace: str):
         except Exception:
             core.create_namespace(k8s_client.V1Namespace(
                 metadata=k8s_client.V1ObjectMeta(name=namespace)))
+        _ensure_storage_quota(core, namespace)
     except Exception:
         pass  # 建立失敗（例如剛好重複建立的 race）不阻擋操作，讓後續呼叫自然報錯
 
@@ -6051,6 +6073,24 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
                 review["decision"] = "block"
                 review["reason"] = "叢集的 Pod 位置不夠"
                 review.setdefault("blockers", []).append("資源需求超出叢集容量：" + _pod_slot_message(extra, slots, used))
+            # 保存空間配額：只算這次要新建的（同名的已經存在就沿用，不重複計算）
+            new_pvcs = [v for v in (parsed.get("volumes") or []) if v.get("kind") == "pvc"]
+            if new_pvcs:
+                from gitops.manifest_writer import pvc_name
+                from agents.cost_agent import _parse_memory_bytes
+                existing = k8s_client.CoreV1Api().list_namespaced_persistent_volume_claim(ns).items
+                names = {p.metadata.name for p in existing}
+                used_gi = sum((_parse_memory_bytes((p.spec.resources.requests or {}).get("storage", "0")) or 0)
+                              for p in existing) / (1024 ** 3)
+                adding = [v for v in new_pvcs if pvc_name(parsed["app_name"], v["name"]) not in names]
+                add_gi = sum(int(str(v.get("size") or "1Gi")[:-2]) for v in adding)
+                if len(existing) + len(adding) > STORAGE_QUOTA_PVCS or used_gi + add_gi > STORAGE_QUOTA_GI:
+                    review["decision"] = "block"
+                    review["reason"] = "保存空間超過帳號上限"
+                    review.setdefault("blockers", []).append(
+                        f"保存空間超過上限：每個帳號最多 {STORAGE_QUOTA_PVCS} 個、合計 {STORAGE_QUOTA_GI}Gi。"
+                        f"目前已經用了 {len(existing)} 個、{used_gi:g}Gi，這次要再新增 {len(adding)} 個、{add_gi}Gi。"
+                        f"請先刪除不用的服務（它保存的資料會一起刪除），或減少資料空間。")
     except Exception:
         pass
     if review["decision"] == "block":
