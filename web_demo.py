@@ -385,14 +385,16 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
         # 改成套用 agents/cost_agent 既有的「依 image 類型推薦資源」規則（跟審查卡上顯示
         # 給使用者看的建議是同一份 profile，不會兩邊數字不一致）；使用者有指定的維度就照使用者的，
         # 沒指定的維度才補預設值。
-        from agents.cost_agent import recommended_resources, recommended_env, recommended_probes
+        from agents.cost_agent import recommended_resources, recommended_env, recommended_probes, container_port
+        # 使用者講的 port 是對外的 port；容器裡用映像檔實際監聽的 port（nginx 是 80），Service 負責轉過去
+        cport = container_port(image, port)
         _res = recommended_resources(image, app_name, memory, cpu)
         resources = k8s_client.V1ResourceRequirements(requests=_res["requests"], limits=_res["limits"])
         # 健康檢查用 dict 傳給 client（序列化時原樣送出，欄位名稱就是 K8s 的 camelCase）
-        _probes = recommended_probes(image, port)
+        _probes = recommended_probes(image, cport)
         container = k8s_client.V1Container(
             name=app_name, image=image,
-            ports=[k8s_client.V1ContainerPort(container_port=port)],
+            ports=[k8s_client.V1ContainerPort(container_port=cport)],
             resources=resources,
             env=[k8s_client.V1EnvVar(name=k, value=v) for k, v in recommended_env(image).items()] or None,
             readiness_probe=_probes.get("readinessProbe"),
@@ -419,7 +421,7 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
             metadata=k8s_client.V1ObjectMeta(name=f"{app_name}-svc"),
             spec=k8s_client.V1ServiceSpec(
                 selector={"app": app_name},
-                ports=[k8s_client.V1ServicePort(port=port, target_port=port)],
+                ports=[k8s_client.V1ServicePort(port=port, target_port=cport)],
                 type="LoadBalancer",
             ),
         )
@@ -1143,14 +1145,15 @@ def _build_agent_manifest(parsed):
     memory = parsed.get("memory")
     cpu = parsed.get("cpu")
     # 審查看的必須是實際會部署的那一份：資源預設值與安全設定跟 k8s_deploy／Git 設定相同
-    from agents.cost_agent import recommended_resources, recommended_env, recommended_probes
+    from agents.cost_agent import recommended_resources, recommended_env, recommended_probes, container_port
+    cport = container_port(image, port)
     container = {
         "name": app_name,
         "image": image,
-        "ports": [{"containerPort": port}],
+        "ports": [{"containerPort": cport}],
         "resources": recommended_resources(image, app_name, memory, cpu),
         "securityContext": {"allowPrivilegeEscalation": False},
-        **recommended_probes(image, port),
+        **recommended_probes(image, cport),
     }
     env = recommended_env(image)
     if env:

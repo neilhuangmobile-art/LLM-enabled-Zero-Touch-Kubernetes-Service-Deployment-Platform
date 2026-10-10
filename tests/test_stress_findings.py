@@ -114,7 +114,7 @@ def test_probes_same_in_review_and_git():
     spec = {"app_name": "web", "image": "nginx:1.27", "pods": 2, "port": 8080}
     review_c = web_demo._build_agent_manifest(spec)["spec"]["template"]["spec"]["containers"][0]
     git_c = yaml.safe_load(_build_deployment_yaml(spec, "u"))["spec"]["template"]["spec"]["containers"][0]
-    want = recommended_probes("nginx:1.27", 8080)
+    want = recommended_probes("nginx:1.27", 80)   # 對外 8080，但 nginx 在容器裡聽 80，檢查要打 80
     for c in (review_c, git_c):
         assert c["readinessProbe"] == want["readinessProbe"] and c["livenessProbe"] == want["livenessProbe"]
 
@@ -134,3 +134,16 @@ def test_known_service_default_port(monkeypatch, text, image, parsed_port, expec
     monkeypatch.setattr(web_demo, "K8S_ENABLED", False, raising=False)
     parsed, _, _, err = web_demo._prepare_deploy(text)
     assert err is None and parsed["port"] == expected
+
+
+def test_external_port_maps_to_real_container_port():
+    """「nginx 開 8085 port」：對外是 8085，容器裡 nginx 聽 80。原本兩邊都設 8085，服務一直連不上。"""
+    from gitops.manifest_writer import _build_deployment_yaml, _build_service_yaml
+    from agents.cost_agent import container_port
+    spec = {"app_name": "web", "image": "nginx:1.27", "pods": 1, "port": 8085}
+    dep = yaml.safe_load(_build_deployment_yaml(spec, "u"))
+    svc = yaml.safe_load(_build_service_yaml(spec, "u"))
+    assert dep["spec"]["template"]["spec"]["containers"][0]["ports"][0]["containerPort"] == 80
+    assert svc["spec"]["ports"][0] == {"protocol": "TCP", "port": 8085, "targetPort": 80}
+    assert container_port("redis:7", 7000) == 6379
+    assert container_port("ghcr.io/me/my-api:1.0", 3000) == 3000   # 不認識的映像檔照使用者講的
