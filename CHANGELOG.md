@@ -1172,3 +1172,15 @@ API_TOKEN 改從 Secret 讀、部署紀錄 commit 裡出現 0 次；刪除後沒
   測試帳號、GitHub repo、namespace、權限設定、連線紀錄都已清除。
 - `pytest` 全過（新增保存空間、啟動指令、配額測試）。
 
+## 2026-10-21
+
+### 修正：Healer「自動修復紀錄」重開機就消失，而且看得到其他帳號的修復
+**為什麼**：Healer 頁的紀錄讀的是 `_healer_bg_state["recent_actions"]`，只存在記憶體，`web_demo.py` 一重啟就顯示「還沒有自動修復過」；
+這份清單也是所有帳號共用的，任何登入的使用者都看得到別人 namespace 的 Pod 名稱與故障原因。
+**改了什麼**：
+- 新增 `_heal_history(namespace)`：從 `core/event_store` 的 heal 紀錄讀最近 30 天、最多 50 筆，最新的在最前面；`/api/healer/status` 改用它，只查目前帳號的 namespace。
+- heal 事件多記 `llm_raw_guess`，重開機後仍顯示「AI 原本猜是…，證據不足，沒有採用」。
+- 前端：時間加上日期；只查出原因、沒有實際改動的紀錄標「需要你處理」，不再標「已處理」。
+**驗證**：新增 `tests/test_heal_history.py` 4 項（重開資料庫後仍讀得到、namespace 隔離、筆數上限、路由只回自己的紀錄）；`pytest` 558 個全過；
+用實際的 `data/events.db` 呼叫，讀回 user-showcase 在 10/11 留下的修復紀錄。詳見 `docs/security_review.md` 41 節。
+

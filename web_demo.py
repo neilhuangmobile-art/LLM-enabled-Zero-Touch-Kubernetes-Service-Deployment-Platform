@@ -4742,10 +4742,10 @@ async function loadHealerBg(){
     const acts = d.recent_actions || [];
     if(hist){
       hist.innerHTML = acts.length
-        ? `<ol class="timeline">${acts.map(a => `<li><time>${a.time ? esc(new Date(a.time).toLocaleTimeString('zh-TW', {hour12:false})) : ''}</time>
-            <div class="what"><span class="app">${esc(a.pod || '')}</span>${esc(a.reason || '')}，原因：${esc(a.root_cause || a.error || '沒有找到')}，處理：${esc(a.action || '無')}
+        ? `<ol class="timeline">${acts.map(a => `<li><time>${a.time ? esc(new Date(a.time).toLocaleString('zh-TW', {hour12:false, month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'})) : ''}</time>
+            <div class="what"><span class="app">${esc(a.pod || '')}</span>${a.reason ? esc(a.reason) + '，' : ''}原因：${esc(a.root_cause || a.error || '沒有找到')}，處理：${esc(a.action || '無')}
             ${a.llm_raw_guess ? `<div class="dim">AI 原本猜是「${esc(a.llm_raw_guess)}」，證據不足，沒有採用。</div>` : ''}</div>
-            <div>${a.ok === false ? stateTag({cls:'fail', label:'沒修好'}) : stateTag({cls:'run', label:'已處理'})}</div></li>`).join('')}</ol>`
+            <div>${a.ok === false ? stateTag({cls:'fail', label:'沒修好'}) : a.needs_user ? stateTag({cls:'warn', label:'需要你處理'}) : stateTag({cls:'run', label:'已處理'})}</div></li>`).join('')}</ol>`
         : emptyBlock('還沒有自動修復過。', 'Pod 出狀況時，Healer 的處理過程會記在這裡。');
     }
   }catch(e){
@@ -7015,7 +7015,9 @@ def _healer_bg_liveness() -> dict:
 @app.route("/api/healer/status")
 def api_healer_status():
     if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
-    return jsonify(_healer_bg_liveness())
+    d = _healer_bg_liveness()
+    d["recent_actions"] = _heal_history(_session_ns())
+    return jsonify(d)
 
 
 @app.route("/api/healer/fix", methods=["POST"])
@@ -7644,10 +7646,41 @@ def _real_heal_pod(pod_name, namespace="default"):
             outcome = ("ok" if result.get("ok") else "fail") if action in _HEAL_REPAIR_ACTIONS else "inspect"
             _events.record(namespace, "heal", _app_key_for_pod_name(pod_name), outcome,
                            {"pod": pod_name, "action": action, "action_label": _HEAL_ACTION_LABEL.get(action, action),
-                            "root_cause": result.get("root_cause"), "message": str(result.get("message") or "")[:300]})
+                            "root_cause": result.get("root_cause"), "message": str(result.get("message") or "")[:300],
+                            "llm_raw_guess": result.get("llm_raw_guess")})
     except Exception as e:
         print(f"[事件紀錄] Healer 紀錄略過：{e}")
     return result
+
+
+def _heal_history(namespace: str, limit: int = None) -> list:
+    """Healer 頁「自動修復紀錄」：從事件紀錄讀，最新的在最前面。
+
+    原本讀 _healer_bg_state["recent_actions"]（只在記憶體），web_demo 重啟就清空，畫面會說
+    「還沒有自動修復過」；而且那份清單是所有帳號共用的，會看到別人 namespace 的修復。
+    改從事件紀錄讀，重開機後仍在，也只查目前帳號的 namespace。
+    """
+    limit = limit or _HEALER_BG_MAX_HISTORY
+    try:
+        rows = _events.query(namespace, since=_time.time() - 30 * 86400, kinds=["heal"])
+    except Exception as e:
+        print(f"[事件紀錄] 讀取修復紀錄失敗：{e}")
+        return []
+    out = []
+    for r in reversed(rows[-limit:]):
+        d = r.get("data") or {}
+        outcome = r.get("outcome")
+        out.append({
+            "time": datetime.utcfromtimestamp(r["ts"]).isoformat() + "Z",
+            "pod": d.get("pod") or r.get("app") or "",
+            "root_cause": d.get("root_cause"),
+            "action": d.get("action_label") or d.get("action"),
+            # ok：真的改動且成功 True、改動失敗 False；只查出原因沒改動（inspect）為 None
+            "ok": True if outcome == "ok" else (False if outcome == "fail" else None),
+            "needs_user": outcome == "inspect",
+            "llm_raw_guess": d.get("llm_raw_guess"),
+        })
+    return out
 
 
 # 資源快照：每個 namespace 每 10 分鐘最多記一次（Pod 數、異常數、累計重啟）
