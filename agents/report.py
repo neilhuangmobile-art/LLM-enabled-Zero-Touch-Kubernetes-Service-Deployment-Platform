@@ -208,7 +208,7 @@ def build_report(events: List[Dict], days: int, now: float = None, live: Dict = 
 
 
 _KIND_LABEL = {"deploy": "部署", "review": "審查", "scale": "擴縮", "update": "換映像檔",
-               "delete": "刪除", "rollback": "回滾", "heal": "自動修復"}
+               "delete": "刪除", "rollback": "回滾", "heal": "自動修復", "sleep": "休眠", "wake": "喚醒"}
 
 
 def _event_detail(e: Dict) -> str:
@@ -224,7 +224,14 @@ def _event_detail(e: Dict) -> str:
         return (f"部署 {d.get('image') or ''}，{d.get('pods') or '?'} 個副本"
                 if e.get("outcome") == "ok" else f"部署失敗：{clean_issue(d.get('error') or '')}")
     if k == "scale":
-        return f"副本調成 {d.get('replicas')} 個" + ("" if e.get("outcome") == "ok" else "（失敗）")
+        lead = "依排程把副本調成" if d.get("source") == "schedule" else "副本調成"
+        return f"{lead} {d.get('replicas')} 個" + ("" if e.get("outcome") == "ok" else "（失敗）")
+    if k == "sleep":
+        return (f"太久沒人使用，進入休眠（原本 {d.get('replicas')} 個副本）" if e.get("outcome") == "ok"
+                else f"想進入休眠但沒有完成：{clean_issue(d.get('error') or '')[:60]}")
+    if k == "wake":
+        how = {"traffic": "有人連線，自動喚醒", "manual": "手動喚醒"}.get(d.get("source"), "喚醒")
+        return f"{how}，恢復 {d.get('replicas')} 個副本" + ("" if e.get("outcome") == "ok" else f"（失敗：{clean_issue(d.get('error') or '')[:60]}）")
     if k == "update":
         return f"映像檔換成 {d.get('image')}" + ("" if e.get("outcome") == "ok" else "（失敗）")
     if k == "heal":

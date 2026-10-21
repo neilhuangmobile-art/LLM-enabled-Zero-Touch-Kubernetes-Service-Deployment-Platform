@@ -85,3 +85,17 @@ Dataset Manager (enriches training data) and Knowledge Base (manages the RAG ind
 For deployment requests, the system prioritizes exact fields: replica count, image, app name, port, and memory. It should not deploy when a request is not a Kubernetes task. Guardian, agent review, and dry-run are used to reduce invalid manifests and unsafe operations.
 
 If a user wants to learn the system, answer with page names and concrete steps. If a user wants to deploy Pods, ask for missing required fields only when needed: image, replica count, app name, and port.
+
+## 分時擴縮與休眠（Scheduled Scaling and Idle Sleep）
+
+ZeroTouch 可以照時段自動調整副本數，也可以讓太久沒人用的服務自動休眠，省下 CPU 和記憶體。這個功能目前只支援平台自己的叢集（本機模式），連接客戶自己叢集的帳號還不能用。
+
+分時擴縮（scheduled scaling）：在對話輸入「shop-web 白天 3 個、晚上 1 個」「shop-web 9 點到 18 點 3 個，其他時間 1 個」「shop-web 平日 2 個，週末 1 個」。系統用固定規則整理成時段表（白天是 08:00 到 20:00，晚上是 20:00 到隔天 08:00），確認卡會顯示每月比整天開滿省多少（依公有雲牌價估算），按「套用」後生效。平台只在時段切換的那一刻調整副本數，中間手動改的數字會保留到下一個時段。取消：「取消 shop-web 的排程」。
+
+休眠（idle sleep）：服務連續 5 天（可以改成 1 到 30 天，例如說「閒置 3 天就休眠」）沒有人連線，平台會把副本數降到 0。判斷依據是 Prometheus 記錄的實際網路流量，健康檢查本身的流量不算；監控資料不夠久時不會休眠。
+
+自動喚醒（auto wake）：休眠中的服務有人連進來時，平台會先回一頁「服務正在喚醒」，通常幾秒到 1 分鐘內恢復休眠前的副本數。也可以在對話說「喚醒 shop-web」，或在「休眠設定」模組按「喚醒」。不需要另外安裝 KEDA。
+
+例外清單（exemption list）：「shop-web 不要休眠」把服務加入例外，它永遠不會因為沒人用而休眠；「shop-web 可以休眠」移出例外。
+
+查看狀態：對話輸入「休眠設定」，會列出每個服務是否休眠中、排程、下一次什麼時候變、是否在例外清單，並可以直接按按鈕喚醒、加入或移出例外、取消排程。分析報告也會記錄每次休眠、喚醒、依排程擴縮。

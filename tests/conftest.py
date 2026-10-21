@@ -15,3 +15,5 @@ os.environ["CUSTOMER_CLUSTER_MODE"] = "0"
 # 事件紀錄（core/event_store.py）寫到暫存檔，不要混進開發者 data/events.db 的真實紀錄
 import tempfile
 os.environ["ZT_EVENTS_DB"] = os.path.join(tempfile.mkdtemp(prefix="zt-events-"), "events.db")
+# 分時擴縮與休眠設定（core/autoscale_store.py）同理
+os.environ["ZT_AUTOSCALE_DB"] = os.path.join(tempfile.mkdtemp(prefix="zt-autoscale-"), "autoscale.db")
