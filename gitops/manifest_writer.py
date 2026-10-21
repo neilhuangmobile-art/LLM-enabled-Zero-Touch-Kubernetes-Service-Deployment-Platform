@@ -126,11 +126,13 @@ def write_manifest(
 _SECRET_ENV_RE = re.compile(r"PASS|SECRET|TOKEN|KEY|CREDENTIAL|PRIVATE", re.IGNORECASE)
 
 
-def split_secret_env(env: dict):
-    """回傳 (一般環境變數, 密碼類環境變數)。"""
+def split_secret_env(env: dict, force=None):
+    """回傳 (一般環境變數, 密碼類環境變數)。force：一定要當密碼的名稱（例如 K8s YAML 裡本來就放在
+    Secret 的值，名稱叫 DATABASE_URL 也一樣不能寫進 Git）。"""
+    force = set(force or [])
     plain, secret = {}, {}
     for k, v in (env or {}).items():
-        (secret if _SECRET_ENV_RE.search(str(k)) else plain)[str(k)] = str(v)
+        (secret if (str(k) in force or _SECRET_ENV_RE.search(str(k))) else plain)[str(k)] = str(v)
     return plain, secret
 
 
@@ -138,9 +140,9 @@ def secret_name(app_name: str) -> str:
     return f"{_sanitize_name(app_name)}-secrets"
 
 
-def env_entries(app_name: str, env: dict) -> list:
+def env_entries(app_name: str, env: dict, force=None) -> list:
     """Deployment 的 env 欄位：一般的直接寫值，密碼類改成從 Secret 讀。"""
-    plain, secret = split_secret_env(env)
+    plain, secret = split_secret_env(env, force)
     out = [{"name": k, "value": v} for k, v in plain.items()]
     out += [{"name": k, "valueFrom": {"secretKeyRef": {"name": secret_name(app_name), "key": k}}} for k in secret]
     return out
@@ -148,7 +150,7 @@ def env_entries(app_name: str, env: dict) -> list:
 
 def build_secret_yaml(llm_result: dict, namespace: str) -> Optional[str]:
     """客戶叢集用：平台連不進客戶叢集，Secret 只能放進客戶自己的私有 repo 由 Flux 套用。"""
-    _, secret = split_secret_env(llm_result.get("env") or {})
+    _, secret = split_secret_env(llm_result.get("env") or {}, llm_result.get("secret_keys"))
     if not secret:
         return None
     doc = {"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
@@ -240,7 +242,7 @@ def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
                         "securityContext": {"allowPrivilegeEscalation": False},
                         **recommended_probes(image, cport),
                         **_extra,
-                        "env": env_entries(app_name, env_vars),
+                        "env": env_entries(app_name, env_vars, llm_result.get("secret_keys")),
                     }],
                     **({"volumes": _vols} if _vols else {}),
                 },

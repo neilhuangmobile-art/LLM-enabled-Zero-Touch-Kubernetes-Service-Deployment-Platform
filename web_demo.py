@@ -370,10 +370,10 @@ def _fmt_k8s_time(ts):
         return str(ts)[:16]
 
 
-def _k8s_env(app_name, env):
+def _k8s_env(app_name, env, force=None):
     from gitops.manifest_writer import env_entries
     out = []
-    for e in env_entries(app_name, env):
+    for e in env_entries(app_name, env, force):
         if "valueFrom" in e:
             ref = e["valueFrom"]["secretKeyRef"]
             out.append(k8s_client.V1EnvVar(name=e["name"], value_from=k8s_client.V1EnvVarSource(
@@ -385,7 +385,7 @@ def _k8s_env(app_name, env):
 
 def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namespace=None,
                env=None, container_port_override=None, expose=True, dns_alias=False,
-               command=None, args=None, volumes=None):
+               command=None, args=None, volumes=None, secret_keys=None):
     """env／container_port_override／expose／dns_alias 是 docker-compose 匯入用的（2026-10-10）：
     環境變數、容器實際監聽的 port、要不要對外開放（compose 沒寫 ports 的服務只給內部連）、
     另外建一個跟服務同名的內部連線入口（其他服務才能照 compose 的寫法用「db:5432」連過來）。"""
@@ -421,7 +421,7 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
             ports=[k8s_client.V1ContainerPort(container_port=cport)],
             resources=resources,
             # 密碼類環境變數從 Secret 讀（值不寫進設定檔與 Git），其他的直接寫
-            env=_k8s_env(app_name, {**recommended_env(image), **(env or {})}) or None,
+            env=_k8s_env(app_name, {**recommended_env(image), **(env or {})}, secret_keys) or None,
             readiness_probe=_probes.get("readinessProbe"),
             liveness_probe=_probes.get("livenessProbe"),
             command=command or None, args=args or None,
@@ -457,8 +457,9 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
             alias = k8s_client.V1Service(
                 api_version="v1", kind="Service",
                 metadata=k8s_client.V1ObjectMeta(name=app_name, labels={"zerotouch/alias-of": app_name}),
-                spec=k8s_client.V1ServiceSpec(selector={"app": app_name}, type="ClusterIP",
-                                              ports=[k8s_client.V1ServicePort(port=cport, target_port=cport)]),
+                spec=k8s_client.V1ServiceSpec(selector={"app": app_name}, type="ClusterIP", ports=(
+                    [k8s_client.V1ServicePort(name="app", port=cport, target_port=cport)] +
+                    ([k8s_client.V1ServicePort(name="external", port=port, target_port=cport)] if port != cport else []))),
             )
         # 保存空間要先建好，Pod 才掛得上；已經存在的不動（PVC 建立後大部分欄位不能改，也不能動到資料）
         for _pvc in build_pvc_docs({"app_name": app_name, "volumes": volumes}, namespace):
@@ -480,7 +481,7 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
             except Exception:
                 core.create_namespaced_service(namespace, alias, _request_timeout=(5, 10))
         from gitops.manifest_writer import split_secret_env, secret_name
-        _secret_vals = split_secret_env(env or {})[1]
+        _secret_vals = split_secret_env(env or {}, secret_keys)[1]
         if _secret_vals:
             sec = k8s_client.V1Secret(api_version="v1", kind="Secret", type="Opaque",
                                       metadata=k8s_client.V1ObjectMeta(name=secret_name(app_name)),
@@ -1258,7 +1259,7 @@ def _build_agent_manifest(parsed):
     env = {**recommended_env(image), **(parsed.get("env") or {})}
     if env:
         from gitops.manifest_writer import env_entries
-        container["env"] = env_entries(app_name, env)
+        container["env"] = env_entries(app_name, env, parsed.get("secret_keys"))
     from gitops.manifest_writer import pod_volumes
     _pod_vols, _mounts = pod_volumes(app_name, parsed.get("volumes"))
     if _mounts:
@@ -2293,7 +2294,7 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
             <label for="chat-input" style="position:absolute;left:-9999px">輸入訊息</label>
             <textarea class="chat-input" id="chat-input" placeholder="說說你想部署什麼，或問服務的狀況" rows="1" oninput="autoGrowChatInput(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
             <input type="file" id="compose-file" accept=".yml,.yaml,text/yaml,application/x-yaml" hidden onchange="onComposeFile(this)">
-            <button class="chat-attach" type="button" onclick="document.getElementById('compose-file').click()" aria-label="上傳 docker-compose 檔" title="上傳 docker-compose 檔"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.5 12.6 20.9a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg></button>
+            <button class="chat-attach" type="button" onclick="document.getElementById('compose-file').click()" aria-label="上傳 docker-compose 或 Kubernetes YAML 檔" title="上傳 docker-compose 或 Kubernetes YAML 檔"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.5 12.6 20.9a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg></button>
             <span class="mic-meter" id="mic-meter" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
             <button class="chat-mic" type="button" id="chat-mic" onclick="toggleVoice()" aria-label="語音輸入" title="語音輸入"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
             <button class="chat-send" type="button" onclick="sendChat()" id="chat-send-txt">送出</button>
@@ -4161,13 +4162,14 @@ function renderFlowCard(flow){
 // ── docker-compose 匯入：檢視服務 → 審查 → 部署 → 完成 ──
 // 每個服務都送進跟一句話部署相同的 /api/deploy/parse、/api/deploy，沒有任何服務能繞過把關。
 function looksLikeCompose(text){
-  return /(^|\n)services\s*:\s*\n/.test(text) && /\n\s+image\s*:|\n\s+build\s*:/.test(text);
+  const k8s = /(^|\n)apiVersion\s*:/.test(text) && /(^|\n)kind\s*:/.test(text);
+  return k8s || (/(^|\n)services\s*:\s*\n/.test(text) && /\n\s+image\s*:|\n\s+build\s*:/.test(text));
 }
 async function onComposeFile(input){
   const f = input.files && input.files[0];
   input.value = '';
   if(!f) return;
-  if(f.size > 100000){ setComposerHint('檔案太大，docker-compose 檔上限 100 KB。', 'voice-err'); return; }
+  if(f.size > 100000){ setComposerHint('檔案太大，上限 100 KB。', 'voice-err'); return; }
   let text = '';
   try{ text = await f.text(); }catch(e){ setComposerHint('讀不到這個檔案，請再選一次。', 'voice-err'); return; }
   if(!currentChatId) newChat();
@@ -4177,14 +4179,14 @@ async function onComposeFile(input){
 async function startComposeFlow(text, source){
   appendTyping('Parsing');
   try{
-    const r = await fetch('/api/compose/parse', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})});
+    const r = await fetch('/api/import/parse', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})});
     const d = await r.json();
     removeTyping();
     if(d.error){ appendMsg('assistant', '沒辦法匯入這份檔案：' + d.error, null, 'text'); return; }
     const flow = newFlow('compose', source || '', {});
     flow.step = 'list';
     flow.source = source || '';
-    flow.compose = {services: d.services.map(s => Object.assign(s, {state:'', review:null, error:null})), problems: d.problems || []};
+    flow.compose = {format: d.format || 'compose', services: d.services.map(s => Object.assign(s, {state:'', review:null, error:null})), problems: d.problems || []};
     appendMsg('assistant', renderFlowCard(flow));
   }catch(e){
     removeTyping();
@@ -4194,7 +4196,8 @@ async function startComposeFlow(text, source){
 const cpBlocked = s => (s.problems || []).some(p => p.level === 'block');
 const cpSpec = s => ({app_name:s.app_name, image:s.image, pods:s.pods, port:s.port, memory:s.memory || undefined, cpu:s.cpu || undefined,
                       env:s.env, container_port:s.container_port, expose:s.expose, dns_alias:s.dns_alias,
-                      command:s.command || undefined, args:s.args || undefined, volumes:s.volumes || undefined});
+                      command:s.command || undefined, args:s.args || undefined, volumes:s.volumes || undefined,
+                      secret_keys:(s.secret_keys || []).length ? s.secret_keys : undefined});
 const CP_LV = {ok:'通過', warn:'提醒', stop:'擋下'};
 function cpVerdicts(rv){
   if(!rv) return '';
@@ -4232,7 +4235,7 @@ function renderComposeCard(flow){
         <span>其他服務用 <b>${esc(s.app_name)}:${esc(s.container_port)}</b> 連它</span>
         ${(s.command || s.args) ? `<span>啟動指令 <b>${esc([].concat(s.command || [], s.args || []).join(' '))}</b></span>` : ''}
         ${(s.volumes || []).length ? `<span>資料空間 <b>${esc(s.volumes.map(v => v.mount + (v.kind === 'pvc' ? '（保存 ' + v.size + '）' : '（暫存）')).join('、'))}</b></span>` : ''}</div>
-      ${envKeys.length ? `<div class="cp-env" aria-label="環境變數">${envKeys.map(k => `<span>${esc(k)} = ${/PASS|SECRET|TOKEN|KEY|CREDENTIAL|PRIVATE/i.test(k) ? '********' : esc(s.env[k])}</span>`).join('')}</div>` : ''}
+      ${envKeys.length ? `<div class="cp-env" aria-label="環境變數">${envKeys.map(k => `<span>${esc(k)} = ${/PASS|SECRET|TOKEN|KEY|CREDENTIAL|PRIVATE/i.test(k) || (s.secret_keys || []).includes(k) ? '********' : esc(s.env[k])}</span>`).join('')}</div>` : ''}
       ${(s.problems || []).length ? `<ul class="cp-probs">${s.problems.map(p => `<li class="${esc(p.level)}">${esc(p.text)}</li>`).join('')}</ul>` : ''}
       ${s.error ? `<ul class="cp-probs"><li class="block">${esc(s.error)}</li></ul>` : ''}
       ${s.review ? `<div class="cp-review">${reviewerOf('安全', (s.review.agents || {}).agents ? s.review.agents.agents.security : null, '', '安全', s.review)}${reviewerOf('成本', (s.review.agents || {}).agents ? s.review.agents.agents.cost : null, '', '成本', s.review)}${reviewerOf('效能', (s.review.agents || {}).agents ? s.review.agents.agents.perf : null, '', '效能', s.review)}</div>` : ''}
@@ -4269,7 +4272,7 @@ function renderComposeCard(flow){
       : `部署完成：${ok} 個成功` + (bad ? `，${bad} 個失敗（展開看原因）` : '') + '。服務要等映像檔下載完、通過健康檢查才會開始接流量，通常需要幾十秒。';
     foot = `<button type="button" class="btn" onclick="showPage('services')">查看我的服務</button>`;
   }
-  const title = 'docker-compose 匯入';
+  const title = cp.format === 'k8s' ? 'Kubernetes YAML 匯入' : 'docker-compose 匯入';
   return flowShell(flow, flowHead(title, steps) + `<div class="body"><div class="lead">${lead}</div>${prog}${order}${top}${rows}</div>`
     + (foot ? `<div class="foot">${foot}</div>` : ''));
 }
@@ -5881,6 +5884,11 @@ def _sanitize_deploy_payload(raw: dict) -> dict:
                          "size": size if v["kind"] == "pvc" else None})
     if vols:
         clean["volumes"] = vols
+    sk = parsed.get("secret_keys")
+    if isinstance(sk, list) and clean.get("env"):
+        keys = [str(k) for k in sk[:50] if str(k) in clean["env"]]
+        if keys:
+            clean["secret_keys"] = keys
     return clean
 
 
@@ -6215,6 +6223,7 @@ def api_deploy_conflicts():
                     "port_conflict_other_account": port_conflict_other_account})
 
 
+@app.route("/api/import/parse", methods=["POST"])
 @app.route("/api/compose/parse", methods=["POST"])
 def api_compose_parse():
     """docker-compose 匯入第一步：只轉換成服務清單，不審查、不部署（2026-10-10）。
@@ -6229,8 +6238,12 @@ def api_compose_parse():
     text = (request.get_json(silent=True) or {}).get("text") or ""
     if not isinstance(text, str):
         return jsonify({"error": "格式不對。"}), 400
+    # 2026-10-21：同一個入口也接受 Kubernetes YAML（有 apiVersion、kind 就當成 K8s 設定檔）
+    from agents.k8s_yaml_import import parse_k8s_yaml, looks_like_k8s
     try:
-        return jsonify(parse_compose(text, default_port))
+        if looks_like_k8s(text):
+            return jsonify(parse_k8s_yaml(text, default_port))
+        return jsonify({**parse_compose(text, default_port), "format": "compose"})
     except ComposeError as e:
         return jsonify({"error": str(e)}), 400
 
@@ -6318,7 +6331,8 @@ def api_deploy():
         ok, message = k8s_deploy(parsed["app_name"], parsed["image"], parsed["pods"], parsed.get("port", 80), parsed.get("memory"), parsed.get("cpu"), namespace=user_ns,
                                  env=parsed.get("env"), container_port_override=parsed.get("container_port"),
                                  expose=parsed.get("expose", True), dns_alias=parsed.get("dns_alias", False),
-                                 command=parsed.get("command"), args=parsed.get("args"), volumes=parsed.get("volumes"))
+                                 command=parsed.get("command"), args=parsed.get("args"), volumes=parsed.get("volumes"),
+                                 secret_keys=parsed.get("secret_keys"))
         k8s_deploy_result = {"ok": ok, "message": message}
         if not ok:
             review.setdefault("warnings", []).append(f"K8s 部署失敗：{message}")
