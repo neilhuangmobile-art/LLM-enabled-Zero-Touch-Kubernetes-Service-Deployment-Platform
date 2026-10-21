@@ -1184,3 +1184,15 @@ API_TOKEN 改從 Secret 讀、部署紀錄 commit 裡出現 0 次；刪除後沒
 **驗證**：新增 `tests/test_heal_history.py` 4 項（重開資料庫後仍讀得到、namespace 隔離、筆數上限、路由只回自己的紀錄）；`pytest` 558 個全過；
 用實際的 `data/events.db` 呼叫，讀回 user-showcase 在 10/11 留下的修復紀錄。詳見 `docs/security_review.md` 41 節。
 
+## 2026-10-21
+
+### 14:00 — 新功能：開機自動啟動
+**為什麼**：2026-10-11 與 10-21 電腦重新開機後，模型伺服器、網站、Healer、對外網址全部沒有回應，要有人手動重開。
+Docker Desktop 本身的開機自動啟動是關閉的，而網站只在啟動時檢查一次叢集，太早啟動會一直當成沒有叢集。
+**改了什麼**：新增 `scripts/install_autostart.ps1`，在 Windows「啟動」資料夾放捷徑（不需管理員權限，`-Remove` 取消）。
+`scripts/start_services.ps1` 新增 `-AtBoot`：先啟動模型伺服器；Docker 沒開就幫忙開，最多等 10 分鐘叢集就緒才啟動網站；
+每一步寫進 `logs/startup.log`；Python 輸出改成即時寫入紀錄檔（原本被暫存，出問題時紀錄檔可能是空的）。
+**驗證**：用開機捷徑相同的指令實跑兩次：① Docker 開著：19 秒內模型就緒、網站 200、對外網址 200；
+② 先用 `docker desktop stop` 關掉 Docker 模擬剛開機：腳本自動開啟 Docker、約 19 秒叢集就緒才啟動網站，
+網站紀錄顯示「[K8s] 已連線」、Healer 背景監控已啟動，展示帳號的服務自動恢復 Running。尚未做真正的重新開機測試。
+
