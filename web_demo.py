@@ -4248,7 +4248,7 @@ function renderComposeCard(flow){
   const top = (cp.problems || []).length ? `<ul class="cp-probs" style="margin-bottom:12px">${cp.problems.map(p => `<li class="${esc(p.level)}">${esc(p.text)}</li>`).join('')}</ul>` : '';
   let lead = '', foot = '', prog = '';
   if(flow.step === 'list'){
-    lead = `從${esc(flow.source || '檔案')}讀到 ${svcs.length} 個服務，會照下面的順序部署（被依賴的先部署）。點任一個服務可以看完整設定和注意事項。`
+    lead = `從${esc(flow.source || '檔案')}讀到 ${svcs.length} 個服務，會照下面的順序部署（${cp.format === 'k8s' ? '只給內部連的服務先部署' : '被依賴的先部署'}）。點任一個服務可以看完整設定和注意事項。`
       + (ready.length < svcs.length ? ` 有 ${svcs.length - ready.length} 個服務沒辦法部署，原因寫在該服務裡。` : '');
     foot = `<button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button>
       <button type="button" class="btn primary" onclick="composeReview('${flow.id}')" ${ready.length ? '' : 'disabled'}>審查 ${ready.length} 個服務</button>`;

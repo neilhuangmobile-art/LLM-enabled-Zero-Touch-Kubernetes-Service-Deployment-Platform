@@ -1196,3 +1196,22 @@ Docker Desktop 本身的開機自動啟動是關閉的，而網站只在啟動�
 ② 先用 `docker desktop stop` 關掉 Docker 模擬剛開機：腳本自動開啟 Docker、約 19 秒叢集就緒才啟動網站，
 網站紀錄顯示「[K8s] 已連線」、Healer 背景監控已啟動，展示帳號的服務自動恢復 Running。尚未做真正的重新開機測試。
 
+### 14:30 — 新功能：上傳 Kubernetes YAML
+**為什麼**：使用者手上常有現成的 K8s 設定檔（教學範例、別的專案），原本只能上傳 docker-compose。
+**改了什麼**：
+- `agents/k8s_yaml_import.py`：輸出跟 compose 匯入同一種格式，前端共用同一張流程卡，每個服務照樣走三方審查。
+  平台只取出認得的欄位重新產生設定，**不會把使用者的 YAML 原封不動套進叢集**。
+- Deployment／StatefulSet → 服務（只取第一個容器）；用 selector 配對 Service：LoadBalancer／NodePort 對外、ClusterIP 只給內部，
+  Service port 與 targetPort（含用名稱指定的 port）分開處理，名稱不同時改用 Service 名稱（其他服務用它連）；
+  同檔的 ConfigMap、Secret（含 base64 的 data）帶入；PVC 轉保存空間（1～5Gi，超過會說明）；內部服務先部署。
+- DaemonSet／Job／CronJob／裸 Pod 擋下；hostPath、privileged、hostNetwork、權限設定、Ingress、namespace 不套用，逐條說明。
+- 部署規格新增 `secret_keys`：來自 Secret 的值不管名稱是什麼都存成 Kubernetes Secret（原本只看名稱，`DATABASE_URL` 會寫進 Git）。
+- 本機的同名連線入口同時開 Service port 與容器 port。`/api/import/parse` 自動判斷 compose 或 K8s YAML；貼上 YAML 也會辨識。
+**驗證**：`tests/test_k8s_yaml_import.py` 11 項，`pytest` 全過（569 項）。展示站實測：貼上含 Secret、ClusterIP（8080→80）、
+LoadBalancer（8094→80）的 YAML：`DATABASE_URL` 從 Secret 讀、部署紀錄 commit 出現 0 次；從另一個服務用 `kapi:8080` 連得到；
+對外 8094 回 200；刪除後 Secret 與連線入口一併清除。
+
+### 14:20 — 修正：展示環境搬出暫存區
+展示用 git worktree 原本建在 AI 助理的暫存資料夾，被 Windows 自動清理刪掉程式檔與展示帳號資料。改建在 `D:\zt-demo`，
+展示帳號以原帳號密碼重新註冊，叢集裡的服務都還在。
+

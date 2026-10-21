@@ -1955,6 +1955,25 @@ Laptop 16GB（CUDA）。
 **驗證**：`tests/test_heal_history.py`（關閉再開啟資料庫後仍讀得到、其他 namespace 的紀錄不會出現、路由只回目前帳號）；
 以實際資料庫呼叫，讀回 2026-10-11 的 50 筆紀錄。
 
+## 41. 上傳 Kubernetes YAML：使用者的設定檔會不會直接被套進叢集？
+
+**風險**：K8s YAML 能寫的東西比 compose 多得多，包括 hostPath 掛主機檔案、privileged、hostNetwork、叢集層級權限（ClusterRole）、
+在別的 namespace 建資源、DaemonSet 在每台機器各跑一份。如果把使用者的 YAML 原樣 `kubectl apply`，等於讓使用者直接操作共用叢集。
+另外，K8s 的 Secret 值不一定叫 PASSWORD／TOKEN（例如 `DATABASE_URL` 內含帳密），原本只用名稱判斷，會被寫進 Git。
+
+**為什麼重要**：多租戶平台的隔離完全靠「平台產生設定」這一點；一旦開放原樣套用，所有防護（三方審查、Pod 位置與保存空間上限、
+namespace 隔離）都會被繞過。
+
+**解決方式**：
+1. 平台只讀出認得的欄位（映像檔、port、副本數、資源、環境變數、啟動指令、PVC／emptyDir），轉成跟一句話部署同一份規格，
+   再由平台的樣板重新產生設定，照樣走三方審查與 guardian；使用者 YAML 裡的其他內容一律不會進到叢集。
+2. 危險或不支援的項目逐條告知「不會套用」或「擋下」，不默默丟掉；namespace 一律改成使用者自己的空間。
+3. 部署規格新增 `secret_keys`：只要值來自 Secret，不管名稱都存成 Kubernetes Secret，部署設定與 Git 只寫 `secretKeyRef`。
+4. 沿用 compose 的防護：檔案 100 KB 上限、全站請求 1 MB 上限、YAML 別名展開節點數上限、最多 50 個設定、10 個服務。
+
+**驗證**：`tests/test_k8s_yaml_import.py`：hostPath／hostNetwork／privileged 不出現在轉換結果、CronJob 與 Ingress 有說明、
+`DATABASE_URL`（base64）解開後列入 secret_keys 且不出現在 Git 設定、別名炸彈被拒。實機：同一份 YAML 部署後 commit 裡密碼 0 次。
+
 ## 尚待排查（優先度較低，不是資源受限，只是還沒排到）
 
 - **2026-10-06 擴充 prompt injection 測試（OWASP AITG-APP-01 範例改寫 + 自行設計，
