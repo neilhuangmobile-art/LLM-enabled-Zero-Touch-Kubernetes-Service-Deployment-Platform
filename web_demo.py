@@ -500,6 +500,12 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
     except Exception as e:
         return False, str(e)
 
+def _last_restart_iso(pod):
+    times = [cs.last_state.terminated.finished_at for cs in ((pod.status.container_statuses or []) if pod.status else [])
+             if cs.last_state and cs.last_state.terminated and cs.last_state.terminated.finished_at]
+    return max(times).isoformat() if times else None
+
+
 def k8s_get_pods(app_name=None, namespace=None):
     namespace = namespace or NS
     if not K8S_ENABLED:
@@ -542,6 +548,9 @@ def k8s_get_pods(app_name=None, namespace=None):
                 "containers": containers,
                 "conditions": cond,
                 "restarts"  : sum(cs.restart_count for cs in (p.status.container_statuses or [])) if p.status and p.status.container_statuses else 0,
+                # 最近一次重啟的時間：重啟次數是從 Pod 建立以來一直累加的，主機重開機時每個 Pod 都會被算一次，
+                # 只看次數會把很久以前的重啟也當成現在有問題（2026-10-21 全系統檢查：17 個 Pod 全被標成需要注意）
+                "last_restart_at": _last_restart_iso(p),
             })
         return result
     except Exception:
@@ -3460,13 +3469,22 @@ function podState(p){
   const phase = p.phase || 'Unknown';
   const ready = (p.conditions || []).find(c => c.type === 'Ready');
   if(phase === 'Running' && (!ready || ready.status === 'True')){
-    return p.restarts >= 5 ? {cls:'warn', label:'執行中，曾重啟 ' + p.restarts + ' 次', attn:true} : {cls:'run', label:'執行中', attn:false};
+    if(p.restarts < 5) return {cls:'run', label:'執行中', attn:false};
+    // 重啟次數會一直累加（主機重開機每個 Pod 也會算一次），最近一小時內又重啟才算需要注意
+    const mins = p.lastRestart ? (Date.now() - Date.parse(p.lastRestart)) / 60000 : null;
+    if(mins != null && mins > 60) return {cls:'run', label:'執行中（曾重啟 ' + p.restarts + ' 次，最近一次在 ' + agoText(mins) + '）', attn:false};
+    return {cls:'warn', label:'執行中，曾重啟 ' + p.restarts + ' 次', attn:true};
   }
   if(phase === 'Running') return {cls:'fail', label:'執行中但還沒準備好', attn:true};
   if(phase === 'Pending') return {cls:'pend', label:'等待中', attn:true};
   if(phase === 'Succeeded') return {cls:'done', label:'已完成', attn:false};
   if(phase === 'Failed') return {cls:'fail', label:'失敗', attn:true};
   return {cls:'pend', label:'狀態不明', attn:true};
+}
+function agoText(mins){
+  if(mins < 120) return Math.round(mins) + ' 分鐘前';
+  if(mins < 48 * 60) return Math.round(mins / 60) + ' 小時前';
+  return Math.round(mins / 1440) + ' 天前';
 }
 function stateTag(s){ return `<span class="state s-${s.cls}"><i></i>${esc(s.label)}</span>`; }
 function humanSummary(s){
@@ -3486,6 +3504,7 @@ function healthTag(pd){
 function slimPod(p){
   const c0 = (p.containers || [])[0] || {};
   return {name:p.name, app:p.app || '', phase:p.phase || 'Unknown', restarts:p.restarts || 0, age:p.age || '',
+          lastRestart:p.last_restart_at || null,
           image:c0.image || '', node:p.node || '', conditions:(p.conditions || []).filter(c => c.type === 'Ready')};
 }
 function cleanCommitMsg(m){
@@ -6374,7 +6393,10 @@ def _pod_log_tail(pod_name: str, namespace: str, container: str, lines: int = 40
         try:
             text = v1.read_namespaced_pod_log(name=pod_name, namespace=namespace, container=container or None,
                                               tail_lines=lines, previous=previous, _request_timeout=5)
-            if text and text.strip():
+            # 舊容器被清掉時 API 不丟例外，而是回「unable to retrieve container logs…」，不能當成日誌
+            # （2026-10-21 全系統檢查：Healer 那份 10/10 修好了，這份漏掉，Pod 詳情的診斷又變成證據不足）
+            from healer.pod_watcher import _LOG_UNAVAILABLE_RE
+            if text and text.strip() and not _LOG_UNAVAILABLE_RE.search(text[:300]):
                 return text[-4000:]
         except Exception:
             continue
@@ -7652,11 +7674,25 @@ _HEAL_REPAIR_ACTIONS = {"analyze_logs", "fix_image", "increase_memory", "fix_pro
                         "restart_app", "set_memory_limit", "revert_app"}
 
 
+def _heal_recently_recorded(namespace, app, action, root_cause, hours=6):
+    """同一個服務、同一種處理、同一個原因，6 小時內已經記過就不再記。網站每次重啟背景 Healer 都會重新檢查一次
+    還沒解決的問題（2026-10-21 全系統檢查：orders-api 同一個問題一週被記 16 次，報告上的修復次數被灌水）。"""
+    try:
+        for e in reversed(_events.query(namespace, since=_time.time() - hours * 3600, kinds=["heal"])):
+            d = e.get("data") or {}
+            if e.get("app") == app and d.get("action") == action and d.get("root_cause") == root_cause:
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def _real_heal_pod(pod_name, namespace="default"):
     result = _real_heal_pod_unrecorded(pod_name, namespace)
     try:
         action = (result or {}).get("action")
-        if action and action not in ("none", "in_progress"):
+        if action and action not in ("none", "in_progress") and not _heal_recently_recorded(
+                namespace, _app_key_for_pod_name(pod_name), action, result.get("root_cause")):
             outcome = ("ok" if result.get("ok") else "fail") if action in _HEAL_REPAIR_ACTIONS else "inspect"
             _events.record(namespace, "heal", _app_key_for_pod_name(pod_name), outcome,
                            {"pod": pod_name, "action": action, "action_label": _HEAL_ACTION_LABEL.get(action, action),
