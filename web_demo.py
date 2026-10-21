@@ -370,10 +370,10 @@ def _fmt_k8s_time(ts):
         return str(ts)[:16]
 
 
-def _k8s_env(app_name, env):
+def _k8s_env(app_name, env, force=None):
     from gitops.manifest_writer import env_entries
     out = []
-    for e in env_entries(app_name, env):
+    for e in env_entries(app_name, env, force):
         if "valueFrom" in e:
             ref = e["valueFrom"]["secretKeyRef"]
             out.append(k8s_client.V1EnvVar(name=e["name"], value_from=k8s_client.V1EnvVarSource(
@@ -385,7 +385,7 @@ def _k8s_env(app_name, env):
 
 def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namespace=None,
                env=None, container_port_override=None, expose=True, dns_alias=False,
-               command=None, args=None, volumes=None):
+               command=None, args=None, volumes=None, secret_keys=None):
     """env／container_port_override／expose／dns_alias 是 docker-compose 匯入用的（2026-10-10）：
     環境變數、容器實際監聽的 port、要不要對外開放（compose 沒寫 ports 的服務只給內部連）、
     另外建一個跟服務同名的內部連線入口（其他服務才能照 compose 的寫法用「db:5432」連過來）。"""
@@ -421,7 +421,7 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
             ports=[k8s_client.V1ContainerPort(container_port=cport)],
             resources=resources,
             # 密碼類環境變數從 Secret 讀（值不寫進設定檔與 Git），其他的直接寫
-            env=_k8s_env(app_name, {**recommended_env(image), **(env or {})}) or None,
+            env=_k8s_env(app_name, {**recommended_env(image), **(env or {})}, secret_keys) or None,
             readiness_probe=_probes.get("readinessProbe"),
             liveness_probe=_probes.get("livenessProbe"),
             command=command or None, args=args or None,
@@ -457,8 +457,9 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
             alias = k8s_client.V1Service(
                 api_version="v1", kind="Service",
                 metadata=k8s_client.V1ObjectMeta(name=app_name, labels={"zerotouch/alias-of": app_name}),
-                spec=k8s_client.V1ServiceSpec(selector={"app": app_name}, type="ClusterIP",
-                                              ports=[k8s_client.V1ServicePort(port=cport, target_port=cport)]),
+                spec=k8s_client.V1ServiceSpec(selector={"app": app_name}, type="ClusterIP", ports=(
+                    [k8s_client.V1ServicePort(name="app", port=cport, target_port=cport)] +
+                    ([k8s_client.V1ServicePort(name="external", port=port, target_port=cport)] if port != cport else []))),
             )
         # 保存空間要先建好，Pod 才掛得上；已經存在的不動（PVC 建立後大部分欄位不能改，也不能動到資料）
         for _pvc in build_pvc_docs({"app_name": app_name, "volumes": volumes}, namespace):
@@ -480,7 +481,7 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
             except Exception:
                 core.create_namespaced_service(namespace, alias, _request_timeout=(5, 10))
         from gitops.manifest_writer import split_secret_env, secret_name
-        _secret_vals = split_secret_env(env or {})[1]
+        _secret_vals = split_secret_env(env or {}, secret_keys)[1]
         if _secret_vals:
             sec = k8s_client.V1Secret(api_version="v1", kind="Secret", type="Opaque",
                                       metadata=k8s_client.V1ObjectMeta(name=secret_name(app_name)),
@@ -498,6 +499,12 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
         return True, f"已部署 {app_name}"
     except Exception as e:
         return False, str(e)
+
+def _last_restart_iso(pod):
+    times = [cs.last_state.terminated.finished_at for cs in ((pod.status.container_statuses or []) if pod.status else [])
+             if cs.last_state and cs.last_state.terminated and cs.last_state.terminated.finished_at]
+    return max(times).isoformat() if times else None
+
 
 def k8s_get_pods(app_name=None, namespace=None):
     namespace = namespace or NS
@@ -543,6 +550,9 @@ def k8s_get_pods(app_name=None, namespace=None):
                 "containers": containers,
                 "conditions": cond,
                 "restarts"  : sum(cs.restart_count for cs in (p.status.container_statuses or [])) if p.status and p.status.container_statuses else 0,
+                # 最近一次重啟的時間：重啟次數是從 Pod 建立以來一直累加的，主機重開機時每個 Pod 都會被算一次，
+                # 只看次數會把很久以前的重啟也當成現在有問題（2026-10-21 全系統檢查：17 個 Pod 全被標成需要注意）
+                "last_restart_at": _last_restart_iso(p),
             })
         return result
     except Exception:
@@ -1276,7 +1286,7 @@ def _build_agent_manifest(parsed):
     env = {**recommended_env(image), **(parsed.get("env") or {})}
     if env:
         from gitops.manifest_writer import env_entries
-        container["env"] = env_entries(app_name, env)
+        container["env"] = env_entries(app_name, env, parsed.get("secret_keys"))
     from gitops.manifest_writer import pod_volumes
     _pod_vols, _mounts = pod_volumes(app_name, parsed.get("volumes"))
     if _mounts:
@@ -2329,7 +2339,7 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
             <label for="chat-input" style="position:absolute;left:-9999px">輸入訊息</label>
             <textarea class="chat-input" id="chat-input" placeholder="說說你想部署什麼，或問服務的狀況" rows="1" oninput="autoGrowChatInput(this)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
             <input type="file" id="compose-file" accept=".yml,.yaml,text/yaml,application/x-yaml" hidden onchange="onComposeFile(this)">
-            <button class="chat-attach" type="button" onclick="document.getElementById('compose-file').click()" aria-label="上傳 docker-compose 檔" data-tip="上傳 docker-compose 檔"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.5 12.6 20.9a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg></button>
+            <button class="chat-attach" type="button" onclick="document.getElementById('compose-file').click()" aria-label="上傳 docker-compose 或 Kubernetes YAML 檔" data-tip="上傳 docker-compose 或 Kubernetes YAML 檔"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.5 12.6 20.9a5.5 5.5 0 0 1-7.8-7.8l8.5-8.5a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.8 1.8 0 0 1-2.6-2.6l7.8-7.8"/></svg></button>
             <span class="mic-meter" id="mic-meter" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
             <button class="chat-mic" type="button" id="chat-mic" onclick="toggleVoice()" aria-label="語音輸入" data-tip="語音輸入"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
             <button class="chat-send" type="button" onclick="sendChat()" id="chat-send-txt">送出</button>
@@ -3395,6 +3405,10 @@ async function startDeployFlow(text){
   }
 }
 
+// 訊息排隊依序處理（2026-10-21 全系統檢查）：上一則還在處理時再送一則，快的那則會先回答、排在慢的前面，
+// 而且快的一回來「思考中」就消失，使用者以為慢的那則已經結束。現在使用者可以連續送出，但照順序回答。
+let chatQueue = Promise.resolve();
+let chatPending = 0;
 async function sendChat(){
   const inp = document.getElementById('chat-input');
   const text = inp.value.trim();
@@ -3403,6 +3417,18 @@ async function sendChat(){
   inp.style.height = '';
   if(!currentChatId) newChat();
   appendMsg('user', text);
+  chatPending++;
+  if(chatPending > 1) appendTyping('排隊中，前一則回答完就會處理這則');
+  const job = chatQueue.then(() => handleChat(text));
+  chatQueue = job.catch(() => {});
+  try { await job; }
+  finally {
+    chatPending--;
+    if(chatPending > 0) appendTyping('處理下一則訊息');
+  }
+}
+
+async function handleChat(text){
   // 貼上的是 docker-compose 內容：直接走匯入流程
   if(looksLikeCompose(text)){
     try{ await startComposeFlow(text, '貼上的內容'); }
@@ -3539,6 +3565,8 @@ function appendTyping(label){
     div = document.createElement('div');
     div.className = 'msg ai'; div.id = 'typing-indicator';
     msgs.appendChild(div);
+  } else if(div !== msgs.lastElementChild){
+    msgs.appendChild(div);   // 永遠留在最底下，不要卡在後來送出的訊息上方
   }
   const txt = TYPING_LABELS[label] || label || '思考中';
   div.innerHTML = '<div class="think-row"><div class="spinner"></div><span data-role="think-label">' + escHtml(txt) + '</span></div>';
@@ -3561,13 +3589,22 @@ function podState(p){
   const phase = p.phase || 'Unknown';
   const ready = (p.conditions || []).find(c => c.type === 'Ready');
   if(phase === 'Running' && (!ready || ready.status === 'True')){
-    return p.restarts >= 5 ? {cls:'warn', label:'執行中，曾重啟 ' + p.restarts + ' 次', attn:true} : {cls:'run', label:'執行中', attn:false};
+    if(p.restarts < 5) return {cls:'run', label:'執行中', attn:false};
+    // 重啟次數會一直累加（主機重開機每個 Pod 也會算一次），最近一小時內又重啟才算需要注意
+    const mins = p.lastRestart ? (Date.now() - Date.parse(p.lastRestart)) / 60000 : null;
+    if(mins != null && mins > 60) return {cls:'run', label:'執行中（曾重啟 ' + p.restarts + ' 次，最近一次在 ' + agoText(mins) + '）', attn:false};
+    return {cls:'warn', label:'執行中，曾重啟 ' + p.restarts + ' 次', attn:true};
   }
   if(phase === 'Running') return {cls:'fail', label:'執行中但還沒準備好', attn:true};
   if(phase === 'Pending') return {cls:'pend', label:'等待中', attn:true};
   if(phase === 'Succeeded') return {cls:'done', label:'已完成', attn:false};
   if(phase === 'Failed') return {cls:'fail', label:'失敗', attn:true};
   return {cls:'pend', label:'狀態不明', attn:true};
+}
+function agoText(mins){
+  if(mins < 120) return Math.round(mins) + ' 分鐘前';
+  if(mins < 48 * 60) return Math.round(mins / 60) + ' 小時前';
+  return Math.round(mins / 1440) + ' 天前';
 }
 function stateTag(s){ return `<span class="state s-${s.cls}"><i></i>${esc(s.label)}</span>`; }
 function humanSummary(s){
@@ -3587,6 +3624,7 @@ function healthTag(pd){
 function slimPod(p){
   const c0 = (p.containers || [])[0] || {};
   return {name:p.name, app:p.app || '', phase:p.phase || 'Unknown', restarts:p.restarts || 0, age:p.age || '',
+          lastRestart:p.last_restart_at || null,
           image:c0.image || '', node:p.node || '', conditions:(p.conditions || []).filter(c => c.type === 'Ready')};
 }
 function cleanCommitMsg(m){
@@ -4397,13 +4435,14 @@ function renderFlowCard(flow){
 // ── docker-compose 匯入：檢視服務 → 審查 → 部署 → 完成 ──
 // 每個服務都送進跟一句話部署相同的 /api/deploy/parse、/api/deploy，沒有任何服務能繞過把關。
 function looksLikeCompose(text){
-  return /(^|\n)services\s*:\s*\n/.test(text) && /\n\s+image\s*:|\n\s+build\s*:/.test(text);
+  const k8s = /(^|\n)apiVersion\s*:/.test(text) && /(^|\n)kind\s*:/.test(text);
+  return k8s || (/(^|\n)services\s*:\s*\n/.test(text) && /\n\s+image\s*:|\n\s+build\s*:/.test(text));
 }
 async function onComposeFile(input){
   const f = input.files && input.files[0];
   input.value = '';
   if(!f) return;
-  if(f.size > 100000){ setComposerHint('檔案太大，docker-compose 檔上限 100 KB。', 'voice-err'); return; }
+  if(f.size > 100000){ setComposerHint('檔案太大，上限 100 KB。', 'voice-err'); return; }
   let text = '';
   try{ text = await f.text(); }catch(e){ setComposerHint('讀不到這個檔案，請再選一次。', 'voice-err'); return; }
   if(!currentChatId) newChat();
@@ -4413,14 +4452,14 @@ async function onComposeFile(input){
 async function startComposeFlow(text, source){
   appendTyping('Parsing');
   try{
-    const r = await fetch('/api/compose/parse', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})});
+    const r = await fetch('/api/import/parse', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})});
     const d = await r.json();
     removeTyping();
     if(d.error){ appendMsg('assistant', '沒辦法匯入這份檔案：' + d.error, null, 'text'); return; }
     const flow = newFlow('compose', source || '', {});
     flow.step = 'list';
     flow.source = source || '';
-    flow.compose = {services: d.services.map(s => Object.assign(s, {state:'', review:null, error:null})), problems: d.problems || []};
+    flow.compose = {format: d.format || 'compose', services: d.services.map(s => Object.assign(s, {state:'', review:null, error:null})), problems: d.problems || []};
     appendMsg('assistant', renderFlowCard(flow));
   }catch(e){
     removeTyping();
@@ -4430,7 +4469,8 @@ async function startComposeFlow(text, source){
 const cpBlocked = s => (s.problems || []).some(p => p.level === 'block');
 const cpSpec = s => ({app_name:s.app_name, image:s.image, pods:s.pods, port:s.port, memory:s.memory || undefined, cpu:s.cpu || undefined,
                       env:s.env, container_port:s.container_port, expose:s.expose, dns_alias:s.dns_alias,
-                      command:s.command || undefined, args:s.args || undefined, volumes:s.volumes || undefined});
+                      command:s.command || undefined, args:s.args || undefined, volumes:s.volumes || undefined,
+                      secret_keys:(s.secret_keys || []).length ? s.secret_keys : undefined});
 const CP_LV = {ok:'通過', warn:'提醒', stop:'擋下'};
 function cpVerdicts(rv){
   if(!rv) return '';
@@ -4468,7 +4508,7 @@ function renderComposeCard(flow){
         <span>其他服務用 <b>${esc(s.app_name)}:${esc(s.container_port)}</b> 連它</span>
         ${(s.command || s.args) ? `<span>啟動指令 <b>${esc([].concat(s.command || [], s.args || []).join(' '))}</b></span>` : ''}
         ${(s.volumes || []).length ? `<span>資料空間 <b>${esc(s.volumes.map(v => v.mount + (v.kind === 'pvc' ? '（保存 ' + v.size + '）' : '（暫存）')).join('、'))}</b></span>` : ''}</div>
-      ${envKeys.length ? `<div class="cp-env" aria-label="環境變數">${envKeys.map(k => `<span>${esc(k)} = ${/PASS|SECRET|TOKEN|KEY|CREDENTIAL|PRIVATE/i.test(k) ? '********' : esc(s.env[k])}</span>`).join('')}</div>` : ''}
+      ${envKeys.length ? `<div class="cp-env" aria-label="環境變數">${envKeys.map(k => `<span>${esc(k)} = ${/PASS|SECRET|TOKEN|KEY|CREDENTIAL|PRIVATE/i.test(k) || (s.secret_keys || []).includes(k) ? '********' : esc(s.env[k])}</span>`).join('')}</div>` : ''}
       ${(s.problems || []).length ? `<ul class="cp-probs">${s.problems.map(p => `<li class="${esc(p.level)}">${esc(p.text)}</li>`).join('')}</ul>` : ''}
       ${s.error ? `<ul class="cp-probs"><li class="block">${esc(s.error)}</li></ul>` : ''}
       ${s.review ? `<div class="cp-review">${reviewerOf('安全', (s.review.agents || {}).agents ? s.review.agents.agents.security : null, '', '安全', s.review)}${reviewerOf('成本', (s.review.agents || {}).agents ? s.review.agents.agents.cost : null, '', '成本', s.review)}${reviewerOf('效能', (s.review.agents || {}).agents ? s.review.agents.agents.perf : null, '', '效能', s.review)}</div>` : ''}
@@ -4481,7 +4521,7 @@ function renderComposeCard(flow){
   const top = (cp.problems || []).length ? `<ul class="cp-probs" style="margin-bottom:12px">${cp.problems.map(p => `<li class="${esc(p.level)}">${esc(p.text)}</li>`).join('')}</ul>` : '';
   let lead = '', foot = '', prog = '';
   if(flow.step === 'list'){
-    lead = `從${esc(flow.source || '檔案')}讀到 ${svcs.length} 個服務，會照下面的順序部署（被依賴的先部署）。點任一個服務可以看完整設定和注意事項。`
+    lead = `從${esc(flow.source || '檔案')}讀到 ${svcs.length} 個服務，會照下面的順序部署（${cp.format === 'k8s' ? '只給內部連的服務先部署' : '被依賴的先部署'}）。點任一個服務可以看完整設定和注意事項。`
       + (ready.length < svcs.length ? ` 有 ${svcs.length - ready.length} 個服務沒辦法部署，原因寫在該服務裡。` : '');
     foot = `<button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button>
       <button type="button" class="btn primary" onclick="composeReview('${flow.id}')" ${ready.length ? '' : 'disabled'}>審查 ${ready.length} 個服務</button>`;
@@ -4505,7 +4545,7 @@ function renderComposeCard(flow){
       : `部署完成：${ok} 個成功` + (bad ? `，${bad} 個失敗（展開看原因）` : '') + '。服務要等映像檔下載完、通過健康檢查才會開始接流量，通常需要幾十秒。';
     foot = `<button type="button" class="btn" onclick="showPage('services')">查看我的服務</button>`;
   }
-  const title = 'docker-compose 匯入';
+  const title = cp.format === 'k8s' ? 'Kubernetes YAML 匯入' : 'docker-compose 匯入';
   return flowShell(flow, flowHead(title, steps) + `<div class="body"><div class="lead">${lead}</div>${prog}${order}${top}${rows}</div>`
     + (foot ? `<div class="foot">${foot}</div>` : ''));
 }
@@ -4978,10 +5018,10 @@ async function loadHealerBg(){
     const acts = d.recent_actions || [];
     if(hist){
       hist.innerHTML = acts.length
-        ? `<ol class="timeline">${acts.map(a => `<li><time>${a.time ? esc(new Date(a.time).toLocaleTimeString('zh-TW', {hour12:false})) : ''}</time>
-            <div class="what"><span class="app">${esc(a.pod || '')}</span>${esc(a.reason || '')}，原因：${esc(a.root_cause || a.error || '沒有找到')}，處理：${esc(a.action || '無')}
+        ? `<ol class="timeline">${acts.map(a => `<li><time>${a.time ? esc(new Date(a.time).toLocaleString('zh-TW', {hour12:false, month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'})) : ''}</time>
+            <div class="what"><span class="app">${esc(a.pod || '')}</span>${a.reason ? esc(a.reason) + '，' : ''}原因：${esc(a.root_cause || a.error || '沒有找到')}，處理：${esc(a.action || '無')}
             ${a.llm_raw_guess ? `<div class="dim">AI 原本猜是「${esc(a.llm_raw_guess)}」，證據不足，沒有採用。</div>` : ''}</div>
-            <div>${a.ok === false ? stateTag({cls:'fail', label:'沒修好'}) : stateTag({cls:'run', label:'已處理'})}</div></li>`).join('')}</ol>`
+            <div>${a.ok === false ? stateTag({cls:'fail', label:'沒修好'}) : a.needs_user ? stateTag({cls:'warn', label:'需要你處理'}) : stateTag({cls:'run', label:'已處理'})}</div></li>`).join('')}</ol>`
         : emptyBlock('還沒有自動修復過。', 'Pod 出狀況時，Healer 的處理過程會記在這裡。');
     }
   }catch(e){
@@ -6131,6 +6171,11 @@ def _sanitize_deploy_payload(raw: dict) -> dict:
                          "size": size if v["kind"] == "pvc" else None})
     if vols:
         clean["volumes"] = vols
+    sk = parsed.get("secret_keys")
+    if isinstance(sk, list) and clean.get("env"):
+        keys = [str(k) for k in sk[:50] if str(k) in clean["env"]]
+        if keys:
+            clean["secret_keys"] = keys
     return clean
 
 
@@ -6465,6 +6510,7 @@ def api_deploy_conflicts():
                     "port_conflict_other_account": port_conflict_other_account})
 
 
+@app.route("/api/import/parse", methods=["POST"])
 @app.route("/api/compose/parse", methods=["POST"])
 def api_compose_parse():
     """docker-compose 匯入第一步：只轉換成服務清單，不審查、不部署（2026-10-10）。
@@ -6479,8 +6525,12 @@ def api_compose_parse():
     text = (request.get_json(silent=True) or {}).get("text") or ""
     if not isinstance(text, str):
         return jsonify({"error": "格式不對。"}), 400
+    # 2026-10-21：同一個入口也接受 Kubernetes YAML（有 apiVersion、kind 就當成 K8s 設定檔）
+    from agents.k8s_yaml_import import parse_k8s_yaml, looks_like_k8s
     try:
-        return jsonify(parse_compose(text, default_port))
+        if looks_like_k8s(text):
+            return jsonify(parse_k8s_yaml(text, default_port))
+        return jsonify({**parse_compose(text, default_port), "format": "compose"})
     except ComposeError as e:
         return jsonify({"error": str(e)}), 400
 
@@ -6568,7 +6618,8 @@ def api_deploy():
         ok, message = k8s_deploy(parsed["app_name"], parsed["image"], parsed["pods"], parsed.get("port", 80), parsed.get("memory"), parsed.get("cpu"), namespace=user_ns,
                                  env=parsed.get("env"), container_port_override=parsed.get("container_port"),
                                  expose=parsed.get("expose", True), dns_alias=parsed.get("dns_alias", False),
-                                 command=parsed.get("command"), args=parsed.get("args"), volumes=parsed.get("volumes"))
+                                 command=parsed.get("command"), args=parsed.get("args"), volumes=parsed.get("volumes"),
+                                 secret_keys=parsed.get("secret_keys"))
         k8s_deploy_result = {"ok": ok, "message": message}
         if not ok:
             review.setdefault("warnings", []).append(f"K8s 部署失敗：{message}")
@@ -6610,7 +6661,10 @@ def _pod_log_tail(pod_name: str, namespace: str, container: str, lines: int = 40
         try:
             text = v1.read_namespaced_pod_log(name=pod_name, namespace=namespace, container=container or None,
                                               tail_lines=lines, previous=previous, _request_timeout=5)
-            if text and text.strip():
+            # 舊容器被清掉時 API 不丟例外，而是回「unable to retrieve container logs…」，不能當成日誌
+            # （2026-10-21 全系統檢查：Healer 那份 10/10 修好了，這份漏掉，Pod 詳情的診斷又變成證據不足）
+            from healer.pod_watcher import _LOG_UNAVAILABLE_RE
+            if text and text.strip() and not _LOG_UNAVAILABLE_RE.search(text[:300]):
                 return text[-4000:]
         except Exception:
             continue
@@ -7265,7 +7319,9 @@ def _healer_bg_liveness() -> dict:
 @app.route("/api/healer/status")
 def api_healer_status():
     if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
-    return jsonify(_healer_bg_liveness())
+    d = _healer_bg_liveness()
+    d["recent_actions"] = _heal_history(_session_ns())
+    return jsonify(d)
 
 
 @app.route("/api/healer/fix", methods=["POST"])
@@ -7886,18 +7942,63 @@ _HEAL_REPAIR_ACTIONS = {"analyze_logs", "fix_image", "increase_memory", "fix_pro
                         "restart_app", "set_memory_limit", "revert_app"}
 
 
+def _heal_recently_recorded(namespace, app, action, root_cause, hours=6):
+    """同一個服務、同一種處理、同一個原因，6 小時內已經記過就不再記。網站每次重啟背景 Healer 都會重新檢查一次
+    還沒解決的問題（2026-10-21 全系統檢查：orders-api 同一個問題一週被記 16 次，報告上的修復次數被灌水）。"""
+    try:
+        for e in reversed(_events.query(namespace, since=_time.time() - hours * 3600, kinds=["heal"])):
+            d = e.get("data") or {}
+            if e.get("app") == app and d.get("action") == action and d.get("root_cause") == root_cause:
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def _real_heal_pod(pod_name, namespace="default"):
     result = _real_heal_pod_unrecorded(pod_name, namespace)
     try:
         action = (result or {}).get("action")
-        if action and action not in ("none", "in_progress"):
+        if action and action not in ("none", "in_progress") and not _heal_recently_recorded(
+                namespace, _app_key_for_pod_name(pod_name), action, result.get("root_cause")):
             outcome = ("ok" if result.get("ok") else "fail") if action in _HEAL_REPAIR_ACTIONS else "inspect"
             _events.record(namespace, "heal", _app_key_for_pod_name(pod_name), outcome,
                            {"pod": pod_name, "action": action, "action_label": _HEAL_ACTION_LABEL.get(action, action),
-                            "root_cause": result.get("root_cause"), "message": str(result.get("message") or "")[:300]})
+                            "root_cause": result.get("root_cause"), "message": str(result.get("message") or "")[:300],
+                            "llm_raw_guess": result.get("llm_raw_guess")})
     except Exception as e:
         print(f"[事件紀錄] Healer 紀錄略過：{e}")
     return result
+
+
+def _heal_history(namespace: str, limit: int = None) -> list:
+    """Healer 頁「自動修復紀錄」：從事件紀錄讀，最新的在最前面。
+
+    原本讀 _healer_bg_state["recent_actions"]（只在記憶體），web_demo 重啟就清空，畫面會說
+    「還沒有自動修復過」；而且那份清單是所有帳號共用的，會看到別人 namespace 的修復。
+    改從事件紀錄讀，重開機後仍在，也只查目前帳號的 namespace。
+    """
+    limit = limit or _HEALER_BG_MAX_HISTORY
+    try:
+        rows = _events.query(namespace, since=_time.time() - 30 * 86400, kinds=["heal"])
+    except Exception as e:
+        print(f"[事件紀錄] 讀取修復紀錄失敗：{e}")
+        return []
+    out = []
+    for r in reversed(rows[-limit:]):
+        d = r.get("data") or {}
+        outcome = r.get("outcome")
+        out.append({
+            "time": datetime.utcfromtimestamp(r["ts"]).isoformat() + "Z",
+            "pod": d.get("pod") or r.get("app") or "",
+            "root_cause": d.get("root_cause"),
+            "action": d.get("action_label") or d.get("action"),
+            # ok：真的改動且成功 True、改動失敗 False；只查出原因沒改動（inspect）為 None
+            "ok": True if outcome == "ok" else (False if outcome == "fail" else None),
+            "needs_user": outcome == "inspect",
+            "llm_raw_guess": d.get("llm_raw_guess"),
+        })
+    return out
 
 
 # 資源快照：每個 namespace 每 10 分鐘最多記一次（Pod 數、異常數、累計重啟）

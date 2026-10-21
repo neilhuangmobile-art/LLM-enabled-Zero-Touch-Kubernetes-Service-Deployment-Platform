@@ -1197,3 +1197,61 @@ API_TOKEN 改從 Secret 讀、部署紀錄 commit 裡出現 0 次；刪除後沒
   shop 套用「白天 3 個、晚上 1 個」後立刻從 1 個調成 3 個。
 - 實測抓到並修好：設定儲存第一次使用時會死結（鎖裡面又去拿同一把鎖），網站第一次查排程就整個停住；改用 RLock 並補測試。
 - 新增 `tests/test_autoscale.py`，`pytest` 全過。
+
+## 2026-10-21
+
+### 修正：Healer「自動修復紀錄」重開機就消失，而且看得到其他帳號的修復
+**為什麼**：Healer 頁的紀錄讀的是 `_healer_bg_state["recent_actions"]`，只存在記憶體，`web_demo.py` 一重啟就顯示「還沒有自動修復過」；
+這份清單也是所有帳號共用的，任何登入的使用者都看得到別人 namespace 的 Pod 名稱與故障原因。
+**改了什麼**：
+- 新增 `_heal_history(namespace)`：從 `core/event_store` 的 heal 紀錄讀最近 30 天、最多 50 筆，最新的在最前面；`/api/healer/status` 改用它，只查目前帳號的 namespace。
+- heal 事件多記 `llm_raw_guess`，重開機後仍顯示「AI 原本猜是…，證據不足，沒有採用」。
+- 前端：時間加上日期；只查出原因、沒有實際改動的紀錄標「需要你處理」，不再標「已處理」。
+**驗證**：新增 `tests/test_heal_history.py` 4 項（重開資料庫後仍讀得到、namespace 隔離、筆數上限、路由只回自己的紀錄）；`pytest` 558 個全過；
+用實際的 `data/events.db` 呼叫，讀回 user-showcase 在 10/11 留下的修復紀錄。詳見 `docs/security_review.md` 41 節。
+
+## 2026-10-21
+
+### 14:00 — 新功能：開機自動啟動
+**為什麼**：2026-10-11 與 10-21 電腦重新開機後，模型伺服器、網站、Healer、對外網址全部沒有回應，要有人手動重開。
+Docker Desktop 本身的開機自動啟動是關閉的，而網站只在啟動時檢查一次叢集，太早啟動會一直當成沒有叢集。
+**改了什麼**：新增 `scripts/install_autostart.ps1`，在 Windows「啟動」資料夾放捷徑（不需管理員權限，`-Remove` 取消）。
+`scripts/start_services.ps1` 新增 `-AtBoot`：先啟動模型伺服器；Docker 沒開就幫忙開，最多等 10 分鐘叢集就緒才啟動網站；
+每一步寫進 `logs/startup.log`；Python 輸出改成即時寫入紀錄檔（原本被暫存，出問題時紀錄檔可能是空的）。
+**驗證**：用開機捷徑相同的指令實跑兩次：① Docker 開著：19 秒內模型就緒、網站 200、對外網址 200；
+② 先用 `docker desktop stop` 關掉 Docker 模擬剛開機：腳本自動開啟 Docker、約 19 秒叢集就緒才啟動網站，
+網站紀錄顯示「[K8s] 已連線」、Healer 背景監控已啟動，展示帳號的服務自動恢復 Running。尚未做真正的重新開機測試。
+
+### 14:30 — 新功能：上傳 Kubernetes YAML
+**為什麼**：使用者手上常有現成的 K8s 設定檔（教學範例、別的專案），原本只能上傳 docker-compose。
+**改了什麼**：
+- `agents/k8s_yaml_import.py`：輸出跟 compose 匯入同一種格式，前端共用同一張流程卡，每個服務照樣走三方審查。
+  平台只取出認得的欄位重新產生設定，**不會把使用者的 YAML 原封不動套進叢集**。
+- Deployment／StatefulSet → 服務（只取第一個容器）；用 selector 配對 Service：LoadBalancer／NodePort 對外、ClusterIP 只給內部，
+  Service port 與 targetPort（含用名稱指定的 port）分開處理，名稱不同時改用 Service 名稱（其他服務用它連）；
+  同檔的 ConfigMap、Secret（含 base64 的 data）帶入；PVC 轉保存空間（1～5Gi，超過會說明）；內部服務先部署。
+- DaemonSet／Job／CronJob／裸 Pod 擋下；hostPath、privileged、hostNetwork、權限設定、Ingress、namespace 不套用，逐條說明。
+- 部署規格新增 `secret_keys`：來自 Secret 的值不管名稱是什麼都存成 Kubernetes Secret（原本只看名稱，`DATABASE_URL` 會寫進 Git）。
+- 本機的同名連線入口同時開 Service port 與容器 port。`/api/import/parse` 自動判斷 compose 或 K8s YAML；貼上 YAML 也會辨識。
+**驗證**：`tests/test_k8s_yaml_import.py` 11 項，`pytest` 全過（569 項）。展示站實測：貼上含 Secret、ClusterIP（8080→80）、
+LoadBalancer（8094→80）的 YAML：`DATABASE_URL` 從 Secret 讀、部署紀錄 commit 出現 0 次；從另一個服務用 `kapi:8080` 連得到；
+對外 8094 回 200；刪除後 Secret 與連線入口一併清除。
+
+### 14:20 — 修正：展示環境搬出暫存區
+展示用 git worktree 原本建在 AI 助理的暫存資料夾，被 Windows 自動清理刪掉程式檔與展示帳號資料。改建在 `D:\zt-demo`，
+展示帳號以原帳號密碼重新註冊，叢集裡的服務都還在。
+
+### 15:10 — 全系統檢查（PWA 動工前）
+**為什麼**：使用者要求動工前先確認整個系統沒有不相容或 bug。
+**檢查了什麼**：程式碼與 GitHub 同步、CI 全綠；`pytest` 全過；`pip check` 無衝突、安裝版本與 requirements.txt 完全一致；
+兩個網站、對外網址、模型伺服器、K8s、Prometheus、Grafana、Flux、Gemini 都正常；瀏覽器實際操作五個頁面、一般問答、
+列出 Pod、查服務健康、分析報告、情境部署→審查→部署→擴縮→刪除完整流程、連續送出兩則訊息；客戶叢集模式註冊→同意書→安裝指令→
+未連線時 API 回 403。全程沒有 JavaScript 錯誤，也沒有伺服器 500。
+**抓到並修好的五個問題**：
+1. Pod 重啟次數從建立以來累加，主機重開機每個 Pod 都算一次，17 個 Pod 全被標成需要注意 → 加上最近一次重啟時間，1 小時內又重啟才算。
+2. Pod 詳情讀到「unable to retrieve container logs」時當成日誌，診斷又變成證據不足（10/10 只修了 Healer 那份）→ 改用同一個判斷。
+3. 同一個問題在網站每次重啟後被重新記錄，報告上的修復次數被灌水（一週 16 次）→ 6 小時內只記一次。
+4. Healer 建議文字寫「確認 Redis 容器已正確執行」，但日誌只提到資料庫 → 模型提到的技術名稱要在證據裡找得到。
+5. 上一則還在處理時再送一則，回答順序錯亂、「思考中」提早消失 → 訊息排隊依序處理。
+**驗證**：每項都有回歸測試；瀏覽器實測：只剩真正有問題的 orders-api 被標註、診斷為「無法連線到資料庫」、連續兩則依序回答且提示持續到最後。
+

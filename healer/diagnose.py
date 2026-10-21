@@ -93,6 +93,24 @@ _CONCRETE_SIGNAL_RE = re.compile(
 )
 
 
+# 模型敘述裡常被憑空加上的技術名稱；出現時必須在日誌、事件、映像檔或 Pod 名稱裡找得到
+_TECH_TERMS = {
+    "redis": r"redis", "mysql": r"mysql|mariadb", "postgres": r"postgres|psql|pg_", "mongodb": r"mongo",
+    "kafka": r"kafka", "rabbitmq": r"rabbit|amqp", "elasticsearch": r"elastic", "nginx": r"nginx",
+    "apache": r"apache|httpd", "java": r"java|jvm", "node.js": r"node", "python": r"python",
+    "docker": r"docker", "dns": r"dns|resolve|name or service", "ssl": r"ssl|tls|certificate|x509",
+}
+
+
+def _unsupported_tech(text: str, evidence: str) -> list:
+    low = (text or "").lower()
+    out = []
+    for term, pattern in _TECH_TERMS.items():
+        if re.search(re.escape(term).replace(r"\.", r"\.?"), low) and not re.search(pattern, evidence):
+            out.append(term)
+    return out
+
+
 def _has_concrete_signal(combined_text: str) -> bool:
     return bool(_CONCRETE_SIGNAL_RE.search(combined_text))
 
@@ -171,8 +189,18 @@ def diagnose_issue(context: dict, use_llm: bool = True) -> dict:
                         "證據不足，只能確定是重複重啟/異常終止，實際原因需要人工查看完整日誌"
                     )
                     llm_result["suggestion"] = rule_result["suggestion"]
-                elif not llm_result.get("suggestion"):
-                    llm_result["suggestion"] = rule_result["suggestion"]
+                else:
+                    # 有具體證據時採用模型的敘述，但模型提到的技術名稱必須在證據裡找得到。
+                    # 2026-10-21 全系統檢查：日誌只寫「cannot connect to database」，模型的建議卻寫
+                    # 「確認 Redis 容器已正確執行」，Redis 是它自己加的。
+                    evidence = combined_text + " " + str(context.get("image", "")).lower() + " " + pod_name.lower()
+                    for key in ("root_cause", "suggestion"):
+                        bad = _unsupported_tech(llm_result.get(key) or "", evidence)
+                        if bad:
+                            llm_result.setdefault("llm_raw_guess", llm_result.get(key))
+                            llm_result[key] = rule_result[key]
+                    if not llm_result.get("suggestion"):
+                        llm_result["suggestion"] = rule_result["suggestion"]
             elif rule_result["severity"] != "unknown":
                 llm_result.setdefault("severity", rule_result["severity"])
             return llm_result

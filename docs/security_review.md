@@ -1942,7 +1942,39 @@ Laptop 16GB（CUDA）。
 部署前另外計算，超過時在審查就擋下並說明已用多少、這次要多少。掛載路徑必須是絕對路徑、不能是根目錄或含 `..`，種類只認 PVC 與 emptyDir，
 不可能變成 hostPath。客戶叢集模式已實測：密碼只出現在客戶自己私有 repo 的 Secret，部署設定裡 0 次。
 
-## 41. 分時擴縮與自動休眠：會不會把有人在用的服務關掉？喚醒器會不會變成攻擊入口？
+## 41. Healer 修復紀錄：重開機就消失，還看得到別人的修復
+
+**風險**：Healer 頁的「自動修復紀錄」只存在記憶體，平台重啟後就空了，使用者會以為從沒修過任何東西；
+更嚴重的是這份清單由所有帳號共用，`/api/healer/status` 會把其他帳號 namespace 的 Pod 名稱、故障原因、處理方式一起回給任何登入的使用者。
+
+**為什麼重要**：多租戶隔離（11 節）的前提是每個帳號只看得到自己的資源，這裡繞過了它；紀錄消失則讓平台的作為無法回顧。
+
+**解決方式**：`/api/healer/status` 的 `recent_actions` 改由 `_heal_history(_session_ns())` 從事件紀錄讀取。事件紀錄本來就以 namespace 為必填、
+查詢只能指定單一 namespace（`core/event_store.py`），保存在 SQLite，重開機不會消失。背景執行緒的記憶體清單保留給既有的存活檢查使用，不再回給前端。
+
+**驗證**：`tests/test_heal_history.py`（關閉再開啟資料庫後仍讀得到、其他 namespace 的紀錄不會出現、路由只回目前帳號）；
+以實際資料庫呼叫，讀回 2026-10-11 的 50 筆紀錄。
+
+## 41. 上傳 Kubernetes YAML：使用者的設定檔會不會直接被套進叢集？
+
+**風險**：K8s YAML 能寫的東西比 compose 多得多，包括 hostPath 掛主機檔案、privileged、hostNetwork、叢集層級權限（ClusterRole）、
+在別的 namespace 建資源、DaemonSet 在每台機器各跑一份。如果把使用者的 YAML 原樣 `kubectl apply`，等於讓使用者直接操作共用叢集。
+另外，K8s 的 Secret 值不一定叫 PASSWORD／TOKEN（例如 `DATABASE_URL` 內含帳密），原本只用名稱判斷，會被寫進 Git。
+
+**為什麼重要**：多租戶平台的隔離完全靠「平台產生設定」這一點；一旦開放原樣套用，所有防護（三方審查、Pod 位置與保存空間上限、
+namespace 隔離）都會被繞過。
+
+**解決方式**：
+1. 平台只讀出認得的欄位（映像檔、port、副本數、資源、環境變數、啟動指令、PVC／emptyDir），轉成跟一句話部署同一份規格，
+   再由平台的樣板重新產生設定，照樣走三方審查與 guardian；使用者 YAML 裡的其他內容一律不會進到叢集。
+2. 危險或不支援的項目逐條告知「不會套用」或「擋下」，不默默丟掉；namespace 一律改成使用者自己的空間。
+3. 部署規格新增 `secret_keys`：只要值來自 Secret，不管名稱都存成 Kubernetes Secret，部署設定與 Git 只寫 `secretKeyRef`。
+4. 沿用 compose 的防護：檔案 100 KB 上限、全站請求 1 MB 上限、YAML 別名展開節點數上限、最多 50 個設定、10 個服務。
+
+**驗證**：`tests/test_k8s_yaml_import.py`：hostPath／hostNetwork／privileged 不出現在轉換結果、CronJob 與 Ingress 有說明、
+`DATABASE_URL`（base64）解開後列入 secret_keys 且不出現在 Git 設定、別名炸彈被拒。實機：同一份 YAML 部署後 commit 裡密碼 0 次。
+
+## 42. 分時擴縮與自動休眠：會不會把有人在用的服務關掉？喚醒器會不會變成攻擊入口？
 
 **風險**：
 1. **誤判沒人用**：健康檢查本身也會產生流量，「流量是 0」永遠不成立；如果門檻抓太寬，有人在用的服務也會被關掉。
