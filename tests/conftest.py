@@ -17,3 +17,5 @@ import tempfile
 os.environ["ZT_EVENTS_DB"] = os.path.join(tempfile.mkdtemp(prefix="zt-events-"), "events.db")
 # 分時擴縮與休眠設定（core/autoscale_store.py）同理
 os.environ["ZT_AUTOSCALE_DB"] = os.path.join(tempfile.mkdtemp(prefix="zt-autoscale-"), "autoscale.db")
+# 對話與專案（core/workspace_store.py）同理
+os.environ["ZT_WORKSPACE_DB"] = os.path.join(tempfile.mkdtemp(prefix="zt-workspace-"), "workspace.db")

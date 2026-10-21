@@ -298,3 +298,17 @@ GitHub org 開的私有 repo（`gitops/tenant_repo.py`），客戶叢集的 Flux
 - 測試、展示時可以把閒置期間縮短：環境變數 `ZT_IDLE_SECONDS_OVERRIDE`（秒）只套用在 `ZT_IDLE_OVERRIDE_NAMESPACES` 列出的 namespace，正式運作不要設。
 - **踩過的坑**：設定儲存第一次使用時在鎖裡面又拿同一把鎖，整個網站卡住，已改用 RLock。
 - **分支**：學校那台（隊友）的進度推在 `dev/capstone6767` 分支，合併進 main 前先跟負責人確認。
+
+## 對話存伺服器＋專案（2026-10-21，隊友陳冠穎負責，在 `dev/capstone6767` 分支）
+
+對話原本只存在瀏覽器 localStorage，改存 `data/workspace.db`（`core/workspace_store.py`，寫法同 autoscale_store）；
+另外新增「專案」：說明、專案指示、對話、服務歸屬、上傳的檔案。安全設計見 `docs/security_review.md` 43 節。
+
+- 對話、專案、檔案綁登入帳號（owner），服務歸屬綁 namespace；所有查詢都帶 owner，不做共享。
+- 前端 `saveChats()` 的呼叫點沒變，內部改成「有變動的對話合併 0.8 秒後 PUT /api/chats/<id>」；存失敗會在輸入框下方提示。
+  舊的 localStorage 對話第一次載入時自動上傳，原資料改名成 `k8s_chats_<帳號>_backup`。
+- `/api/deploy`、`/api/import/parse`、`/api/chat` 多收可省略的 `project_id`；沒帶就跟原本一樣。
+- `k8s_delete_deployment` 外層包裝刪除成功後會清掉服務的專案歸屬（實際刪除邏輯移到 `_k8s_delete_deployment_by_mode`）。
+- 專案指示只當 AI 問答的背景資料，**不會**自動改部署規格。
+- 空白對話（沒有任何訊息）不列進「最近的對話」、不存伺服器，送出第一則訊息才成立；載入時會清掉伺服器上的空白對話。
+- 考慮中：回收桶（刪除的對話、專案保留 7 天可復原），還沒做。

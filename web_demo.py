@@ -1540,6 +1540,47 @@ a{color:var(--signal)}
 .chat-room-delete{opacity:0;color:var(--text-3);padding:0 4px;flex:none;transition:opacity .15s,color .15s}
 .chat-room-item:hover .chat-room-delete,.chat-room-item:focus-within .chat-room-delete{opacity:1}
 .chat-room-delete:hover{color:var(--stop)}
+/* ── 專案（2026-10-21）── */
+.proj-section{display:flex;align-items:center;justify-content:space-between}
+.proj-add{border:0;background:transparent;color:var(--text-3);font-size:17px;line-height:1;padding:1px 7px;border-radius:4px;cursor:pointer}
+.proj-add:hover,.proj-add:focus-visible{color:var(--signal);background:var(--panel-2)}
+.chat-room-title .proj-ico{display:inline-block;width:14px;height:14px;flex:none;color:var(--text-3)}
+.chat-room-title .proj-badge{display:inline-flex;flex:none;overflow:visible}
+.chat-room-item.proj-item{cursor:pointer}
+.proj-empty-side{font-size:13px;color:var(--text-3);padding:2px 10px 6px}
+.proj-tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--grid);margin-bottom:18px}
+.proj-tabs button{border:0;background:transparent;color:var(--text-2);padding:8px 14px;font-size:14.5px;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;white-space:nowrap}
+.proj-tabs button:hover{color:var(--text)}
+.proj-tabs button.active{color:var(--text);border-bottom-color:var(--signal);font-weight:500}
+.proj-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:860px){.proj-grid{grid-template-columns:1fr}}
+.proj-box{border:1px solid var(--grid);border-radius:6px;background:var(--panel);padding:16px 18px}
+.proj-box h2{font-size:15.5px;font-weight:700;margin:0 0 6px}
+.proj-box.danger{border-color:color-mix(in srgb,var(--stop) 45%,transparent)}
+.proj-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--grid);font-size:14px}
+.proj-row:last-child{border-bottom:0}
+.proj-row .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.proj-row.click{cursor:pointer}
+.proj-row.click:hover .grow{color:var(--signal)}
+.proj-muted{color:var(--text-3);font-size:13px}
+.proj-box .lbl{display:block;font-size:13.5px;color:var(--text-2);margin:14px 0 6px}
+.proj-box textarea{min-height:96px;resize:vertical}
+.proj-box input[type=text],.proj-modal input[type=text]{width:100%;background:var(--panel-2);border:1px solid var(--grid-2);border-radius:var(--radius);padding:9px 12px;color:var(--text);font-size:14.5px}
+.proj-box input[type=text]:focus,.proj-modal input[type=text]:focus{border-color:var(--signal);outline:none;box-shadow:0 0 0 3px var(--signal-soft)}
+.proj-box select{background:var(--panel-2);border:1px solid var(--grid-2);border-radius:var(--radius);padding:7px 10px;color:var(--text);font-size:14px;min-width:0;flex:1}
+.proj-actions{display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:12px;flex-wrap:wrap}
+.proj-msg{font-size:13.5px;margin-right:auto}
+.proj-msg.ok{color:var(--pass)}.proj-msg.err{color:var(--stop)}
+.proj-modal{padding:22px;max-width:520px}
+.proj-modal h3{font-size:16px;font-weight:700;margin:0 0 12px}
+.proj-modal .lbl{display:block;font-size:13.5px;color:var(--text-2);margin:12px 0 6px}
+.proj-del label{display:flex;gap:8px;align-items:flex-start;padding:5px 0;font-size:14px;cursor:pointer}
+.proj-del input[type=checkbox],.proj-del input[type=radio]{margin-top:3px;flex:none;accent-color:var(--signal);width:auto}
+.proj-del .q{font-size:14px;font-weight:700;margin:14px 0 4px}
+.proj-del .note{display:block;font-size:12.5px;color:var(--text-3)}
+.proj-del .warn-t{color:var(--stop);font-size:12.5px}
+.proj-warn{font-size:13.5px;background:var(--caution-soft);border:1px solid var(--caution);border-radius:4px;padding:8px 10px;margin-top:10px}
+.proj-err{font-size:13.5px;background:var(--stop-soft);border:1px solid color-mix(in srgb,var(--stop) 50%,transparent);border-radius:4px;padding:8px 10px;margin-top:10px}
 .sys-panel{border:1px solid var(--grid);border-radius:8px;background:var(--panel);padding:10px 12px;display:flex;flex-direction:column;gap:7px;font-size:13.5px}
 .status-pill{display:flex;align-items:center;gap:8px;min-width:0}
 .status-pill .val{margin-left:auto;color:var(--text-3);font-size:13px;white-space:nowrap}
@@ -2195,7 +2236,7 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
   .layout{flex-direction:column}
   .sidebar{width:100%;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:10px 16px;border-right:0;border-bottom:1px solid var(--grid)}
   .sidebar-nav{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;flex:1 1 100%;order:3}
-  .sidebar-nav .nav-section,#chat-room-list,.sys-panel,.sidebar-footer,.new-chat-wrap{display:none}
+  .sidebar-nav .nav-section,#chat-room-list,#project-list,.sys-panel,.sidebar-footer,.new-chat-wrap{display:none}
   .nav-item{width:auto;white-space:nowrap}
   .nav-item.active::before{display:none}
   .main{height:auto;flex:1;min-height:0}
@@ -2284,6 +2325,8 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
       <button class="nav-item" type="button" data-page="healer" onclick="showPage('healer')"><svg viewBox="0 0 16 16" fill="none"><path d="M1.5 8.5h3l1.5-4 3 7 1.5-3h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>自動修復</button>
       <button class="nav-item" type="button" data-page="dashboard" onclick="showPage('dashboard')"><svg viewBox="0 0 16 16" fill="none"><path d="M2.5 11a5.5 5.5 0 1111 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 11l2.6-3.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>資源總覽</button>
       <button class="nav-item" type="button" data-page="gitops" onclick="showPage('gitops')"><svg viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 6v1a3 3 0 003 3h1M11 6v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>部署紀錄</button>
+      <div class="nav-section proj-section"><span>專案</span><button type="button" class="proj-add" onclick="openProjectModal()" data-tip="新增專案" aria-label="新增專案">+</button></div>
+      <div id="project-list"></div>
       <div class="nav-section">最近的對話</div>
       <div id="chat-room-list"></div>
     </nav>
@@ -2331,6 +2374,19 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
     </div>
 
     <!-- Chat Page -->
+    <div class="page" id="page-project">
+      <div class="page-head"><div><h1 class="page-title" id="proj-title">專案</h1>
+        <p class="page-sub" id="proj-sub"></p></div>
+        <div class="page-actions"><button type="button" class="btn primary" id="proj-newchat-btn" onclick="projectNewChat()">在這個專案開始新對話</button></div></div>
+      <div class="proj-tabs" role="tablist" aria-label="專案分頁">
+        <button type="button" role="tab" data-ptab="overview" onclick="setProjTab('overview')">總覽</button>
+        <button type="button" role="tab" data-ptab="services" onclick="setProjTab('services')">服務</button>
+        <button type="button" role="tab" data-ptab="files" onclick="setProjTab('files')">檔案</button>
+        <button type="button" role="tab" data-ptab="settings" onclick="setProjTab('settings')">設定</button>
+      </div>
+      <div id="proj-body"></div>
+    </div>
+
     <div class="page active" id="page-chat" style="padding:0;overflow:hidden">
       <div class="chat-shell">
         <div class="chat-messages" id="chat-messages"></div>
@@ -2377,6 +2433,11 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
           <button class="deploy-confirm-btn primary" type="button" id="confirm-dialog-yes">是</button>
         </div>
       </div>
+    </div>
+
+    <!-- 專案：新增專案、刪除專案的卡片（內容由 JS 填） -->
+    <div class="modal-bg" id="proj-modal-bg" onclick="if(event.target===this) closeProjModal()">
+      <div class="modal proj-modal" role="dialog" aria-modal="true" id="proj-modal"></div>
     </div>
 
     <div class="page" id="page-gitops">
@@ -2780,7 +2841,7 @@ function toggleTheme(){
 syncThemeBtn();
 try { window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', syncThemeBtn); } catch(e){}
 
-const PAGE_TITLES = {chat:'對話', services:'我的服務', healer:'自動修復', dashboard:'資源總覽', gitops:'部署紀錄'};
+const PAGE_TITLES = {chat:'對話', services:'我的服務', healer:'自動修復', dashboard:'資源總覽', gitops:'部署紀錄', project:'專案'};
 // 舊頁面名稱（書籤、舊卡片上的按鈕）導到合併後的新頁面
 const PAGE_ALIAS = {pods:'services', deployments:'services', metrics:'dashboard', deploy:'chat', dataset:'chat', kb:'chat'};
 
@@ -2802,6 +2863,8 @@ function showPage(name){
   if(name === 'gitops') loadGitopsPage();
   if(name === 'healer') loadHealerPage();
   if(name === 'dashboard') loadDashboardPage();
+  if(name === 'project') loadProjectPage();
+  renderProjectList();
 }
 
 // ── Status polling ──
@@ -3003,6 +3066,7 @@ function newFlow(kind, originalText, spec){
     originalText: originalText || '',
     spec: spec || {}, review:null, resource:null,
     createdAt: Date.now(),
+    projectId: (currentChat() || {}).projectId || null,
   };
   return chatFlows[id];
 }
@@ -3031,35 +3095,111 @@ function persistFlowCard(id){
 function _chatsKey(){ return 'k8s_chats_' + CURRENT_USER; }
 function _currentChatKey(){ return 'k8s_current_chat_' + CURRENT_USER; }
 
-function initChats(){
-  try { chats = JSON.parse(localStorage.getItem(_chatsKey())||'[]'); } catch(e){ chats=[]; }
-  currentChatId = localStorage.getItem(_currentChatKey()) || null;
-  if(!chats.length){
-    const id = 'chat_' + Date.now();
-    chats.push({id, title:'新對話', messages:[]});
-    currentChatId = id;
-    saveChats();
+// 2026-10-21：對話改存伺服器（/api/chats，資料在 data/workspace.db，每個帳號只讀得到自己的），換瀏覽器也看得到。
+// 「這台瀏覽器正在看哪一則」(currentChatId) 照舊存 localStorage。舊的 localStorage 對話第一次載入時自動搬上伺服器。
+let chatsLoaded = false, _chatsLoading = null, _chatSaveTimer = null, _chatSaveFailed = false;
+const _chatSent = {};   // 每則對話最後一次成功存到伺服器的內容，用來判斷哪些有變
+function _chatPayload(ch){ return JSON.stringify({title:ch.title, messages:ch.messages, projectId:ch.projectId || null}); }
+
+async function _putChat(ch){
+  const body = _chatPayload(ch);
+  const r = await fetch('/api/chats/' + encodeURIComponent(ch.id), {method:'PUT', headers:{'Content-Type':'application/json'}, body});
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok || !d.ok) throw new Error(d.error || ('伺服器回應 ' + r.status));
+  _chatSent[ch.id] = body;
+}
+function _chatSaveWarn(msg){
+  if(msg){ _chatSaveFailed = true; setComposerHint(msg, 'voice-err'); }
+  else if(_chatSaveFailed){ _chatSaveFailed = false; setComposerHint(''); }
+}
+
+async function _loadChatsFromServer(){
+  const r = await fetch('/api/chats');
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok || !d.ok) throw new Error(d.error || ('伺服器回應 ' + r.status));
+  let list = (d.chats || []).map(ch => ({id:ch.id, title:ch.title, messages:ch.messages || [], projectId:ch.projectId || null}));
+  // 完全沒有訊息的對話直接清掉（2026-10-21：空白對話不列進清單，舊版留下的也一併清理）
+  list.filter(ch => !ch.messages.length).forEach(ch => { fetch('/api/chats/' + encodeURIComponent(ch.id), {method:'DELETE'}).catch(() => {}); });
+  list = list.filter(ch => ch.messages.length);
+  list.forEach(ch => { _chatSent[ch.id] = _chatPayload(ch); });
+  if(!list.length){
+    // 舊對話搬家：伺服器上還沒有、這台瀏覽器有 → 上傳，成功後把舊資料改名成備份（不刪）
+    let old = [];
+    try { old = JSON.parse(localStorage.getItem(_chatsKey()) || '[]'); } catch(e){ old = []; }
+    if(Array.isArray(old) && old.length){
+      old = old.filter(ch => ch && Array.isArray(ch.messages) && ch.messages.length);
+      for(const ch of old){ ch.projectId = null; await _putChat(ch); }
+      try {
+        localStorage.setItem(_chatsKey() + '_backup', localStorage.getItem(_chatsKey()));
+        localStorage.removeItem(_chatsKey());
+      } catch(e){}
+      list = old;
+    }
   }
+  return list;
+}
+
+async function initChats(){
+  if(!chatsLoaded){
+    if(!_chatsLoading){
+      _chatsLoading = _loadChatsFromServer().then(list => { chats = list; }).catch(e => {
+        _chatSaveWarn('讀不到伺服器上的對話（' + (e.message || e) + '），請確認網站還在執行後重新整理。');
+      }).finally(() => { chatsLoaded = true; _chatsLoading = null; });
+    }
+    await _chatsLoading;
+  }
+  try { currentChatId = localStorage.getItem(_currentChatKey()) || currentChatId || null; } catch(e){}
   if(!currentChatId || !chats.find(ch=>ch.id===currentChatId)){
-    currentChatId = chats[chats.length-1].id;
+    // 剛登入或上次看的是還沒送出的空白對話：開一則空白對話（歡迎畫面），送出第一則訊息才會存檔、列進清單
+    const draft = chats.find(ch => !ch.messages.length && !ch.projectId);
+    if(draft) currentChatId = draft.id;
+    else { currentChatId = 'chat_' + Date.now(); chats.push({id:currentChatId, title:'新對話', messages:[], projectId:null}); }
   }
   hydrateChatFlows();
   renderChatList();
   renderMessages();
 }
 
+// 呼叫點跟原本一樣多：改成把有變動的對話合併 0.8 秒後存到伺服器；存不進去會在輸入框下方明顯提示
 function saveChats(){
-  localStorage.setItem(_chatsKey(), JSON.stringify(chats));
-  localStorage.setItem(_currentChatKey(), currentChatId||'');
+  try { localStorage.setItem(_currentChatKey(), currentChatId||''); } catch(e){}
+  clearTimeout(_chatSaveTimer);
+  _chatSaveTimer = setTimeout(_flushChats, 800);
 }
-
-function newChat(){
-  if(!chats.length){
-    try { chats = JSON.parse(localStorage.getItem(_chatsKey())||'[]'); } catch(e){ chats=[]; }
+async function _flushChats(){
+  _chatSaveTimer = null;
+  for(const ch of chats.slice()){
+    if(!ch.messages.length) continue;   // 空白對話送出第一則訊息才存
+    if(_chatSent[ch.id] === _chatPayload(ch)) continue;
+    try { await _putChat(ch); _chatSaveWarn(null); }
+    catch(e){ _chatSaveWarn('對話沒有存到伺服器：' + (e.message || e) + '。請確認網站還在執行，重新整理前先複製重要內容。'); }
   }
-  const id = 'chat_' + Date.now();
-  chats.push({id, title:'新對話', messages:[]});
-  currentChatId = id;
+}
+// 關閉或離開頁面前，把還沒存的小量變動送出去（keepalive 有大小限制，大的對話靠前面的 0.8 秒存檔）
+window.addEventListener('pagehide', () => {
+  if(!_chatSaveTimer) return;
+  chats.forEach(ch => {
+    const body = _chatPayload(ch);
+    if(!ch.messages.length || _chatSent[ch.id] === body || body.length > 60000) return;
+    try { fetch('/api/chats/' + encodeURIComponent(ch.id), {method:'PUT', headers:{'Content-Type':'application/json'}, body, keepalive:true}); } catch(e){}
+  });
+});
+
+// 2026-10-21：空白對話不列進「最近的對話」、也不存到伺服器，送出第一則訊息（或上傳檔案）後才正式成立；
+// 已經在空白對話上再按「新對話」不會多開一則
+function _dropEmptyChats(keepId){ chats = chats.filter(ch => ch.messages.length || ch.id === keepId); }
+function newChat(projectId){
+  if(!chatsLoaded){ initChats().then(() => newChat(projectId)); return; }
+  const pid = (typeof projectId === 'string' && projectId) ? projectId : null;
+  const cur = currentChat();
+  if(cur && !cur.messages.length){
+    cur.projectId = pid;
+  } else {
+    const id = 'chat_' + Date.now();
+    chats.push({id, title:'新對話', messages:[], projectId: pid});
+    currentChatId = id;
+  }
+  _dropEmptyChats(currentChatId);
   saveChats();
   showPage('chat');
   renderChatList();
@@ -3070,8 +3210,12 @@ function newChat(){
 function deleteChat(id, e){
   e.stopPropagation();
   chats = chats.filter(ch=>ch.id!==id);
+  delete _chatSent[id];
+  fetch('/api/chats/' + encodeURIComponent(id), {method:'DELETE'}).then(r => {
+    if(!r.ok) throw new Error('伺服器回應 ' + r.status);
+  }).catch(err => _chatSaveWarn('對話沒有從伺服器刪除：' + (err.message || err) + '，重新整理後可能還會看到。'));
   if(currentChatId===id) currentChatId = chats.length ? chats[chats.length-1].id : null;
-  if(!chats.length){ saveChats(); newChat(); return; }   // 先存檔：newChat() 在清單空的時候會從 localStorage 讀回，沒存會讀到刪除前的資料
+  if(!chats.length){ saveChats(); newChat(); return; }   // 先存檔再開新對話（2026-10-21 修正，見 CHANGELOG）
   saveChats();
   renderChatList();
   renderMessages();
@@ -3079,6 +3223,7 @@ function deleteChat(id, e){
 
 function switchChat(id){
   currentChatId = id;
+  _dropEmptyChats(id);
   saveChats();
   showPage('chat');
   hydrateChatFlows();
@@ -3093,11 +3238,298 @@ function currentChat(){
 function renderChatList(){
   const el = document.getElementById('chat-room-list');
   if(!el) return;
-  el.innerHTML = chats.slice().reverse().map(ch=>`
+  el.innerHTML = chats.filter(ch => ch.messages.length).reverse().map(ch=>`
     <div class="chat-room-item ${ch.id===currentChatId?'active':''}" onclick="switchChat('${ch.id}')">
-      <span class="chat-room-title"><span>${escHtml(ch.title)}</span></span>
+      <span class="chat-room-title">${chatProjectBadge(ch)}<span>${escHtml(ch.title)}</span></span>
       <span class="chat-room-delete" role="button" tabindex="0" data-tip="刪除這個對話" aria-label="刪除這個對話" onclick="deleteChat('${ch.id}',event)">刪除</span>
     </div>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  專案（2026-10-21）：說明、專案指示、對話、服務、上傳的檔案。不做共享，只看得到自己的。
+// ══════════════════════════════════════════════════════════════════
+let projects = [], currentProjectId = null, projTab = 'overview', projData = null;
+const PROJ_ICON = '<svg class="proj-ico" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M1.75 4.25a1 1 0 011-1h3.2l1.5 1.5h5.8a1 1 0 011 1v6.5a1 1 0 01-1 1H2.75a1 1 0 01-1-1v-8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+function escAttr(v){ return esc(v).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+function projectById(id){ return projects.find(p => p.id === id); }
+function chatProjectBadge(ch){
+  const p = ch && ch.projectId ? projectById(ch.projectId) : null;
+  return p ? `<span class="proj-badge" data-tip="專案：${escAttr(p.name)}" aria-label="專案：${escAttr(p.name)}">${PROJ_ICON}</span>` : '';
+}
+async function projFetch(url, method, body){
+  const r = await fetch(url, {method: method || 'GET', headers: body ? {'Content-Type':'application/json'} : {}, body: body ? JSON.stringify(body) : undefined});
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok || d.ok === false) throw new Error(d.error || ('伺服器回應 ' + r.status));
+  return d;
+}
+async function loadProjects(){
+  try { projects = (await projFetch('/api/projects')).projects || []; }
+  catch(e){ projects = []; }
+  renderProjectList();
+  renderChatList();
+}
+function renderProjectList(){
+  const el = document.getElementById('project-list');
+  if(!el) return;
+  if(!projects.length){ el.innerHTML = '<div class="proj-empty-side">還沒有專案，按右上的 + 建立。</div>'; return; }
+  const onProj = currentPageName() === 'project';
+  el.innerHTML = projects.map(p => `
+    <div class="chat-room-item proj-item ${onProj && p.id === currentProjectId ? 'active' : ''}" role="button" tabindex="0" onclick="openProject('${p.id}')" onkeydown="if(event.key==='Enter')openProject('${p.id}')">
+      <span class="chat-room-title">${PROJ_ICON}<span>${esc(p.name)}</span></span>
+    </div>`).join('');
+}
+function openProject(id){
+  currentProjectId = id;
+  projTab = 'overview';
+  showPage('project');
+}
+function setProjTab(t){ projTab = t; renderProjectPage(); }
+async function loadProjectPage(){
+  const body = document.getElementById('proj-body');
+  renderProjectList();
+  if(!currentProjectId){ showPage('chat'); return; }
+  try {
+    projData = (await projFetch('/api/projects/' + encodeURIComponent(currentProjectId))).project;
+  } catch(e){
+    projData = null;
+    body.innerHTML = `<div class="proj-box">${emptyBlock('讀不到這個專案。', e.message || String(e))}</div>`;
+    return;
+  }
+  const i = projects.findIndex(p => p.id === projData.id);
+  if(i >= 0){ projects[i] = Object.assign({}, projects[i], {name: projData.name}); renderProjectList(); }
+  renderProjectPage();
+}
+function renderProjectPage(){
+  const p = projData;
+  if(!p) return;
+  document.getElementById('proj-title').textContent = p.name;
+  document.getElementById('proj-sub').textContent = p.description || '這個專案的對話、服務和上傳的檔案都整理在這裡。';
+  const tt = document.getElementById('topbar-title');
+  if(tt) tt.textContent = '專案：' + p.name;
+  document.getElementById('proj-newchat-btn').textContent = `在「${p.name}」開始新對話`;
+  document.querySelectorAll('.proj-tabs button').forEach(b => {
+    const on = b.dataset.ptab === projTab;
+    b.classList.toggle('active', on); b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  const body = document.getElementById('proj-body');
+  if(projTab === 'services') body.innerHTML = projServicesHTML(p);
+  else if(projTab === 'files') body.innerHTML = projFilesHTML(p);
+  else if(projTab === 'settings') body.innerHTML = projSettingsHTML(p);
+  else body.innerHTML = projOverviewHTML(p);
+}
+function projTime(ts){
+  const d = new Date(ts * 1000);
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+function projOverviewHTML(p){
+  const chatRows = p.chats.length ? p.chats.map(c => `
+      <div class="proj-row click" role="button" tabindex="0" onclick="openProjectChat('${c.id}')" onkeydown="if(event.key==='Enter')openProjectChat('${c.id}')">
+        <span class="grow">${esc(c.title)}</span><span class="proj-muted">${projTime(c.updated_at)}</span></div>`).join('')
+    : '<p class="proj-muted">還沒有對話。按右上的按鈕，在這個專案開始第一則對話；在專案裡部署的服務會自動歸到這個專案。</p>';
+  return `<div class="proj-grid">
+    <div class="proj-box"><h2>對話</h2>${chatRows}</div>
+    <div class="proj-box"><h2>說明與專案指示</h2>
+      <label class="lbl" for="proj-desc">說明</label>
+      <textarea id="proj-desc" maxlength="2000" placeholder="這個專案在做什麼，例如：學校社團的網路商店">${esc(p.description)}</textarea>
+      <label class="lbl" for="proj-inst">專案指示</label>
+      <textarea id="proj-inst" maxlength="2000" placeholder="例如：映像檔都用公司的倉庫、web 至少開 2 個副本、記憶體上限 512Mi">${esc(p.instructions)}</textarea>
+      <p class="field-hint">AI 回答這個專案裡的問題時會參考專案指示。部署時不會自動改設定，還是以你在部署單上確認的內容為準。</p>
+      <div class="proj-actions"><span class="proj-msg" id="proj-ov-msg"></span><button type="button" class="btn primary" onclick="saveProjectText()">儲存</button></div>
+    </div></div>`;
+}
+function projServicesHTML(p){
+  const rows = p.services.length ? p.services.map(s => {
+    const st = !s.exists ? '找不到這個服務，可能已經在別的地方被刪除了' : s.sleeping ? '休眠中' : `${s.ready}/${s.replicas} 個副本就緒`;
+    return `<div class="proj-row"><span class="grow">${esc(s.name)}</span><span class="proj-muted">${esc(st)}</span>
+      <button type="button" class="btn btn-sm" data-tip="移出後服務照常運作" onclick="projServiceAction('remove','${escAttr(s.name)}')">移出專案</button></div>`;
+  }).join('') : '<p class="proj-muted">這個專案還沒有服務。在專案的對話裡部署，或從下面把現有的服務移進來。</p>';
+  const add = p.available_services.length
+    ? `<div class="proj-actions" style="justify-content:flex-start"><select id="proj-add-svc" aria-label="選擇要移進專案的服務">${p.available_services.map(n => `<option value="${escAttr(n)}">${esc(n)}</option>`).join('')}</select>
+         <button type="button" class="btn" onclick="projServiceAction('add', document.getElementById('proj-add-svc').value)">移進專案</button></div>`
+    : '<p class="proj-muted" style="margin-top:12px">目前沒有可以移進來的服務（每個服務只能屬於一個專案）。</p>';
+  return `<div class="proj-box"><h2>服務</h2>${rows}
+    <div class="proj-actions" style="justify-content:flex-start"><span class="proj-msg" id="proj-svc-msg"></span></div>
+    <label class="lbl">把現有的服務移進這個專案</label>${add}</div>`;
+}
+function projFilesHTML(p){
+  const rows = p.files.length ? p.files.map(f => `
+      <div class="proj-row"><span class="grow">${esc(f.name)}</span>
+        <span class="proj-muted">${f.format === 'k8s' ? 'Kubernetes YAML' : 'docker-compose'}，${Math.max(1, Math.round(f.size / 1000))} KB，${projTime(f.created_at)}</span>
+        <a class="btn btn-sm" href="/api/projects/${encodeURIComponent(p.id)}/files/${encodeURIComponent(f.id)}" download>下載</a>
+        <button type="button" class="btn btn-sm danger" onclick="projDeleteFile('${f.id}','${escAttr(f.name)}')">刪除</button></div>`).join('')
+    : '<p class="proj-muted">還沒有檔案。在這個專案的對話裡上傳 docker-compose 或 Kubernetes YAML，原始檔案會留在這裡。</p>';
+  return `<div class="proj-box"><h2>檔案</h2>${rows}</div>`;
+}
+function projSettingsHTML(p){
+  return `<div class="page-stack">
+    <div class="proj-box"><h2>專案名稱</h2>
+      <input type="text" id="proj-name" maxlength="40" value="${escAttr(p.name)}" aria-label="專案名稱">
+      <div class="proj-actions"><span class="proj-msg" id="proj-name-msg"></span><button type="button" class="btn primary" onclick="renameProject()">儲存</button></div></div>
+    <div class="proj-box danger"><h2>刪除專案</h2>
+      <p class="proj-muted">可以選擇要一起刪掉哪些內容，其餘的移出專案或留在專案裡。部署紀錄和報告用的紀錄一律保留。</p>
+      <div class="proj-actions"><button type="button" class="btn danger" onclick="openDeleteProject()">刪除專案…</button></div></div>
+  </div>`;
+}
+function projSetMsg(id, text, ok){
+  const el = document.getElementById(id);
+  if(el){ el.textContent = text; el.className = 'proj-msg ' + (ok ? 'ok' : 'err'); }
+}
+async function saveProjectText(){
+  try {
+    projData = (await projFetch('/api/projects/' + encodeURIComponent(currentProjectId), 'PATCH',
+      {description: document.getElementById('proj-desc').value, instructions: document.getElementById('proj-inst').value})).project;
+    document.getElementById('proj-sub').textContent = projData.description || '這個專案的對話、服務和上傳的檔案都整理在這裡。';
+    projSetMsg('proj-ov-msg', '已儲存。', true);
+  } catch(e){ projSetMsg('proj-ov-msg', '沒有存成功：' + e.message, false); }
+}
+async function renameProject(){
+  try {
+    projData = (await projFetch('/api/projects/' + encodeURIComponent(currentProjectId), 'PATCH',
+      {name: document.getElementById('proj-name').value})).project;
+    const i = projects.findIndex(p => p.id === projData.id);
+    if(i >= 0) projects[i].name = projData.name;
+    renderProjectList(); renderChatList(); renderProjectPage();
+    projSetMsg('proj-name-msg', '已儲存。', true);
+  } catch(e){ projSetMsg('proj-name-msg', '沒有存成功：' + e.message, false); }
+}
+async function projServiceAction(action, name){
+  if(!name) return;
+  try {
+    const d = await projFetch('/api/projects/' + encodeURIComponent(currentProjectId) + '/services', 'POST', {action, name});
+    await loadProjectPage();
+    projSetMsg('proj-svc-msg', d.message, true);
+  } catch(e){ projSetMsg('proj-svc-msg', e.message, false); }
+}
+async function projDeleteFile(fid, name){
+  if(!(await askConfirm('刪除檔案', `確定要刪除 <b>${esc(name)}</b> 嗎？已經部署的服務不受影響。`, '刪除', '取消'))) return;
+  try { await projFetch('/api/projects/' + encodeURIComponent(currentProjectId) + '/files/' + encodeURIComponent(fid), 'DELETE'); }
+  catch(e){ await askConfirm('沒有刪除成功', esc(e.message), '知道了', '關閉'); }
+  loadProjectPage();
+}
+async function openProjectChat(id){
+  await initChats();
+  if(!chats.find(ch => ch.id === id)){ chatsLoaded = false; await initChats(); }
+  switchChat(id);
+}
+function projectNewChat(){ if(currentProjectId) newChat(currentProjectId); }
+
+// ── 新增專案、刪除專案的卡片 ──
+function openProjModal(html){
+  document.getElementById('proj-modal').innerHTML = html;
+  document.getElementById('proj-modal-bg').classList.add('open');
+  setTimeout(() => { const f = document.querySelector('#proj-modal input[type=text], #proj-modal input'); if(f) f.focus(); }, 0);
+}
+function closeProjModal(){ document.getElementById('proj-modal-bg').classList.remove('open'); }
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && document.getElementById('proj-modal-bg')?.classList.contains('open')) closeProjModal(); });
+function openProjectModal(){
+  openProjModal(`<h3>新增專案</h3>
+    <label class="lbl" for="np-name">專案名稱</label><input type="text" id="np-name" maxlength="40" placeholder="例如：網路商店" onkeydown="if(event.key==='Enter')createProject()">
+    <label class="lbl" for="np-desc">說明（選填）</label><textarea id="np-desc" maxlength="2000" placeholder="這個專案在做什麼"></textarea>
+    <div class="proj-err" id="np-err" hidden></div>
+    <div class="confirm-dialog-actions"><button type="button" class="btn" onclick="closeProjModal()">取消</button>
+      <button type="button" class="btn primary" onclick="createProject()">建立</button></div>`);
+}
+async function createProject(){
+  const err = document.getElementById('np-err');
+  try {
+    const p = (await projFetch('/api/projects', 'POST', {name: document.getElementById('np-name').value, description: document.getElementById('np-desc').value})).project;
+    projects.push(p);
+    closeProjModal();
+    openProject(p.id);
+  } catch(e){ err.textContent = e.message; err.hidden = false; }
+}
+function openDeleteProject(){
+  const p = projData;
+  if(!p) return;
+  const nSvc = p.services.length, hasInst = !!(p.instructions || '').trim();
+  const svcList = nSvc ? '：' + p.services.map(s => esc(s.name)).join('、') : '';
+  openProjModal(`<h3>刪除專案「${esc(p.name)}」</h3><div class="proj-del">
+    <div class="q">請勾選想要移除的部分：</div>
+    <label><input type="checkbox" id="pd-all" onchange="pdSync(this)"> <span>整個專案<span class="note">勾選後會自動勾選下列所有選項</span></span></label>
+    <label><input type="checkbox" class="pd-part" data-k="chats" onchange="pdSync()"> <span>對話（${p.chats.length} 則）</span></label>
+    <label><input type="checkbox" class="pd-part" data-k="services" onchange="pdSync()"> <span>服務（${nSvc} 個${svcList}）${nSvc ? '<span class="note warn-t">勾選會關掉並刪除正在運行的服務</span>' : ''}</span></label>
+    <label><input type="checkbox" class="pd-part" data-k="files" onchange="pdSync()"> <span>檔案（上傳的 compose、YAML，${p.files.length} 個）</span></label>
+    <label><input type="checkbox" class="pd-part" data-k="instructions" onchange="pdSync()"> <span>專案指示${hasInst ? '' : '（目前是空的）'}</span></label>
+    <div id="pd-rest-box"><div class="q">未勾選的部分要怎麼處理？</div>
+      <label><input type="radio" name="pd-rest" value="move" onchange="pdSync()"> <span>移出專案，然後刪除這個空專案<span class="note">對話會變成一般對話，服務照常運作、不屬於任何專案</span></span></label>
+      <label><input type="radio" name="pd-rest" value="keep" onchange="pdSync()"> <span>保留在這個專案中（只刪除勾選的部分）</span></label></div>
+    <div class="proj-warn" id="pd-lost" hidden></div>
+    <div id="pd-confirm" hidden><label class="lbl" for="pd-name" style="display:block;padding:0;cursor:default">要刪除服務，請輸入專案名稱「${esc(p.name)}」確認：</label>
+      <input type="text" id="pd-name" autocomplete="off" oninput="pdSync()"></div>
+    <div class="proj-err" id="pd-err" hidden></div>
+    </div>
+    <div class="confirm-dialog-actions"><button type="button" class="btn" onclick="closeProjModal()">取消</button>
+      <button type="button" class="btn primary danger" id="pd-go" disabled onclick="doDeleteProject()">刪除</button></div>`);
+  pdSync();
+}
+function pdState(){
+  const all = document.getElementById('pd-all').checked;
+  const parts = {};
+  document.querySelectorAll('.pd-part').forEach(c => { parts[c.dataset.k] = all || c.checked; });
+  const r = document.querySelector('input[name="pd-rest"]:checked');
+  return {all, parts, rest: all ? 'move' : (r ? r.value : null)};
+}
+function pdSync(src){
+  const p = projData, allBox = document.getElementById('pd-all');
+  if(src === allBox) document.querySelectorAll('.pd-part').forEach(c => { c.checked = allBox.checked; });
+  const s = pdState();
+  document.querySelectorAll('.pd-part').forEach(c => { c.disabled = s.all; });
+  document.getElementById('pd-rest-box').hidden = s.all;
+  // 移出時沒地方放的：檔案、專案指示
+  const lost = [];
+  if(s.rest === 'move' && !s.all){
+    if(!s.parts.files && p.files.length) lost.push('files');
+    if(!s.parts.instructions && (p.instructions || '').trim()) lost.push('instructions');
+  }
+  const lostBox = document.getElementById('pd-lost');
+  if(lost.length){
+    const links = [];
+    if(lost.includes('files')) p.files.forEach(f => links.push(`<a href="/api/projects/${encodeURIComponent(p.id)}/files/${encodeURIComponent(f.id)}" download>${esc(f.name)}</a>`));
+    if(lost.includes('instructions')) links.push('<a href="#" onclick="pdDownloadInstructions();return false">專案指示.txt</a>');
+    lostBox.innerHTML = `${lost.includes('files') ? '檔案' : ''}${lost.length === 2 ? '和' : ''}${lost.includes('instructions') ? '專案指示' : ''}在專案外沒有地方放，會跟專案一起刪除。需要的話先下載備份：${links.join('、')}`;
+    lostBox.hidden = false;
+  } else lostBox.hidden = true;
+  const needName = s.parts.services && p.services.length > 0;
+  document.getElementById('pd-confirm').hidden = !needName;
+  const nameOk = !needName || document.getElementById('pd-name').value.trim() === p.name;
+  const anyPart = Object.values(s.parts).some(Boolean);
+  const valid = s.rest && (s.rest === 'move' || anyPart) && nameOk;
+  document.getElementById('pd-go').disabled = !valid;
+}
+function pdDownloadInstructions(){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([projData.instructions || ''], {type:'text/plain;charset=utf-8'}));
+  a.download = projData.name + '-專案指示.txt';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+async function doDeleteProject(){
+  const s = pdState(), p = projData, btn = document.getElementById('pd-go'), err = document.getElementById('pd-err');
+  btn.disabled = true; btn.textContent = '處理中…'; err.hidden = true;
+  let d;
+  try {
+    const r = await fetch('/api/projects/' + encodeURIComponent(p.id) + '/delete', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({remove: Object.assign({all: s.all}, s.parts), rest: s.rest, confirm_name: (document.getElementById('pd-name') || {}).value || ''})});
+    d = await r.json().catch(() => ({}));
+    if(!r.ok || !d.ok) throw new Error(d.error || ('伺服器回應 ' + r.status));
+  } catch(e){
+    err.textContent = e.message; err.hidden = false; btn.textContent = '刪除'; pdSync();
+    return;
+  }
+  closeProjModal();
+  // 對話可能被刪除或移出：先把還沒存的變動送出，再從伺服器重新讀一次
+  clearTimeout(_chatSaveTimer); await _flushChats();
+  chatsLoaded = false; chats = [];
+  await loadProjects();
+  if(d.project_deleted){
+    currentProjectId = null;
+    await initChats();
+    showPage('chat');
+    setComposerHint(`已刪除專案「${p.name}」${d.deleted_services && d.deleted_services.length ? '，並刪除服務：' + d.deleted_services.join('、') : ''}。`);
+  } else {
+    await initChats();
+    showPage('project');
+  }
 }
 
 function renderMessages(){
@@ -3312,7 +3744,7 @@ async function flowExecuteDeploy(id){
   persistFlowCard(id);
   try{
     const r = await fetch('/api/deploy',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({input:flow.originalText, parsed:flow.spec})});
+      body:JSON.stringify({input:flow.originalText, parsed:flow.spec, project_id:flow.projectId || undefined})});
     const d = await r.json();
     if(!flowAlive(flow)) return;
     if(d.error || d.rejected){
@@ -3577,7 +4009,7 @@ async function runQA(text){
   setTyping('Thinking');
   try{
     const hist = (currentChat()?.messages || []).slice(-10).map(m => ({role: m.role === 'assistant' ? 'assistant' : 'user', content: msgPlainText(m.content)}));
-    const r = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:text, history:hist})});
+    const r = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:text, history:hist, project_id:currentChat()?.projectId || undefined})});
     const d = await r.json();
     removeTyping();
     appendMsg('assistant', d.reply || d.error || '沒有收到回覆，請再問一次。', d.sources, 'text');
@@ -4393,7 +4825,7 @@ function flowStateAttrs(flow){
               spec:flow.spec, review:flow.review, resource:flow.resource, rollout:flow.rollout || null,
               resultMsg:flow.resultMsg || null, errorMsg:flow.errorMsg || null, blockers:flow.blockers || null,
               retryStep:flow.retryStep || null, pendingSync:!!flow.pendingSync, scenario:flow.scenario || null,
-              compose:flow.compose || null, source:flow.source || null};
+              compose:flow.compose || null, source:flow.source || null, projectId:flow.projectId || null};
   return `data-flow-id="${flow.id}" data-flow-seq="${flow.seq}" data-flow-step="${flow.step}" data-flow-state="${encodeURIComponent(JSON.stringify(st))}" data-summary="${esc(flowSummary(flow))}"`;
 }
 function flowSummary(flow){
@@ -4452,10 +4884,12 @@ async function onComposeFile(input){
 async function startComposeFlow(text, source){
   appendTyping('Parsing');
   try{
-    const r = await fetch('/api/import/parse', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})});
+    const pid = currentChat()?.projectId || undefined;
+    const r = await fetch('/api/import/parse', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text, project_id:pid, filename:pid ? (source || '') : undefined})});
     const d = await r.json();
     removeTyping();
     if(d.error){ appendMsg('assistant', '沒辦法匯入這份檔案：' + d.error, null, 'text'); return; }
+    if(d.project_file && !d.project_file.ok) appendMsg('assistant', '這份檔案沒有存進專案的「檔案」分頁：' + d.project_file.error + '（不影響這次部署）', null, 'text');
     const flow = newFlow('compose', source || '', {});
     flow.step = 'list';
     flow.source = source || '';
@@ -4600,7 +5034,7 @@ async function composeDeploy(id){
     s.state = 'deploying';
     persistFlowCard(id);
     try{
-      const d = await cpFetch(flow, '/api/deploy', {parsed:cpSpec(s)});
+      const d = await cpFetch(flow, '/api/deploy', {parsed:cpSpec(s), project_id:flow.projectId || undefined});
       if(!flowAlive(flow)) return;
       const ok = !d.error && !d.rejected && !(d.k8s_deploy && d.k8s_deploy.ok === false);
       s.state = ok ? 'deployed' : 'failed';
@@ -5082,6 +5516,7 @@ async function openPodDrawer(name, diagnose){
 window.addEventListener('DOMContentLoaded', function(){
   if(loggedIn){
     applyLang();
+    loadProjects();
     initChats();
     showPage('chat');
   }
@@ -5988,6 +6423,10 @@ def api_chat():
     snap = _cluster_snapshot_for(message, user_ns)
     if snap:
         grounded = f"[現況]\n{snap}\n\n[問題]\n{message}"
+    # 專案裡的對話：把專案指示當成背景資料（2026-10-21；沒帶 project_id 就跟原本一樣）
+    proj_note = _ws_project_instructions(data.get("project_id"))
+    if proj_note:
+        grounded = f"[專案指示（使用者為這個專案設定的偏好，僅供參考）]\n{proj_note}\n\n{grounded}"
     reply, sources = chat_llama(grounded, history)
     if reply.startswith("[Local Model unavailable]"):
         reply, sources = _fallback_chat_reply(message, history, user_ns)
@@ -6522,17 +6961,24 @@ def api_compose_parse():
     # 讀內容之前先看大小（JSON 包裝後會比原文大一些，留兩倍空間）
     if (request.content_length or 0) > MAX_COMPOSE_BYTES * 2:
         return jsonify({"error": f"檔案太大（上限 {MAX_COMPOSE_BYTES // 1000} KB）。"}), 413
-    text = (request.get_json(silent=True) or {}).get("text") or ""
+    body = request.get_json(silent=True) or {}
+    text = body.get("text") or ""
     if not isinstance(text, str):
         return jsonify({"error": "格式不對。"}), 400
     # 2026-10-21：同一個入口也接受 Kubernetes YAML（有 apiVersion、kind 就當成 K8s 設定檔）
     from agents.k8s_yaml_import import parse_k8s_yaml, looks_like_k8s
     try:
         if looks_like_k8s(text):
-            return jsonify(parse_k8s_yaml(text, default_port))
-        return jsonify({**parse_compose(text, default_port), "format": "compose"})
+            result = parse_k8s_yaml(text, default_port)
+        else:
+            result = {**parse_compose(text, default_port), "format": "compose"}
     except ComposeError as e:
         return jsonify({"error": str(e)}), 400
+    # 專案裡的對話上傳的檔案，原文存進專案的「檔案」分頁（沒帶 project_id 就跟原本一樣）
+    if body.get("project_id"):
+        result["project_file"] = _ws_save_upload(body.get("project_id"), body.get("filename"),
+                                                 result.get("format") or "yaml", text)
+    return jsonify(result)
 
 
 @app.route("/api/deploy/parse", methods=["POST"])
@@ -6597,6 +7043,8 @@ def api_deploy():
         except Exception as e:
             gitops_result = {"ok": False, "files": [], "commit_sha": None, "message": str(e)}
             k8s_result = {"ok": False, "message": str(e)}
+        if gitops_result.get("ok"):
+            _ws_assign_after_deploy(data.get("project_id"), parsed.get("app_name"), user_ns)
         return jsonify({"parsed": enriched, "k8s": True, "review": review, "gitops": gitops_result,
                         "k8s_deploy": k8s_result, "resource_summary": _resource_summary(parsed, review),
                         "customer_cluster": True})
@@ -6623,6 +7071,8 @@ def api_deploy():
         k8s_deploy_result = {"ok": ok, "message": message}
         if not ok:
             review.setdefault("warnings", []).append(f"K8s 部署失敗：{message}")
+        else:
+            _ws_assign_after_deploy(data.get("project_id"), parsed.get("app_name"), user_ns)
 
     return jsonify({"parsed": enriched, "k8s": K8S_ENABLED, "review": review, "gitops": gitops_result,
                     "k8s_deploy": k8s_deploy_result, "resource_summary": _resource_summary(parsed, review)})
@@ -7732,6 +8182,18 @@ def _dashboard_summary(namespace):
 
 # ── 寫入類包裝 ──
 def k8s_delete_deployment(app_name, namespace=None):
+    result = _k8s_delete_deployment_by_mode(app_name, namespace)
+    # 2026-10-21 專案功能：服務刪掉後清掉它的專案歸屬，同名的新服務不會繼承（兩種叢集模式都經過這裡）
+    if result and result[0] and namespace:
+        try:
+            from core import workspace_store
+            workspace_store.forget_service(namespace, app_name)
+        except Exception:
+            pass
+    return result
+
+
+def _k8s_delete_deployment_by_mode(app_name, namespace=None):
     if not _is_remote_ns(namespace):
         return _local_k8s_delete_deployment(app_name, namespace)
     blocked = _remote_write_guard(namespace)
@@ -8644,6 +9106,214 @@ def api_autoscale_settings():
         return jsonify({"ok": False, "error": f"天數要在 {_as_store.MIN_IDLE_DAYS} 到 {_as_store.MAX_IDLE_DAYS} 天之間。"}), 400
     _as_store.set_idle_days(ns, days)
     return jsonify({"ok": True, "message": f"已經改成：服務連續 {days} 天沒人使用就自動休眠。"})
+
+
+# ══════════════════════════════════════════════════════════════════
+#  對話存伺服器＋專案（2026-10-21）：資料在 core/workspace_store.py（data/workspace.db）。
+#  對話、專案、檔案綁登入帳號（owner），服務歸屬綁 namespace；不做共享，讀寫只碰自己的資料。
+# ══════════════════════════════════════════════════════════════════
+from core import workspace_store as _ws
+
+
+def _ws_guard():
+    if "username" not in session:
+        return None, None, (jsonify({"error": "Not authenticated"}), 401)
+    return session["username"], _session_ns(), None
+
+
+def _ws_assign_after_deploy(project_id, app_name, ns):
+    """部署成功後把服務歸到專案（專案不是自己的就忽略，不影響部署結果）。"""
+    if not project_id or not app_name or not has_request_context() or "username" not in session:
+        return
+    try:
+        if _ws.get_project(session["username"], project_id):
+            _ws.assign_service(ns, app_name, session["username"], project_id)
+    except Exception as e:
+        print(f"[project] 部署後歸到專案失敗：{e}")
+
+
+def _ws_save_upload(project_id, filename, fmt, text):
+    try:
+        f = _ws.add_file(session["username"], str(project_id), filename or "upload.yaml", fmt, text)
+        return {"ok": True, "name": f["name"]}
+    except _ws.WorkspaceError as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _ws_project_instructions(project_id) -> str:
+    if not project_id or "username" not in session:
+        return ""
+    p = _ws.get_project(session["username"], str(project_id))
+    return (p or {}).get("instructions") or ""
+
+
+def _ws_err(e, status=400):
+    return jsonify({"ok": False, "error": str(e)}), status
+
+
+# ── 對話 ──
+@app.route("/api/chats")
+def api_chats_list():
+    owner, _, err = _ws_guard()
+    if err:
+        return err
+    return jsonify({"ok": True, "chats": _ws.list_chats(owner)})
+
+
+@app.route("/api/chats/<chat_id>", methods=["PUT", "DELETE"])
+def api_chat_put(chat_id):
+    owner, _, err = _ws_guard()
+    if err:
+        return err
+    if request.method == "DELETE":
+        _ws.delete_chat(owner, chat_id)
+        return jsonify({"ok": True})
+    if (request.content_length or 0) > _ws.MAX_CHAT_BYTES * 2:
+        return _ws_err("這則對話太長了，沒辦法再存。請開一則新對話繼續。", 413)
+    body = request.get_json(silent=True) or {}
+    try:
+        _ws.put_chat(owner, chat_id, body.get("title"), body.get("messages"), body.get("projectId"))
+    except _ws.WorkspaceError as e:
+        return _ws_err(e)
+    return jsonify({"ok": True})
+
+
+# ── 專案 ──
+def _ws_project_view(owner, ns, p):
+    apps = _ws.services_of(ns, owner, p["id"])
+    live = {d["name"]: d for d in (k8s_get_deployments(ns) or [])}
+    services = [{"name": a, "exists": a in live,
+                 "replicas": live.get(a, {}).get("replicas"), "ready": live.get(a, {}).get("ready"),
+                 "sleeping": live.get(a, {}).get("sleeping", False)} for a in apps]
+    owned = _ws.service_projects(ns, owner)
+    available = [d["name"] for d in live.values() if d["name"] not in owned]
+    return {**p, "chats": _ws.chats_of(owner, p["id"]), "services": services,
+            "available_services": sorted(available), "files": _ws.list_files(owner, p["id"])}
+
+
+@app.route("/api/projects", methods=["GET", "POST"])
+def api_projects():
+    owner, _, err = _ws_guard()
+    if err:
+        return err
+    if request.method == "POST":
+        body = request.get_json(silent=True) or {}
+        try:
+            p = _ws.create_project(owner, body.get("name"), body.get("description") or "")
+        except _ws.WorkspaceError as e:
+            return _ws_err(e)
+        return jsonify({"ok": True, "project": p})
+    return jsonify({"ok": True, "projects": _ws.list_projects(owner)})
+
+
+@app.route("/api/projects/<pid>", methods=["GET", "PATCH"])
+def api_project(pid):
+    owner, ns, err = _ws_guard()
+    if err:
+        return err
+    p = _ws.get_project(owner, pid)
+    if not p:
+        return _ws_err("找不到這個專案，可能已經被刪除了。", 404)
+    if request.method == "PATCH":
+        body = request.get_json(silent=True) or {}
+        try:
+            p = _ws.update_project(owner, pid, body.get("name"), body.get("description"), body.get("instructions"))
+        except _ws.WorkspaceError as e:
+            return _ws_err(e)
+    return jsonify({"ok": True, "project": _ws_project_view(owner, ns, p)})
+
+
+@app.route("/api/projects/<pid>/services", methods=["POST"])
+def api_project_services(pid):
+    owner, ns, err = _ws_guard()
+    if err:
+        return err
+    if not _ws.get_project(owner, pid):
+        return _ws_err("找不到這個專案，可能已經被刪除了。", 404)
+    body = request.get_json(silent=True) or {}
+    name, action = str(body.get("name") or "").strip(), body.get("action")
+    if action == "remove":
+        if _ws.service_projects(ns, owner).get(name) != pid:
+            return _ws_err(f"「{name}」不在這個專案裡。", 404)
+        _ws.unassign_service(ns, name, owner)
+        return jsonify({"ok": True, "message": f"已經把 {name} 移出專案，服務照常運作。"})
+    if action != "add":
+        return _ws_err("不認得的動作。")
+    if name not in {d["name"] for d in (k8s_get_deployments(ns) or [])}:
+        return _ws_err(f"找不到服務「{name}」。", 404)
+    other = _ws.service_projects(ns, owner).get(name)
+    if other and other != pid:
+        q = _ws.get_project(owner, other)
+        return _ws_err(f"「{name}」已經在專案「{(q or {}).get('name', '')}」裡，一個服務只能屬於一個專案。請先從那個專案移出。", 409)
+    _ws.assign_service(ns, name, owner, pid)
+    return jsonify({"ok": True, "message": f"已經把 {name} 移進專案。"})
+
+
+@app.route("/api/projects/<pid>/files/<fid>", methods=["GET", "DELETE"])
+def api_project_file(pid, fid):
+    owner, _, err = _ws_guard()
+    if err:
+        return err
+    if request.method == "DELETE":
+        if not _ws.delete_file(owner, pid, fid):
+            return _ws_err("找不到這個檔案。", 404)
+        return jsonify({"ok": True})
+    f = _ws.get_file(owner, pid, fid)
+    if not f:
+        return _ws_err("找不到這個檔案。", 404)
+    from urllib.parse import quote
+    return app.response_class(f["content"], mimetype="text/yaml; charset=utf-8", headers={
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(f['name'])}",
+        "X-Content-Type-Options": "nosniff"})
+
+
+@app.route("/api/projects/<pid>/delete", methods=["POST"])
+def api_project_delete(pid):
+    """刪除專案（使用者設計的勾選卡片）：remove 是要刪掉的部分；rest＝move 時其餘移出並刪除空專案，
+    rest＝keep 時其餘留在專案裡、專案保留。有服務刪除失敗時不刪專案本身。部署紀錄與事件紀錄一律保留。"""
+    owner, ns, err = _ws_guard()
+    if err:
+        return err
+    p = _ws.get_project(owner, pid)
+    if not p:
+        return _ws_err("找不到這個專案，可能已經被刪除了。", 404)
+    body = request.get_json(silent=True) or {}
+    rm = body.get("remove") or {}
+    everything = bool(rm.get("all"))
+    rm = {k: everything or bool(rm.get(k)) for k in ("chats", "services", "files", "instructions")}
+    rest = "move" if everything else body.get("rest")
+    if rest not in ("move", "keep"):
+        return _ws_err("請選擇未勾選的部分要移出專案，還是保留在專案中。")
+    if rest == "keep" and not any(rm.values()):
+        return _ws_err("沒有勾選任何要移除的部分。")
+    apps = _ws.services_of(ns, owner, pid)
+    if rm["services"] and apps and str(body.get("confirm_name") or "").strip() != p["name"]:
+        return _ws_err("要刪除服務，請輸入正確的專案名稱確認。")
+
+    done, failed = [], []
+    if rm["services"]:
+        for a in apps:
+            ok, msg = k8s_delete_deployment(a, ns)
+            (done if ok else failed).append(a if ok else f"{a}（{msg}）")
+    if rm["chats"]:
+        _ws.delete_chats_of(owner, pid)
+    if rm["files"]:
+        _ws.delete_files_of(owner, pid)
+    if rm["instructions"]:
+        _ws.update_project(owner, pid, instructions="")
+    if failed:
+        return jsonify({"ok": False, "project_deleted": False, "deleted_services": done,
+                        "error": "這些服務沒有刪掉：" + "、".join(failed)
+                                 + "。專案先保留，請確認 Kubernetes 連線正常後再試一次。"}), 502
+    deleted_project = rest == "move"
+    if deleted_project:
+        if not rm["chats"]:
+            _ws.move_chats_out(owner, pid)
+        if not rm["services"]:
+            for a in apps:
+                _ws.unassign_service(ns, a, owner)
+        _ws.delete_project_row(owner, pid)
+    return jsonify({"ok": True, "project_deleted": deleted_project, "deleted_services": done})
 
 
 if __name__ == "__main__":
