@@ -3304,6 +3304,10 @@ async function startDeployFlow(text){
   }
 }
 
+// 訊息排隊依序處理（2026-10-21 全系統檢查）：上一則還在處理時再送一則，快的那則會先回答、排在慢的前面，
+// 而且快的一回來「思考中」就消失，使用者以為慢的那則已經結束。現在使用者可以連續送出，但照順序回答。
+let chatQueue = Promise.resolve();
+let chatPending = 0;
 async function sendChat(){
   const inp = document.getElementById('chat-input');
   const text = inp.value.trim();
@@ -3312,6 +3316,18 @@ async function sendChat(){
   inp.style.height = '';
   if(!currentChatId) newChat();
   appendMsg('user', text);
+  chatPending++;
+  if(chatPending > 1) appendTyping('排隊中，前一則回答完就會處理這則');
+  const job = chatQueue.then(() => handleChat(text));
+  chatQueue = job.catch(() => {});
+  try { await job; }
+  finally {
+    chatPending--;
+    if(chatPending > 0) appendTyping('處理下一則訊息');
+  }
+}
+
+async function handleChat(text){
   // 貼上的是 docker-compose 內容：直接走匯入流程
   if(looksLikeCompose(text)){
     try{ await startComposeFlow(text, '貼上的內容'); }
@@ -3447,6 +3463,8 @@ function appendTyping(label){
     div = document.createElement('div');
     div.className = 'msg ai'; div.id = 'typing-indicator';
     msgs.appendChild(div);
+  } else if(div !== msgs.lastElementChild){
+    msgs.appendChild(div);   // 永遠留在最底下，不要卡在後來送出的訊息上方
   }
   const txt = TYPING_LABELS[label] || label || '思考中';
   div.innerHTML = '<div class="think-row"><div class="spinner"></div><span data-role="think-label">' + escHtml(txt) + '</span></div>';
