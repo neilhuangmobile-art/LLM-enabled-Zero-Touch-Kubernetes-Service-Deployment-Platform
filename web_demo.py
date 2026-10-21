@@ -3289,6 +3289,7 @@ async function loadProjectPage(){
   renderProjectList();
   if(!currentProjectId){ showPage('chat'); return; }
   try {
+    await initChats();
     projData = (await projFetch('/api/projects/' + encodeURIComponent(currentProjectId))).project;
   } catch(e){
     projData = null;
@@ -3324,10 +3325,20 @@ function projTime(ts){
 function projOverviewHTML(p){
   const chatRows = p.chats.length ? p.chats.map(c => `
       <div class="proj-row click" role="button" tabindex="0" onclick="openProjectChat('${c.id}')" onkeydown="if(event.key==='Enter')openProjectChat('${c.id}')">
-        <span class="grow">${esc(c.title)}</span><span class="proj-muted">${projTime(c.updated_at)}</span></div>`).join('')
+        <span class="grow">${esc(c.title)}</span><span class="proj-muted">${projTime(c.updated_at)}</span>
+        <button type="button" class="btn btn-sm" data-tip="移出後變成一般對話，內容不變" onclick="event.stopPropagation();moveChatToProject('${c.id}', null)">移出專案</button></div>`).join('')
     : '<p class="proj-muted">還沒有對話。按右上的按鈕，在這個專案開始第一則對話；在專案裡部署的服務會自動歸到這個專案。</p>';
+  // 2026-10-21：把現有的一般對話移進專案（已經在別的專案的對話要先從那個專案移出）
+  const loose = chats.filter(ch => ch.messages.length && !ch.projectId).slice().reverse();
+  const addChat = loose.length
+    ? `<div class="proj-actions" style="justify-content:flex-start"><select id="proj-add-chat" aria-label="選擇要移進專案的對話">${loose.map(ch => `<option value="${escAttr(ch.id)}">${esc(ch.title)}</option>`).join('')}</select>
+         <button type="button" class="btn" onclick="moveChatToProject(document.getElementById('proj-add-chat').value, currentProjectId)">移進專案</button></div>`
+    : '<p class="proj-muted">沒有可以移進來的對話（已經在其他專案裡的對話，要先從那個專案移出）。</p>';
   return `<div class="proj-grid">
-    <div class="proj-box"><h2>對話</h2>${chatRows}</div>
+    <div class="proj-box"><h2>對話</h2>${chatRows}
+      <div class="proj-actions" style="justify-content:flex-start"><span class="proj-msg" id="proj-chat-msg"></span></div>
+      <label class="lbl">把現有的對話移進這個專案</label>${addChat}
+      <p class="field-hint">移動對話不會移動它部署過的服務；服務要到「服務」分頁另外移。</p></div>
     <div class="proj-box"><h2>說明與專案指示</h2>
       <label class="lbl" for="proj-desc">說明</label>
       <textarea id="proj-desc" maxlength="2000" placeholder="這個專案在做什麼，例如：學校社團的網路商店">${esc(p.description)}</textarea>
@@ -3410,6 +3421,19 @@ async function openProjectChat(id){
   await initChats();
   if(!chats.find(ch => ch.id === id)){ chatsLoaded = false; await initChats(); }
   switchChat(id);
+}
+async function moveChatToProject(chatId, pid){
+  const ch = chats.find(c => c.id === chatId);
+  if(!ch) return;
+  const before = ch.projectId || null;
+  ch.projectId = pid || null;
+  clearTimeout(_chatSaveTimer); _chatSaveTimer = null;
+  try { await _putChat(ch); }
+  catch(e){ ch.projectId = before; projSetMsg('proj-chat-msg', '沒有移成功：' + (e.message || e), false); return; }
+  renderChatList();
+  await loadProjectPage();
+  projSetMsg('proj-chat-msg', pid ? `已經把「${ch.title}」移進專案。` : `已經把「${ch.title}」移出專案，變成一般對話。`, true);
+  _flushChats();
 }
 function projectNewChat(){ if(currentProjectId) newChat(currentProjectId); }
 
