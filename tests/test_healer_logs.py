@@ -57,3 +57,20 @@ def test_pure_crashloop_still_detected():
         "events": [{"reason": "BackOff", "message": "Back-off restarting failed container web"}],
     })
     assert d["action"] == "analyze_logs"
+
+
+@pytest.mark.parametrize("logs,keep", [
+    ("FATAL: cannot connect to database\n", False),                    # 日誌沒提到 Redis，模型卻寫 Redis → 換掉
+    ("Error: connect ECONNREFUSED redis:6379\n", True),               # 日誌真的有 Redis → 保留模型說法
+])
+def test_model_cannot_invent_tech_names(monkeypatch, logs, keep):
+    """2026-10-21 全系統檢查：日誌只寫連不上資料庫，模型建議卻寫「確認 Redis 容器已正確執行」。"""
+    import healer.diagnose as dg
+    monkeypatch.setattr(dg, "_llm_analyze", lambda ctx: {
+        "root_cause": "無法連線到資料庫", "suggestion": "確認 Redis 容器已正確執行且可訪問", "severity": "medium"})
+    d = dg.diagnose_issue({"pod_name": "orders-api-1", "namespace": "u", "container": "c", "reason": "Error",
+                           "message": "", "restart_count": 3, "logs": logs, "events": [], "image": "busybox:1.36"})
+    assert d["action"] == "check_dependencies"
+    assert ("Redis" in d["suggestion"]) is keep
+    if not keep:
+        assert "Redis" in (d.get("llm_raw_guess") or "")   # 被攔下的說法留存，近失事件可見化
