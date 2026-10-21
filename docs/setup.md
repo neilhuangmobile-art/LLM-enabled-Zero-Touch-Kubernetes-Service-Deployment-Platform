@@ -140,7 +140,9 @@ powershell -ExecutionPolicy Bypass -File scripts\install_autostart.ps1 -Remove  
 會在 Windows「啟動」資料夾放一個捷徑（不需要系統管理員權限），登入後在背景執行 `start_services.ps1 -AtBoot`：
 先啟動模型伺服器；Kubernetes 還沒就緒時，Docker Desktop 沒開就幫忙開，最多等 10 分鐘，**叢集就緒才啟動網站**
 （網站只在啟動時檢查一次叢集，太早啟動會一直當成沒有叢集）。10 分鐘都沒好，網站照樣啟動並顯示 Docker 沒開的提示。
-過程記在 `logs\startup.log`。Tailscale 的對外網址（`tailscale funnel --bg`）本身重開機後就會恢復，不用另外處理。2026-10-10 曾發生模型伺服器在
+過程記在 `logs\startup.log`。Tailscale 的對外網址（`tailscale funnel --bg`）本身重開機後就會恢復，不用另外處理。
+
+2026-10-10 曾發生模型伺服器在
 AI 助理的背景工作裡啟動、對話重新開啟時跟著被結束，網站頂端出現「AI 模型伺服器沒有在執行」的紅色橫幅；
 用這個腳本啟動就不會有這個問題。
 
