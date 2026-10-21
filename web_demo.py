@@ -3071,7 +3071,7 @@ function deleteChat(id, e){
   e.stopPropagation();
   chats = chats.filter(ch=>ch.id!==id);
   if(currentChatId===id) currentChatId = chats.length ? chats[chats.length-1].id : null;
-  if(!chats.length){ newChat(); return; }
+  if(!chats.length){ saveChats(); newChat(); return; }   // 先存檔：newChat() 在清單空的時候會從 localStorage 讀回，沒存會讀到刪除前的資料
   saveChats();
   renderChatList();
   renderMessages();

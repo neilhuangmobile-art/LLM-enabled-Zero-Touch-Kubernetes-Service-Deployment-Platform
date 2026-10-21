@@ -286,3 +286,15 @@ GitHub org 開的私有 repo（`gitops/tenant_repo.py`），客戶叢集的 Flux
 - **踩過的坑**：Healer 不能用「還原最近一次變更」修映像檔問題，會讓設定來回跳；要用
   `restore_previous_image` 加冷卻時間。新的 GitHub org 預設關閉 deploy key，要手動開。這台電腦的網路
   遇到大量平行下載會卡住，第一次拉 Flux 映像檔可能要重啟 Docker Desktop。
+
+## 分時擴縮與閒置休眠（2026-10-11 完成本機模式，隊友陳冠穎負責）
+
+對話說「shop-web 白天 3 個、晚上 1 個」照時段調副本數；服務太久沒人連線就降到 0，有人連線自動喚醒；「x 不要休眠」加入例外清單。
+程式在 `agents/timeslot.py`（時段解析，全部是固定規則）、`core/autoscale_store.py`（設定，`data/autoscale.db`）、
+`core/sleep_mode.py`（閒置判斷與喚醒器），`web_demo.py` 尾端的 `_autoscale_loop` 是背景迴圈。安全設計見 `docs/security_review.md` 42 節。
+
+- 排程與行事曆共用同一個背景迴圈 `_autoscale_loop`，不要另開第二套。
+- 只支援本機模式；客戶叢集模式（`zt-` 開頭的 namespace）還沒做：要改用回報器的資料判斷閒置，排程改成照時間寫 Git 設定。
+- 測試、展示時可以把閒置期間縮短：環境變數 `ZT_IDLE_SECONDS_OVERRIDE`（秒）只套用在 `ZT_IDLE_OVERRIDE_NAMESPACES` 列出的 namespace，正式運作不要設。
+- **踩過的坑**：設定儲存第一次使用時在鎖裡面又拿同一把鎖，整個網站卡住，已改用 RLock。
+- **分支**：學校那台（隊友）的進度推在 `dev/capstone6767` 分支，合併進 main 前先跟負責人確認。
