@@ -293,7 +293,10 @@ GitHub org 開的私有 repo（`gitops/tenant_repo.py`），客戶叢集的 Flux
 程式在 `agents/timeslot.py`（時段解析，全部是固定規則）、`core/autoscale_store.py`（設定，`data/autoscale.db`）、
 `core/sleep_mode.py`（閒置判斷與喚醒器），`web_demo.py` 尾端的 `_autoscale_loop` 是背景迴圈。安全設計見 `docs/security_review.md` 42 節。
 
-- 排程與行事曆共用同一個背景迴圈 `_autoscale_loop`，不要另開第二套。
+- 背景工作一律掛在共用排程器 `core/scheduler.py`（`scheduler.register(名稱, 函式, every_seconds=…)`，用法寫在檔案開頭），分時擴縮的三個工作由 `_register_autoscale_tasks()` 註冊；之後的行事曆也掛上來，不要另開第二套迴圈。
+- 閒置天數上限 7 天（Prometheus 只保留 10 天、沒有永久儲存）。喚醒器第一次用要從 Docker Hub 下載 `python:3.12-alpine`。
+- 分時擴縮的 K8s 呼叫一律帶 `_request_timeout=_AS_K8S_TIMEOUT`；`_as_read_dep` 叢集沒回應時丟 `_AsClusterDown`（回 503 中文說明）。
+- 「我的服務」頁有「分時與休眠」模組（`W.autoscale`），「設定排程」彈窗是 `openScheduleEditor()`。
 - 只支援本機模式；客戶叢集模式（`zt-` 開頭的 namespace）還沒做：要改用回報器的資料判斷閒置，排程改成照時間寫 Git 設定。
 - 測試、展示時可以把閒置期間縮短：環境變數 `ZT_IDLE_SECONDS_OVERRIDE`（秒）只套用在 `ZT_IDLE_OVERRIDE_NAMESPACES` 列出的 namespace，正式運作不要設。
 - **踩過的坑**：設定儲存第一次使用時在鎖裡面又拿同一把鎖，整個網站卡住，已改用 RLock。

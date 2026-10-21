@@ -16,7 +16,9 @@ from typing import Dict, List, Optional
 
 DEFAULT_IDLE_DAYS = 5
 MIN_IDLE_DAYS = 1
-MAX_IDLE_DAYS = 30
+# 2026-10-21：上限從 30 天改成 7 天。這台 Prometheus 只保留 10 天資料（而且沒有永久儲存空間），超過保留期的天數
+# 永遠判斷不出來；留 3 天緩衝，避免資料剛好卡在邊界時在「夠／不夠」之間跳動。
+MAX_IDLE_DAYS = 7
 
 # RLock：讀寫函式拿著鎖時會呼叫 _db()，第一次使用時 _db() 會呼叫 init()，init() 也要拿同一把鎖。
 # 用一般的 Lock 會自己卡死（2026-10-11 實測：網站第一次查排程就整個停住）。
@@ -108,6 +110,7 @@ def get_settings(namespace: str) -> Dict:
     with _lock:
         row = _db().execute("SELECT idle_days, exempt FROM settings WHERE namespace = ?", (namespace,)).fetchone()
     idle_days = row[0] if row and row[0] else DEFAULT_IDLE_DAYS
+    idle_days = max(MIN_IDLE_DAYS, min(MAX_IDLE_DAYS, int(idle_days)))   # 舊版存過超過 7 天的設定也當 7 天
     exempt = json.loads(row[1]) if row and row[1] else []
     return {"idle_days": int(idle_days), "exempt": sorted(set(exempt))}
 

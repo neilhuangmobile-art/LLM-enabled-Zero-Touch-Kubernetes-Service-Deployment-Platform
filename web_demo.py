@@ -1581,6 +1581,12 @@ a{color:var(--signal)}
 .proj-del .warn-t{color:var(--stop);font-size:12.5px}
 .proj-warn{font-size:13.5px;background:var(--caution-soft);border:1px solid var(--caution);border-radius:4px;padding:8px 10px;margin-top:10px}
 .proj-err{font-size:13.5px;background:var(--stop-soft);border:1px solid color-mix(in srgb,var(--stop) 50%,transparent);border-radius:4px;padding:8px 10px;margin-top:10px}
+/* 分時擴縮：「我的服務」頁的閒置天數、設定排程彈窗（2026-10-21） */
+.as-idle{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;color:var(--text-2)}
+.as-idle select{background:var(--panel-2);border:1px solid var(--grid-2);border-radius:var(--radius);padding:3px 6px;color:var(--text);font-size:13.5px}
+.as-ed-ex{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+#as-ed-plan .zt-w{margin-top:12px}
+.proj-modal:has(#as-ed-plan){max-width:640px}
 .sys-panel{border:1px solid var(--grid);border-radius:8px;background:var(--panel);padding:10px 12px;display:flex;flex-direction:column;gap:7px;font-size:13.5px}
 .status-pill{display:flex;align-items:center;gap:8px;min-width:0}
 .status-pill .val{margin-left:auto;color:var(--text-3);font-size:13px;white-space:nowrap}
@@ -2370,7 +2376,7 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
       <div class="page-head"><div><h1 class="page-title">我的服務</h1>
         <p class="page-sub">你部署的每個服務，以及它底下實際在跑的 Pod。點任一列可以看詳情，服務還可以擴縮、更新映像檔、回滾或刪除。</p></div>
         <div class="page-actions"><button type="button" class="btn primary" data-act="example" data-text="部署 2 個 nginx:1.27，開 80 port">部署新服務</button></div></div>
-      <div class="page-stack"><div id="svc-deps"></div><div id="svc-pods"></div></div>
+      <div class="page-stack"><div id="svc-deps"></div><div id="svc-autoscale"></div><div id="svc-pods"></div></div>
     </div>
 
     <!-- Chat Page -->
@@ -2602,7 +2608,7 @@ const MANUAL_ZH = `
         <li><b>休眠</b>：服務連續 5 天沒有人連線，就把副本數降到 0，不佔資源。平台看的是實際收到的流量，健康檢查本身的流量不算。</li>
         <li><b>自動喚醒</b>：休眠中有人連進來，會先看到「服務正在喚醒」，通常幾秒到 1 分鐘就恢復原本的副本數。也可以說 <code>喚醒 shop-web</code>。</li>
         <li><b>例外清單</b>：<code>shop-web 不要休眠</code> 把它加進例外，<code>shop-web 可以休眠</code> 移出例外。</li>
-        <li><code>閒置 3 天就休眠</code>：改天數（1 到 30 天）。<code>休眠設定</code>：看每個服務的狀態、排程與例外，也可以直接按按鈕操作。</li>
+        <li><code>閒置 3 天就休眠</code>：改天數（1 到 7 天）。<code>休眠設定</code>：看每個服務的狀態、排程與例外，也可以直接按按鈕操作。</li>
       </ul>
     </div>
   </details>
@@ -3626,7 +3632,7 @@ function matchClientRule(text){
     ['as_cancel', /(?:取消|刪除|關掉|停止|移除)\s*([a-z0-9][a-z0-9-]*)\s*的?\s*(?:分時|排程|時段)/i, m=>({name:m[1]})],
     ['as_idle_days', /(?:閒置|沒人?用|沒有人用|沒有?流量)\s*(?:超過)?\s*(\d{1,2})\s*天.{0,10}休眠/i, m=>({days:parseInt(m[1],10)})],
     ['as_show', /(?:分時|排程|休眠|例外)(?:擴縮)?\s*(?:的)?\s*(?:設定|狀態|清單|名單|列表|情況)|^(?:列出|查看|顯示|看看?).{0,6}(?:排程|休眠|例外)/i, null],
-    ['as_schedule', /^(?!.*(?:部署|佈署|部屬|deploy)).*(?:白天|晚上|夜間|晚間|深夜|凌晨|上班時間|辦公時間|平日|工作日|週末|周末|假日|\d{1,2}\s*(?:點|[:：]\d{2})).{0,40}?\d{1,3}\s*(?:個|副本|pods?)/i, null],
+    ['as_schedule', /^(?!.*(?:部署|佈署|部屬|deploy|擴|縮|調|掛掉|掛了|壞|當機|當掉|錯誤|出錯)).*(?:白天|晚上|夜間|晚間|深夜|凌晨|上班時間|辦公時間|平日|工作日|週末|周末|假日|\d{1,2}\s*(?:點|[:：]\d{2})).{0,40}?\d{1,3}\s*(?:個|副本|pods?)/i, null],
     // 分析報告：句子裡有「報告／報表／週報／月報」而且不是在要求部署
     ['report', /^(?!.*(?:\u90e8\u7f72|deploy|\u8d77\u4e00\u500b|\u958b\u4e00\u500b)).*(?:\u5206\u6790\u5831\u544a|\u5831\u544a|\u5831\u8868|\u9031\u5831|\u5468\u5831|\u6708\u5831|\breport\b)/i, () => ({q:text})],
     ['list_pods', /^(list|show|\u67e5\u770b|\u986f\u793a|\u5217\u51fa)\s*(all\s*|\u6240\u6709|\u5168\u90e8)?\s*(pods?|\u5bb9\u5668)/i, null],
@@ -3792,6 +3798,29 @@ async function flowExecuteDeploy(id){
   }
   persistFlowCard(id);
   if(flow.step === 'done') trackRollout(id);
+  if(flow.step === 'done') offerScheduleAfterDeploy(flow);
+}
+
+// 2026-10-21：「平日 2 個、週末 1 個……幫我部署」這種句子，部署完成後提示可以接著設定分時擴縮
+// （分時擴縮只能設定在已經部署的服務上，所以不在部署的同時套用）
+function schedulePhraseOf(text){
+  const t = String(text || '');
+  const m = t.match(/(?:白天|晚上|夜間|晚間|深夜|凌晨|上班時間|辦公時間|平日|工作日|週末|周末|假日|\d{1,2}\s*(?:點|[:：]\d{2}))/);
+  if(!m) return '';
+  const rest = t.slice(m.index);
+  let end = 0;
+  for(const x of rest.matchAll(/\d{1,3}\s*(?:個|副本|pods?)/gi)){ if(x.index > 80) break; end = x.index + x[0].length; }
+  return end ? rest.slice(0, end).replace(/["“”「」]/g, '').trim() : '';
+}
+function offerScheduleAfterDeploy(flow){
+  if(flow.kind !== 'deploy' || !flow.spec || !flow.spec.app_name) return;
+  const phrase = schedulePhraseOf(flow.originalText);
+  if(!phrase) return;
+  const ch = currentChat();
+  if(!ch || !ch.messages.some(m => String(m.content || '').includes('data-flow-id="' + flow.id + '"'))) return;
+  const sentence = flow.spec.app_name + ' ' + phrase;
+  appendMsg('assistant', `<div>你剛剛也提到時段。服務部署好了，要接著設定分時擴縮嗎？分時擴縮只能設定在已經部署的服務上，所以剛剛沒有一起套用。
+    <div style="margin-top:8px"><button type="button" class="btn btn-sm" data-act="example" data-text="${escAttr(sentence)}">把「${esc(sentence)}」放進輸入框</button></div></div>`);
 }
 
 async function startDestructiveFlow(kind, args){
@@ -3843,6 +3872,16 @@ async function startDeployFlow(text){
   try{
     const r = await fetch('/api/deploy/parse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:text})});
     const d = await r.json();
+    if(Array.isArray(d.missing) && d.missing.length && d.parsed && !d.rejected){
+      // 2026-10-21：句子沒講到映像檔等必要欄位時，不再顯示英文錯誤，直接出部署單讓使用者補（審查流程不變）
+      const p = d.parsed;
+      const what = {app_name:'服務名稱（例如 shop-web）', image:'映像檔：要跑哪個程式，例如 nginx:1.27、redis:7', pods:'副本數：要同時開幾個'};
+      appendMsg('assistant', '還差' + d.missing.map(k => what[k] || k).join('；') + '。請在下面的部署單補上，再按「下一步」。', null, 'text');
+      const flow = newFlow('deploy', text, {app_name:p.app_name || '', image:p.image || '', pods:p.pods || 1, port:p.port || 80,
+                                             memory:p.memory, cpu:p.cpu});
+      appendMsg('assistant', renderFlowCard(flow));
+      return;
+    }
     if(d.error || d.rejected){
       appendMsg('assistant', '沒辦法部署：' + (d.error || d.reason || '審查沒有通過。'), null, 'text');
       return;
@@ -4369,7 +4408,8 @@ W.autoscale = {
   summary: d => d.ok === false ? '分時與休眠：' + (d.error || '')
     : `分時與休眠：${(d.items || []).filter(x => x.sleeping).length} 個服務休眠中，${(d.items || []).filter(x => x.schedule).length} 個有排程`,
   head: d => `<h2>分時與休眠</h2><span class="meta">${d.ok === false ? '' : `<span>連續 ${esc(d.idle_days)} 天沒人用就休眠</span>`}<span>${esc(d.at)} 的資料</span></span>
-    <div class="filters"><button type="button" class="chip ghost" data-act="refresh">重新整理</button></div>`,
+    <div class="filters">${d.ok === false ? '' : `<label class="as-idle">閒置 <select class="as-idle-sel" aria-label="閒置幾天就休眠">${[1,2,3,4,5,6,7].map(n => `<option value="${n}" ${n === Number(d.idle_days) ? 'selected' : ''}>${n}</option>`).join('')}</select> 天就休眠</label>
+      <button type="button" class="chip ghost" data-act="as-idle-save">儲存天數</button>`}<button type="button" class="chip ghost" data-act="refresh">重新整理</button></div>`,
   body: (d, st) => {
     if(d.ok === false) return emptyBlock('這個功能現在不能用。', d.error || '');
     const items = d.items || [];
@@ -4387,7 +4427,8 @@ W.autoscale = {
         : x.idle_note ? `<div class="dim as-note">${esc(x.idle_note)}</div>` : '';
       const btns = (x.sleeping && !x.waking ? `<button type="button" class="btn btn-sm primary" data-act="as-wake" data-name="${esc(x.name)}">喚醒</button>` : '') +
         `<button type="button" class="btn btn-sm" data-act="as-exempt" data-name="${esc(x.name)}" data-v="${x.exempt ? 0 : 1}">${x.exempt ? '允許休眠' : '不要休眠'}</button>` +
-        (x.schedule ? `<button type="button" class="btn btn-sm" data-act="as-cancel" data-name="${esc(x.name)}">取消排程</button>` : '');
+        (x.schedule ? `<button type="button" class="btn btn-sm" data-act="as-cancel" data-name="${esc(x.name)}">取消排程</button>` : '') +
+        `<button type="button" class="btn btn-sm primary" data-act="as-edit" data-name="${esc(x.name)}">${x.schedule ? '修改排程' : '設定排程'}</button>`;
       return `<tr class="enter" style="animation-delay:${i * 25}ms"><td class="id">${esc(x.name)}${note}</td><td>${state}</td>
         <td class="as-sched">${sched}</td><td class="r"><div class="as-btns">${btns}</div></td></tr>`;
     }).join('');
@@ -4420,6 +4461,28 @@ W.asplan = {
     return table + save + notes + asMsg(st) + foot;
   },
 };
+// 2026-10-21：「我的服務」頁的「設定排程」：輸入時段 → 預覽（跟對話裡同一張確認卡）→ 套用
+function openScheduleEditor(name){
+  const ex = ['白天 3 個、晚上 1 個', '平日 2 個、週末 1 個', '9 點到 18 點 3 個，其他時間 1 個'];
+  openProjModal(`<h3>設定 ${esc(name)} 的分時擴縮</h3>
+    <label class="lbl" for="as-ed-text">什麼時段開幾個？</label>
+    <input type="text" id="as-ed-text" placeholder="例如：白天 3 個、晚上 1 個" onkeydown="if(event.key==='Enter')previewSchedule('${escAttr(name)}')">
+    <div class="as-ed-ex">${ex.map(x => `<button type="button" class="chip ghost" onclick="document.getElementById('as-ed-text').value='${escAttr(x)}'">${esc(x)}</button>`).join('')}</div>
+    <p class="field-hint">白天是 08:00 到 20:00；平日是週一到週五。只在時段切換的那一刻調整，最少保留 1 個。</p>
+    <div class="proj-err" id="as-ed-err" hidden></div>
+    <div id="as-ed-plan"></div>
+    <div class="confirm-dialog-actions"><button type="button" class="btn" onclick="closeProjModal()">關閉</button>
+      <button type="button" class="btn primary" onclick="previewSchedule('${escAttr(name)}')">預覽</button></div>`);
+}
+async function previewSchedule(name){
+  const text = (document.getElementById('as-ed-text').value || '').trim();
+  const err = document.getElementById('as-ed-err'), host = document.getElementById('as-ed-plan');
+  err.hidden = true; host.innerHTML = '';
+  if(!text){ err.textContent = '請先輸入時段，或點一個範例。'; err.hidden = false; return; }
+  const d = await postJSON('/api/autoscale/parse', {text: name + ' ' + text});
+  if(!d.ok){ err.textContent = d.error || '看不懂這個時段設定。'; err.hidden = false; return; }
+  host.innerHTML = widgetHTML('asplan', d, {});
+}
 async function postJSON(url, body){
   const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body || {})});
   if(r.status === 401) throw new Error('登入已經過期，請重新整理頁面後再登入。');
@@ -4789,9 +4852,20 @@ document.addEventListener('click', function(e){
     const data = decState(w.dataset.wData) || {};
     t.disabled = true; t.textContent = '套用中';
     postJSON('/api/autoscale/schedule', {plan:data.plan})
-      .then(d => d.ok ? rerenderWidget(w, {msg:d.message, err:false}, Object.assign({}, data, {done:true}))
-                      : rerenderWidget(w, {msg:d.error || '沒有套用成功。', err:true}))
+      .then(d => { if(d.ok && document.getElementById('svc-autoscale') && currentPageName() === 'services') loadServicesPage(true);
+                   return d.ok ? rerenderWidget(w, {msg:d.message, err:false}, Object.assign({}, data, {done:true}))
+                               : rerenderWidget(w, {msg:d.error || '沒有套用成功。', err:true}); })
       .catch(e => rerenderWidget(w, {msg:'沒有套用成功：' + (e.message || e), err:true}));
+    return;
+  }
+  if(act === 'as-edit'){ openScheduleEditor(t.dataset.name); return; }
+  if(act === 'as-idle-save' && w){
+    const sel = w.querySelector('.as-idle-sel');
+    t.disabled = true;
+    postJSON('/api/autoscale/settings', {idle_days: parseInt(sel && sel.value, 10)}).then(async d => {
+      let data; try { data = await W_LOAD.autoscale(); } catch(e){ data = undefined; }
+      rerenderWidget(w, {msg:d.message || d.error || '', err:!d.ok}, data);
+    }).catch(e => rerenderWidget(w, {msg:'沒有儲存成功：' + (e.message || e), err:true}));
     return;
   }
   if(act === 'as-dismiss' && w){
@@ -5440,6 +5514,7 @@ async function mountWidget(hostId, kind, state, quiet){
 }
 function loadServicesPage(quiet){
   mountWidget('svc-deps', 'deployments', {p:1}, quiet);
+  mountWidget('svc-autoscale', 'autoscale', {p:1}, quiet);   // 2026-10-21：分時擴縮與休眠，可以直接點按鈕設定
   mountWidget('svc-pods', 'pods', {f:'all', p:1}, quiet);
 }
 function loadGitopsPage(quiet){ mountWidget('gitops-w', 'gitops', {p:1}, quiet); }
@@ -6014,7 +6089,8 @@ _INTENT_RULES = [
     ("as_cancel", re.compile(r"(?:取消|刪除|關掉|停止|移除)\s*([a-z0-9][a-z0-9-]*)\s*的?\s*(?:分時|排程|時段)", re.I), {1: "name"}),
     ("as_idle_days", re.compile(r"(?:閒置|沒人?用|沒有人用|沒有?流量)\s*(?:超過)?\s*(\d{1,2})\s*天.{0,10}休眠", re.I), {1: "days"}),
     ("as_show", re.compile(r"(?:分時|排程|休眠|例外)(?:擴縮)?\s*(?:的)?\s*(?:設定|狀態|清單|名單|列表|情況)|^(?:列出|查看|顯示|看看?).{0,6}(?:排程|休眠|例外)", re.I), {}),
-    ("as_schedule", re.compile(r"^(?!.*(?:部署|佈署|部屬|deploy)).*(?:白天|晚上|夜間|晚間|深夜|凌晨|上班時間|辦公時間|平日|工作日|週末|周末|假日|\d{1,2}\s*(?:點|[:：]\d{2})).{0,40}?\d{1,3}\s*(?:個|副本|pods?)", re.I), {}),
+    # 2026-10-21：排除「擴、縮、調、掛掉、壞、當機、錯誤」——「晚上 8 點把 web 擴到 3 個」是立即擴縮、「凌晨 3 點掛掉了 2 個」是在描述問題，不是設定時段
+    ("as_schedule", re.compile(r"^(?!.*(?:部署|佈署|部屬|deploy|擴|縮|調|掛掉|掛了|壞|當機|當掉|錯誤|出錯)).*(?:白天|晚上|夜間|晚間|深夜|凌晨|上班時間|辦公時間|平日|工作日|週末|周末|假日|\d{1,2}\s*(?:點|[:：]\d{2})).{0,40}?\d{1,3}\s*(?:個|副本|pods?)", re.I), {}),
     ("report",re.compile(r"^(?!.*(?:部署|deploy|起一個|開一個)).*(?:分析報告|報告|報表|週報|周報|月報|\breport\b)", re.I), {}),
     ("list_pods", re.compile(r"^(list|show|查看|顯示|列出)\s*(all\s*|所有|全部)?\s*(pods?|容器)", re.I), {}),
     ("list_deployments", re.compile(r"^(list|show|查看|顯示|列出)\s*(all\s*|所有|全部)?\s*(deploy(ment)?s?|部署)", re.I), {}),
@@ -6715,7 +6791,9 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
 
     missing = [k for k in ("app_name", "image", "pods") if not parsed.get(k)]
     if missing:
-        return parsed, enriched, None, ({"error": f"Missing required field(s): {', '.join(missing)}", "parsed": enriched}, 422)
+        # 2026-10-21：多帶 missing，前端改成直接出部署單讓使用者補（error 字串維持原樣，其他呼叫端不受影響）
+        return parsed, enriched, None, ({"error": f"Missing required field(s): {', '.join(missing)}", "parsed": enriched,
+                                         "missing": missing}, 422)
     # 2026-10-03：app_name 格式不合法時（例如純數字開頭的「123」），過去完全沒在這裡
     # 擋下——Deployment 名稱本身符合 K8s 規則，但這個系統一定會另外建一個
     # "<app_name>-svc" 的 Service，Service 名稱用的是更嚴格的 DNS-1035 規則
@@ -8575,6 +8653,8 @@ _as_lock = threading.Lock()
 _as_busy = set()                     # 正在休眠或喚醒的 (namespace, 服務)，同一個服務不能同時被兩個執行緒處理
 _as_state = {"idle": {}, "prometheus_ok": None, "last_idle_check": None}
 _AS_TICK = 10
+# 2026-10-21：分時擴縮／休眠的 K8s 呼叫一律設逾時（連線 5 秒、讀取 15 秒），叢集卡住時不會讓請求或背景迴圈跟著卡住
+_AS_K8S_TIMEOUT = (5, 15)
 _AS_SCHEDULE_EVERY = 30
 _AS_IDLE_EVERY = 600
 # 測試、展示用：把閒置期間縮成幾秒，只套用在 ZT_IDLE_OVERRIDE_NAMESPACES 列出的 namespace。正式運作不要設。
@@ -8618,7 +8698,7 @@ def _as_wait_ready(ns, name, timeout):
     end = _time.time() + timeout
     while _time.time() < end:
         try:
-            d = apps.read_namespaced_deployment(name, ns)
+            d = apps.read_namespaced_deployment(name, ns, _request_timeout=_AS_K8S_TIMEOUT)
             want = d.spec.replicas or 0
             if want and (d.status.ready_replicas or 0) >= want:
                 return True
@@ -8650,7 +8730,7 @@ def _as_services_for(ns, dep, redirected=False):
     """選到這個服務 Pod 的 Service；redirected=True 時找已經改接到它的喚醒器的。"""
     labels = dep.spec.template.metadata.labels or {}
     out = []
-    for s in k8s_client.CoreV1Api().list_namespaced_service(ns).items:
+    for s in k8s_client.CoreV1Api().list_namespaced_service(ns, _request_timeout=_AS_K8S_TIMEOUT).items:
         sel = s.spec.selector or {}
         if redirected and sel.get(_sleep.LABEL_WAKER) == dep.metadata.name:
             out.append(s)
@@ -8676,7 +8756,7 @@ def _as_point_services(ns, svcs, to_waker_of=None):
                 continue
             patch = {"metadata": {"annotations": {_sleep.ANN_ORIG_SELECTOR: None}},
                      "spec": {"selector": {**{k: None for k in cur if k not in orig}, **orig}}}
-        core.patch_namespaced_service(s.metadata.name, ns, patch)
+        core.patch_namespaced_service(s.metadata.name, ns, patch, _request_timeout=_AS_K8S_TIMEOUT)
 
 
 def _as_cost_per_replica_hour(dep) -> float:
@@ -8693,7 +8773,7 @@ def _as_sleep(ns, app, why=""):
     apps = k8s_client.AppsV1Api()
     waker = _sleep.waker_name(app)
     try:
-        dep = apps.read_namespaced_deployment(app, ns)
+        dep = apps.read_namespaced_deployment(app, ns, _request_timeout=_AS_K8S_TIMEOUT)
         ann = dict(dep.metadata.annotations or {})
         cur = int(dep.spec.replicas or 0)
         if ann.get(_sleep.ANN_SLEEP_REPLICAS) or cur == 0:
@@ -8702,14 +8782,14 @@ def _as_sleep(ns, app, why=""):
         if svcs:
             body = _sleep.waker_manifest(app, ns, [p for s in svcs for p in _as_target_ports(s, dep)])
             try:
-                apps.create_namespaced_deployment(ns, body)
+                apps.create_namespaced_deployment(ns, body, _request_timeout=_AS_K8S_TIMEOUT)
             except Exception as e:
                 if getattr(e, "status", None) != 409:
                     raise
-                apps.replace_namespaced_deployment(waker, ns, body)
+                apps.replace_namespaced_deployment(waker, ns, body, _request_timeout=_AS_K8S_TIMEOUT)
             if not _as_wait_ready(ns, waker, 120):
                 try:
-                    apps.delete_namespaced_deployment(waker, ns)
+                    apps.delete_namespaced_deployment(waker, ns, _request_timeout=_AS_K8S_TIMEOUT)
                 except Exception:
                     pass
                 raise RuntimeError("喚醒器沒有在 2 分鐘內啟動（可能是映像檔下載失敗），這次先不休眠")
@@ -8717,7 +8797,7 @@ def _as_sleep(ns, app, why=""):
         apps.patch_namespaced_deployment(app, ns, {
             "metadata": {"annotations": {_sleep.ANN_SLEEP_REPLICAS: str(cur), _sleep.ANN_SLEEPING_SINCE: _utc_now_iso(),
                                          _sleep.ANN_WAKING: None}},
-            "spec": {"replicas": 0}})
+            "spec": {"replicas": 0}}, _request_timeout=_AS_K8S_TIMEOUT)
         _events.record(ns, "sleep", app, "ok", {"replicas": cur, "why": why, "auto_wake": bool(svcs)})
         return True, (f"{app} 已經進入休眠（原本 {cur} 個副本）。" +
                       ("有人連進來時會自動喚醒。" if svcs else f"它沒有連線入口，需要時請說「喚醒 {app}」。"))
@@ -8736,13 +8816,13 @@ def _as_finish_wake(ns, dep):
         _as_point_services(ns, _as_services_for(ns, dep, redirected=True))
     finally:
         try:
-            apps.delete_namespaced_deployment(_sleep.waker_name(app), ns)
+            apps.delete_namespaced_deployment(_sleep.waker_name(app), ns, _request_timeout=_AS_K8S_TIMEOUT)
         except Exception:
             pass
         try:
             apps.patch_namespaced_deployment(app, ns, {"metadata": {"annotations": {
                 _sleep.ANN_SLEEP_REPLICAS: None, _sleep.ANN_SLEEPING_SINCE: None, _sleep.ANN_WAKING: None,
-                _sleep.ANN_ACTIVE_SINCE: _utc_now_iso()}}})
+                _sleep.ANN_ACTIVE_SINCE: _utc_now_iso()}}}, _request_timeout=_AS_K8S_TIMEOUT)
         except Exception:
             pass   # 服務已經被刪掉
 
@@ -8754,7 +8834,7 @@ def _as_wake(ns, app, source="manual", replicas=None):
     apps = k8s_client.AppsV1Api()
     target = None
     try:
-        dep = apps.read_namespaced_deployment(app, ns)
+        dep = apps.read_namespaced_deployment(app, ns, _request_timeout=_AS_K8S_TIMEOUT)
         ann = dict(dep.metadata.annotations or {})
         if not ann.get(_sleep.ANN_SLEEP_REPLICAS):
             _as_finish_wake(ns, dep)
@@ -8764,9 +8844,9 @@ def _as_wake(ns, app, source="manual", replicas=None):
         if blocked:
             raise RuntimeError(msg)
         apps.patch_namespaced_deployment(app, ns, {"metadata": {"annotations": {_sleep.ANN_WAKING: _utc_now_iso()}},
-                                                   "spec": {"replicas": target}})
+                                                   "spec": {"replicas": target}}, _request_timeout=_AS_K8S_TIMEOUT)
         ready = _as_wait_ready(ns, app, 180)
-        _as_finish_wake(ns, apps.read_namespaced_deployment(app, ns))
+        _as_finish_wake(ns, apps.read_namespaced_deployment(app, ns, _request_timeout=_AS_K8S_TIMEOUT))
         _events.record(ns, "wake", app, "ok" if ready else "fail",
                        {"replicas": target, "source": source,
                         "error": None if ready else "3 分鐘內沒有全部就緒"})
@@ -8781,9 +8861,9 @@ def _as_wake(ns, app, source="manual", replicas=None):
 
 def _as_waker_hit(ns, app) -> bool:
     core = k8s_client.CoreV1Api()
-    for p in core.list_namespaced_pod(ns, label_selector=f"{_sleep.LABEL_WAKER}={app}").items:
+    for p in core.list_namespaced_pod(ns, label_selector=f"{_sleep.LABEL_WAKER}={app}", _request_timeout=_AS_K8S_TIMEOUT).items:
         try:
-            log = core.read_namespaced_pod_log(p.metadata.name, ns, since_seconds=_AS_TICK * 3, tail_lines=50)
+            log = core.read_namespaced_pod_log(p.metadata.name, ns, since_seconds=_AS_TICK * 3, tail_lines=50, _request_timeout=_AS_K8S_TIMEOUT)
         except Exception:
             continue
         if _sleep.WAKE_MARK in (log or ""):
@@ -8798,7 +8878,7 @@ def _as_spawn(fn, *args):
 def _as_tick_wake():
     """每 10 秒：有人連到喚醒器就叫醒；休眠中的服務被手動調過副本數就收尾；沒有主人的喚醒器收掉。"""
     apps = k8s_client.AppsV1Api()
-    deps = [d for d in apps.list_deployment_for_all_namespaces().items if d.metadata.namespace.startswith("user-")]
+    deps = [d for d in apps.list_deployment_for_all_namespaces(_request_timeout=_AS_K8S_TIMEOUT).items if d.metadata.namespace.startswith("user-")]
     by_key = {(d.metadata.namespace, d.metadata.name): d for d in deps}
     for d in deps:
         ns, name = d.metadata.namespace, d.metadata.name
@@ -8809,7 +8889,7 @@ def _as_tick_wake():
                 continue
             if owner is None:
                 try:
-                    apps.delete_namespaced_deployment(name, ns)
+                    apps.delete_namespaced_deployment(name, ns, _request_timeout=_AS_K8S_TIMEOUT)
                 except Exception:
                     pass
             elif not (owner.metadata.annotations or {}).get(_sleep.ANN_SLEEP_REPLICAS):
@@ -8833,12 +8913,12 @@ def _as_apply_schedule(ns, app, plan, last_target, now=None):
     target = min(int(target), max_replicas())
     apps = k8s_client.AppsV1Api()
     try:
-        dep = apps.read_namespaced_deployment(app, ns)
+        dep = apps.read_namespaced_deployment(app, ns, _request_timeout=_AS_K8S_TIMEOUT)
     except Exception:
         return None
     if (dep.metadata.annotations or {}).get(_sleep.ANN_SLEEP_REPLICAS):
         # 休眠中不叫醒它，只更新「醒來時要開幾個」
-        apps.patch_namespaced_deployment(app, ns, {"metadata": {"annotations": {_sleep.ANN_SLEEP_REPLICAS: str(target)}}})
+        apps.patch_namespaced_deployment(app, ns, {"metadata": {"annotations": {_sleep.ANN_SLEEP_REPLICAS: str(target)}}}, _request_timeout=_AS_K8S_TIMEOUT)
         _as_store.set_last_target(ns, app, target)
         return target
     cur = int(dep.spec.replicas or 0)
@@ -8847,7 +8927,7 @@ def _as_apply_schedule(ns, app, plan, last_target, now=None):
         if blocked:
             _events.record(ns, "scale", app, "fail", {"replicas": target, "source": "schedule", "error": msg})
         else:
-            apps.patch_namespaced_deployment_scale(app, ns, {"spec": {"replicas": target}})
+            apps.patch_namespaced_deployment_scale(app, ns, {"spec": {"replicas": target}}, _request_timeout=_AS_K8S_TIMEOUT)
             _events.record(ns, "scale", app, "ok", {"replicas": target, "source": "schedule", "from": cur})
     _as_store.set_last_target(ns, app, target)
     return target
@@ -8883,13 +8963,13 @@ def _as_tick_idle():
         _as_state["prometheus_ok"] = False
         return
     apps = k8s_client.AppsV1Api()
-    for ns in [n.metadata.name for n in k8s_client.CoreV1Api().list_namespace().items if n.metadata.name.startswith("user-")]:
+    for ns in [n.metadata.name for n in k8s_client.CoreV1Api().list_namespace(_request_timeout=_AS_K8S_TIMEOUT).items if n.metadata.name.startswith("user-")]:
         settings = _as_store.get_settings(ns)
         window = (_AS_IDLE_OVERRIDE if _AS_IDLE_OVERRIDE and (not _AS_IDLE_OVERRIDE_NS or ns in _AS_IDLE_OVERRIDE_NS)
                   else settings["idle_days"] * 86400)
         bucket = _sleep.bucket_for(window)
         notes = {}
-        cand = [d for d in apps.list_namespaced_deployment(ns).items
+        cand = [d for d in apps.list_namespaced_deployment(ns, _request_timeout=_AS_K8S_TIMEOUT).items
                 if not _as_is_waker(d) and (d.spec.replicas or 0) > 0
                 and not (d.metadata.annotations or {}).get(_sleep.ANN_SLEEP_REPLICAS)]
         for d in cand:
@@ -8909,7 +8989,7 @@ def _as_tick_idle():
             except Exception:
                 continue
             rs_since = {}
-            for rs in apps.list_namespaced_replica_set(ns).items:
+            for rs in apps.list_namespaced_replica_set(ns, _request_timeout=_AS_K8S_TIMEOUT).items:
                 for o in rs.metadata.owner_references or []:
                     if o.kind == "Deployment" and rs.metadata.creation_timestamp:
                         rs_since[o.name] = max(rs_since.get(o.name, 0), rs.metadata.creation_timestamp.timestamp())
@@ -8928,27 +9008,13 @@ def _as_tick_idle():
     _as_state["last_idle_check"] = _utc_now_iso()
 
 
-def _autoscale_loop():
-    last_sched = last_idle = 0.0
-    while True:
-        _time.sleep(_AS_TICK)
-        if not K8S_ENABLED:
-            continue
-        for fn, every, last in ((_as_tick_wake, 0, None), (_as_tick_schedules, _AS_SCHEDULE_EVERY, "s"),
-                                (_as_tick_idle, _AS_IDLE_EVERY, "i")):
-            now = _time.time()
-            if last == "s":
-                if now - last_sched < every:
-                    continue
-                last_sched = now
-            elif last == "i":
-                if now - last_idle < every:
-                    continue
-                last_idle = now
-            try:
-                fn()
-            except Exception as e:
-                print(f"[分時擴縮／休眠] {fn.__name__} 失敗：{e}")
+def _register_autoscale_tasks():
+    """2026-10-21：改掛在共用背景排程器（core/scheduler.py），之後的行事曆也掛同一條，不另開迴圈。
+    間隔跟原本的 _autoscale_loop 一樣：喚醒每次醒來都看、排程每 30 秒、閒置判斷照 _AS_IDLE_EVERY。"""
+    from core import scheduler
+    scheduler.register("分時擴縮／休眠：喚醒", _as_tick_wake, every_seconds=0)
+    scheduler.register("分時擴縮：套用排程", _as_tick_schedules, every_seconds=_AS_SCHEDULE_EVERY)
+    scheduler.register("休眠：閒置判斷", _as_tick_idle, every_seconds=_AS_IDLE_EVERY)
 
 
 # ── API ──
@@ -8964,12 +9030,25 @@ def _as_guard():
     return ns, None
 
 
+class _AsClusterDown(Exception):
+    """叢集沒有回應（逾時、連不上），跟「找不到這個服務」分開講。"""
+
+
+@app.errorhandler(_AsClusterDown)
+def _as_cluster_down(e):
+    return jsonify({"ok": False, "error": "Kubernetes 叢集沒有回應，請確認 Docker Desktop 的 Kubernetes 正常運作後再試一次。"}), 503
+
+
 def _as_read_dep(ns, app):
     try:
-        d = k8s_client.AppsV1Api().read_namespaced_deployment(app, ns)
+        d = k8s_client.AppsV1Api().read_namespaced_deployment(app, ns, _request_timeout=_AS_K8S_TIMEOUT)
         return None if _as_is_waker(d) else d
-    except Exception:
-        return None
+    except k8s_client.exceptions.ApiException as e:
+        if e.status == 404:
+            return None
+        raise _AsClusterDown() from e
+    except Exception as e:
+        raise _AsClusterDown() from e
 
 
 def _as_name_arg():
@@ -8978,7 +9057,8 @@ def _as_name_arg():
 
 
 def _as_not_found(name):
-    return jsonify({"ok": False, "error": f"找不到名稱是「{name}」的服務。可以先說「列出我的服務」看看有哪些。"}), 404
+    return jsonify({"ok": False, "error": f"找不到名稱是「{name}」的服務。分時擴縮和休眠要設定在已經部署的服務上："
+                                          f"可以先部署它，或說「列出我的服務」看看有哪些。"}), 404
 
 
 def _as_plan_view(ns, plan, dep):
@@ -9002,7 +9082,11 @@ def api_autoscale():
     scheds = {s["app"]: s for s in _as_store.get_schedules(ns)}
     now = datetime.now(_ts.TZ)
     items = []
-    for d in k8s_client.AppsV1Api().list_namespaced_deployment(ns).items:
+    try:
+        dep_items = k8s_client.AppsV1Api().list_namespaced_deployment(ns, _request_timeout=_AS_K8S_TIMEOUT).items
+    except Exception as e:
+        raise _AsClusterDown() from e
+    for d in dep_items:
         if _as_is_waker(d):
             continue
         app_name, ann = d.metadata.name, d.metadata.annotations or {}
@@ -9127,7 +9211,8 @@ def api_autoscale_settings():
     except (TypeError, ValueError):
         return jsonify({"ok": False, "error": "天數要是整數。"}), 400
     if not _as_store.MIN_IDLE_DAYS <= days <= _as_store.MAX_IDLE_DAYS:
-        return jsonify({"ok": False, "error": f"天數要在 {_as_store.MIN_IDLE_DAYS} 到 {_as_store.MAX_IDLE_DAYS} 天之間。"}), 400
+        return jsonify({"ok": False, "error": f"天數要在 {_as_store.MIN_IDLE_DAYS} 到 {_as_store.MAX_IDLE_DAYS} 天之間。"
+                                              f"平台的監控只保留大約 10 天的流量紀錄，天數再長就判斷不出來有沒有人用。"}), 400
     _as_store.set_idle_days(ns, days)
     return jsonify({"ok": True, "message": f"已經改成：服務連續 {days} 天沒人使用就自動休眠。"})
 
@@ -9356,7 +9441,9 @@ if __name__ == "__main__":
         _healer_bg_state["started_at"] = _utc_now_iso()
         _healer_bg_state["interval"] = _HEALER_BG_INTERVAL
         print("  Healer: background auto-heal loop started (scan every 30s)")
-        threading.Thread(target=_autoscale_loop, daemon=True).start()
+        _register_autoscale_tasks()
+        from core import scheduler as _scheduler
+        _scheduler.start(lambda: K8S_ENABLED)
         print("  Autoscale: schedule / idle-sleep / auto-wake loop started"
               + (f"（測試模式：閒置 {_AS_IDLE_OVERRIDE} 秒就休眠）" if _AS_IDLE_OVERRIDE else ""))
     else:
