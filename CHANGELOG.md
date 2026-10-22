@@ -1307,3 +1307,12 @@ OOM 測試 Pod 被 Healer 調高記憶體後收到「✅ oomtest 已自動修復
 部署與回滾共用。回滾沒寫進 Git 時會在訊息裡說明。
 **驗證**：`tests/test_gitops_commit.py` 4 項（只提交指定檔案、hook 真的有跑、hook 擋下時不留暫存、目錄路徑）；`test_rollback.py` 補驗回滾真的產生 commit；
 `pytest` 全過（684 項）。
+
+### 01:45 — 交接前全系統檢查；組員接手說明
+**檢查範圍**：程式碼與 CI、`pytest`（700 項）與 CI 同款乾淨環境、`pip check` 與 requirements 版本、兩個網站／對外網址／模型伺服器／K8s／
+Prometheus／Grafana／Flux／Gemini、瀏覽器實測（六個頁面、問答、部署→擴縮→換映像檔→回滾→刪除、手機五個分頁、客戶叢集模式註冊與同意書）。
+**抓到並修好**：①10/9 之後本機部署與回滾沒有寫進 Git（見上方 01:30）；②「把 X 的映像檔換成 nginx:1.28」把「檔換成」當成映像檔名稱，
+而且伺服器接受了這個不合法的名稱（K8s 回 InvalidImageName，舊 Pod 還在所以服務沒斷）→ 規則改成吃掉「映像檔／鏡像檔」，
+`check_image` 先檢查 Docker 映像參照格式（`tests/test_system_check_20261023.py` 16 項）。
+**交接**：新增 `docs/handoff/TEAM_HANDOFF_2026-10-23.md`（接手步驟、新功能與程式位置、改程式的規則與陷阱、分時擴縮與個人化要先對齊的事、已知問題），
+`CLAUDE.md` 開頭加上指引。

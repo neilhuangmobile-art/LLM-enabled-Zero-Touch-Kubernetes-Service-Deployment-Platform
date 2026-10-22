@@ -13,6 +13,9 @@
 > [docs/handoff/SCHOOL_MACHINE_SETUP.md](docs/handoff/SCHOOL_MACHINE_SETUP.md)。那台的使用者是隊友，
 > 記憶快照裡的「使用者」指的是專案負責人，偏好要跟隊友確認。
 
+> **⚠ 2026-10-23 組員接手**：先讀 [docs/handoff/TEAM_HANDOFF_2026-10-23.md](docs/handoff/TEAM_HANDOFF_2026-10-23.md)
+> （接手步驟、新功能、改程式的規則與陷阱、組員負責的分時擴縮／個人化要先對齊的事、已知問題）。
+
 ## 專案是什麼
 
 LLM-enabled Zero-Touch Kubernetes Service Deployment Platform：使用者以自然語言描述需求，
@@ -44,7 +47,8 @@ LLM-enabled Zero-Touch Kubernetes Service Deployment Platform：使用者以自�
 | `healer/` | Pod 監控、LLM 根因診斷、自動補救 |
 | `observability/` | Prometheus 指標、Grafana Dashboard、告警規則（2026-09-15 起真的部署了 kube-prometheus-stack，不再是死代碼，見下方「進行中工作」與 `observability/README.md`） |
 | `training/` | LoRA 微調資料生成、清洗、訓練、評估 |
-| `web_demo.py` | Web Dashboard（Flask），現行唯一入口 |
+| `web_demo.py` | Web Dashboard（Flask），現行唯一入口；`/m` 是手機監控版（唯讀，頁面在 `core/mobile_page.py`） |
+| `core/push.py`、`core/schedule_*.py` | 手機推播；預約任務與行事曆（到期提醒、使用者確認才執行） |
 | `0_touch_generate_pods.py` | 零接觸部署 CLI 入口 |
 
 ## 測試
