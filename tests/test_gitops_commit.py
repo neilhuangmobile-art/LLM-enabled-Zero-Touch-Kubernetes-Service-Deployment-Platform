@@ -31,7 +31,9 @@ def repo(tmp_path):
 
 def _hook(repo, body):
     h = repo / ".git" / "hooks" / "pre-commit"
-    h.write_text("#!/bin/sh\n" + body + "\n", newline="\n")
+    # CI 是 Python 3.9：Path.write_text 沒有 newline 參數（3.10 才有）
+    with open(h, "w", newline="\n") as f:
+        f.write("#!/bin/sh\n" + body + "\n")
     os.chmod(h, 0o755)
 
 
