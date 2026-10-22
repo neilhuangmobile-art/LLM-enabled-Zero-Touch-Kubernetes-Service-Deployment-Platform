@@ -1247,3 +1247,14 @@ LoadBalancer（8094→80）的 YAML：`DATABASE_URL` 從 Secret 讀、部署紀�
 **驗證**：`tests/test_push.py` 20 項，`pytest` 全過；CI 同款乾淨環境收集無誤。Chromium 實測：真的 FCM 訂閱、測試通知顯示；
 OOM 測試 Pod 被 Healer 調高記憶體後收到「✅ oomtest 已自動修復」，點通知網址直接打開服務詳情；斷網出現離線頁；390px 寬無橫向捲動。
 新增套件 pip-audit 無已知漏洞、bandit 無問題。細節見 `docs/security_review.md` 43 節。
+
+### 23:20 — 新功能：手機端改成只能看狀態的監控版
+**為什麼**：使用者用 iPhone 實測時，手機打開的是完整網站，會跳同意書，也能部署。使用者要的是手機只用來監控。
+**改了什麼**：
+- 新增 `/m`（`core/mobile_page.py`）：底部四個分頁（總覽、服務、修復紀錄、設定），點服務進唯讀詳情（白話狀態、Healer 最近的判斷、
+  警告事件、健康時間軸），網址 `#分頁` 跟著變，手機返回手勢可用；每 30 秒更新，讀不到時保留舊資料但明確標示。
+- 手機（iPhone／Android 手機）一律導到 `/m`，不跳同意書；PWA 的 `start_url` 改成 `/m`；點通知直接開那個服務的詳情。
+- **伺服器端唯讀**：手機登入的 session 標記 readonly，`_readonly_guard` 以白名單只放行唯讀 API，其他一律 403，與 User-Agent 無關。
+- 通知設定的程式抽到 `static/push-client.js`，完整版與手機版共用。
+**驗證**：`tests/test_mobile_view.py` 33 項，`pytest` 全過（627 項）。模擬 iPhone 實測四個分頁、返回、詳情、從通知開啟、
+頁內直接打 `/api/deploy` 得 403；電腦版不受影響。細節見 `docs/security_review.md` 44 節。

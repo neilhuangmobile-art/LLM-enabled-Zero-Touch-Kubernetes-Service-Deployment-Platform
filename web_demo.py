@@ -1389,6 +1389,7 @@ HTML = r"""<!DOCTYPE html>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="ZeroTouch">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
+<script src="/static/push-client.js" defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -4764,99 +4765,7 @@ function loadServicesPage(quiet){
 function loadGitopsPage(quiet){ mountWidget('gitops-w', 'gitops', {p:1}, quiet); }
 function loadHealerPage(quiet){ mountWidget('heal-scan', 'healer', {p:1}, quiet); loadHealerBg(); if(!quiet) renderPushPanel(); }
 
-// ── 手機通知（PWA 推播，2026-10-22） ──
-// 每種「開不了」的狀況都直接講原因和下一步，不能只有一顆按不下去的按鈕
-function isIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
-function isStandalone(){ return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
-function b64urlToBytes(s){
-  const pad = '='.repeat((4 - s.length % 4) % 4);
-  const raw = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
-  return Uint8Array.from(raw, c => c.charCodeAt(0));
-}
-async function postPush(path, body){
-  const r = await fetch('/api/push/' + path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {})});
-  let d = {};
-  try { d = await r.json(); } catch(e){}
-  if(!r.ok || d.ok === false) throw new Error(d.error || ('伺服器回應 HTTP ' + r.status));
-  return d;
-}
-async function currentPushSub(){
-  const reg = await navigator.serviceWorker.ready;
-  return reg.pushManager.getSubscription();
-}
-let pushSynced = false;
-async function renderPushPanel(msg){
-  const box = document.getElementById('push-body');
-  if(!box) return;
-  const show = (html) => { box.innerHTML = `<div class="push-box">${html}${msg ? `<div>${msg}</div>` : ''}</div>`; };
-  if(!window.isSecureContext){
-    show('<div class="t-warn">通知只能在 https 網址下開啟。請改用平台的對外網址（https:// 開頭）打開這個頁面。</div>'); return;
-  }
-  if(isIOS() && !isStandalone()){
-    show(`<div>iPhone／iPad 要先把平台加到主畫面，才能收到通知（需要 iOS 16.4 以上）：</div>
-      <ol><li>用 <b>Safari</b> 打開這個網址</li><li>點下方的「分享」按鈕（方框加向上箭頭）</li><li>選「加入主畫面」</li><li>從主畫面的 ZeroTouch 圖示打開，再回到這一頁按「開啟通知」</li></ol>`); return;
-  }
-  if(!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)){
-    show('<div class="t-warn">這個瀏覽器不支援推播通知。請改用 Chrome、Edge、Firefox，或 iPhone 上加到主畫面的 Safari。</div>'); return;
-  }
-  if(Notification.permission === 'denied'){
-    show(`<div class="t-warn">你之前拒絕了這個網站的通知，瀏覽器不會再問一次。</div>
-      <div>請到瀏覽器的網站設定（網址列左邊的圖示 → 網站設定 → 通知）改成「允許」，再重新整理這一頁。手機上的 App 版本請到手機的「設定 → 通知 → ZeroTouch」打開。</div>`); return;
-  }
-  let st;
-  try { st = await getJSON('/api/push/status'); } catch(e){ show(`<div class="t-warn">讀不到通知設定：${esc(e.message || String(e))}</div>`); return; }
-  if(!st.available){ show('<div class="t-warn">平台這端還沒有設定好推播功能（伺服器缺少推播套件），請通知管理員。</div>'); return; }
-  let sub = null;
-  try { sub = await currentPushSub(); } catch(e){}
-  if(sub && !pushSynced){
-    // 伺服器那份可能被清掉過（例如推播服務回報失效），每次進頁面先同步一次
-    pushSynced = true;
-    try { await postPush('subscribe', {subscription: sub.toJSON()}); } catch(e){ sub = null; }
-  }
-  if(sub){
-    show(`<div>✅ 這台裝置<b>已開啟</b>通知。Healer 發現問題或修好時，會通知你服務名稱和原因；同一個問題 6 小時內只通知一次。</div>
-      <div class="dim">平台的主機關機時不會送出通知，所以沒收到通知不代表一切正常。這個帳號目前有 ${esc(st.devices)} 台裝置開啟通知（最多 ${esc(st.max_devices)} 台）。</div>
-      <div class="actions"><button type="button" class="btn" data-act="push-test">送測試通知</button><button type="button" class="btn" data-act="push-off">關閉這台裝置的通知</button></div>`);
-  } else {
-    show(`<div>開啟後，Healer 發現問題或修好時，這台裝置會跳出通知；點通知會直接打開那個服務的詳情。通知只寫服務名稱和原因，不會顯示日誌內容或密碼。</div>
-      <div class="actions"><button type="button" class="btn primary" data-act="push-on">開啟通知</button></div>`);
-  }
-}
-async function pushTurnOn(){
-  try{
-    const perm = await Notification.requestPermission();
-    if(perm !== 'granted'){ renderPushPanel(perm === 'denied' ? '' : '<span class="t-warn">你沒有允許通知，所以還沒開啟。想開的時候再按一次即可。</span>'); return; }
-    const st = await getJSON('/api/push/status');
-    const reg = await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
-    if(!sub) sub = await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: b64urlToBytes(st.public_key)});
-    await postPush('subscribe', {subscription: sub.toJSON()});
-    pushSynced = true;
-    await postPush('test', {endpoint: sub.endpoint});
-    renderPushPanel('已送出一則測試通知。如果幾秒內沒有看到，請確認手機或電腦沒有開「勿擾模式」。');
-  }catch(e){ renderPushPanel(`<span class="t-warn">開啟失敗：${esc(e.message || String(e))}</span>`); }
-}
-async function pushTurnOff(){
-  try{
-    const sub = await currentPushSub();
-    if(sub){ await postPush('unsubscribe', {endpoint: sub.endpoint}); await sub.unsubscribe(); }
-    renderPushPanel('已關閉這台裝置的通知。');
-  }catch(e){ renderPushPanel(`<span class="t-warn">關閉失敗：${esc(e.message || String(e))}</span>`); }
-}
-async function pushTest(){
-  try{
-    const sub = await currentPushSub();
-    if(!sub) throw new Error('這台裝置還沒開啟通知。');
-    await postPush('test', {endpoint: sub.endpoint});
-    renderPushPanel('已送出測試通知。如果幾秒內沒有看到，請確認沒有開「勿擾模式」。');
-  }catch(e){ renderPushPanel(`<span class="t-warn">${esc(e.message || String(e))}</span>`); }
-}
-document.addEventListener('click', e => {
-  const b = e.target.closest('[data-act^="push-"]');
-  if(!b) return;
-  b.disabled = true;
-  ({'push-on': pushTurnOn, 'push-off': pushTurnOff, 'push-test': pushTest}[b.dataset.act] || (() => {}))();
-});
+// 手機通知設定區塊在 /static/push-client.js（手機監控版共用），這裡只呼叫 renderPushPanel()
 // 舊程式（部署完成等地方）會呼叫 loadStats() 刷新數字：改成悄悄刷新目前所在的頁面
 function loadStats(){
   const p = currentPageName();
@@ -4973,6 +4882,8 @@ window.addEventListener('DOMContentLoaded', function(){
 # ── Routes ──────────────────────────────────────────────────
 @app.route("/")
 def index():
+    if _is_phone() or session.get("readonly"):
+        return _redirect_to_mobile()
     if "username" not in session:
         return render_template_string(HTML, logged_in=False, page='login', error=None, k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
     return render_template_string(HTML, logged_in=True, page='app', error=None, k8s=K8S_ENABLED, username=session["username"], is_admin=session.get("is_admin", False))
@@ -5006,27 +4917,31 @@ def register():
     session["is_admin"] = False  # 密碼註冊帳號永遠不可能是管理員，見 _is_admin_user()
     return redirect("/")
 
+def _login_page(error, monitor=False):
+    """登入失敗時回到對應的登入頁：手機監控版回手機登入頁，其他回完整版登入頁。"""
+    if monitor:
+        return _mobile_login_page(error)
+    return render_template_string(HTML, logged_in=False, page='login', error=error, k8s=K8S_ENABLED,
+                                  username='', google_login_available=_google_oauth_configured())
+
+
 @app.route("/auth/login", methods=["POST"])
 def login():
     username = request.form.get("username","").strip()
     password = request.form.get("password","")
+    # 從手機（或手機監控版的登入頁）登入：這個 session 只能查看
+    monitor = request.form.get("mode") == "monitor" or _is_phone()
     stored_user = USERS.get(username)
     if isinstance(stored_user, dict) and stored_user.get("auth_provider") == "google" and "password_hash" not in stored_user:
         # 這個帳號是純 Google 登入建立的，沒有密碼可以比對——講清楚原因跟下一步
         # 動作，不要讓使用者以為自己打錯密碼一直重試（AGENT_RULES.md 新手友善原則）。
-        return render_template_string(
-            HTML, logged_in=False, page='login',
-            error="這個帳號是用 Google 登入建立的，沒有密碼，請改按下方的「使用 Google 帳號登入」。",
-            k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
+        return _login_page("這個帳號是用 Google 登入建立的，沒有密碼，請改按下方的「使用 Google 帳號登入」。", monitor)
     stored_hash = stored_user.get("password_hash", "") if isinstance(stored_user, dict) else stored_user
     if verify_password(password, stored_hash):
         if isinstance(stored_user, dict) and stored_user.get("banned"):
             # 帳號已被封鎖（通常是 Gemini 判定累積達到門檻自動觸發，見 _ban_user）。
             # 不能只回 401——要講清楚原因，不然使用者會以為是打錯密碼。
-            return render_template_string(
-                HTML, logged_in=False, page='login',
-                error="這個帳號因為多次嘗試操縱系統，已經被封鎖。",
-                k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
+            return _login_page("這個帳號因為多次嘗試操縱系統，已經被封鎖。", monitor)
         # 舊帳號可能是「純字串密碼」或「dict 但裡面存的是弱雜湊（沒加鹽的 sha256）」，
         # 登入成功那一刻密碼是明文可用的，順便升級成 pbkdf2，不用等使用者自己改密碼。
         if not isinstance(stored_user, dict) or not stored_hash.startswith("pbkdf2_sha256$"):
@@ -5039,8 +4954,9 @@ def login():
         _ensure_user_namespace(_user_namespace(username))
         session["username"] = username
         session["is_admin"] = _is_admin_user(username)  # 密碼帳號恆為 False，保持呼叫一致避免未來改動漏掉
-        return redirect("/")
-    return render_template_string(HTML, logged_in=False, page='login', error="帳號或密碼不正確。", k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
+        session["readonly"] = monitor
+        return redirect("/m" if monitor else "/")
+    return _login_page("帳號或密碼不正確。", monitor)
 
 @app.route("/auth/logout", methods=["POST"])
 def logout():
@@ -5064,6 +4980,7 @@ def google_login():
     # CSRF 防護：標準 OAuth state 參數，callback 時核對，不符就拒絕。
     state = secrets.token_urlsafe(24)
     session["google_oauth_state"] = state
+    session["google_login_mode"] = "monitor" if request.args.get("mode") == "monitor" else "full"
     params = {
         "client_id": GOOGLE_CLIENT_ID,
         "redirect_uri": _external_url(url_for("google_callback")),
@@ -5080,10 +4997,10 @@ def google_callback():
     if not _google_oauth_configured():
         return _google_config_error_page()
 
+    monitor = session.pop("google_login_mode", "full") == "monitor" or _is_phone()
+
     def _login_error(msg):
-        return render_template_string(
-            HTML, logged_in=False, page='login', error=msg,
-            k8s=K8S_ENABLED, username='', google_login_available=_google_oauth_configured())
+        return _login_page(msg, monitor)
 
     expected_state = session.pop("google_oauth_state", None)
     got_state = request.args.get("state")
@@ -5154,7 +5071,8 @@ def google_callback():
 
     session["username"] = username
     session["is_admin"] = _is_admin_user(username)
-    return redirect("/")
+    session["readonly"] = monitor
+    return redirect("/m" if monitor else "/")
 
 
 @app.before_request
@@ -5314,7 +5232,7 @@ import time as _time
 # 還沒連線的帳號也可以使用的路徑（登入/登出、引導流程本身、回報器）
 _ONBOARD_OPEN_PATHS = ("/onboarding", "/onboard/", "/auth/", "/agent/report", "/api/onboard/status",
                        # PWA 外殼：瀏覽器抓 manifest／圖示時不帶登入狀態，service worker 每頁都會註冊
-                       "/manifest.webmanifest", "/sw.js", "/offline", "/icons/", "/favicon.ico")
+                       "/manifest.webmanifest", "/sw.js", "/offline", "/icons/", "/favicon.ico", "/static/")
 
 
 def _needs_onboarding(username) -> bool:
@@ -5328,8 +5246,11 @@ def _needs_onboarding(username) -> bool:
 def _require_cluster_connection():
     if not _needs_onboarding(session.get("username")):
         return None
-    if request.path.startswith(_ONBOARD_OPEN_PATHS):
+    if request.path.startswith(_ONBOARD_OPEN_PATHS) or request.path == "/m":
         return None
+    if (_is_phone() or session.get("readonly")) and not request.path.startswith("/api/"):
+        # 手機監控版只看狀態、不安裝任何東西，不走同意書；/m 會說明「請先用電腦完成連線」
+        return redirect("/m")
     if request.path.startswith("/api/"):
         return jsonify({"error": "請先完成叢集連線（同意書 → 執行指令 → 連線檢查）。"
                                  , "onboarding": "/onboarding"}), 403
@@ -8038,7 +7959,7 @@ def pwa_manifest():
     manifest = {
         "name": "ZeroTouch 部署平台", "short_name": "ZeroTouch",
         "description": "用一句話部署服務，Healer 自動修復並通知你",
-        "id": "/", "start_url": "/?source=pwa", "scope": "/", "display": "standalone",
+        "id": "/", "start_url": "/m", "scope": "/", "display": "standalone",
         "background_color": _THEME_COLOR, "theme_color": _THEME_COLOR, "lang": "zh-TW",
         "icons": [
             {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
@@ -8120,6 +8041,77 @@ def api_push_test():
         return jsonify({"ok": True})
     return jsonify({"ok": False, "error": "推播服務說這台裝置的訂閱已經失效，請重新開啟通知。" if r == "removed"
                     else "推播服務暫時沒有回應，請稍後再按一次「送測試通知」。"}), 502
+
+
+# ══════════════════════════════════════════════════════════════════
+# 手機監控版 /m（2026-10-22）：手機只看狀態，不能部署或修改
+# 頁面在 core/mobile_page.py，只呼叫唯讀 API。限制由伺服器執行，不是只靠畫面：
+# 手機登入的 session 標記 readonly，之後只放行下面白名單裡的 API，其他一律 403。
+# ══════════════════════════════════════════════════════════════════
+import re as _re_m
+from core.mobile_page import MOBILE_HTML
+
+_PHONE_UA_RE = _re_m.compile(r"iPhone|iPod|Android.*Mobile|Mobile.*Android", _re_m.I)
+
+# 唯讀 session 能用的 API：(方法, 路徑規則)。用白名單，之後新增的 API 預設就會被擋
+_READONLY_API = (
+    ("GET", _re_m.compile(r"^/api/(status|deployments|pods|healer/status|push/status)$")),
+    ("GET", _re_m.compile(r"^/api/pods/[^/]+(/history)?$")),
+    ("POST", _re_m.compile(r"^/api/push/(subscribe|unsubscribe|test)$")),
+)
+# 唯讀 session 能開的頁面與檔案；其他頁面一律轉到 /m
+_READONLY_PAGES = ("/m", "/auth/logout", "/manifest.webmanifest", "/sw.js", "/offline", "/icons/",
+                   "/favicon.ico", "/static/")
+
+
+def _is_phone() -> bool:
+    """手機（iPhone、Android 手機）。iPad 和平板照舊用完整版。"""
+    return bool(_PHONE_UA_RE.search(request.headers.get("User-Agent", "")))
+
+
+def _redirect_to_mobile():
+    pod = request.args.get("pod", "")
+    if _re_m.fullmatch(r"[a-z0-9][a-z0-9.\-]{0,252}", pod or ""):
+        return redirect("/m?pod=" + pod)
+    return redirect("/m")
+
+
+def _mobile_login_page(error=None):
+    return render_template_string(MOBILE_HTML, view="login", error=error, username="",
+                                  google_login_available=_google_oauth_configured(), needs_setup=False)
+
+
+def _readonly_allowed(method: str, path: str) -> bool:
+    if path.startswith("/api/"):
+        if request.args.get("diagnose"):
+            return False   # 診斷會跑模型、可能觸發後續處置，手機版只看既有結果
+        return any(method == m and rx.match(path) for m, rx in _READONLY_API)
+    return path == "/m" or path.startswith(_READONLY_PAGES[1:])
+
+
+@app.before_request
+def _readonly_guard():
+    if not session.get("readonly") or "username" not in session:
+        return None
+    if _readonly_allowed(request.method, request.path):
+        return None
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "手機版只能查看狀態，部署、擴縮、刪除等操作請用電腦開啟平台。"
+                                 " / The mobile app is view-only; please use a computer to make changes.",
+                        "readonly": True}), 403
+    return _redirect_to_mobile()
+
+
+@app.route("/m")
+def mobile_view():
+    if "username" not in session:
+        return _mobile_login_page()
+    if _is_phone():
+        # 手機上打開的 session 一律降為唯讀（例如之前用手機登入過完整版）
+        session["readonly"] = True
+    return render_template_string(MOBILE_HTML, view="app", error=None, username=session["username"],
+                                  google_login_available=False,
+                                  needs_setup=_needs_onboarding(session["username"]))
 
 
 if __name__ == "__main__":
