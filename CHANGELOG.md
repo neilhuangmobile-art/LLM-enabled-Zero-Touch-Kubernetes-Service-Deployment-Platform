@@ -1229,3 +1229,21 @@ LoadBalancer（8094→80）的 YAML：`DATABASE_URL` 從 Secret 讀、部署紀�
 5. 上一則還在處理時再送一則，回答順序錯亂、「思考中」提早消失 → 訊息排隊依序處理。
 **驗證**：每項都有回歸測試；瀏覽器實測：只剩真正有問題的 orders-api 被標註、診斷為「無法連線到資料庫」、連續兩則依序回答且提示持續到最後。
 
+
+## 2026-10-22
+
+### 21:30 — 新功能：手機 App（PWA）與 Healer 推播通知
+**為什麼**：使用者想在手機上隨時知道 Healer 的狀況。不做原生 App（要 Apple 開發者帳號、審核、另寫一套），改做可加到主畫面的網頁 App，
+加上 Web Push 推播。
+**改了什麼**：
+- PWA 外殼：`/manifest.webmanifest`、`/sw.js`、`/offline`、App 圖示與 favicon（`scripts/make_icons.py` 產生，順便解決 favicon 404）。
+  service worker 不快取任何 API 或頁面，只在連不上或通道回 502／503／504 時顯示離線說明頁（講明主機可能關機、已部署的服務不受影響、
+  離線期間不會有通知）。
+- 推播（新增依賴 `pywebpush==2.5.0`）：`core/push.py` 管訂閱（`data/push.db`）、VAPID 金鑰（`data/vapid_private.pem`）、
+  endpoint 允許清單與通知內容；Healer 寫入修復紀錄時（已過 6 小時去重）背景送出，本機與客戶叢集兩條 Healer 路徑都涵蓋。
+  通知只寫服務名稱、原因、處理方式，點通知打開該服務的詳情。
+- Healer 頁新增「手機通知」區塊：開啟／關閉／送測試通知；iPhone 未加到主畫面、拒絕過權限、非 https、瀏覽器不支援，各自給步驟。
+- 修好一個既有問題：Healer 頁的「正在修復 X」會讓其他帳號看到你的 Pod 名稱，現在只顯示自己 namespace 的。
+**驗證**：`tests/test_push.py` 20 項，`pytest` 全過；CI 同款乾淨環境收集無誤。Chromium 實測：真的 FCM 訂閱、測試通知顯示；
+OOM 測試 Pod 被 Healer 調高記憶體後收到「✅ oomtest 已自動修復」，點通知網址直接打開服務詳情；斷網出現離線頁；390px 寬無橫向捲動。
+新增套件 pip-audit 無已知漏洞、bandit 無問題。細節見 `docs/security_review.md` 43 節。

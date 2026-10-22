@@ -1381,6 +1381,14 @@ HTML = r"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ZeroTouch</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0B1622">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/icons/apple-touch-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ZeroTouch">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -2145,6 +2153,9 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
 .pod-chart-empty{margin:0}
 .logbox{margin:0;max-height:260px;overflow:auto;background:var(--void);border:1px solid var(--grid);border-radius:4px;padding:10px 12px;font-family:var(--f-id);font-size:12.5px;line-height:1.6;color:var(--text-2);white-space:pre-wrap;word-break:break-all}
 .module{padding:0}
+.push-box{padding:14px 18px;display:flex;flex-direction:column;gap:10px;color:var(--text-2);font-size:14px;line-height:1.7}
+.push-box ol{margin:0;padding-left:20px}
+.push-box .t-warn{color:var(--caution)}
 .card.module,.auth-card{padding:34px 32px}
 .pd + .pd{padding-top:18px;margin-top:2px}
 .zt-drawer .pd + .pd{border-top:1px solid var(--grid)}
@@ -2354,6 +2365,8 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
         <p class="page-sub">Healer 每 30 秒在背景檢查一次你的 Pod。發現問題會先找出原因，再套用對應的修復，例如調高記憶體上限或恢復上一個能用的映像檔，不只是把 Pod 刪掉重來。</p></div></div>
       <div class="page-stack">
         <div class="status-strip" id="heal-bg" role="status"><span class="lamp-s"></span><span>讀取中</span></div>
+        <section class="module" id="push-panel"><div class="module-head"><h2>手機通知</h2><span class="meta"><span>Healer 發現問題或修好時通知你</span></span></div>
+          <div id="push-body"></div></section>
         <div id="heal-processing"></div>
         <div id="heal-scan"></div>
         <section class="module"><div class="module-head"><h2>自動修復紀錄</h2><span class="meta"><span>最近的處理結果，最新的在最上面</span></span></div>
@@ -4749,7 +4762,101 @@ function loadServicesPage(quiet){
   mountWidget('svc-pods', 'pods', {f:'all', p:1}, quiet);
 }
 function loadGitopsPage(quiet){ mountWidget('gitops-w', 'gitops', {p:1}, quiet); }
-function loadHealerPage(quiet){ mountWidget('heal-scan', 'healer', {p:1}, quiet); loadHealerBg(); }
+function loadHealerPage(quiet){ mountWidget('heal-scan', 'healer', {p:1}, quiet); loadHealerBg(); if(!quiet) renderPushPanel(); }
+
+// ── 手機通知（PWA 推播，2026-10-22） ──
+// 每種「開不了」的狀況都直接講原因和下一步，不能只有一顆按不下去的按鈕
+function isIOS(){ return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+function isStandalone(){ return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
+function b64urlToBytes(s){
+  const pad = '='.repeat((4 - s.length % 4) % 4);
+  const raw = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+async function postPush(path, body){
+  const r = await fetch('/api/push/' + path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {})});
+  let d = {};
+  try { d = await r.json(); } catch(e){}
+  if(!r.ok || d.ok === false) throw new Error(d.error || ('伺服器回應 HTTP ' + r.status));
+  return d;
+}
+async function currentPushSub(){
+  const reg = await navigator.serviceWorker.ready;
+  return reg.pushManager.getSubscription();
+}
+let pushSynced = false;
+async function renderPushPanel(msg){
+  const box = document.getElementById('push-body');
+  if(!box) return;
+  const show = (html) => { box.innerHTML = `<div class="push-box">${html}${msg ? `<div>${msg}</div>` : ''}</div>`; };
+  if(!window.isSecureContext){
+    show('<div class="t-warn">通知只能在 https 網址下開啟。請改用平台的對外網址（https:// 開頭）打開這個頁面。</div>'); return;
+  }
+  if(isIOS() && !isStandalone()){
+    show(`<div>iPhone／iPad 要先把平台加到主畫面，才能收到通知（需要 iOS 16.4 以上）：</div>
+      <ol><li>用 <b>Safari</b> 打開這個網址</li><li>點下方的「分享」按鈕（方框加向上箭頭）</li><li>選「加入主畫面」</li><li>從主畫面的 ZeroTouch 圖示打開，再回到這一頁按「開啟通知」</li></ol>`); return;
+  }
+  if(!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)){
+    show('<div class="t-warn">這個瀏覽器不支援推播通知。請改用 Chrome、Edge、Firefox，或 iPhone 上加到主畫面的 Safari。</div>'); return;
+  }
+  if(Notification.permission === 'denied'){
+    show(`<div class="t-warn">你之前拒絕了這個網站的通知，瀏覽器不會再問一次。</div>
+      <div>請到瀏覽器的網站設定（網址列左邊的圖示 → 網站設定 → 通知）改成「允許」，再重新整理這一頁。手機上的 App 版本請到手機的「設定 → 通知 → ZeroTouch」打開。</div>`); return;
+  }
+  let st;
+  try { st = await getJSON('/api/push/status'); } catch(e){ show(`<div class="t-warn">讀不到通知設定：${esc(e.message || String(e))}</div>`); return; }
+  if(!st.available){ show('<div class="t-warn">平台這端還沒有設定好推播功能（伺服器缺少推播套件），請通知管理員。</div>'); return; }
+  let sub = null;
+  try { sub = await currentPushSub(); } catch(e){}
+  if(sub && !pushSynced){
+    // 伺服器那份可能被清掉過（例如推播服務回報失效），每次進頁面先同步一次
+    pushSynced = true;
+    try { await postPush('subscribe', {subscription: sub.toJSON()}); } catch(e){ sub = null; }
+  }
+  if(sub){
+    show(`<div>✅ 這台裝置<b>已開啟</b>通知。Healer 發現問題或修好時，會通知你服務名稱和原因；同一個問題 6 小時內只通知一次。</div>
+      <div class="dim">平台的主機關機時不會送出通知，所以沒收到通知不代表一切正常。這個帳號目前有 ${esc(st.devices)} 台裝置開啟通知（最多 ${esc(st.max_devices)} 台）。</div>
+      <div class="actions"><button type="button" class="btn" data-act="push-test">送測試通知</button><button type="button" class="btn" data-act="push-off">關閉這台裝置的通知</button></div>`);
+  } else {
+    show(`<div>開啟後，Healer 發現問題或修好時，這台裝置會跳出通知；點通知會直接打開那個服務的詳情。通知只寫服務名稱和原因，不會顯示日誌內容或密碼。</div>
+      <div class="actions"><button type="button" class="btn primary" data-act="push-on">開啟通知</button></div>`);
+  }
+}
+async function pushTurnOn(){
+  try{
+    const perm = await Notification.requestPermission();
+    if(perm !== 'granted'){ renderPushPanel(perm === 'denied' ? '' : '<span class="t-warn">你沒有允許通知，所以還沒開啟。想開的時候再按一次即可。</span>'); return; }
+    const st = await getJSON('/api/push/status');
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub) sub = await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: b64urlToBytes(st.public_key)});
+    await postPush('subscribe', {subscription: sub.toJSON()});
+    pushSynced = true;
+    await postPush('test', {endpoint: sub.endpoint});
+    renderPushPanel('已送出一則測試通知。如果幾秒內沒有看到，請確認手機或電腦沒有開「勿擾模式」。');
+  }catch(e){ renderPushPanel(`<span class="t-warn">開啟失敗：${esc(e.message || String(e))}</span>`); }
+}
+async function pushTurnOff(){
+  try{
+    const sub = await currentPushSub();
+    if(sub){ await postPush('unsubscribe', {endpoint: sub.endpoint}); await sub.unsubscribe(); }
+    renderPushPanel('已關閉這台裝置的通知。');
+  }catch(e){ renderPushPanel(`<span class="t-warn">關閉失敗：${esc(e.message || String(e))}</span>`); }
+}
+async function pushTest(){
+  try{
+    const sub = await currentPushSub();
+    if(!sub) throw new Error('這台裝置還沒開啟通知。');
+    await postPush('test', {endpoint: sub.endpoint});
+    renderPushPanel('已送出測試通知。如果幾秒內沒有看到，請確認沒有開「勿擾模式」。');
+  }catch(e){ renderPushPanel(`<span class="t-warn">${esc(e.message || String(e))}</span>`); }
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act^="push-"]');
+  if(!b) return;
+  b.disabled = true;
+  ({'push-on': pushTurnOn, 'push-off': pushTurnOff, 'push-test': pushTest}[b.dataset.act] || (() => {}))();
+});
 // 舊程式（部署完成等地方）會呼叫 loadStats() 刷新數字：改成悄悄刷新目前所在的頁面
 function loadStats(){
   const p = currentPageName();
@@ -4844,10 +4951,18 @@ async function openPodDrawer(name, diagnose){
 }
 
 window.addEventListener('DOMContentLoaded', function(){
+  // service worker：手機加到主畫面、離線說明頁、推播都靠它；註冊失敗不影響網站本身
+  if('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('/sw.js').catch(() => {});
   if(loggedIn){
     applyLang();
     initChats();
-    showPage('chat');
+    // 從通知點進來：/?page=healer&pod=<服務名稱>，直接打開那個服務的詳情
+    const q = new URLSearchParams(location.search);
+    const target = q.get('page');
+    showPage(target && document.getElementById('page-' + (PAGE_ALIAS[target] || target)) ? target : 'chat');
+    const pod = q.get('pod');
+    if(pod && /^[a-z0-9][a-z0-9.\-]{0,252}$/.test(pod)) openPodDrawer(pod, false);
+    if(q.has('page') || q.has('pod') || q.has('source')) history.replaceState(null, '', '/');
   }
 });
 </script>
@@ -5197,7 +5312,9 @@ from cluster.pages import ONBOARD_HTML
 import time as _time
 
 # 還沒連線的帳號也可以使用的路徑（登入/登出、引導流程本身、回報器）
-_ONBOARD_OPEN_PATHS = ("/onboarding", "/onboard/", "/auth/", "/agent/report", "/api/onboard/status")
+_ONBOARD_OPEN_PATHS = ("/onboarding", "/onboard/", "/auth/", "/agent/report", "/api/onboard/status",
+                       # PWA 外殼：瀏覽器抓 manifest／圖示時不帶登入狀態，service worker 每頁都會註冊
+                       "/manifest.webmanifest", "/sw.js", "/offline", "/icons/", "/favicon.ico")
 
 
 def _needs_onboarding(username) -> bool:
@@ -7070,7 +7187,12 @@ def _healer_bg_liveness() -> dict:
 def api_healer_status():
     if "username" not in session: return jsonify({"error": "Not authenticated"}), 401
     d = _healer_bg_liveness()
-    d["recent_actions"] = _heal_history(_session_ns())
+    ns = _session_ns()
+    d["recent_actions"] = _heal_history(ns)
+    # 背景 Healer 一次只處理一個 Pod，「正在修復」是全平台共用的一份狀態；
+    # 不是自己 namespace 的就不顯示，不然會看到別的帳號的服務名稱（2026-10-22 PWA 實測時發現）
+    if (d.get("processing") or {}).get("namespace") != ns:
+        d["processing"] = None
     return jsonify(d)
 
 
@@ -7712,10 +7834,15 @@ def _real_heal_pod(pod_name, namespace="default"):
         if action and action not in ("none", "in_progress") and not _heal_recently_recorded(
                 namespace, _app_key_for_pod_name(pod_name), action, result.get("root_cause")):
             outcome = ("ok" if result.get("ok") else "fail") if action in _HEAL_REPAIR_ACTIONS else "inspect"
-            _events.record(namespace, "heal", _app_key_for_pod_name(pod_name), outcome,
-                           {"pod": pod_name, "action": action, "action_label": _HEAL_ACTION_LABEL.get(action, action),
+            app_key = _app_key_for_pod_name(pod_name)
+            label = _HEAL_ACTION_LABEL.get(action, action)
+            _events.record(namespace, "heal", app_key, outcome,
+                           {"pod": pod_name, "action": action, "action_label": label,
                             "root_cause": result.get("root_cause"), "message": str(result.get("message") or "")[:300],
                             "llm_raw_guess": result.get("llm_raw_guess")})
+            # 推播跟紀錄用同一個去重：同一個問題 6 小時內只通知一次。點通知用服務名稱查，
+            # Healer 重建 Pod 後舊的 Pod 名稱就查不到了
+            _push.send_async(namespace, _push.heal_message(app_key, outcome, result.get("root_cause"), label, app_key))
     except Exception as e:
         print(f"[事件紀錄] Healer 紀錄略過：{e}")
     return result
@@ -7823,6 +7950,176 @@ def api_report():
         days = 0
     days = max(1, min(MAX_DAYS, days)) if days else parse_period(request.args.get("q", ""))
     return jsonify(_build_user_report(_session_ns(), days, with_ai=request.args.get("ai", "1") != "0"))
+
+
+# ══════════════════════════════════════════════════════════════════
+# 手機 App（PWA）與推播通知（2026-10-22）
+# 加到手機主畫面後是全螢幕的 App；Healer 處理過問題就推播通知，點通知打開那個服務的詳情。
+# service worker 刻意不快取任何 API 或頁面，避免手機上把舊的叢集狀態當成現況；
+# 只快取一份離線說明頁，主機關機時至少講清楚發生什麼事。
+# ══════════════════════════════════════════════════════════════════
+from flask import send_from_directory, Response
+from core import push as _push
+
+_push.init()
+_STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+_THEME_COLOR = "#0B1622"
+
+_SW_JS = r"""// ZeroTouch service worker：只負責離線說明頁與推播通知，不快取任何資料
+const OFFLINE_CACHE = 'zt-offline-v1';
+const OFFLINE_URL = '/offline';
+
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(OFFLINE_CACHE).then(c => c.add(new Request(OFFLINE_URL, {cache: 'reload'}))));
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys()
+    .then(ks => Promise.all(ks.filter(k => k !== OFFLINE_CACHE).map(k => caches.delete(k))))
+    .then(() => self.clients.claim()));
+});
+
+// 只處理「打開頁面」：連不上，或通道回 502/503/504（主機關機時 Tailscale Funnel 會這樣回）就顯示離線說明
+self.addEventListener('fetch', e => {
+  if (e.request.mode !== 'navigate') return;
+  e.respondWith(fetch(e.request).then(r => {
+    if ([502, 503, 504].includes(r.status)) return caches.match(OFFLINE_URL).then(o => o || r);
+    return r;
+  }).catch(() => caches.match(OFFLINE_URL)));
+});
+
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (x) { d = {body: e.data ? e.data.text() : ''}; }
+  e.waitUntil(self.registration.showNotification(d.title || 'ZeroTouch', {
+    body: d.body || '', tag: d.tag || undefined, renotify: !!d.tag,
+    icon: '/icons/icon-192.png', badge: '/icons/badge-96.png',
+    data: {url: (typeof d.url === 'string' && d.url.startsWith('/')) ? d.url : '/?page=healer'},
+  }));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = new URL(e.notification.data.url, self.location.origin).href;
+  e.waitUntil(clients.matchAll({type: 'window', includeUncontrolled: true}).then(ws => {
+    for (const w of ws) {
+      if (new URL(w.url).origin === self.location.origin && 'navigate' in w) {
+        return w.navigate(url).then(x => (x || w).focus());
+      }
+    }
+    return clients.openWindow(url);
+  }));
+});
+"""
+
+_OFFLINE_HTML = """<!DOCTYPE html>
+<html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ZeroTouch｜平台離線</title><meta name="theme-color" content="#0B1622">
+<style>
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0B1622;color:#DCE8F0;
+font-family:"Noto Sans TC",system-ui,sans-serif;padding:16px;box-sizing:border-box}
+main{max-width:440px;border:1px solid #28506B;background:#0F2030;border-radius:12px;padding:24px}
+h1{font-size:20px;margin:0 0 12px;color:#F5B547}p{line-height:1.7;margin:0 0 12px;color:#93AABB}
+ul{padding-left:20px;color:#93AABB;line-height:1.7}button{margin-top:8px;width:100%;padding:12px;border:0;border-radius:8px;
+background:#5CC8FF;color:#0B1622;font-size:16px;font-weight:700}
+</style></head><body><main>
+<h1>平台目前連不上</h1>
+<p>手機連到了網路，但 ZeroTouch 平台沒有回應。最常見的原因是平台的主機關機或重新開機中，通常幾分鐘內會自動恢復。</p>
+<ul><li>你叢集裡已經部署的服務<b>照常運作</b>，不受影響。</li>
+<li>平台離線期間 Healer 不會檢查，也<b>不會送通知</b>，沒收到通知不代表一切正常。</li></ul>
+<p lang="en">The platform is unreachable, most likely because its host is off or restarting. Your deployed services keep running; Healer checks and notifications resume when the platform is back.</p>
+<button onclick="location.reload()">重新整理 / Retry</button>
+</main></body></html>"""
+
+
+@app.route("/manifest.webmanifest")
+def pwa_manifest():
+    manifest = {
+        "name": "ZeroTouch 部署平台", "short_name": "ZeroTouch",
+        "description": "用一句話部署服務，Healer 自動修復並通知你",
+        "id": "/", "start_url": "/?source=pwa", "scope": "/", "display": "standalone",
+        "background_color": _THEME_COLOR, "theme_color": _THEME_COLOR, "lang": "zh-TW",
+        "icons": [
+            {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+        ],
+    }
+    return Response(json.dumps(manifest, ensure_ascii=False), mimetype="application/manifest+json")
+
+
+@app.route("/sw.js")
+def pwa_service_worker():
+    return Response(_SW_JS, mimetype="text/javascript",
+                    headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+
+
+@app.route("/offline")
+def pwa_offline():
+    return Response(_OFFLINE_HTML, mimetype="text/html")
+
+
+@app.route("/icons/<path:name>")
+def pwa_icon(name):
+    return send_from_directory(os.path.join(_STATIC_DIR, "icons"), name, max_age=86400)
+
+
+@app.route("/favicon.ico")
+def favicon():
+    return send_from_directory(_STATIC_DIR, "favicon.ico", max_age=86400)
+
+
+@app.route("/api/push/status")
+def api_push_status():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    key = _push.public_key()
+    try:
+        import pywebpush  # noqa: F401
+    except Exception:
+        key = None
+    return jsonify({"available": bool(key), "public_key": key,
+                    "devices": _push.count_for_user(session["username"]),
+                    "max_devices": _push.MAX_DEVICES_PER_USER})
+
+
+@app.route("/api/push/subscribe", methods=["POST"])
+def api_push_subscribe():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    body = request.get_json(silent=True) or {}
+    err = _push.add(session["username"], _session_ns(), body.get("subscription"),
+                    request.headers.get("User-Agent", ""))
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+    return jsonify({"ok": True, "devices": _push.count_for_user(session["username"])})
+
+
+@app.route("/api/push/unsubscribe", methods=["POST"])
+def api_push_unsubscribe():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    endpoint = str((request.get_json(silent=True) or {}).get("endpoint") or "")
+    return jsonify({"ok": True, "removed": _push.remove(session["username"], endpoint)})
+
+
+@app.route("/api/push/test", methods=["POST"])
+def api_push_test():
+    """只送給「這台裝置」：同一個帳號的其他裝置不會被測試通知吵到。"""
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    endpoint = str((request.get_json(silent=True) or {}).get("endpoint") or "")
+    sub = _push.subscription(session["username"], endpoint)
+    if not sub:
+        return jsonify({"ok": False, "error": "這台裝置還沒開啟通知，請先按「開啟通知」。"}), 400
+    r = _push.send_one(sub, {"title": "🔔 ZeroTouch 通知已開啟",
+                             "body": "之後 Healer 發現問題或修好時，會用這種方式通知你。",
+                             "url": "/?page=healer", "tag": "zt-test"})
+    if r == "sent":
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "error": "推播服務說這台裝置的訂閱已經失效，請重新開啟通知。" if r == "removed"
+                    else "推播服務暫時沒有回應，請稍後再按一次「送測試通知」。"}), 502
 
 
 if __name__ == "__main__":

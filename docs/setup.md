@@ -254,6 +254,20 @@ GitHub 開的私有 repo 的 commit，再由客戶叢集裡的 Flux 自動套用
 - 解除安裝：`kubectl delete namespace <客戶的 zt-… namespace>`，再刪除對應的
   `clusterrole`/`clusterrolebinding zt-reporter-nodes-<namespace>`。
 
+## 7.7 手機 App 與推播通知（2026-10-22）
+
+不用額外設定：裝好 `requirements.txt`（含 `pywebpush`）後，第一次有人開啟通知時，平台會自動產生推播用的金鑰，
+存在 `data/vapid_private.pem`。**不要刪這個檔案**，刪掉後所有已開啟通知的裝置都要重新開啟一次。換電腦時不要複製它
+（跟 `data/` 其他檔案一樣），新電腦會產生新的，使用者重新開啟通知即可。
+
+手機上的步驟（必須用 https 的對外網址，見 7.5 節）：
+- **Android（Chrome）**：打開對外網址並登入 → 選單「加到主畫面」或「安裝應用程式」→ 從主畫面打開 →
+  「自動修復」頁 → 「開啟通知」→ 允許。會馬上收到一則測試通知。
+- **iPhone／iPad**（iOS 16.4 以上）：一定要用 Safari 打開 → 分享 → 「加入主畫面」→ 從主畫面的圖示打開 → 「自動修復」頁 →
+  「開啟通知」。直接在 Safari 分頁裡收不到通知，畫面上也會這樣說明。
+
+注意：平台主機關機時不會送通知；同一個問題 6 小時內只通知一次。圖示要改設計就改 `scripts/make_icons.py` 再執行一次。
+
 ---
 
 ## 8. Kubernetes 設定
