@@ -8,7 +8,7 @@
 | 項目 | 狀態 |
 |---|---|
 | 測試 | `pytest` 700 項全過；跟 CI 相同的乾淨環境 346 項通過、66 項略過 |
-| CI | 最新一次 commit 通過 |
+| CI | 通過（GitHub Actions，Python 3.9） |
 | 套件 | `pip check` 沒有衝突，安裝版本與 `requirements.txt` 完全一致 |
 | 服務 | 兩個網站、對外網址、模型伺服器、K8s、Prometheus、Grafana、Flux、Gemini 都正常 |
 | 瀏覽器實測 | 六個頁面、一般問答、部署 → 擴縮 → 換映像檔 → 回滾 → 刪除、預約從建立到確認執行、手機監控版五個分頁、客戶叢集模式的註冊與同意書，全部正常 |
@@ -72,7 +72,9 @@
 5. **`web_demo.py` 的 `HTML` 會經過 Jinja 處理。** JavaScript 裡不能出現 `{{`、`{%`、`{#`。改完之後，把頁面實際渲染出來，再用 `node --check` 檢查一次。
 6. **Healer 判斷「是不是同一個問題」時，不能比對模型寫的文字。** 模型每次的措辭都不一樣。目前的做法是比對「服務＋處理方式」，有實際修改的處理再加上 Pod 名稱。
 7. **新的測試檔如果需要 Flask 或 torch，要用 `pytest.importorskip`。** 而且要放在測試函式或 fixture 裡面，不要寫在檔案最上面，否則 CI 會把整個檔案（包括純邏輯的測試）一起略過。
-8. **專案慣例**：回覆與文件一律用繁體中文。有實質改動就記進 `CHANGELOG.md`；評審可能會問的風險記進 `docs/security_review.md`。大改動要先出計畫，得到同意才能動手（見 `AGENT_RULES.md`）。
+8. **CI 用的是 Python 3.9**，但這台開發機是 3.12。測試裡不要用 3.10 以後才有的寫法，例如 `Path.write_text(newline=...)`、`match`、`X | None`。
+   交接前就是因為這樣，CI 紅了一次。推上去之後要看 CI 結果，不能只看本機測試。
+9. **專案慣例**：回覆與文件一律用繁體中文。有實質改動就記進 `CHANGELOG.md`；評審可能會問的風險記進 `docs/security_review.md`。大改動要先出計畫，得到同意才能動手（見 `AGENT_RULES.md`）。
 
 ---
 
