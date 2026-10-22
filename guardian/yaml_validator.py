@@ -108,10 +108,21 @@ def check_image(image: str, policy_file: str = None) -> list:
     只檢查一個映像名稱，回傳阻斷原因清單（空清單＝允許）。
     給不經過完整 manifest 驗證的路徑用，例如 /api/update 直接換映像檔。
     """
+    # 先檢查格式：映像檔名稱只能是 ASCII（倉庫名稱小寫），不合法的名稱 K8s 會回 InvalidImageName，
+    # 換映像檔的 Pod 就永遠起不來（2026-10-23 全系統檢查：「檔換成」被當成映像檔名稱送進叢集）
+    if not isinstance(image, str) or len(image) > 255 or not _IMAGE_REF_RE.match(image):
+        return [f"「{str(image)[:60]}」不是合法的映像檔名稱。寫法像 nginx:1.27 或 registry.example.com/team/app:v1。"]
     policy = _load_policy(policy_file or str(_POLICY_FILE))
     doc = {"spec": {"template": {"spec": {"containers": [{"name": "app", "image": image}]}}}}
     errors, _ = _check_images(doc, policy)
     return errors
+
+
+# Docker 映像參照：[registry[:port]/]repo[/repo...][:tag][@sha256:digest]；倉庫名稱一律小寫
+_IMAGE_REF_RE = re.compile(
+    r"^(?:[A-Za-z0-9.-]+(?::\d+)?/)?"
+    r"[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*"
+    r"(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?(?:@sha256:[a-f0-9]{64})?$")
 
 
 def validate_from_llm_result(llm_result: dict) -> dict:

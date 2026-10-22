@@ -3194,7 +3194,7 @@ function matchClientRule(text){
     ['scale', /scale\s+(\S+)\s+to\s+(\d+)/i, m=>({name:m[1],replicas:parseInt(m[2],10)})],
     ['scale', /\u628a?\s*(\S+?)\s*(?:\u64f4|\u7e2e|\u8abf).*?(\d+)/i, m=>({name:m[1],replicas:parseInt(m[2],10)})],
     ['update_image', /update\s+(\S+)\s+to\s+(\S+)/i, m=>({name:m[1],image:m[2]})],
-    ['update_image', /\u628a?\s*(\S+?)\s*\u7684?\s*(?:image|\u6620\u50cf|\u93e1\u50cf)\s*(?:\u63db\u6210|\u6539\u6210|\u6539\u70ba|to)?\s*(\S+)/i, m=>({name:m[1],image:m[2]})],
+    ['update_image', /\u628a?\s*(\S+?)\s*\u7684?\s*(?:image|\u6620\u50cf\u6a94?|\u93e1\u50cf\u6a94?)\s*(?:\u63db\u6210|\u6539\u6210|\u6539\u70ba|\u66f4\u65b0\u6210|\u66f4\u65b0\u70ba|to)?\s*(\S+)/i, m=>({name:m[1],image:m[2]})],
     ['rollback', /rollback\s+(\S+)/i, m=>({name:m[1]})],
     ['rollback', /(\S+)\s*(?:\u56de\u6efe|\u56de\u5fa9|\u9084\u539f)/i, m=>({name:m[1]})],
   ];
@@ -6052,7 +6052,8 @@ _INTENT_RULES = [
     ("scale", re.compile(r"scale\s+(\S+)\s+to\s+(\d+)", re.I), {1: "name", 2: "replicas"}),
     ("scale", re.compile(r"把?\s*(\S+?)\s*(?:擴|縮|調).*?(\d+)", re.I), {1: "name", 2: "replicas"}),
     ("update_image", re.compile(r"update\s+(\S+)\s+to\s+(\S+)", re.I), {1: "name", 2: "image"}),
-    ("update_image", re.compile(r"把?\s*(\S+?)\s*的?\s*(?:image|映像|鏡像)\s*(?:換成|改成|改為|to)?\s*(\S+)", re.I), {1: "name", 2: "image"}),
+    # 「映像檔」的「檔」要一起吃掉，不然「映像檔換成 nginx:1.28」會把「檔換成」當成映像檔名稱（2026-10-23 全系統檢查）
+    ("update_image", re.compile(r"把?\s*(\S+?)\s*的?\s*(?:image|映像檔?|鏡像檔?)\s*(?:換成|改成|改為|更新成|更新為|to)?\s*(\S+)", re.I), {1: "name", 2: "image"}),
     ("rollback", re.compile(r"rollback\s+(\S+)", re.I), {1: "name"}),
     ("rollback", re.compile(r"(\S+)\s*(?:回滾|回復|還原)", re.I), {1: "name"}),
     # deploy：前端有更完整的複合 regex，這裡只當 server 端安全網（args 交給 /api/deploy/parse 解析）
