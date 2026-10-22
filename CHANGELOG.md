@@ -1298,3 +1298,12 @@ OOM 測試 Pod 被 Healer 調高記憶體後收到「✅ oomtest 已自動修復
 **驗證**：`tests/test_schedule_time.py`、`tests/test_schedule.py` 共 46 項，`pytest` 全過（680 項）。瀏覽器實測：一句話預約部署 → 改分鐘 → 預約 →
 到期 30 秒內跳出提示與對話卡、側欄顯示 1 → 確定執行 → 重新審查並部署、追到運作中 1/1 → 重新整理後預約卡顯示已完成；擴縮預約改時間、取消；
 200 副本預約當下被擋；手機行事曆沒有任何操作按鈕、直接打建立 API 回 403。
+
+### 01:30 — 修正：10/9 之後本機模式的部署與回滾都沒有寫進 Git（全系統檢查發現）
+**怎麼發現的**：測試預約部署時，部署設定檔停在暫存區沒有 commit。查 git log：最後一筆 `gitops: deploy` 是 10/3。
+**原因**：`gitops/manifest_writer.py` 與 `gitops/rollback.py` 用 GitPython 的 `index.commit()`，它會自己執行 pre-commit hook（gitleaks），
+在 Windows 上呼叫到 WSL 的 bash（這台沒有），每次 commit 都失敗、例外被吞掉。10/9 換電腦裝上 hook 之後就一直這樣，部署本身成功所以沒人發現。
+**修正**：新增 `commit_paths()` 改用 git 指令（hook 由 Git for Windows 執行，密碼檢查照樣有效），只提交這次的檔案、失敗時移出暫存區；
+部署與回滾共用。回滾沒寫進 Git 時會在訊息裡說明。
+**驗證**：`tests/test_gitops_commit.py` 4 項（只提交指定檔案、hook 真的有跑、hook 擋下時不留暫存、目錄路徑）；`test_rollback.py` 補驗回滾真的產生 commit；
+`pytest` 全過（684 項）。

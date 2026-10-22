@@ -2058,6 +2058,25 @@ iPhone 一定要先加到主畫面（iOS 16.4 以上）才收得到。service wo
 審查沒過不能預約）、`tests/test_schedule_time.py`（各種說法、不會把版本號或「快一點」讀成時間、重複排程被拒）。瀏覽器實測整條流程：
 到期 30 秒內提示 → 確定執行 → 重新審查 → 部署 → 追到運作中。
 
+## 46. GitOps 審計軌跡兩週沒有寫入，而且沒人發現
+
+**風險**：平台主打「每次部署都寫進 Git，可追查、可回滾」。10/9 換電腦後，本機模式的部署與回滾全部沒有產生 commit：
+GitPython 的 `index.commit()` 會自己執行 pre-commit hook（gitleaks），在 Windows 上找到的是 WSL 的 bash，執行失敗；
+例外被吞掉只印一行 log，部署本身照樣成功，畫面上也沒有任何提示。
+
+**為什麼重要**：審計軌跡是評審一定會問的點（「你怎麼知道誰在什麼時候改了什麼」）；而且「部署紀錄」頁與 Git 回滾都依賴這些 commit，
+等於這兩個功能在本機模式下悄悄失效。這也是「靜默失敗」的典型例子。
+
+**解決方式**：`gitops/manifest_writer.commit_paths()` 改用 git 指令提交（hook 由 Git for Windows 自己的 sh 執行，gitleaks 照樣把關），
+只提交這次部署／回滾的檔案（原本會把整個暫存區一起提交），失敗時把檔案移出暫存區；回滾沒寫進 Git 時，回傳訊息會明講。
+客戶叢集模式（`gitops/tenant_repo.py`）本來就用 git 指令，不受影響。
+
+**沒做的事**：這兩週部署過的服務不會補 commit（測試資料為主，叢集上的狀態才是準的）。
+「commit 失敗時要不要讓部署整個失敗」沒有改：部署已經套用到叢集，回報失敗反而會讓使用者以為沒部署成功；改成在結果訊息裡標示。
+
+**驗證**：`tests/test_gitops_commit.py`（只提交指定檔案、hook 真的有執行、hook 擋下時不留暫存、目錄路徑）、
+`tests/test_rollback.py`（回滾後 HEAD 是 `gitops: revert ...`）。
+
 ## 尚待排查（優先度較低，不是資源受限，只是還沒排到）
 
 - **2026-10-06 擴充 prompt injection 測試（OWASP AITG-APP-01 範例改寫 + 自行設計，
