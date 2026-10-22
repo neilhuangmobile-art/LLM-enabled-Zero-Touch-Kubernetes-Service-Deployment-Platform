@@ -106,7 +106,7 @@ def test_heal_message_is_short_and_has_no_raw_logs():
     assert "\n" not in m["body"] and len(m["body"]) <= push.MAX_TEXT
     assert m["url"] == "/?page=healer&pod=orders-api"
     ok = push.heal_message("web", "ok", "記憶體不足", "調高記憶體上限", "web")
-    assert "已自動修復" in ok["title"] and "調高記憶體上限" in ok["body"]
+    assert "已自動處理" in ok["title"] and "調高記憶體上限" in ok["body"]
     # Pod 名稱只留合法字元，不能拿來塞網址參數
     assert push.heal_message("a", "ok", "c", "l", "x&y=<b>")["url"] == "/?page=healer&pod=xyb"
 
@@ -142,4 +142,4 @@ def test_heal_push_follows_record_dedupe(tmp_path, monkeypatch):
     monkeypatch.setattr(web_demo, "_real_heal_pod_unrecorded",
                         lambda p, n: {"ok": True, "action": "increase_memory", "root_cause": "記憶體不足"})
     web_demo._real_heal_pod("orders-api-5bb884c797-54fcm", "user-push")
-    assert len(sent) == 2 and "已自動修復" in sent[1][1]["title"]
+    assert len(sent) == 2 and "已自動處理" in sent[1][1]["title"]

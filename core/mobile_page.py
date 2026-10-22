@@ -84,8 +84,8 @@ dl.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-siz
 dl.kv dt{color:var(--text-3)} dl.kv dd{margin:0;word-break:break-word}
 .ev{font-size:13px;color:var(--text-2);padding:6px 0;border-top:1px solid var(--grid)}
 .ev:first-child{border-top:0}
-.bar{display:flex;gap:2px;height:18px;margin-top:6px}
-.bar i{flex:1;border-radius:2px;background:var(--pass)}
+.bar{display:flex;gap:1px;height:18px;margin-top:6px;border-radius:4px;overflow:hidden}
+.bar i{flex:1;min-width:1px;background:var(--pass)}
 .bar i.bad{background:var(--stop)}
 .tl{list-style:none;margin:0;padding:0}
 .tl li{background:var(--panel);border:1px solid var(--grid);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px}
@@ -100,7 +100,25 @@ dl.kv dt{color:var(--text-3)} dl.kv dd{margin:0;word-break:break-word}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
 .push-box{display:flex;flex-direction:column;gap:10px;color:var(--text-2);font-size:14px;line-height:1.7}
 .push-box ol{margin:0;padding-left:20px}
-.tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;display:grid;grid-template-columns:repeat(4,1fr);background:var(--panel);border-top:1px solid var(--grid);padding-bottom:env(safe-area-inset-bottom)}
+/* 圖表 */
+.chart{width:100%;height:auto;display:block;touch-action:pan-y}
+.chart .ax{stroke:var(--grid);stroke-width:1}
+.chart text{fill:var(--text-3);font-size:10px}
+.chart-cap{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.chart-cap b{font-size:15px}
+.chart-cap .now{font-size:20px;font-weight:700}
+.readout{font-size:12.5px;color:var(--text-2);min-height:18px;margin-top:4px}
+.donuts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.donut{text-align:center}
+.donut .t{font-size:13px;color:var(--text-2);margin-top:4px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--text-2);margin-top:10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.hbar{margin:8px 0}
+.hbar .row{display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px}
+.hbar .track{height:10px;border-radius:5px;background:var(--panel-2);overflow:hidden}
+.hbar .fill{height:100%;border-radius:5px;background:var(--signal)}
+.note{font-size:12.5px;color:var(--text-3);margin-top:8px}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;display:grid;grid-template-columns:repeat(5,1fr);background:var(--panel);border-top:1px solid var(--grid);padding-bottom:env(safe-area-inset-bottom)}
 .tabs button{border:0;background:none;color:var(--text-3);height:var(--tab-h);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:12px;position:relative}
 .tabs button svg{width:22px;height:22px}
 .tabs button.on{color:var(--signal)}
@@ -148,6 +166,7 @@ dl.kv dt{color:var(--text-3)} dl.kv dd{margin:0;word-break:break-word}
   <div id="banners"></div>
   <section class="view" id="v-overview"></section>
   <section class="view" id="v-services"></section>
+  <section class="view" id="v-charts"></section>
   <section class="view" id="v-history"></section>
   <section class="view" id="v-settings">
     <div class="card"><div style="font-weight:700;margin-bottom:8px">手機通知</div><div id="push-body"></div></div>
@@ -161,13 +180,14 @@ dl.kv dt{color:var(--text-3)} dl.kv dd{margin:0;word-break:break-word}
 <nav class="tabs" aria-label="分頁">
   <button type="button" data-tab="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/></svg>總覽<span class="dot" id="dot-ov"></span></button>
   <button type="button" data-tab="services"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/></svg>服務</button>
+  <button type="button" data-tab="charts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>圖表</button>
   <button type="button" data-tab="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>修復紀錄</button>
   <button type="button" data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8a6 6 0 1112 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 004 0"/></svg>設定</button>
 </nav>
 <script>
 const NEEDS_SETUP = {{ 'true' if needs_setup else 'false' }};
-const TITLES = {overview:'總覽', services:'服務', history:'修復紀錄', settings:'設定'};
-const S = {status:null, deps:[], pods:[], healer:null, loadedAt:null, error:null};
+const TITLES = {overview:'總覽', services:'服務', charts:'圖表', history:'修復紀錄', settings:'設定'};
+const S = {status:null, deps:[], pods:[], healer:null, dash:null, dashError:null, loadedAt:null, error:null};
 
 function esc(v){ return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 async function getJSON(url){
@@ -211,6 +231,9 @@ async function refresh(){
       getJSON('/api/healer/status').catch(() => null)]);
     S.status = st; S.deps = dp.deployments || []; S.pods = pd.pods || []; S.healer = hl;
     S.loadedAt = new Date(); S.error = null;
+    // 圖表資料另外抓：Prometheus 慢或連不上時，不要拖住上面的狀態
+    getJSON('/api/dashboard').then(d => { S.dash = d; S.dashError = null; renderCharts(); })
+      .catch(e => { S.dashError = e.message || String(e); renderCharts(); });
   }catch(e){
     // 連不上（主機關機）或伺服器錯誤：保留上一份資料但明確標示，不假裝是現況
     S.error = e.message || String(e);
@@ -291,18 +314,122 @@ async function renderDetail(name){
       html += `<div class="card"><div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><b style="flex:1;word-break:break-all;font-size:13.5px">${esc(p.name)}</b><span class="tag ${p.healthy ? '' : 'bad'}">${p.healthy ? '健康' : '有狀況'}</span></div>
         <dl class="kv"><dt>狀態</dt><dd>${p.healthy ? '正常執行中' : esc(reasonText(why) || p.phase)}</dd><dt>重啟</dt><dd>${esc(p.restarts)} 次</dd><dt>建立</dt><dd>${esc(p.age)}</dd></dl>
         ${warns.length ? `<div class="sec" style="margin-top:12px">警告事件</div>${warns.map(e => `<div class="ev"><b>${esc(e.reason)}</b>${e.count > 1 ? `（${esc(e.count)} 次）` : ''}　${esc(e.message)}</div>`).join('')}` : ''}
-        <div class="sec" style="margin-top:12px">健康狀態（最近 1 小時，綠色正常、紅色有狀況）</div><div class="bar" id="bar-${esc(p.name)}"><i style="background:var(--grid)"></i></div></div>`;
+        <div class="sec" style="margin-top:12px">健康狀態（綠色正常、紅色有狀況）</div><div id="hist-${esc(p.name)}"><div class="dim" style="font-size:13px">讀取中…</div></div></div>`;
     }
     el.innerHTML = html;
-    for(const p of pods.slice(0, 5)){
+    pods.slice(0, 5).forEach((p, n) => {
       getJSON('/api/pods/' + encodeURIComponent(p.name) + '/history').then(h => {
         if(seq !== detailSeq) return;
-        const bar = document.getElementById('bar-' + p.name);
-        const hs = ((h && h.history) || []).slice(-60);
-        if(bar) bar.innerHTML = hs.length ? hs.map(x => `<i class="${x.phase === 'Running' && x.total && x.ready === x.total ? '' : 'bad'}"></i>`).join('') : '<span class="dim" style="font-size:13px">還沒有累積資料</span>';
+        const box = document.getElementById('hist-' + p.name);
+        const hs = ((h && h.history) || []).slice(-120);
+        if(!box) return;
+        if(!hs.length){ box.innerHTML = '<span class="dim" style="font-size:13px">還沒有累積資料。Healer 每 30 秒記錄一次，過幾分鐘再來看。</span>'; return; }
+        const ok = x => x.phase === 'Running' && x.total && x.ready === x.total;
+        box.innerHTML = `<div class="bar">${hs.map(x => `<i class="${ok(x) ? '' : 'bad'}"></i>`).join('')}</div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-3);margin-top:2px"><span>${esc(hhmm(hs[0].t))}</span><span>${esc(hhmm(hs[hs.length - 1].t))}</span></div>
+          <div class="sec" style="margin-top:12px">重啟次數趨勢</div>
+          ${hs.length > 1 ? lineChart('rs' + n, hs.map(x => ({t:x.t, v:x.restarts || 0})), '次', 'var(--stop)', 0) : '<span class="dim" style="font-size:13px">資料還不夠畫趨勢。</span>'}`;
       }).catch(() => {});
-    }
+    });
   }catch(e){ if(seq === detailSeq) el.innerHTML = `<div class="empty">讀取失敗：${esc(e.message || String(e))}</div>`; }
+}
+
+// ── 圖表（手寫 SVG，不載入外部套件） ──
+const CHARTS = {};
+function hhmm(t){ return new Date(t).toLocaleTimeString('zh-TW', {hour12:false, hour:'2-digit', minute:'2-digit'}); }
+function fmtNum(v, digits){ return Number(v).toFixed(digits).replace(/\.0+$/, ''); }
+// 折線圖：點圖上任一處會顯示最接近那個時間點的數值
+function lineChart(id, pts, unit, color, digits){
+  CHARTS[id] = {pts, unit, digits};
+  const W = 340, H = 150, L = 38, R = 8, T = 10, B = 22;
+  const max = Math.max(...pts.map(p => p.v), 0);
+  const top = max > 0 ? max * 1.15 : 1;
+  const x = i => L + (pts.length > 1 ? i * (W - L - R) / (pts.length - 1) : (W - L - R) / 2);
+  const y = v => T + (H - T - B) * (1 - v / top);
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join('');
+  const area = `${line}L${x(pts.length - 1).toFixed(1)},${y(0)}L${x(0).toFixed(1)},${y(0)}Z`;
+  const last = pts[pts.length - 1];
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" data-chart="${id}" role="img" aria-label="趨勢圖">
+    <line class="ax" x1="${L}" y1="${y(0)}" x2="${W - R}" y2="${y(0)}"/><line class="ax" x1="${L}" y1="${y(top / 1.15)}" x2="${W - R}" y2="${y(top / 1.15)}" stroke-dasharray="3 3"/>
+    <text x="${L - 4}" y="${y(0) + 3}" text-anchor="end">0</text><text x="${L - 4}" y="${y(top / 1.15) + 3}" text-anchor="end">${esc(fmtNum(top / 1.15, digits))}</text>
+    <text x="${L}" y="${H - 6}">${esc(hhmm(pts[0].t))}</text><text x="${W - R}" y="${H - 6}" text-anchor="end">${esc(hhmm(last.t))}</text>
+    <path d="${area}" style="fill:${color};opacity:.14"/><path d="${line}" style="fill:none;stroke:${color};stroke-width:2;stroke-linejoin:round"/>
+    <circle class="mark" cx="${x(pts.length - 1)}" cy="${y(last.v)}" r="4" style="fill:${color}"/></svg>
+    <div class="readout" id="ro-${id}">最新 ${esc(hhmm(last.t))}：${esc(fmtNum(last.v, digits))} ${esc(unit)}（點圖表看其他時間）</div>`;
+}
+function onChartTap(svg, clientX){
+  const c = CHARTS[svg.dataset.chart];
+  if(!c || !c.pts.length) return;
+  const box = svg.getBoundingClientRect(), W = 340, L = 38, R = 8;
+  const vx = (clientX - box.left) * W / box.width;
+  const i = Math.max(0, Math.min(c.pts.length - 1, Math.round((vx - L) / ((W - L - R) / Math.max(1, c.pts.length - 1)))));
+  const p = c.pts[i];
+  const mark = svg.querySelector('.mark'), line = svg.querySelector('path:last-of-type');
+  if(mark && line){
+    const seg = line.getAttribute('d').split(/[ML]/).filter(Boolean)[i];
+    if(seg){ const [cx, cy] = seg.split(','); mark.setAttribute('cx', cx); mark.setAttribute('cy', cy); }
+  }
+  const ro = document.getElementById('ro-' + svg.dataset.chart);
+  if(ro) ro.textContent = `${hhmm(p.t)}：${fmtNum(p.v, c.digits)} ${c.unit}`;
+}
+// 環狀圖：parts = [{v, color, label}]
+function donut(parts, center, sub){
+  const total = parts.reduce((s, p) => s + Math.max(0, p.v), 0) || 1;
+  const r = 42, C = 2 * Math.PI * r;
+  let off = 0;
+  const arcs = parts.map(p => {
+    const len = Math.max(0, p.v) / total * C;
+    const s = `<circle cx="60" cy="60" r="${r}" style="fill:none;stroke:${p.color};stroke-width:16" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 60 60)"/>`;
+    off += len; return s;
+  }).join('');
+  return `<svg class="chart" viewBox="0 0 120 120" style="max-width:150px;margin:0 auto"><circle cx="60" cy="60" r="${r}" style="fill:none;stroke:var(--panel-2);stroke-width:16"/>${arcs}
+    <text x="60" y="58" text-anchor="middle" style="fill:var(--text);font-size:15px;font-weight:700">${esc(center)}</text>
+    <text x="60" y="74" text-anchor="middle">${esc(sub)}</text></svg>`;
+}
+function chartEmpty(msg){ return `<div class="empty" style="padding:18px 6px">${esc(msg)}</div>`; }
+
+function renderCharts(){
+  const el = document.getElementById('v-charts');
+  if(!el) return;
+  if(NEEDS_SETUP){ el.innerHTML = '<div class="empty">還沒連上叢集。請先用電腦完成連線設定。</div>'; return; }
+  const d = S.dash;
+  if(!d){ el.innerHTML = S.dashError ? chartEmpty('讀不到圖表資料：' + S.dashError) : '<div class="empty">讀取中…</div>'; return; }
+  let trendMsg = '';
+  if(!d.k8s_enabled) trendMsg = 'Kubernetes 沒有連線，讀不到用量。';
+  else if(d.customer_cluster) trendMsg = '你的叢集沒有安裝指標收集元件（metrics-server），所以沒有用量趨勢。下面的容量與用量是依各服務設定的資源需求計算。';
+  else if(!d.prometheus_up) trendMsg = '監控元件（Prometheus）目前連不上，暫時沒有用量趨勢。';
+  const cpu = d.cpu_trend || [], mem = d.mem_trend || [];
+  const trendCard = (title, pts, unit, color, digits, id) => `<div class="card"><div class="chart-cap"><b>${title}</b><span class="dim" style="font-size:12px">過去 30 分鐘</span></div>
+    ${trendMsg ? chartEmpty(trendMsg) : pts.length < 2 ? chartEmpty('資料還不夠畫趨勢，服務剛啟動時要等幾分鐘。') : lineChart(id, pts, unit, color, digits)}</div>`;
+  let html = trendCard('CPU 用量', cpu, '核', 'var(--pass)', 3, 'cpu') + trendCard('記憶體用量', mem, 'MiB', 'var(--signal)', 1, 'mem');
+
+  const cap = d.cluster_capacity, used = d.cluster_used, rem = d.cluster_remaining;
+  if(cap && used && rem){
+    const mineC = d.my_total_cpu_cores || 0, mineM = d.my_total_mem_gib || 0;
+    const parts = (mine, u, r) => [{v:mine, color:'var(--signal)'}, {v:Math.max(0, u - mine), color:'var(--caution)'}, {v:r, color:'var(--panel-2)'}];
+    const pct = (u, c) => c ? Math.round(u / c * 100) + '%' : '-';
+    html += `<div class="card"><div class="chart-cap"><b>叢集容量</b><span class="dim" style="font-size:12px">整個叢集共用</span></div>
+      <div class="donuts"><div class="donut">${donut(parts(mineC, used.cpu_cores, rem.cpu_cores), pct(used.cpu_cores, cap.cpu_cores), '已使用')}<div class="t">CPU：剩 ${esc(fmtNum(rem.cpu_cores, 2))} / ${esc(fmtNum(cap.cpu_cores, 2))} 核</div></div>
+      <div class="donut">${donut(parts(mineM, used.mem_gib, rem.mem_gib), pct(used.mem_gib, cap.mem_gib), '已使用')}<div class="t">記憶體：剩 ${esc(fmtNum(rem.mem_gib, 1))} / ${esc(fmtNum(cap.mem_gib, 1))} GiB</div></div></div>
+      <div class="legend"><span><i style="background:var(--signal)"></i>我的服務</span><span><i style="background:var(--caution)"></i>其他使用者與系統</span><span><i style="background:var(--panel-2);border:1px solid var(--grid-2)"></i>剩餘</span></div>
+      <div class="note">${(d.cluster_used_source || {}).cpu === 'requests' ? 'CPU 以各服務申請的量計算' : 'CPU 以實際用量計算'}；${(d.cluster_used_source || {}).mem === 'usage' ? '記憶體以實際用量計算' : '記憶體以各服務申請的量計算'}。同一時間可能有其他使用者在部署，數字會變動。</div></div>`;
+  } else {
+    html += `<div class="card"><b>叢集容量</b>${chartEmpty('讀不到叢集容量。')}</div>`;
+  }
+
+  const deps = d.my_deployments || [];
+  if(deps.length){
+    const maxM = Math.max(...deps.map(x => x.mem_gib || 0), 0.001), maxC = Math.max(...deps.map(x => x.cpu_cores || 0), 0.001);
+    const rows = [...deps].sort((a, b) => (b.mem_gib || 0) - (a.mem_gib || 0));
+    html += `<div class="card"><div class="chart-cap"><b>各服務佔用的資源</b><span class="dim" style="font-size:12px">依申請量</span></div>
+      ${rows.map(x => `<div class="hbar"><div class="row"><span>${esc(x.name)}<span class="dim">　×${esc(x.replicas)}</span></span><span class="dim">${esc(fmtNum((x.mem_gib || 0) * 1024, 0))} MiB · ${esc(fmtNum(x.cpu_cores || 0, 2))} 核</span></div>
+        <div class="track"><div class="fill" style="width:${Math.max(2, (x.mem_gib || 0) / maxM * 100).toFixed(1)}%"></div></div>
+        <div class="track" style="margin-top:3px;height:6px"><div class="fill" style="width:${Math.max(2, (x.cpu_cores || 0) / maxC * 100).toFixed(1)}%;background:var(--pass)"></div></div></div>`).join('')}
+      <div class="legend"><span><i style="background:var(--signal)"></i>記憶體</span><span><i style="background:var(--pass)"></i>CPU</span></div></div>`;
+  }
+  html += `<div class="card"><div class="chart-cap"><b>每月預估費用</b><span class="now">US$ ${esc(fmtNum(d.my_monthly_usd || 0, 2))}</span></div>
+    <div class="dim" style="font-size:13px">依你所有服務申請的 CPU ${esc(fmtNum(d.my_total_cpu_cores || 0, 2))} 核、記憶體 ${esc(fmtNum(d.my_total_mem_gib || 0, 2))} GiB，以一般雲端價格估算。</div></div>`;
+  el.innerHTML = html;
 }
 
 function renderHistory(){
@@ -336,11 +463,13 @@ function render(){
   renderBanners();
   const h = location.hash.slice(1) || 'overview';
   if(h.startsWith('services/')) return;   // 詳情頁自己管，不要被 30 秒更新蓋掉
-  renderOverview(); renderServices(); renderHistory();
+  renderOverview(); renderServices(); renderCharts(); renderHistory();
   document.getElementById('upd').textContent = S.loadedAt ? `更新 ${fmtTime(S.loadedAt)}` : '';
 }
 
 document.addEventListener('click', e => {
+  const ch = e.target.closest('[data-chart]');
+  if(ch){ onChartTap(ch, e.clientX); return; }
   const tab = e.target.closest('[data-tab]');
   if(tab){ location.hash = tab.dataset.tab; return; }
   const svc = e.target.closest('[data-svc]');

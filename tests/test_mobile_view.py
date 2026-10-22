@@ -51,7 +51,7 @@ def test_monitor_page_has_no_write_actions(client):
                 "/api/rollback", "/api/healer/fix", "/api/healer/auto", "/api/chat", "/api/intent",
                 "/api/import", "diagnose=1"):
         assert bad not in html, bad
-    for tab in ("overview", "services", "history", "settings"):
+    for tab in ("overview", "services", "charts", "history", "settings"):
         assert f'data-tab="{tab}"' in html
 
 
@@ -86,7 +86,7 @@ def test_phone_password_login_is_readonly(client, monkeypatch):
     ("POST", "/api/deploy"), ("POST", "/api/deploy/parse"), ("POST", "/api/scale"), ("POST", "/api/delete"),
     ("POST", "/api/update"), ("POST", "/api/rollback"), ("POST", "/api/healer/fix"), ("POST", "/api/healer/auto-fix"),
     ("POST", "/api/chat"), ("POST", "/api/intent"), ("POST", "/api/import/parse"), ("GET", "/api/report"),
-    ("GET", "/api/pods/web?diagnose=1"), ("GET", "/api/some-future-endpoint"),
+    ("GET", "/api/pods/web?diagnose=1"), ("GET", "/api/some-future-endpoint"), ("GET", "/api/gitops"),
 ], ids=lambda v: re.sub(r"\W+", "_", v))
 def test_readonly_session_blocks_writes(client, method, path):
     """用白名單：寫入 API、會觸發模型的診斷、以及之後新增但沒列進白名單的 API，全部擋下。"""
@@ -96,7 +96,7 @@ def test_readonly_session_blocks_writes(client, method, path):
     assert r.status_code == 403 and r.get_json().get("readonly") is True
 
 
-@pytest.mark.parametrize("path", ["/api/deployments", "/api/pods", "/api/healer/status", "/api/status",
+@pytest.mark.parametrize("path", ["/api/deployments", "/api/pods", "/api/healer/status", "/api/status", "/api/dashboard",
                                   "/api/pods/web", "/api/pods/web-1-2/history", "/api/push/status"])
 def test_readonly_session_can_read(client, monkeypatch, path):
     monkeypatch.setattr(web_demo, "_session_ns", lambda: "user-alice")

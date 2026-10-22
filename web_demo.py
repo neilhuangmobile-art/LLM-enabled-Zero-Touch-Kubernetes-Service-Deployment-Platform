@@ -7738,13 +7738,18 @@ _HEAL_REPAIR_ACTIONS = {"analyze_logs", "fix_image", "increase_memory", "fix_pro
                         "restart_app", "set_memory_limit", "revert_app"}
 
 
-def _heal_recently_recorded(namespace, app, action, root_cause, hours=6):
-    """同一個服務、同一種處理、同一個原因，6 小時內已經記過就不再記。網站每次重啟背景 Healer 都會重新檢查一次
-    還沒解決的問題（2026-10-21 全系統檢查：orders-api 同一個問題一週被記 16 次，報告上的修復次數被灌水）。"""
+def _heal_recently_recorded(namespace, app, action, pod=None, hours=6):
+    """6 小時內已經記過就不再記（也不再推播）。網站每次重啟背景 Healer 都會重新檢查一次還沒解決的問題
+    （2026-10-21 全系統檢查：orders-api 同一個問題一週被記 16 次，報告上的修復次數被灌水）。
+
+    比對的是「服務＋處理方式」，真的有改動的處理再加上 Pod 名稱；**不比對原因文字**：原因是模型寫的，
+    同一個問題每次措辭都不同（2026-10-22 手機實測：連不上資料庫 13 分鐘內通知 4 次；反過來，記憶體上限
+    連調 3 次卻因為措辭剛好相同而沒有紀錄、沒有通知）。真的修過一次就會換成新的 Pod，所以每次實際的修復
+    都會記到；只是查出原因、沒有改動的（例如請你檢查相依服務），同一個服務 6 小時內只記一次。"""
     try:
         for e in reversed(_events.query(namespace, since=_time.time() - hours * 3600, kinds=["heal"])):
             d = e.get("data") or {}
-            if e.get("app") == app and d.get("action") == action and d.get("root_cause") == root_cause:
+            if e.get("app") == app and d.get("action") == action and (pod is None or d.get("pod") == pod):
                 return True
     except Exception:
         pass
@@ -7756,7 +7761,8 @@ def _real_heal_pod(pod_name, namespace="default"):
     try:
         action = (result or {}).get("action")
         if action and action not in ("none", "in_progress") and not _heal_recently_recorded(
-                namespace, _app_key_for_pod_name(pod_name), action, result.get("root_cause")):
+                namespace, _app_key_for_pod_name(pod_name), action,
+                pod_name if action in _HEAL_REPAIR_ACTIONS else None):
             outcome = ("ok" if result.get("ok") else "fail") if action in _HEAL_REPAIR_ACTIONS else "inspect"
             app_key = _app_key_for_pod_name(pod_name)
             label = _HEAL_ACTION_LABEL.get(action, action)
@@ -8058,7 +8064,7 @@ _PHONE_UA_RE = _re_m.compile(r"iPhone|iPod|Android.*Mobile|Mobile.*Android", _re
 
 # 唯讀 session 能用的 API：(方法, 路徑規則)。用白名單，之後新增的 API 預設就會被擋
 _READONLY_API = (
-    ("GET", _re_m.compile(r"^/api/(status|deployments|pods|healer/status|push/status)$")),
+    ("GET", _re_m.compile(r"^/api/(status|deployments|pods|healer/status|push/status|dashboard)$")),
     ("GET", _re_m.compile(r"^/api/pods/[^/]+(/history)?$")),
     ("POST", _re_m.compile(r"^/api/push/(subscribe|unsubscribe|test)$")),
 )

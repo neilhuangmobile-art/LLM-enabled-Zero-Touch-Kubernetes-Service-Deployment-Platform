@@ -200,6 +200,13 @@ def diagnose_issue(context: dict, use_llm: bool = True) -> dict:
                         "證據不足，只能確定是重複重啟/異常終止，實際原因需要人工查看完整日誌"
                     )
                     llm_result["suggestion"] = rule_result["suggestion"]
+                elif rule_result["action"] == "fix_probe":
+                    # 探針失敗的事件裡有 `connection refused`，模型常把它寫成「連線到 API 失敗／超時」，
+                    # 跟實際狀況（應用程式還沒啟動完就被健康檢查判死）不符（2026-10-22 實測）。用規則層的文字。
+                    if llm_result.get("root_cause") != rule_result["root_cause"]:
+                        llm_result["llm_raw_guess"] = llm_result.get("root_cause")
+                    llm_result["root_cause"] = rule_result["root_cause"]
+                    llm_result["suggestion"] = rule_result["suggestion"]
                 else:
                     # 有具體證據時採用模型的敘述，但模型提到的技術名稱必須在證據裡找得到。
                     # 2026-10-21 全系統檢查：日誌只寫「cannot connect to database」，模型的建議卻寫

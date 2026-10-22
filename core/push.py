@@ -188,7 +188,8 @@ def heal_message(app: str, outcome: str, root_cause: str, action_label: str, pod
     app = clean_text(app, 60) or "你的服務"
     cause = clean_text(root_cause, 60) or "原因還在確認"
     if outcome == "ok":
-        title, body = f"✅ {app} 已自動修復", f"{cause}；已{clean_text(action_label, 30)}。"
+        # 「已處理」不是「已修好」：處理動作成功了，但服務是否恢復要看之後的狀況，不能說得太滿
+        title, body = f"🔧 {app} 已自動處理", f"{cause}；已{clean_text(action_label, 30)}。如果還是不正常，Healer 會繼續處理並通知你。"
     elif outcome == "fail":
         title, body = f"❌ {app} 自動修復失敗", f"{cause}。打開看看建議的處理方式。"
     else:
