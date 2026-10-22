@@ -11,7 +11,7 @@ import threading, json, urllib.request, hashlib, secrets, re, uuid, requests
 from datetime import datetime, timezone, timedelta
 from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
 
-from core.config import ROOT, YAML_DIR, MODEL_SERVER_URL, ADMIN_EMAILS
+from core.config import ROOT, YAML_DIR, MODEL_SERVER_URL, ADMIN_EMAILS, healer_owns_namespace
 from llama_client import ask_llama, save_gold_sample, chat_llama, classify_intent
 from core.claude_client import claude_chat, is_available as claude_available
 from rag import kb_manager
@@ -6975,6 +6975,9 @@ def _healer_background_loop(interval: int = 30):
                 # 客戶叢集的 namespace（zt-）交給 _remote_healer_loop 用 Git 處理。平台自己的叢集剛好
                 # 也是客戶叢集時（例如本機測試），兩個迴圈會搶同一個 Pod（2026-10-09 實測）。
                 if _is_remote_ns(issue.get("namespace")):
+                    continue
+                # 同一個叢集上的另一個網站負責的 namespace 不碰（見 core/config.py 的 HEALER_*_NAMESPACES）
+                if not healer_owns_namespace(issue.get("namespace") or ""):
                     continue
                 key = f"{issue['namespace']}/{issue['pod_name']}/{issue['reason']}"
                 now_keys.add(key)

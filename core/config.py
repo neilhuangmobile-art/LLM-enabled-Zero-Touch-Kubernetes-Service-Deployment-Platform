@@ -100,6 +100,17 @@ TENANT_GITHUB_ORG   = os.environ.get("TENANT_GITHUB_ORG", "")
 # 1 = 非管理員帳號登入後必須先完成「同意書 → 執行指令 → 連線檢查」才能使用網站，部署走客戶叢集。
 # 預設 0（維持本機叢集模式），讓本機開發、既有測試與 QA 腳本不受影響；對外開放時在 .env 設 1。
 CUSTOMER_CLUSTER_MODE = os.environ.get("CUSTOMER_CLUSTER_MODE", "0").strip() == "1"
+# 背景 Healer 負責的 namespace（逗號分隔）。同一個叢集上跑兩個網站（正式站 5050 + 展示站 5051）時，
+# 兩邊的 Healer 都會掃全部 namespace、搶修同一個 Pod，紀錄與通知也會落在不同網站（2026-10-22 實測）。
+# HEALER_ONLY_NAMESPACES：只處理這些（空白 = 全部）；HEALER_SKIP_NAMESPACES：這些不處理。
+HEALER_ONLY_NAMESPACES = {s.strip() for s in os.environ.get("HEALER_ONLY_NAMESPACES", "").split(",") if s.strip()}
+HEALER_SKIP_NAMESPACES = {s.strip() for s in os.environ.get("HEALER_SKIP_NAMESPACES", "").split(",") if s.strip()}
+
+
+def healer_owns_namespace(ns: str) -> bool:
+    if ns in HEALER_SKIP_NAMESPACES:
+        return False
+    return not HEALER_ONLY_NAMESPACES or ns in HEALER_ONLY_NAMESPACES
 # 平台、客戶狀態等執行期資料（不進版控）
 DATA_DIR         = os.path.join(ROOT, "data")
 TENANT_REPOS_DIR = os.path.join(DATA_DIR, "tenant_repos")

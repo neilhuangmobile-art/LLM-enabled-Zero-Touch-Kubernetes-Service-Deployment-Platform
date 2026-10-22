@@ -111,6 +111,17 @@ def _unsupported_tech(text: str, evidence: str) -> list:
     return out
 
 
+_PROBE_FAIL_RE = re.compile(r"(liveness|readiness|startup) probe failed|failed (liveness|readiness|startup) probe", re.I)
+
+
+def _event_text(message: str) -> str:
+    """健康檢查失敗的事件只留下「哪種探針失敗」。K8s 會把探針連不上的細節（`dial tcp ...: connection refused`）
+    寫進事件，原樣保留會被「依賴服務連不上」那條規則搶先比中（2026-10-22 實測：啟動要 40 秒的服務被判成
+    連不上 API、叫使用者檢查相依服務）。應用程式自己日誌裡的連線錯誤不受影響，照樣優先比中依賴服務。"""
+    m = _PROBE_FAIL_RE.search(message or "")
+    return f"{(m.group(1) or m.group(2)).lower()} probe failed" if m else (message or "")
+
+
 def _has_concrete_signal(combined_text: str) -> bool:
     return bool(_CONCRETE_SIGNAL_RE.search(combined_text))
 
@@ -157,7 +168,7 @@ def diagnose_issue(context: dict, use_llm: bool = True) -> dict:
     combined_text = "\n".join([
         reason, message, logs,
         " ".join(e.get("reason", "") for e in events),
-        " ".join(e.get("message", "") for e in events),
+        " ".join(_event_text(e.get("message", "")) for e in events),
     ]).lower()
 
     # ── 層 1：規則型快速分析 ─────────────────────────────────────

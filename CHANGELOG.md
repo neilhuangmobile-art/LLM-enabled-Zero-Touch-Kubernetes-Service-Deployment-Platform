@@ -1258,3 +1258,12 @@ OOM 測試 Pod 被 Healer 調高記憶體後收到「✅ oomtest 已自動修復
 - 通知設定的程式抽到 `static/push-client.js`，完整版與手機版共用。
 **驗證**：`tests/test_mobile_view.py` 33 項，`pytest` 全過（627 項）。模擬 iPhone 實測四個分頁、返回、詳情、從通知開啟、
 頁內直接打 `/api/deploy` 得 403；電腦版不受影響。細節見 `docs/security_review.md` 44 節。
+
+### 23:45 — 修正：兩個網站的 Healer 搶修同一個 Pod；健康檢查太早被誤判成連不上相依服務
+**怎麼發現的**：在 `neilhuang-mobile` 帳號部署五個故障案例（記憶體不足、映像檔拼錯、啟動太慢、資料庫連不上、正常對照）讓 Healer 處理。
+**問題 1**：正式站（5050）與展示站（5051）共用本機叢集，兩邊的背景 Healer 都掃全部 namespace：映像檔拼錯被展示站修好，紀錄與通知卻落在展示站，
+正式站（手機上看的）完全沒有；記憶體不足的服務一分鐘內被兩邊各處理一次。→ 新增 `HEALER_ONLY_NAMESPACES`／`HEALER_SKIP_NAMESPACES`，
+展示站只處理 `user-showcase`，正式站跳過它。
+**問題 2**：啟動要 40 秒、健康檢查 15 秒就放棄的服務，被判成「連不上相依服務」：K8s 的探針失敗事件含有 `connection refused`，
+被依賴服務那條規則搶先比中。→ 規則比對前，探針失敗事件只保留「哪種探針失敗」；應用程式日誌裡的連線錯誤照樣優先判成依賴服務。
+**驗證**：`tests/test_healer_scope.py` 3 項，`pytest` 全過（630 項）；重新部署五個案例實測（見下一筆）。
