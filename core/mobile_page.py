@@ -125,6 +125,26 @@ dl.kv dt{color:var(--text-3)} dl.kv dd{margin:0;word-break:break-word}
 .tabs .dot{position:absolute;top:10px;left:calc(50% + 8px);width:9px;height:9px;border-radius:50%;background:var(--stop);display:none}
 .tabs .dot.show{display:block}
 .view{display:none} .view.on{display:block}
+.gear{border:0;background:none;color:var(--text-2);padding:4px;margin-left:4px;display:flex}
+.gear.on{color:var(--signal)}
+/* 行事曆（只能看） */
+.mcal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.mcal-head b{font-size:16px}
+.mcal-head button{border:1px solid var(--grid-2);background:var(--panel);color:var(--text);border-radius:8px;width:36px;height:32px;font-size:18px}
+.mcal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.mcal .wd{text-align:center;font-size:11px;color:var(--text-3)}
+.mcal button{aspect-ratio:1/1;border:1px solid var(--grid);background:var(--panel);color:var(--text);border-radius:8px;font-size:13px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0}
+.mcal button.today{border-color:var(--signal);color:var(--signal);font-weight:700}
+.mcal button.sel{background:var(--signal);border-color:var(--signal);color:var(--on-signal)}
+.mcal .mk{display:flex;gap:2px;height:6px}
+.mcal .mk i{width:5px;height:5px;border-radius:50%}
+.mk-task{background:var(--signal)}.mk-due{background:var(--caution)}.mk-dep{background:var(--pass)}.mk-bad{background:var(--stop)}.mk-note{background:var(--text-2)}
+.mcal button.sel .mk i{outline:1px solid var(--on-signal)}
+.mday h3{font-size:13px;color:var(--text-3);margin:14px 2px 6px;font-weight:600}
+.mrow{background:var(--panel);border:1px solid var(--grid);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;font-size:14px}
+.mrow .t{font-size:12px;color:var(--text-3)}
+.mrow.del{border-color:var(--stop)}
+.mnote{white-space:pre-wrap;background:var(--panel);border:1px solid var(--grid);border-radius:var(--radius);padding:10px 12px;font-size:14px}
 /* 登入 */
 .login{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:24px 20px calc(24px + env(safe-area-inset-bottom))}
 .login h1{font-size:24px;margin:0 0 4px}
@@ -161,12 +181,14 @@ dl.kv dt{color:var(--text-3)} dl.kv dd{margin:0;word-break:break-word}
   <button class="back" id="back" type="button" hidden>‹ 服務</button>
   <h1 id="title">總覽</h1>
   <span class="upd" id="upd"></span>
+  <button class="gear" type="button" data-tab="settings" aria-label="設定"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg></button>
 </header>
 <main>
   <div id="banners"></div>
   <section class="view" id="v-overview"></section>
   <section class="view" id="v-services"></section>
   <section class="view" id="v-charts"></section>
+  <section class="view" id="v-calendar"></section>
   <section class="view" id="v-history"></section>
   <section class="view" id="v-settings">
     <div class="card"><div style="font-weight:700;margin-bottom:8px">手機通知</div><div id="push-body"></div></div>
@@ -181,12 +203,12 @@ dl.kv dt{color:var(--text-3)} dl.kv dd{margin:0;word-break:break-word}
   <button type="button" data-tab="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/></svg>總覽<span class="dot" id="dot-ov"></span></button>
   <button type="button" data-tab="services"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="6" rx="1.5"/><rect x="4" y="14" width="16" height="6" rx="1.5"/></svg>服務</button>
   <button type="button" data-tab="charts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>圖表</button>
+  <button type="button" data-tab="calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>行事曆<span class="dot" id="dot-cal"></span></button>
   <button type="button" data-tab="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>修復紀錄</button>
-  <button type="button" data-tab="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8a6 6 0 1112 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 004 0"/></svg>設定</button>
 </nav>
 <script>
 const NEEDS_SETUP = {{ 'true' if needs_setup else 'false' }};
-const TITLES = {overview:'總覽', services:'服務', charts:'圖表', history:'修復紀錄', settings:'設定'};
+const TITLES = {overview:'總覽', services:'服務', charts:'圖表', calendar:'行事曆', history:'修復紀錄', settings:'設定'};
 const S = {status:null, deps:[], pods:[], healer:null, dash:null, dashError:null, loadedAt:null, error:null};
 
 function esc(v){ return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -231,6 +253,7 @@ async function refresh(){
       getJSON('/api/healer/status').catch(() => null)]);
     S.status = st; S.deps = dp.deployments || []; S.pods = pd.pods || []; S.healer = hl;
     S.loadedAt = new Date(); S.error = null;
+    loadMCal();
     // 圖表資料另外抓：Prometheus 慢或連不上時，不要拖住上面的狀態
     getJSON('/api/dashboard').then(d => { S.dash = d; S.dashError = null; renderCharts(); })
       .catch(e => { S.dashError = e.message || String(e); renderCharts(); });
@@ -432,6 +455,65 @@ function renderCharts(){
   el.innerHTML = html;
 }
 
+// ── 行事曆（只能看：預約、平台做過的事、備註；要預約、取消、確認執行都用電腦） ──
+const WDZ = '日一二三四五六';
+const SST = {scheduled:'已預約', due:'等你確認', running:'執行中', done:'已完成', failed:'失敗', blocked:'被擋下', cancelled:'已取消', expired:'已過期'};
+const z2 = n => String(n).padStart(2, '0');
+function twp(ts){ const d = new Date(ts * 1000 + 8 * 3600 * 1000); return {y:d.getUTCFullYear(), mo:d.getUTCMonth() + 1, d:d.getUTCDate(), h:d.getUTCHours(), mi:d.getUTCMinutes(), wd:d.getUTCDay()}; }
+function twDay(ts){ const p = twp(ts); return `${p.y}-${z2(p.mo)}-${z2(p.d)}`; }
+function twHM(ts){ const p = twp(ts); return `${z2(p.h)}:${z2(p.mi)}`; }
+const MC = {month:null, sel:null, data:null, err:null};
+async function loadMCal(){
+  if(NEEDS_SETUP){ renderMCal(); return; }
+  const m = MC.month || twDay(Date.now() / 1000).slice(0, 7);
+  try{
+    MC.data = await getJSON('/api/calendar?month=' + m); MC.month = m; MC.err = null;
+    if(!MC.sel || MC.sel.slice(0, 7) !== m) MC.sel = MC.data.today.slice(0, 7) === m ? MC.data.today : m + '-01';
+  }catch(e){ MC.err = e.message || String(e); }
+  renderMCal();
+}
+function mcalShift(n){
+  const [y, m] = (MC.month || twDay(Date.now() / 1000).slice(0, 7)).split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + n, 1));
+  MC.month = `${d.getUTCFullYear()}-${z2(d.getUTCMonth() + 1)}`; MC.sel = null;
+  loadMCal();
+}
+function renderMCal(){
+  const el = document.getElementById('v-calendar');
+  if(!el) return;
+  if(NEEDS_SETUP){ el.innerHTML = '<div class="empty">還沒連上叢集。請先用電腦完成連線設定。</div>'; return; }
+  if(!MC.data){ el.innerHTML = MC.err ? `<div class="empty">行事曆讀取失敗：${esc(MC.err)}</div>` : '<div class="empty">讀取中…</div>'; return; }
+  const [y, m] = MC.month.split('-').map(Number);
+  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), ndays = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  let cells = WDZ.split('').map(w => `<div class="wd">${w}</div>`).join('') + '<div></div>'.repeat(first);
+  let dueAll = 0;
+  for(let d = 1; d <= ndays; d++){
+    const day = `${MC.month}-${z2(d)}`, info = MC.data.days[day] || {};
+    const tasks = info.tasks || [], evs = info.events || [];
+    const due = tasks.some(t => t.status === 'due'); dueAll += tasks.filter(t => t.status === 'due').length;
+    const live = tasks.some(t => t.status === 'scheduled');
+    const bad = evs.some(e => e.kind === 'heal' || e.kind === 'review' || e.outcome === 'fail');
+    const dep = evs.some(e => ['deploy', 'scale', 'update', 'delete', 'rollback'].includes(e.kind));
+    cells += `<button type="button" data-mcal-day="${day}" class="${day === MC.data.today ? 'today' : ''} ${day === MC.sel ? 'sel' : ''}" aria-label="${m} 月 ${d} 日">${d}
+      <span class="mk">${live ? '<i class="mk-task"></i>' : ''}${due ? '<i class="mk-due"></i>' : ''}${dep ? '<i class="mk-dep"></i>' : ''}${bad ? '<i class="mk-bad"></i>' : ''}${info.note ? '<i class="mk-note"></i>' : ''}</span></button>`;
+  }
+  const info = MC.data.days[MC.sel] || {};
+  const [sy, sm, sd] = MC.sel.split('-').map(Number);
+  const tasks = (info.tasks || []).slice().sort((a, b) => a.run_at - b.run_at), evs = (info.events || []).slice().sort((a, b) => a.ts - b.ts);
+  const pill = s => `<span class="tag ${s === 'due' ? 'warn' : ['failed', 'blocked'].includes(s) ? 'bad' : ['cancelled', 'expired'].includes(s) ? 'idle' : ''}">${esc(SST[s] || s)}</span>`;
+  el.innerHTML = `<div class="card">
+      <div class="mcal-head"><button type="button" data-mcal-shift="-1" aria-label="上個月">‹</button><b>${y} 年 ${m} 月</b><button type="button" data-mcal-shift="1" aria-label="下個月">›</button></div>
+      <div class="mcal">${cells}</div>
+      <div class="legend"><span><i style="background:var(--signal)"></i>預約</span><span><i style="background:var(--caution)"></i>等你確認</span><span><i style="background:var(--pass)"></i>部署／變更</span><span><i style="background:var(--stop)"></i>修復／擋下</span><span><i style="background:var(--text-2)"></i>備註</span></div></div>
+    <div class="mday"><h3>${sm} 月 ${sd} 日（週${WDZ[new Date(Date.UTC(sy, sm - 1, sd)).getUTCDay()]}）的預約</h3>
+      ${tasks.length ? tasks.map(t => `<div class="mrow ${t.kind === 'delete' ? 'del' : ''}"><div style="display:flex;gap:8px;align-items:center"><span class="t">${esc(twHM(t.run_at))}</span><b style="flex:1">${esc(t.summary)}</b>${pill(t.status)}</div>${t.result ? `<div class="t" style="margin-top:4px">${esc(t.result)}</div>` : ''}</div>`).join('') : '<div class="dim" style="font-size:13.5px">這天沒有預約。</div>'}
+      <h3>這天發生的事</h3>
+      ${evs.length ? evs.map(e => `<div class="mrow"><span class="t">${esc(twHM(e.ts))}</span>　<b style="color:${e.kind === 'heal' || e.kind === 'review' || e.outcome === 'fail' ? 'var(--stop)' : 'inherit'}">${esc(e.label)}</b> ${esc(e.app || '')}${e.detail ? `<div class="t" style="margin-top:2px">${esc(e.detail)}</div>` : ''}</div>`).join('') : '<div class="dim" style="font-size:13.5px">平台這天沒有紀錄。</div>'}
+      <h3>備註</h3>${info.note ? `<div class="mnote">${esc(info.note)}</div>` : '<div class="dim" style="font-size:13.5px">沒有備註。</div>'}
+      <p class="note">要預約、取消、確認執行或寫備註，請用電腦打開平台。手機版只能查看。</p></div>`;
+  const dc = document.getElementById('dot-cal'); if(dc) dc.classList.toggle('show', dueAll > 0);
+}
+
 function renderHistory(){
   const el = document.getElementById('v-history');
   if(NEEDS_SETUP){ el.innerHTML = '<div class="empty">還沒連上叢集。</div>'; return; }
@@ -450,7 +532,8 @@ function route(){
   const [tab, sub] = h.split('/');
   const t = TITLES[tab] ? tab : 'overview';
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'v-' + t));
-  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  document.querySelectorAll('.tabs button, .gear').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  if(t === 'calendar') loadMCal();
   const back = document.getElementById('back');
   back.hidden = !(t === 'services' && sub);
   document.getElementById('title').textContent = (t === 'services' && sub) ? sub : TITLES[t];
@@ -470,6 +553,10 @@ function render(){
 document.addEventListener('click', e => {
   const ch = e.target.closest('[data-chart]');
   if(ch){ onChartTap(ch, e.clientX); return; }
+  const md = e.target.closest('[data-mcal-day]');
+  if(md){ MC.sel = md.dataset.mcalDay; renderMCal(); return; }
+  const ms = e.target.closest('[data-mcal-shift]');
+  if(ms){ mcalShift(parseInt(ms.dataset.mcalShift, 10)); return; }
   const tab = e.target.closest('[data-tab]');
   if(tab){ location.hash = tab.dataset.tab; return; }
   const svc = e.target.closest('[data-svc]');

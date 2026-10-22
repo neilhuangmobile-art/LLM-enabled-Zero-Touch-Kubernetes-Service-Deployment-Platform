@@ -2157,6 +2157,67 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
 .push-box{padding:14px 18px;display:flex;flex-direction:column;gap:10px;color:var(--text-2);font-size:14px;line-height:1.7}
 .push-box ol{margin:0;padding-left:20px}
 .push-box .t-warn{color:var(--caution)}
+/* ── 預約與行事曆（2026-10-23） ── */
+.nav-badge{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--caution);color:#1a1200;font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+.nav-badge[hidden]{display:none}
+.sched-box{border:1px solid var(--signal-line);background:var(--signal-soft);border-radius:var(--radius);padding:12px 14px;margin:10px 0}
+.sched-box .t{font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.sched-pick{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.sched-pick select{background:var(--panel);color:var(--text);border:1px solid var(--grid-2);border-radius:8px;padding:6px 8px;font:inherit}
+.sched-pick span{color:var(--text-2)}
+.sched-when{margin-top:8px;font-size:14px}
+.sched-when b{color:var(--signal)}
+.sched-when .bad{color:var(--stop)}
+.sched-kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:4px 0 0;font-size:14px}
+.sched-kv dt{color:var(--text-3)} .sched-kv dd{margin:0}
+.st-pill{font-size:12px;padding:2px 9px;border-radius:999px;border:1px solid var(--grid-2);color:var(--text-2);white-space:nowrap}
+.st-pill.scheduled{border-color:var(--signal-line);color:var(--signal)}
+.st-pill.due{border-color:var(--caution);color:var(--caution);background:var(--caution-soft)}
+.st-pill.done{border-color:var(--pass);color:var(--pass)}
+.st-pill.failed,.st-pill.blocked{border-color:var(--stop);color:var(--stop)}
+.sch-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 0;border-top:1px solid var(--grid)}
+.sch-row:first-child{border-top:0}
+.sch-row .when{font-variant-numeric:tabular-nums;color:var(--text-2);min-width:150px}
+.sch-row .what{flex:1;min-width:180px}
+.sch-row .what .res{display:block;font-size:12.5px;color:var(--text-3)}
+.sch-row .acts{display:flex;gap:6px}
+.sch-row.del .what b{color:var(--stop)}
+.due-overlay{position:fixed;inset:0;z-index:320;background:rgba(5,12,20,.72);display:flex;align-items:center;justify-content:center;padding:16px}
+.due-overlay[hidden]{display:none}
+.due-dialog{width:min(640px,100%);max-height:88vh;overflow:auto;background:var(--panel);border:1px solid var(--caution);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.45)}
+.due-head{padding:18px 20px 6px}.due-head h2{margin:0 0 6px;font-size:20px}.due-head p{margin:0;color:var(--text-2);font-size:14px;line-height:1.7}
+#due-list{padding:4px 20px}
+.due-item{border:1px solid var(--grid);border-radius:12px;padding:12px 14px;margin:10px 0}
+.due-item.del{border-color:var(--stop)}
+.due-item .sum{font-weight:600}
+.due-item .meta2{font-size:13px;color:var(--text-2);margin:2px 0 10px}
+.due-item .warn{color:var(--stop);font-size:13px;margin-bottom:8px}
+.due-item .out{margin-top:8px;font-size:14px}
+.due-foot{padding:6px 20px 18px;display:flex;justify-content:flex-end}
+.cal-wrap{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);gap:16px;align-items:start}
+@media (max-width:1000px){.cal-wrap{grid-template-columns:1fr}}
+.cal-month .module-head h2{min-width:120px;text-align:center}
+.cal-legend{display:flex;flex-wrap:wrap;gap:4px 12px;margin-left:auto;font-size:12px}
+.mk{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:1px}
+.mk.task{background:var(--signal)}.mk.due{background:var(--caution)}.mk.dep{background:var(--pass)}.mk.bad{background:var(--stop)}.mk.note{background:var(--text-2);border-radius:2px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:var(--grid);border-top:1px solid var(--grid)}
+.cal-grid .wd{background:var(--panel-2);text-align:center;font-size:12px;color:var(--text-3);padding:6px 0}
+.cal-cell{background:var(--panel);min-height:84px;min-width:0;overflow:hidden;padding:6px 8px;text-align:left;border:0;color:var(--text);font:inherit;cursor:pointer;display:flex;flex-direction:column;gap:4px}
+.cal-cell:hover{background:var(--panel-2)}
+.cal-cell.out{opacity:.35;cursor:default}
+.cal-cell.sel{outline:2px solid var(--signal);outline-offset:-2px}
+.cal-cell .n{font-size:13px;font-variant-numeric:tabular-nums}
+.cal-cell.today .n{background:var(--signal);color:var(--on-signal);border-radius:999px;padding:0 7px;align-self:flex-start;font-weight:700}
+.cal-cell .mks{display:flex;flex-wrap:wrap;gap:3px;align-items:center;font-size:11px;color:var(--text-2)}
+.cal-cell .chip{font-size:11px;line-height:1.4;padding:0 5px;border-radius:4px;background:var(--signal-soft);color:var(--signal);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:100%}
+.cal-cell .chip.due{background:var(--caution-soft);color:var(--caution)}
+.cal-day-body{padding:12px 16px 16px;display:flex;flex-direction:column;gap:14px}
+.cal-day-body h3{font-size:13px;color:var(--text-3);margin:0 0 4px;font-weight:600}
+.cal-day-body textarea{width:100%;min-height:80px;background:var(--panel-2);color:var(--text);border:1px solid var(--grid-2);border-radius:8px;padding:8px;font:inherit;resize:vertical}
+.cal-ev{font-size:13.5px;padding:6px 0;border-top:1px solid var(--grid);display:flex;gap:8px}
+.cal-ev:first-child{border-top:0}
+.cal-ev time{color:var(--text-3);font-variant-numeric:tabular-nums}
+.cal-ev .k{font-weight:600}.cal-ev .k.bad{color:var(--stop)}
 .card.module,.auth-card{padding:34px 32px}
 .pd + .pd{padding-top:18px;margin-top:2px}
 .zt-drawer .pd + .pd{border-top:1px solid var(--grid)}
@@ -2258,6 +2319,7 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
       <button class="nav-item active" type="button" data-page="chat" onclick="showPage('chat')"><svg viewBox="0 0 16 16" fill="none"><path d="M2.5 3.5a2 2 0 012-2h7a2 2 0 012 2v5a2 2 0 01-2 2H8l-3.5 3v-3a2 2 0 01-2-2v-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>對話</button>
       <button class="nav-item" type="button" data-page="services" onclick="showPage('services')"><svg viewBox="0 0 16 16" fill="none"><rect x="2" y="2.5" width="12" height="4" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="2" y="9.5" width="12" height="4" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>我的服務</button>
       <button class="nav-item" type="button" data-page="healer" onclick="showPage('healer')"><svg viewBox="0 0 16 16" fill="none"><path d="M1.5 8.5h3l1.5-4 3 7 1.5-3h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>自動修復</button>
+      <button class="nav-item" type="button" data-page="calendar" onclick="showPage('calendar')"><svg viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>行事曆<span class="nav-badge" id="nav-due-badge" hidden></span></button>
       <button class="nav-item" type="button" data-page="dashboard" onclick="showPage('dashboard')"><svg viewBox="0 0 16 16" fill="none"><path d="M2.5 11a5.5 5.5 0 1111 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 11l2.6-3.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>資源總覽</button>
       <button class="nav-item" type="button" data-page="gitops" onclick="showPage('gitops')"><svg viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 6v1a3 3 0 003 3h1M11 6v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>部署紀錄</button>
       <div class="nav-section">最近的對話</div>
@@ -2352,6 +2414,31 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
           <button class="deploy-confirm-btn" type="button" id="confirm-dialog-no">否</button>
           <button class="deploy-confirm-btn primary" type="button" id="confirm-dialog-yes">是</button>
         </div>
+      </div>
+    </div>
+
+    <!-- 預約時間到了：打開網站或網站開著時跳出來，使用者按「確定執行」才會執行 -->
+    <div id="due-overlay" class="due-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="due-title">
+      <div class="due-dialog">
+        <div class="due-head"><h2 id="due-title">⏰ 預約時間到了</h2>
+          <p>下面的預約已經到了你約定的時間。<b>系統不會自動執行</b>，請確認現在要不要做；部署會再審查一次，因為叢集狀況可能已經變了。</p></div>
+        <div id="due-list"></div>
+        <div class="due-foot"><button type="button" class="btn" data-act="due-close">全部稍後再說</button></div>
+      </div>
+    </div>
+
+    <div class="page" id="page-calendar">
+      <div class="page-head"><div><h1 class="page-title">行事曆</h1>
+        <p class="page-sub">預約的操作、平台做過的事、你的備註都在這裡。在對話裡說「10 月 25 日下午 3 點部署 2 個 nginx」，或在確認卡上按「改成預約」就能預約；時間到了會提醒你，<b>確認後才會執行</b>。</p></div></div>
+      <div class="cal-wrap">
+        <section class="module cal-month">
+          <div class="module-head"><button type="button" class="btn btn-sm" data-act="cal-prev" aria-label="上個月">‹</button>
+            <h2 id="cal-title">行事曆</h2><button type="button" class="btn btn-sm" data-act="cal-next" aria-label="下個月">›</button>
+            <button type="button" class="btn btn-sm" data-act="cal-today">今天</button>
+            <span class="meta cal-legend"><span><i class="mk task"></i>預約</span><span><i class="mk due"></i>等你確認</span><span><i class="mk dep"></i>部署／變更</span><span><i class="mk bad"></i>修復／擋下</span><span><i class="mk note"></i>備註</span></span></div>
+          <div class="cal-grid" id="cal-grid" role="grid"></div>
+        </section>
+        <section class="module cal-day"><div class="module-head"><h2 id="cal-day-title">選一天</h2></div><div id="cal-day-body" class="cal-day-body"></div></section>
       </div>
     </div>
 
@@ -2706,7 +2793,7 @@ function toggleTheme(){
 syncThemeBtn();
 try { window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', syncThemeBtn); } catch(e){}
 
-const PAGE_TITLES = {chat:'對話', services:'我的服務', healer:'自動修復', dashboard:'資源總覽', gitops:'部署紀錄'};
+const PAGE_TITLES = {chat:'對話', services:'我的服務', healer:'自動修復', calendar:'行事曆', dashboard:'資源總覽', gitops:'部署紀錄'};
 // 舊頁面名稱（書籤、舊卡片上的按鈕）導到合併後的新頁面
 const PAGE_ALIAS = {pods:'services', deployments:'services', metrics:'dashboard', deploy:'chat', dataset:'chat', kb:'chat'};
 
@@ -2727,6 +2814,7 @@ function showPage(name){
   if(name === 'services') loadServicesPage();
   if(name === 'gitops') loadGitopsPage();
   if(name === 'healer') loadHealerPage();
+  if(name === 'calendar') loadCalendarPage();
   if(name === 'dashboard') loadDashboardPage();
 }
 
@@ -3251,8 +3339,18 @@ async function flowExecuteDeploy(id){
   if(flow.step === 'done') trackRollout(id);
 }
 
-async function startDestructiveFlow(kind, args){
+// 預約相關句子的規則（跟伺服器的 _SCHED_*_RE 同一套）
+const SCHED_TIME_HINT_RE = /今天|明天|後天|今日|明日|分鐘後|小時後|鐘頭後|天後|之後|以後|下週|下周|下個?禮拜|下星期|週[一二三四五六日天]|周[一二三四五六日天]|星期[一二三四五六日天]|禮拜[一二三四五六日天]|\d+\s*月\s*\d+|[一二三四五六七八九十]+月|\d{1,2}\s*[:：]\s*\d{2}|\d\s*點|[一二兩三四五六七八九十]點|早上|上午|中午|下午|晚上|凌晨|傍晚|預約|排程|排定|定時|到時候|每天|每週|每周|每小時|\d{4}-\d{1,2}-\d{1,2}|\b\d{1,2}\/\d{1,2}\b/;
+function matchScheduleRule(text){
+  if(/(?:取消|刪掉|刪除|不要).{0,20}預約|預約.{0,20}(?:取消|不要了|刪掉)/.test(text)) return 'cancel_schedule';
+  if(/預約.{0,20}(?:改到|改成|改在|延到|延後到|提前到|挪到|換到)/.test(text)) return 'reschedule';
+  if(/(?:我有|有沒有|有哪些|有什麼|列出|查看|顯示|看一下).{0,6}(?:預約|排程)|預約(?:清單|列表|了什麼|了哪些)|(?:今天|明天|後天|這週|這周|本週|下週|下周|這個月|下個月).{0,4}(?:要做什麼|有什麼事|有什麼預約|有哪些預約|的預約|行程)/.test(text)) return 'list_schedule';
+  return null;
+}
+
+async function startDestructiveFlow(kind, args, sched){
   const flow = newFlow(kind, '', Object.assign({}, args));
+  if(sched && SCHED_KINDS.includes(kind)){ flow.schedOn = true; flow.when = sched.when || {ts:defaultSchedTs()}; }
   if((kind==='scale'||kind==='update_image') && args.name){
     try{
       const r = await fetch('/api/deployments'); const d = await r.json();
@@ -3296,7 +3394,7 @@ async function flowExecuteAction(id){
   persistFlowCard(id);
 }
 
-async function startDeployFlow(text){
+async function startDeployFlow(text, sched, originalText){
   try{
     const r = await fetch('/api/deploy/parse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:text})});
     const d = await r.json();
@@ -3312,6 +3410,7 @@ async function startDeployFlow(text){
     flow.review = d.review || null;
     flow.resource = d.resource_summary || null;
     flow.scenario = d.scenario || null;
+    if(sched){ flow.schedOn = true; flow.when = sched.when || {ts:defaultSchedTs()}; flow.fullText = originalText || text; }
     appendMsg('assistant', renderFlowCard(flow));
   }catch(e){
     appendMsg('assistant', '解析部署需求時連線失敗，請再試一次。（' + e + '）', null, 'text');
@@ -3350,21 +3449,51 @@ async function handleChat(text){
   }
   appendTyping('Understanding');
 
-  let intent = matchClientRule(text);
+  // 預約相關的查詢／取消／改時間：句子裡常帶著時間和「部署、刪除」，要在讀時間之前先判斷
+  const schedIntent = matchScheduleRule(text);
+  if(schedIntent){
+    try{ setTyping('Fetching'); await runScheduleIntent(schedIntent, text); }
+    catch(e){ appendMsg('assistant', '讀取預約時發生錯誤：' + e, null, 'text'); }
+    finally{ removeTyping(); }
+    return;
+  }
+
+  // 一句話帶時間（「明天早上 9 點部署 2 個 nginx」）：讀出時間、把時間那段拿掉，剩下的照常判斷要做什麼
+  let when = null, schedHint = false, body = text;
+  if(SCHED_TIME_HINT_RE.test(text)){
+    try{
+      const w = await fetch('/api/schedule/when', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})}).then(r => r.json());
+      if(w.recurring){
+        removeTyping();
+        appendMsg('assistant', `<div class="md"><p>「${escHtml(w.matched || '')}」這種重複排程目前不支援，預約只能排一次性的操作。</p><p>想依時段自動調整副本數，請使用分時擴縮功能；想排一次性的操作，可以說「明天早上 9 點把 web 擴到 3 個」。</p></div>`);
+        return;
+      }
+      if(w.found){ when = {ts:w.ts, display:w.display}; body = w.rest || text; }
+      else if(w.hint){ schedHint = true; body = text.replace(/預約|排程|排定|定時|到時候|屆時/g, '').trim() || text; }
+    }catch(e){ /* 讀不出時間就當成一般句子處理 */ }
+  }
+
+  let intent = matchClientRule(body);
   if(!intent){
     try{
-      const r = await fetch('/api/intent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
+      const r = await fetch('/api/intent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:body})});
       intent = await r.json();
     }catch(e){ intent = {action:'qa', args:{}, source:'error'}; }
   }
 
   const action = intent.action || 'qa';
+  const sched = (when || schedHint) ? {when, on:true} : null;
+  if(sched && !SCHED_KINDS.includes(action) && action !== 'qa'){
+    removeTyping();
+    appendMsg('assistant', '<div class="md"><p>預約只能排<b>部署、擴縮、換映像檔、刪除</b>這四種操作。這個要求請在需要的時候直接說，或換個說法，例如「明天早上 9 點把 web 擴到 3 個」。</p></div>');
+    return;
+  }
   try{
     if(action==='qa'){ await runQA(text); }
     else if(action==='clarify'){ startClarify(intent); }
     else if(READ_ACTIONS.includes(action)){ window.__lastIntentArgs = intent.args||{}; setTyping('Fetching'); await runReadAction(action); }
-    else if(action==='deploy'){ setTyping('Parsing'); await startDeployFlow(text); }
-    else if(DESTRUCTIVE_KINDS.includes(action)){ setTyping('Preparing'); await startDestructiveFlow(action, intent.args||{}); }
+    else if(action==='deploy'){ setTyping('Parsing'); await startDeployFlow(body, sched, text); }
+    else if(DESTRUCTIVE_KINDS.includes(action)){ setTyping('Preparing'); await startDestructiveFlow(action, intent.args||{}, sched); }
     else { await runQA(text); }
   }catch(e){
     appendMsg('assistant','處理的時候發生錯誤：'+e, null, 'text');
@@ -4171,7 +4300,8 @@ function flowStateAttrs(flow){
               spec:flow.spec, review:flow.review, resource:flow.resource, rollout:flow.rollout || null,
               resultMsg:flow.resultMsg || null, errorMsg:flow.errorMsg || null, blockers:flow.blockers || null,
               retryStep:flow.retryStep || null, pendingSync:!!flow.pendingSync, scenario:flow.scenario || null,
-              compose:flow.compose || null, source:flow.source || null};
+              compose:flow.compose || null, source:flow.source || null,
+              when:flow.when || null, schedOn:!!flow.schedOn, task:flow.task || null};
   return `data-flow-id="${flow.id}" data-flow-seq="${flow.seq}" data-flow-step="${flow.step}" data-flow-state="${encodeURIComponent(JSON.stringify(st))}" data-summary="${esc(flowSummary(flow))}"`;
 }
 function flowSummary(flow){
@@ -4194,6 +4324,7 @@ function renderFlowCard(flow){
     return flowShell(flow, flowHead('這個請求已經失效', '') + `<div class="body"><div class="lead">重新整理頁面後，進行到一半的流程沒辦法接著做。需要的話，請再說一次你想做的事。</div></div>`);
   }
   if(flow.step === 'cancelled') return renderCancelledCard(flow);
+  if(flow.step === 'scheduled') return renderScheduledCard(flow);
   if(flow.kind === 'compose') return renderComposeCard(flow);
   if(flow.kind === 'deploy'){
     if(flow.step === 'spec') return renderSpecCard(flow);
@@ -4446,7 +4577,7 @@ function renderSpecCard(flow){
   const out = s.output || s;
   const g = k => esc(out[k] != null ? out[k] : (s[k] != null ? s[k] : ''));
   return flowShell(flow, flowHead('部署單', stepsHTML(1)) + `<div class="body">
-    <div class="lead">${flow.scenario && flow.scenario.applies ? '我依你描述的情境推算出下面的規格，推算過程如下。' : '我照你的描述整理成下面的規格。'}有不對的地方直接改，再按「下一步」。</div>
+    <div class="lead">${flow.scenario && flow.scenario.applies ? '我依你描述的情境推算出下面的規格，推算過程如下。' : '我照你的描述整理成下面的規格。'}有不對的地方直接改，再按「下一步」。${flow.schedOn ? `<br><b>這是預約部署</b>${flow.when && flow.when.ts ? `（${esc(fmtTW(flow.when.ts))}）` : ''}，審查通過後可以在下一步調整時間。` : ''}</div>
     ${scenarioHTML(flow.scenario)}
     <div class="fgrid">
       <div><label for="${flow.id}-app">服務名稱</label><input id="${flow.id}-app" data-field="app_name" value="${g('app_name')}" placeholder="my-app"><div class="hint">小寫英文字母開頭，只能用小寫字母、數字和連字號，例如 web-frontend</div></div>
@@ -4530,12 +4661,12 @@ function renderReviewCard(flow){
   const seal = {approve:['ok', '放行'], warn:['warn', '注意'], block:['stop', '退回']}[decision] || ['stop', '退回'];
   let say, actions;
   if(decision === 'approve'){
-    say = `<b>可以部署</b><span class="dim">三項審查都通過了。</span>`;
-    actions = `<button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button><button type="button" class="btn primary" onclick="flowExecuteDeploy('${flow.id}')">開始部署</button>`;
+    say = flow.schedOn ? `<b>可以預約</b><span class="dim">三項審查都通過了。時間到了會再審查一次，你確認後才部署。</span>` : `<b>可以部署</b><span class="dim">三項審查都通過了。</span>`;
+    actions = schedActionsHTML(flow, `<button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button><button type="button" class="btn primary" onclick="flowExecuteDeploy('${flow.id}')">開始部署</button>`);
   } else if(decision === 'warn'){
     const ws = (rv.warnings || []).slice(0, 4).map(w => `<li>${esc(cleanIssue(w))}</li>`).join('');
-    say = `<b>可以部署，但有幾點要注意</b>${ws ? `<ul>${ws}</ul>` : ''}`;
-    actions = `<button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button><button type="button" class="btn primary" onclick="flowExecuteDeploy('${flow.id}')">我了解，仍要部署</button>`;
+    say = `<b>${flow.schedOn ? '可以預約' : '可以部署'}，但有幾點要注意</b>${ws ? `<ul>${ws}</ul>` : ''}`;
+    actions = schedActionsHTML(flow, `<button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button><button type="button" class="btn primary" onclick="flowExecuteDeploy('${flow.id}')">我了解，仍要部署</button>`);
   } else {
     const bs = (rv.blockers || []).slice(0, 5).map(b => `<li>${esc(cleanIssue(b))}</li>`).join('');
     say = `<b>這次部署被擋下了</b>${bs ? `<ul>${bs}</ul>` : `<span class="dim">${esc(rv.reason || '')}</span>`}<span class="dim">修改規格後可以重新送審。</span>`;
@@ -4554,6 +4685,7 @@ function renderReviewCard(flow){
       ${reviewerOf('效能審查', a.perf, '', '效能', rv)}
     </div>
     ${res}
+    ${flow.schedOn && decision !== 'block' ? `<div class="body" style="padding-bottom:0">${schedBoxHTML(flow)}</div>` : ''}
     <div class="decision">
       <div class="seal ${seal[0]}" aria-hidden="true"><svg viewBox="0 0 76 76"><circle class="ring-o" cx="38" cy="38" r="36"/><circle class="ticks" cx="38" cy="38" r="30"/><text x="38" y="45" text-anchor="middle">${seal[1]}</text></svg></div>
       <div class="say">${say}</div>
@@ -4605,12 +4737,14 @@ function renderDestructiveCard(flow){
   else if(flow.kind === 'delete') detail = `<div class="lead">${esc(destructiveSummary(flow))}。<b class="t-stop">刪除之後沒辦法復原</b>，服務上的流量會中斷；如果這個服務有保存資料（例如從 docker-compose 匯入的資料庫），資料也會一起刪除。</div>`;
   else if(flow.kind === 'healer_fix') detail = `<div class="lead">${esc(destructiveSummary(flow))}。Healer 會先判斷原因，再套用對應的修復，例如調高記憶體上限或恢復上一個能用的映像檔。</div>`;
   else detail = `<div class="lead">${esc(destructiveSummary(flow))}。</div>`;
-  return flowShell(flow, flowHead(titles[flow.kind] || '確認操作', '<span class="meta">執行前請確認</span>') + `<div class="body">
+  const nowActs = `<button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button>
+      <button type="button" class="btn ${flow.kind === 'delete' ? 'danger' : 'primary'}" onclick="flowExecuteAction('${flow.id}')" ${k8sOff ? 'disabled' : ''}>${confirmLabel}</button>`;
+  return flowShell(flow, flowHead(titles[flow.kind] || '確認操作', `<span class="meta">${flow.schedOn ? '預約：時間到了提醒你確認後才執行' : '執行前請確認'}</span>`) + `<div class="body">
     ${detail}
+    ${flow.schedOn ? schedBoxHTML(flow) : ''}
     <div class="err" data-role="error" role="alert"></div>
-    ${k8sOff ? '<div class="err" style="display:block">Kubernetes 目前沒有連線，這個操作沒辦法執行。</div>' : ''}</div>
-    <div class="foot"><button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button>
-      <button type="button" class="btn ${flow.kind === 'delete' ? 'danger' : 'primary'}" onclick="flowExecuteAction('${flow.id}')" ${k8sOff ? 'disabled' : ''}>${confirmLabel}</button></div>`,
+    ${k8sOff && !flow.schedOn ? '<div class="err" style="display:block">Kubernetes 目前沒有連線，這個操作沒辦法執行。</div>' : ''}</div>
+    <div class="foot">${schedActionsHTML(flow, nowActs)}</div>`,
     flow.kind === 'delete' ? 'danger' : '');
 }
 
@@ -4706,6 +4840,15 @@ function hydrateChatFlows(){
     if(st.kind === 'deploy' && st.step === 'done' && (!st.rollout || st.rollout.state !== 'running') && st.rollout?.state !== 'timeout'){
       chatFlows[st.id] = st; resume.push(st.id); return;
     }
+    // 預約卡的按鈕操作的是伺服器上的預約（不靠記憶體），重新整理後照樣能用；狀態以伺服器為準重抓
+    if(st.step === 'scheduled'){
+      chatFlows[st.id] = st;
+      if(st.task && st.task.id) getJSON('/api/schedule?status=all').then(d => {
+        const cur = (d.tasks || []).find(x => x.id === st.task.id);
+        if(cur && cur.status !== st.task.status){ st.task = cur; persistFlowCard(st.id); }
+      }).catch(() => {});
+      return;
+    }
     if(['done', 'error', 'cancelled', 'expired'].includes(st.step)) return;
     st.step = 'expired';
     chatFlows[st.id] = st;
@@ -4713,6 +4856,528 @@ function hydrateChatFlows(){
   });
   saveChats();
   if(resume.length) setTimeout(() => resume.forEach(id => trackRollout(id)), 500);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  預約與行事曆（2026-10-23）
+//  預約到期不自動執行：手機推播＋網站提示，使用者按「確定執行」才呼叫跟手動操作相同的 API。
+//  時間一律以台北時間顯示與選擇（UTC+8，沒有日光節約），不受這台電腦的時區設定影響。
+// ══════════════════════════════════════════════════════════════════
+const SCHED_KINDS = ['deploy', 'scale', 'update_image', 'delete'];
+const WD_ZH = '日一二三四五六';
+const SCHED_STATUS = {scheduled:'已預約', due:'等你確認', running:'執行中', done:'已完成', failed:'失敗', blocked:'被擋下', cancelled:'已取消', expired:'已過期'};
+function twParts(ts){ const d = new Date(ts * 1000 + 8 * 3600 * 1000); return {y:d.getUTCFullYear(), mo:d.getUTCMonth() + 1, d:d.getUTCDate(), h:d.getUTCHours(), mi:d.getUTCMinutes(), wd:d.getUTCDay()}; }
+function twTs(y, mo, d, h, mi){ return Date.UTC(y, mo - 1, d, h, mi) / 1000 - 8 * 3600; }
+const z2 = n => String(n).padStart(2, '0');
+function fmtTW(ts){ const p = twParts(ts); return `${p.y}-${z2(p.mo)}-${z2(p.d)}（週${WD_ZH[p.wd]}）${z2(p.h)}:${z2(p.mi)}`; }
+function fmtTWShort(ts){ const p = twParts(ts); return `${p.mo}/${p.d}（週${WD_ZH[p.wd]}）${z2(p.h)}:${z2(p.mi)}`; }
+function twDay(ts){ const p = twParts(ts); return `${p.y}-${z2(p.mo)}-${z2(p.d)}`; }
+function spanText(sec){
+  sec = Math.max(0, Math.round(sec));
+  const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+  return d ? `${d} 天${h ? ` ${h} 小時` : ''}` : h ? `${h} 小時${m ? ` ${m} 分鐘` : ''}` : `${Math.max(1, m)} 分鐘`;
+}
+function countdown(ts){ const s = ts - Date.now() / 1000; return s > 0 ? `還有 ${spanText(s)}` : `已經過了 ${spanText(-s)}`; }
+function defaultSchedTs(){ const t = Math.ceil((Date.now() / 1000 + 3600) / 300) * 300; return t; }
+function schedPickerHTML(key, ts){
+  const p = twParts(ts || defaultSchedTs());
+  const opt = (from, to, sel, step, fmt) => { let o = ''; for(let i = from; i <= to; i += (step || 1)) o += `<option value="${i}" ${i === sel ? 'selected' : ''}>${fmt ? fmt(i) : i}</option>`; return o; };
+  const mins = p.mi % 5 ? opt(p.mi, p.mi, p.mi, 1, z2) + opt(0, 55, -1, 5, z2) : opt(0, 55, p.mi, 5, z2);
+  return `<div class="sched-pick" data-sched-key="${esc(key)}">
+    <select data-sp="mo" aria-label="月">${opt(1, 12, p.mo)}</select><span>月</span>
+    <select data-sp="d" aria-label="日">${opt(1, 31, p.d)}</select><span>日</span>
+    <select data-sp="h" aria-label="時">${opt(0, 23, p.h, 1, z2)}</select><span>:</span>
+    <select data-sp="mi" aria-label="分">${mins}</select></div>
+    <div class="sched-when" data-role="sched-when">${schedWhenLine(ts || defaultSchedTs())}</div>`;
+}
+// 選的月日已經過了就是明年；2 月 30 日這種不存在的日期回傳 null
+function readPicker(root){
+  if(!root) return null;
+  const v = k => parseInt(root.querySelector(`[data-sp="${k}"]`).value, 10);
+  const mo = v('mo'), d = v('d'), h = v('h'), mi = v('mi');
+  let y = twParts(Date.now() / 1000).y;
+  let ts = twTs(y, mo, d, h, mi);
+  if(ts < Date.now() / 1000 - 60){ y += 1; ts = twTs(y, mo, d, h, mi); }
+  return twParts(ts).mo === mo ? ts : null;
+}
+function schedProblem(ts){
+  if(!ts) return '這個日期不存在，請重新選。';
+  const s = ts - Date.now() / 1000;
+  if(s < 120) return `${fmtTW(ts)} 太近了，預約時間要在 2 分鐘以後；想馬上做請按「改成馬上執行」。`;
+  if(s > 90 * 86400) return '預約最多只能排到 90 天內。';
+  return '';
+}
+function schedWhenLine(ts){
+  const bad = schedProblem(ts);
+  return bad ? `<span class="bad">${esc(bad)}</span>` : `時間到了會提醒你確認：<b>${esc(fmtTW(ts))}</b>，${countdown(ts)}`;
+}
+document.addEventListener('change', e => {
+  const sp = e.target.closest && e.target.closest('.sched-pick');
+  if(!sp) return;
+  const ts = readPicker(sp);
+  const box = sp.parentElement;
+  const w = box.querySelector('[data-role="sched-when"]');
+  if(w) w.innerHTML = schedWhenLine(ts);
+  const flow = chatFlows[sp.dataset.schedKey];
+  if(flow && ts) flow.when = {ts};
+  const btn = document.querySelector(`[data-sched-btn="${sp.dataset.schedKey}"]`);
+  if(btn) btn.textContent = ts && !schedProblem(ts) ? `預約在 ${fmtTWShort(ts)}` : '預約';
+});
+
+// ── 確認卡上的「改成預約」 ──
+function schedBoxHTML(flow){
+  return `<div class="sched-box"><div class="t">預約時間<span class="dim" style="font-weight:400;font-size:13px">月／日　時：分（台北時間）</span></div>
+    ${schedPickerHTML(flow.id, flow.when && flow.when.ts)}<div class="err" data-role="sched-error" role="alert"></div></div>`;
+}
+function schedActionsHTML(flow, nowActions){
+  if(!SCHED_KINDS.includes(flow.kind)) return nowActions;
+  if(flow.schedOn){
+    const ts = (flow.when && flow.when.ts) || defaultSchedTs();
+    return `<button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button>
+      <button type="button" class="btn" onclick="flowSchedToggle('${flow.id}', false)">改成馬上執行</button>
+      <button type="button" class="btn primary" data-sched-btn="${flow.id}" onclick="flowSchedule('${flow.id}')">${schedProblem(ts) ? '預約' : '預約在 ' + esc(fmtTWShort(ts))}</button>`;
+  }
+  return nowActions + `<button type="button" class="btn" onclick="flowSchedToggle('${flow.id}', true)">改成預約</button>`;
+}
+function flowSchedToggle(id, on){
+  const flow = chatFlows[id];
+  if(!flowAlive(flow)) return;
+  flow.schedOn = !!on;
+  if(on && !flow.when) flow.when = {ts:defaultSchedTs()};
+  persistFlowCard(id);
+}
+async function flowSchedule(id){
+  const flow = chatFlows[id];
+  if(!flowAlive(flow)) return;
+  const root = document.querySelector(`[data-flow-id="${id}"]`);
+  const errEl = root && root.querySelector('[data-role="sched-error"]');
+  const fail = m => { if(errEl){ errEl.style.display = 'block'; errEl.textContent = m; } };
+  const ts = readPicker(root && root.querySelector('.sched-pick'));
+  const bad = schedProblem(ts);
+  if(bad) return fail(bad);
+  const a = flow.spec || {};
+  const body = {kind:flow.kind, run_at:ts, text:flow.originalText || ''};
+  if(flow.kind === 'deploy') body.spec = a;
+  else Object.assign(body, {name:a.name, replicas:a.replicas, image:a.image});
+  const btn = root.querySelector(`[data-sched-btn="${id}"]`);
+  if(btn){ btn.disabled = true; btn.textContent = '預約中'; }
+  try{
+    const r = await fetch('/api/schedule', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const d = await r.json();
+    if(!flowAlive(flow)) return;
+    if(!d.ok){ if(btn){ btn.disabled = false; btn.textContent = '再試一次'; } return fail(d.error || '預約失敗。'); }
+    flow.task = d.task; flow.step = 'scheduled';
+    persistFlowCard(id);
+    refreshDueBadge();
+  }catch(e){ if(btn){ btn.disabled = false; btn.textContent = '再試一次'; } fail('連線失敗，請再試一次。（' + e + '）'); }
+}
+function schedPill(s){ return `<span class="st-pill ${esc(s)}">${esc(SCHED_STATUS[s] || s)}</span>`; }
+function schedRowActions(t){
+  if(!['scheduled', 'due'].includes(t.status)) return '';
+  return (t.status === 'due' ? `<button type="button" class="btn btn-sm primary" data-act="due-open">確認執行</button>` : '')
+    + `<button type="button" class="btn btn-sm" data-act="sch-resched" data-id="${t.id}" data-ts="${t.run_at}">改時間</button>`
+    + `<button type="button" class="btn btn-sm" data-act="sch-cancel" data-id="${t.id}" data-sum="${esc(t.summary)}">取消</button>`;
+}
+function renderScheduledCard(flow){
+  const t = flow.task || {};
+  const active = ['scheduled', 'due'].includes(t.status);
+  const lead = active ? '時間到了會用手機推播和網站提示提醒你，<b>你確認之後才會執行</b>。這段期間可以隨時改時間或取消。'
+    : esc(t.result || SCHED_STATUS[t.status] || '');
+  return flowShell(flow, flowHead('預約', `<span class="meta">${schedPill(t.status)}</span>`) + `<div class="body">
+    <div class="lead">${lead}</div>
+    <dl class="sched-kv"><dt>預約編號</dt><dd>${esc('#' + t.id)}</dd><dt>時間</dt><dd>${esc(fmtTW(t.run_at))}${active ? `　<span class="dim">${countdown(t.run_at)}</span>` : ''}</dd><dt>內容</dt><dd>${esc(t.summary)}</dd></dl></div>
+    <div class="foot" style="justify-content:flex-start"><button type="button" class="btn" data-act="sch-cal" data-ts="${t.run_at}">在行事曆查看</button>
+      ${active ? `<button type="button" class="btn" data-act="sch-resched" data-id="${t.id}" data-ts="${t.run_at}">改時間</button>
+      <button type="button" class="btn danger" data-act="sch-cancel" data-id="${t.id}" data-sum="${esc(t.summary)}">取消這個預約</button>` : ''}</div>`,
+    active ? 'done-card' : '');
+}
+// 預約狀態改了：同步更新對話裡的預約卡、預約清單模組、行事曆、側欄數字
+function schedChanged(task){
+  if(task){
+    Object.values(chatFlows).forEach(f => { if(f.task && f.task.id === task.id){ f.task = task; persistFlowCard(f.id); } });
+  }
+  document.querySelectorAll('.zt-w[data-w="schedule"]').forEach(w => refreshWidget(w));
+  if(currentPageName() === 'calendar') loadCalendarPage(true);
+  refreshDueBadge();
+}
+async function schedOp(id, op, body){
+  const r = await fetch(`/api/schedule/${id}/${op}`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body || {})});
+  const d = await r.json().catch(() => ({}));
+  if(!d.ok) throw Object.assign(new Error(d.error || '操作失敗。'), {task:d.task});
+  return d.task;
+}
+// 改時間：跳出跟確認卡一樣的「月日時分」選單
+async function askNewTime(curTs){
+  const ok = await askConfirm('改預約時間', `<p style="margin:0 0 10px">選新的時間（台北時間）：</p>${schedPickerHTML('dialog', curTs)}`, '改到這個時間', '不改了');
+  if(!ok) return null;
+  return readPicker(document.querySelector('#confirm-dialog-body .sched-pick'));
+}
+async function schedReschedule(id, curTs){
+  const ts = await askNewTime(curTs);
+  if(ts == null) return;
+  const bad = schedProblem(ts);
+  if(bad){ alertMsg(bad); return; }
+  try{ schedChanged(await schedOp(id, 'reschedule', {run_at:ts})); }
+  catch(e){ alertMsg(e.message); if(e.task) schedChanged(e.task); }
+}
+async function schedCancel(id, summary){
+  const ok = await askConfirm('取消預約', `確定要取消「<b>${esc(summary || '#' + id)}</b>」嗎？取消後時間到了不會再提醒你，也不會執行。`, '確定取消', '不要取消');
+  if(!ok) return;
+  try{ schedChanged(await schedOp(id, 'cancel')); }
+  catch(e){ alertMsg(e.message); if(e.task) schedChanged(e.task); }
+}
+function alertMsg(m){ askConfirm('沒有完成', esc(m), '知道了', '關閉'); }
+
+// ── 預約清單模組（對話裡問「我有哪些預約」） ──
+W.schedule = {
+  summary: d => `預約清單：共 ${(d.items || []).length} 筆`,
+  head: (d, st) => {
+    const due = (d.items || []).filter(t => t.status === 'due').length;
+    return `<h2>我的預約</h2><span class="meta"><span>共 ${(d.items || []).length} 筆</span>${due ? `<b class="t-warn">${due} 筆等你確認</b>` : ''}<span>${esc(d.at || '')} 的資料</span></span>
+      <div class="filters" role="group" aria-label="依狀態篩選">${filterChips(st, [['active', '還沒執行'], ['due', '等你確認'], ['final', '已結束'], ['all', '全部']])}
+      <button type="button" class="chip ghost" data-act="refresh">重新整理</button></div>`;
+  },
+  body: (d, st) => {
+    const f = st.f || 'active';
+    let rows = d.items || [];
+    if(f === 'active') rows = rows.filter(t => ['scheduled', 'due'].includes(t.status));
+    else if(f === 'due') rows = rows.filter(t => t.status === 'due');
+    else if(f === 'final') rows = rows.filter(t => !['scheduled', 'due', 'running'].includes(t.status));
+    if(d.only) rows = rows.filter(t => d.only.includes(t.id));
+    if(!rows.length) return emptyBlock(f === 'active' ? '目前沒有還沒執行的預約。' : '沒有符合條件的預約。',
+      '在對話裡說「明天早上 9 點部署 2 個 nginx」，或在確認卡按「改成預約」就能新增。');
+    rows = rows.slice().sort((a, b) => f === 'final' ? b.run_at - a.run_at : a.run_at - b.run_at);
+    const slice = pageSlice(rows, st);
+    return `<div style="padding:4px 18px 10px">${slice.map(t => `<div class="sch-row ${t.kind === 'delete' ? 'del' : ''}">
+      <span class="when">${esc(fmtTW(t.run_at))}</span>
+      <span class="what"><b>${esc(t.summary)}</b>${t.result ? `<span class="res">${esc(t.result)}</span>` : ['scheduled', 'due'].includes(t.status) ? `<span class="res">${countdown(t.run_at)}</span>` : ''}</span>
+      ${schedPill(t.status)}<span class="acts">${schedRowActions(t)}<button type="button" class="btn btn-sm" data-act="sch-cal" data-ts="${t.run_at}">行事曆</button></span></div>`).join('')}</div>
+      ${pagerHTML(rows.length, st.p || 1, W_PER)}`;
+  },
+};
+W_LOAD.schedule = async (old) => ({items:(await getJSON('/api/schedule?status=all')).tasks || [], only:(old && old.only) || null, at:nowHM()});
+
+// 從一句話找出指的是哪一個預約：名稱、日期都比對，找不到或不只一個就列出來讓使用者選
+function matchTasks(tasks, text, when){
+  let rows = tasks.filter(t => ['scheduled', 'due'].includes(t.status));
+  const names = rows.map(t => (t.args && (t.args.name || (t.args.spec || {}).app_name)) || '').filter(Boolean);
+  const named = names.filter(n => text.includes(n));
+  if(named.length) rows = rows.filter(t => named.includes((t.args && (t.args.name || (t.args.spec || {}).app_name)) || ''));
+  if(when && when.found && !when.recurring){
+    const sameDay = rows.filter(t => twDay(t.run_at) === twDay(when.ts));
+    if(sameDay.length) rows = sameDay;
+  }
+  const kw = [['刪', 'delete'], ['部署', 'deploy'], ['擴', 'scale'], ['縮', 'scale'], ['映像', 'update_image'], ['版本', 'update_image']].filter(([k]) => text.includes(k)).map(([, v]) => v);
+  if(kw.length && rows.some(t => kw.includes(t.kind))) rows = rows.filter(t => kw.includes(t.kind));
+  return rows;
+}
+async function runScheduleIntent(action, text){
+  const all = (await getJSON('/api/schedule?status=all')).tasks || [];
+  removeTyping();
+  if(action === 'list_schedule'){
+    const w = await fetch('/api/schedule/when', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})}).then(r => r.json()).catch(() => ({}));
+    let only = null, lead;
+    const active = all.filter(t => ['scheduled', 'due'].includes(t.status));
+    if(w.found && !w.recurring && /週|周|禮拜|星期/.test(text) && !/週[一二三四五六日天]/.test(text)){
+      // 「下週要做什麼」：那一整週
+      const p = twParts(w.ts), monday = twTs(p.y, p.mo, p.d, 0, 0) - ((p.wd + 6) % 7) * 86400;
+      only = active.filter(t => t.run_at >= monday && t.run_at < monday + 7 * 86400).map(t => t.id);
+      lead = `${fmtTW(monday).slice(0, 10)} 那一週有 ${only.length} 個預約。`;
+    } else if(w.found && !w.recurring){
+      only = active.filter(t => twDay(t.run_at) === twDay(w.ts)).map(t => t.id);
+      lead = `${fmtTW(w.ts).slice(0, 14)}有 ${only.length} 個預約。`;
+    } else {
+      const due = active.filter(t => t.status === 'due').length;
+      lead = active.length ? `你有 ${active.length} 個還沒執行的預約${due ? `，其中 ${due} 個已經到時間、等你確認` : ''}。` : '你目前沒有還沒執行的預約。';
+    }
+    appendWidget('schedule', {items:all, only, at:nowHM()}, {f:'active', p:1}, lead);
+    return;
+  }
+  const w = await fetch('/api/schedule/when', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})}).then(r => r.json()).catch(() => ({}));
+  if(action === 'reschedule'){
+    // 「把 X 的預約改到 5 點」：新時間是句子裡「改到」後面那一段
+    const tail = text.split(/改到|改成|改在|延到|延後到|提前到|挪到|換到/).slice(1).join(' ');
+    const nw = tail ? await fetch('/api/schedule/when', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text:tail})}).then(r => r.json()).catch(() => ({})) : {};
+    const rows = matchTasks(all, text.split(/改到|改成|改在|延到|延後到|提前到|挪到|換到/)[0], null);
+    if(rows.length !== 1){
+      appendWidget('schedule', {items:all, only:rows.map(t => t.id), at:nowHM()}, {f:'active', p:1},
+        rows.length ? `找到 ${rows.length} 個可能的預約，請在要改的那一列按「改時間」。` : '找不到符合的預約，下面是你所有還沒執行的預約。');
+      return;
+    }
+    appendMsg('assistant', schedConfirmCardHTML('reschedule', rows[0], nw.found && !nw.recurring ? nw.ts : null));
+    return;
+  }
+  const rows = matchTasks(all, text, w);
+  if(rows.length !== 1){
+    appendWidget('schedule', {items:all, only:rows.map(t => t.id), at:nowHM()}, {f:'active', p:1},
+      rows.length ? `找到 ${rows.length} 個可能的預約，請在要取消的那一列按「取消」。` : '找不到符合的預約，下面是你所有還沒執行的預約。');
+    return;
+  }
+  appendMsg('assistant', schedConfirmCardHTML('cancel', rows[0]));
+}
+// 取消／改時間的確認卡（兩步確認：這張卡是第一步，按鈕是第二步）
+function schedConfirmCardHTML(op, t, newTs){
+  const head = op === 'cancel' ? '取消預約' : '改預約時間';
+  const body = op === 'cancel'
+    ? `<div class="lead">要取消下面這個預約嗎？取消後時間到了不會提醒，也不會執行。</div>`
+    : `<div class="lead">把下面這個預約改到新的時間：</div>`;
+  const pick = op === 'reschedule' ? `<div class="sched-box">${schedPickerHTML('rs-' + t.id, newTs || t.run_at)}</div>` : '';
+  return `<div class="module flow" data-sched-card="${t.id}">${flowHead(head, `<span class="meta">${schedPill(t.status)}</span>`)}<div class="body">${body}
+    <dl class="sched-kv"><dt>預約編號</dt><dd>${esc('#' + t.id)}</dd><dt>原本的時間</dt><dd>${esc(fmtTW(t.run_at))}</dd><dt>內容</dt><dd>${esc(t.summary)}</dd></dl>${pick}
+    <div class="err" data-role="error" role="alert"></div></div>
+    <div class="foot"><button type="button" class="btn" data-act="sch-card-close">不用了</button>
+      <button type="button" class="btn ${op === 'cancel' ? 'danger' : 'primary'}" data-act="${op === 'cancel' ? 'sch-card-cancel' : 'sch-card-resched'}" data-id="${t.id}">${op === 'cancel' ? '確定取消' : '改到這個時間'}</button></div></div>`;
+}
+function persistMsgCard(el, attr){
+  const ch = currentChat(); if(!ch || !el) return;
+  const key = `${attr}="${el.getAttribute(attr)}"`;
+  const msg = ch.messages.find(m => m.role === 'assistant' && String(m.content || '').includes(key));
+  if(msg){ msg.content = el.outerHTML; saveChats(); }
+}
+function closeSchedCard(card, text){
+  card.querySelector('.foot').innerHTML = `<span class="dim">${esc(text)}</span>`;
+  persistMsgCard(card, 'data-sched-card');
+}
+
+// ── 到期提示：打開網站時、以及網站開著時每 30 秒檢查一次 ──
+function refreshDueBadge(){
+  if(!loggedIn) return Promise.resolve([]);
+  return getJSON('/api/schedule?status=due').then(d => {
+    const n = (d.tasks || []).length, b = document.getElementById('nav-due-badge');
+    if(b){ b.hidden = !n; b.textContent = n; }
+    return d.tasks || [];
+  }).catch(() => []);
+}
+async function pollDue(){
+  if(!loggedIn || document.hidden) return;
+  refreshDueBadge();
+  let tasks = [];
+  try{ tasks = (await getJSON('/api/schedule/due')).tasks || []; }catch(e){ return; }
+  if(tasks.length) showDue(tasks);
+}
+function dueItemHTML(t, inChat){
+  const del = t.kind === 'delete';
+  return `<div class="due-item ${del ? 'del' : ''}" data-due-id="${t.id}">
+    <div class="sum">${esc(t.summary)}</div><div class="meta2">約定的時間 ${esc(fmtTW(t.run_at))}，${countdown(t.run_at)}${t.kind === 'deploy' ? '。執行前會再審查一次' : ''}</div>
+    ${del ? '<div class="warn">刪除後服務會停止，保存的資料也會一起刪除，沒辦法復原。</div>' : ''}
+    <div class="actions" data-role="acts"><button type="button" class="btn ${del ? 'danger' : 'primary'}" data-act="due-run" data-id="${t.id}">確定執行</button>
+      <button type="button" class="btn" data-act="due-cancel" data-id="${t.id}">取消這個預約</button>
+      <button type="button" class="btn" data-act="due-snooze" data-id="${t.id}">稍後再說</button></div>
+    <div class="out" data-role="out"></div></div>`;
+}
+function showDue(tasks){
+  const ov = document.getElementById('due-overlay'), list = document.getElementById('due-list');
+  if(!ov || !list) return;
+  const have = new Set([...list.querySelectorAll('[data-due-id]')].map(x => +x.dataset.dueId));
+  let added = 0;
+  tasks.forEach(t => { if(!have.has(t.id)){ list.insertAdjacentHTML('beforeend', dueItemHTML(t)); added++; } });
+  if(added || ov.hidden) ov.hidden = false;
+  // 正在對話頁：對話裡也放一張同樣的卡
+  if(currentPageName() === 'chat') tasks.forEach(t => {
+    const ch = currentChat();
+    if(ch && !ch.messages.some(m => String(m.content || '').includes(`data-due-card="${t.id}"`)))
+      appendMsg('assistant', `<div class="module flow" data-due-card="${t.id}">${flowHead('預約時間到了', '<span class="meta">' + schedPill('due') + '</span>')}<div class="body">${dueItemHTML(t, true)}</div></div>`);
+  });
+}
+function dueEls(id){ return [...document.querySelectorAll(`.due-item[data-due-id="${id}"]`)]; }
+function dueSetOutcome(id, html, cls){
+  dueEls(id).forEach(el => {
+    const acts = el.querySelector('[data-role="acts"]'); if(acts) acts.remove();
+    const out = el.querySelector('[data-role="out"]'); if(out){ out.className = 'out ' + (cls || ''); out.innerHTML = html; }
+    const card = el.closest('[data-due-card]'); if(card) persistMsgCard(card, 'data-due-card');
+  });
+  const list = document.getElementById('due-list');
+  if(list && !list.querySelector('[data-role="acts"]')){
+    const foot = document.querySelector('#due-overlay .due-foot');
+    if(foot) foot.innerHTML = '<button type="button" class="btn primary" data-act="due-close">關閉</button>';
+  }
+}
+// 確定執行：先搶執行權（同一個預約不會被執行兩次），再呼叫跟手動操作完全相同的 API，最後回報結果
+async function runScheduledTask(id){
+  let t;
+  try{ t = await schedOp(id, 'start'); }catch(e){ return {status:'failed', msg:e.message, task:e.task}; }
+  let url, body;
+  const a = t.args || {};
+  if(t.kind === 'deploy'){ url = '/api/deploy'; body = {input:t.input || '', parsed:a.spec}; }
+  else if(t.kind === 'scale'){ url = '/api/scale'; body = {name:a.name, replicas:a.replicas}; }
+  else if(t.kind === 'update_image'){ url = '/api/update'; body = {name:a.name, image:a.image}; }
+  else { url = '/api/delete'; body = {name:a.name}; }
+  let status = 'failed', msg = '', pending = false;
+  try{
+    const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const x = await r.json().catch(() => ({}));
+    if(t.kind === 'deploy'){
+      if(x.error || x.rejected){
+        status = (x.rejected || (x.review && x.review.decision === 'block')) ? 'blocked' : 'failed';
+        const bs = ((x.review && x.review.blockers) || []).slice(0, 3).map(cleanIssue);
+        msg = (status === 'blocked' ? '這次審查沒有通過，沒有部署' : (x.error || '部署失敗')) + (bs.length ? '：' + bs.join('；') : (x.error && status === 'blocked' ? '：' + x.error : ''));
+      } else if(x.k8s_deploy && x.k8s_deploy.ok === false){ msg = '叢集實際部署失敗：' + x.k8s_deploy.message; }
+      else { status = 'done'; pending = !!(x.k8s_deploy && x.k8s_deploy.pending_sync); msg = pending ? '已送到你的叢集，大約 30 到 60 秒內套用。' : '已部署，服務要幾十秒才會開始接流量。'; }
+    } else {
+      const ok = r.ok && x.success !== false && !x.error;
+      status = ok ? 'done' : (r.status === 409 ? 'blocked' : 'failed');
+      msg = ok ? (x.message || '已完成。') : (x.error || x.message || '操作失敗。');
+    }
+  }catch(e){ msg = '連線失敗：' + e; }
+  let fin = null;
+  try{ fin = await schedOp(id, 'done', {status, result:msg}); }catch(e){}
+  return {status, msg, pending, task:fin || Object.assign({}, t, {status, result:msg})};
+}
+async function dueRun(id){
+  dueEls(id).forEach(el => { el.querySelectorAll('[data-role="acts"] button').forEach(b => b.disabled = true);
+    const out = el.querySelector('[data-role="out"]'); if(out) out.innerHTML = '<span class="dim">執行中…部署會先重新審查，大約需要十幾秒。</span>'; });
+  const res = await runScheduledTask(id);
+  const t = res.task || {};
+  const ok = res.status === 'done';
+  const link = ok && t.kind !== 'delete' ? ` <button type="button" class="btn btn-sm" data-act="open-dep" data-name="${esc((t.args || {}).name || ((t.args || {}).spec || {}).app_name || '')}">查看服務</button>` : '';
+  dueSetOutcome(id, `${schedPill(res.status)} ${esc(res.msg)}${link}`, ok ? '' : 't-stop');
+  // 部署成功而且人在對話頁：接著顯示部署進度，跟一般部署一樣追到運作中
+  if(ok && t.kind === 'deploy' && currentPageName() === 'chat'){
+    const spec = (t.args || {}).spec || {};
+    const flow = newFlow('deploy', t.input || '', spec);
+    flow.step = 'done'; flow.pendingSync = res.pending; flow.rollout = {state:'syncing'};
+    appendMsg('assistant', renderFlowCard(flow));
+    trackRollout(flow.id);
+  }
+  schedChanged(t);
+}
+document.addEventListener('click', async function(e){
+  const t = e.target.closest('[data-act]');
+  if(!t || t.disabled) return;
+  const act = t.dataset.act, id = parseInt(t.dataset.id, 10);
+  if(act === 'due-run'){ dueRun(id); return; }
+  if(act === 'due-cancel'){
+    try{ const task = await schedOp(id, 'cancel'); dueSetOutcome(id, schedPill('cancelled') + ' 已取消，不會執行。'); schedChanged(task); }
+    catch(err){ dueSetOutcome(id, esc(err.message), 't-stop'); }
+    return;
+  }
+  if(act === 'due-snooze'){
+    try{ await schedOp(id, 'snooze'); dueSetOutcome(id, '<span class="dim">好，30 分鐘後或下次打開網站時再提醒你。</span>'); }catch(err){ dueSetOutcome(id, esc(err.message), 't-stop'); }
+    return;
+  }
+  if(act === 'due-close'){
+    const list = document.getElementById('due-list');
+    const pending = [...list.querySelectorAll('[data-role="acts"]')].map(a => +a.closest('[data-due-id]').dataset.dueId);
+    await Promise.all(pending.map(x => schedOp(x, 'snooze').catch(() => null)));
+    document.getElementById('due-overlay').hidden = true;
+    list.innerHTML = '';
+    const foot = document.querySelector('#due-overlay .due-foot');
+    if(foot) foot.innerHTML = '<button type="button" class="btn" data-act="due-close">全部稍後再說</button>';
+    return;
+  }
+  if(act === 'due-open'){
+    const tasks = (await getJSON('/api/schedule?status=due').catch(() => ({}))).tasks || [];
+    if(tasks.length) showDue(tasks); return;
+  }
+  if(act === 'sch-cancel'){ schedCancel(id, t.dataset.sum); return; }
+  if(act === 'sch-resched'){ schedReschedule(id, parseFloat(t.dataset.ts)); return; }
+  if(act === 'sch-cal'){ calOpenDay(twDay(parseFloat(t.dataset.ts))); return; }
+  if(act === 'sch-card-close'){ closeSchedCard(t.closest('[data-sched-card]'), '沒有變更。'); return; }
+  if(act === 'sch-card-cancel' || act === 'sch-card-resched'){
+    const card = t.closest('[data-sched-card]');
+    const err = card.querySelector('[data-role="error"]');
+    try{
+      let task;
+      if(act === 'sch-card-cancel') task = await schedOp(id, 'cancel');
+      else {
+        const ts = readPicker(card.querySelector('.sched-pick'));
+        const bad = schedProblem(ts);
+        if(bad){ err.style.display = 'block'; err.textContent = bad; return; }
+        task = await schedOp(id, 'reschedule', {run_at:ts});
+      }
+      closeSchedCard(card, act === 'sch-card-cancel' ? `已取消預約 #${id}。` : `已改到 ${fmtTW(task.run_at)}。`);
+      schedChanged(task);
+    }catch(ex){ err.style.display = 'block'; err.textContent = ex.message; }
+    return;
+  }
+  if(act === 'cal-prev' || act === 'cal-next'){ calShift(act === 'cal-prev' ? -1 : 1); return; }
+  if(act === 'cal-today'){ calOpenDay(twDay(Date.now() / 1000)); return; }
+  if(act === 'cal-day'){ calSelect(t.dataset.day); return; }
+  if(act === 'cal-note-save'){ calSaveNote(t); return; }
+});
+
+// ── 行事曆頁 ──
+let calMonth = null, calSel = null, calData = null;
+function calOpenDay(day){
+  calMonth = day.slice(0, 7); calSel = day;
+  if(currentPageName() !== 'calendar') showPage('calendar'); else loadCalendarPage();
+}
+function calShift(n){
+  const [y, m] = (calMonth || twDay(Date.now() / 1000).slice(0, 7)).split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + n, 1));
+  calMonth = `${d.getUTCFullYear()}-${z2(d.getUTCMonth() + 1)}`;
+  calSel = null;
+  loadCalendarPage();
+}
+async function loadCalendarPage(quiet){
+  const grid = document.getElementById('cal-grid');
+  if(!grid) return;
+  calMonth = calMonth || twDay(Date.now() / 1000).slice(0, 7);
+  if(!quiet) grid.innerHTML = '<div class="skeleton" style="grid-column:1/-1;padding:18px"><i></i><i></i><i></i></div>';
+  try{ calData = await getJSON('/api/calendar?month=' + calMonth); }
+  catch(e){ grid.innerHTML = `<div style="grid-column:1/-1">${emptyBlock('行事曆讀取失敗。', e.message || String(e))}</div>`; return; }
+  if(!calSel || calSel.slice(0, 7) !== calMonth) calSel = calData.today.slice(0, 7) === calMonth ? calData.today : calMonth + '-01';
+  renderCalendar();
+}
+function calMarks(info){
+  const tasks = info.tasks || [], evs = info.events || [];
+  const live = tasks.filter(t => ['scheduled', 'due'].includes(t.status));
+  const due = tasks.some(t => t.status === 'due');
+  const bad = evs.some(e => e.kind === 'heal' || e.kind === 'review' || e.outcome === 'fail');
+  const dep = evs.some(e => ['deploy', 'scale', 'update', 'delete', 'rollback'].includes(e.kind)) || tasks.some(t => t.status === 'done');
+  return {live, due, bad, dep, note:!!info.note};
+}
+function renderCalendar(){
+  const [y, m] = calMonth.split('-').map(Number);
+  document.getElementById('cal-title').textContent = `${y} 年 ${m} 月`;
+  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+  const ndays = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  let html = '日一二三四五六'.split('').map(w => `<div class="wd">${w}</div>`).join('');
+  for(let i = 0; i < first; i++) html += '<div class="cal-cell out" aria-hidden="true"></div>';
+  for(let d = 1; d <= ndays; d++){
+    const day = `${calMonth}-${z2(d)}`, info = calData.days[day] || {};
+    const k = calMarks(info);
+    const chips = k.live.slice(0, 2).map(t => `<span class="chip ${t.status === 'due' ? 'due' : ''}">${esc(fmtTW(t.run_at).slice(-5))} ${esc(t.summary)}</span>`).join('')
+      + (k.live.length > 2 ? `<span class="chip">還有 ${k.live.length - 2} 個</span>` : '');
+    html += `<button type="button" class="cal-cell ${day === calData.today ? 'today' : ''} ${day === calSel ? 'sel' : ''}" data-act="cal-day" data-day="${day}" aria-label="${m} 月 ${d} 日">
+      <span class="n">${d}</span>${chips}<span class="mks">${k.due ? '<i class="mk due"></i>' : ''}${k.dep ? '<i class="mk dep"></i>' : ''}${k.bad ? '<i class="mk bad"></i>' : ''}${k.note ? '<i class="mk note"></i>' : ''}</span></button>`;
+  }
+  document.getElementById('cal-grid').innerHTML = html;
+  renderCalDay();
+}
+function calSelect(day){
+  calSel = day;
+  document.querySelectorAll('.cal-cell.sel').forEach(c => c.classList.remove('sel'));
+  const c = document.querySelector(`.cal-cell[data-day="${day}"]`); if(c) c.classList.add('sel');
+  renderCalDay();
+}
+function renderCalDay(){
+  const info = (calData && calData.days[calSel]) || {};
+  const [y, m, d] = calSel.split('-').map(Number);
+  const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  document.getElementById('cal-day-title').textContent = `${m} 月 ${d} 日（週${WD_ZH[wd]}）`;
+  const tasks = (info.tasks || []).slice().sort((a, b) => a.run_at - b.run_at);
+  const evs = (info.events || []).slice().sort((a, b) => a.ts - b.ts);
+  document.getElementById('cal-day-body').innerHTML = `
+    <div><h3>預約</h3>${tasks.length ? tasks.map(t => `<div class="sch-row ${t.kind === 'delete' ? 'del' : ''}"><span class="when" style="min-width:auto">${esc(fmtTW(t.run_at).slice(-5))}</span>
+      <span class="what"><b>${esc(t.summary)}</b>${t.result ? `<span class="res">${esc(t.result)}</span>` : ''}</span>${schedPill(t.status)}<span class="acts">${schedRowActions(t)}</span></div>`).join('')
+      : '<div class="dim" style="font-size:13.5px">這天沒有預約。</div>'}</div>
+    <div><h3>這天發生的事</h3>${evs.length ? evs.map(e => `<div class="cal-ev"><time>${esc(fmtTW(e.ts).slice(-5))}</time><span><span class="k ${e.kind === 'heal' || e.kind === 'review' || e.outcome === 'fail' ? 'bad' : ''}">${esc(e.label)}</span> ${esc(e.app || '')}${e.detail ? `<span class="dim">　${esc(e.detail)}</span>` : ''}</span></div>`).join('')
+      : '<div class="dim" style="font-size:13.5px">平台這天沒有紀錄。</div>'}</div>
+    <div><h3>備註</h3><textarea id="cal-note" maxlength="500" placeholder="記下這天要做的事，例如「下午跟組員對齊分時擴縮」">${esc(info.note || '')}</textarea>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:6px"><button type="button" class="btn btn-sm primary" data-act="cal-note-save">儲存備註</button><span class="dim" id="cal-note-msg" style="font-size:12.5px"></span></div></div>`;
+}
+async function calSaveNote(btn){
+  const msg = document.getElementById('cal-note-msg');
+  btn.disabled = true;
+  try{
+    const r = await fetch('/api/calendar/note', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({day:calSel, text:document.getElementById('cal-note').value})});
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.error || '儲存失敗');
+    await loadCalendarPage(true);
+    const m2 = document.getElementById('cal-note-msg');
+    if(m2) m2.textContent = '已儲存';
+  }catch(e){ msg.textContent = e.message; btn.disabled = false; }
 }
 
 // 不太確定使用者要不要執行時的追問
@@ -4872,6 +5537,10 @@ window.addEventListener('DOMContentLoaded', function(){
     const pod = q.get('pod');
     if(pod && /^[a-z0-9][a-z0-9.\-]{0,252}$/.test(pod)) openPodDrawer(pod, false);
     if(q.has('page') || q.has('pod') || q.has('source')) history.replaceState(null, '', '/');
+    // 預約到期提示：打開網站時檢查一次，之後每 30 秒；切回這個分頁時也馬上檢查
+    setTimeout(pollDue, 1500);
+    setInterval(pollDue, 30000);
+    document.addEventListener('visibilitychange', () => { if(!document.hidden) pollDue(); });
   }
 });
 </script>
@@ -5346,8 +6015,17 @@ def _rag_fallback_context(message: str, history: list = None) -> tuple:
 
 # ── Chat 意圖辨識：規則層（前端規則的 Python 對應，當安全網）──────────
 # 每條 (action, compiled_regex, group->arg 對應)。第一條命中即回傳。
+_SCHED_CANCEL_RE = r"(?:取消|刪掉|刪除|不要).{0,20}預約|預約.{0,20}(?:取消|不要了|刪掉)"
+_SCHED_RESCHED_RE = r"預約.{0,20}(?:改到|改成|改在|延到|延後到|提前到|挪到|換到)"
+_SCHED_LIST_RE = (r"(?:我有|有沒有|有哪些|有什麼|列出|查看|顯示|看一下).{0,6}(?:預約|排程)|預約(?:清單|列表|了什麼|了哪些)|"
+                  r"(?:今天|明天|後天|這週|這周|本週|下週|下周|這個月|下個月).{0,4}(?:要做什麼|有什麼事|有什麼預約|有哪些預約|的預約|行程)")
+_SCHED_INTENTS = {"cancel_schedule", "reschedule", "list_schedule"}
 _INTENT_RULES = [
-    ("report", re.compile(r"^(?!.*(?:部署|deploy|起一個|開一個)).*(?:分析報告|報告|報表|週報|周報|月報|\breport\b)", re.I), {}),
+    # 預約（2026-10-23）：放最前面，這幾句話裡常帶著時間和「部署、刪除」字眼，不能被當成要馬上執行
+    ("cancel_schedule", re.compile(_SCHED_CANCEL_RE), {}),
+    ("reschedule", re.compile(_SCHED_RESCHED_RE), {}),
+    ("list_schedule", re.compile(_SCHED_LIST_RE), {}),
+    ("report",re.compile(r"^(?!.*(?:部署|deploy|起一個|開一個)).*(?:分析報告|報告|報表|週報|周報|月報|\breport\b)", re.I), {}),
     ("list_pods", re.compile(r"^(list|show|查看|顯示|列出)\s*(all\s*|所有|全部)?\s*(pods?|容器)", re.I), {}),
     ("list_deployments", re.compile(r"^(list|show|查看|顯示|列出)\s*(all\s*|所有|全部)?\s*(deploy(ment)?s?|部署)", re.I), {}),
     ("gitops_log", re.compile(r"^(gitops|deploy history|git ?log)|部署(紀錄|歷史|記錄)", re.I), {}),
@@ -5446,7 +6124,8 @@ def _rule_intent(message: str):
         # /真的去掃描 pod），答非所問。這類規則（groupmap 是空字典，代表沒有要求
         # 抽取任何具體目標）如果訊息本身帶有疑問句標記，視為沒命中，讓它 fall
         # through 到後面能正確分類成 qa 的 classify_intent()。
-        if not groupmap and _QUESTION_MARKERS_RE.search(msg):
+        # 預約相關的句子本來就常用問句（「我有哪些預約？」），而且只是查看或取消，不受這條限制
+        if not groupmap and action not in _SCHED_INTENTS and _QUESTION_MARKERS_RE.search(msg):
             continue
         args = {}
         implausible = False
@@ -8053,6 +8732,220 @@ def api_push_test():
 
 
 # ══════════════════════════════════════════════════════════════════
+# 預約任務與行事曆（2026-10-23）
+# 預約到期**不自動執行**：背景檢查把到期的預約改成「等你確認」並推播到手機，使用者在電腦上按
+# 「確定執行」才會呼叫跟手動操作完全相同的 API（部署會重新審查一次）。設計見 core/schedule_store.py。
+# ══════════════════════════════════════════════════════════════════
+from core import schedule_store as _sched
+from core.schedule_time import parse_when as _parse_when, fmt_local as _fmt_local, TW as _TW
+
+_sched.init()
+_K8S_NAME_RE = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
+
+
+def _sched_task_view(t: dict) -> dict:
+    """給前端的預約資料：時間一律附上台北時間的顯示字串。"""
+    return {"id": t["id"], "kind": t["kind"], "args": t["args"], "summary": t["summary"], "input": t.get("input") or "",
+            "run_at": t["run_at"], "display": _fmt_local(datetime.fromtimestamp(t["run_at"], timezone.utc)),
+            "status": t["status"], "result": t.get("result"), "created_at": t["created_at"]}
+
+
+def _sched_validate(data: dict):
+    """回傳 (kind, args, summary, 錯誤訊息)。部署會先跑一次完整審查，沒過就不能預約。"""
+    kind = data.get("kind")
+    if kind == "deploy":
+        spec = data.get("spec")
+        if not isinstance(spec, dict) or len(json.dumps(spec)) > 8000:
+            return kind, None, None, "部署規格不正確，請重新描述一次要部署什麼。"
+        text = (data.get("text") or "").strip() or _synth_input_from_spec(spec)
+        parsed, enriched, review, error = _prepare_deploy(text, spec)
+        if error:
+            payload, _status = error
+            return kind, None, None, payload.get("error") or "審查沒有通過，不能預約。"
+        if (review or {}).get("decision") == "block":
+            reasons = "；".join(str(b) for b in (review.get("blockers") or [])[:3])
+            return kind, None, None, "審查沒有通過，不能預約" + (f"：{reasons}" if reasons else "。")
+        spec = {k: v for k, v in spec.items() if not str(k).startswith("_")}
+        summary = f"部署 {parsed.get('app_name')}（{parsed.get('image')}，{parsed.get('pods')} 個副本）"
+        return kind, {"spec": spec}, summary, None
+    name = str(data.get("name") or "").strip()
+    if kind not in ("scale", "update_image", "delete"):
+        return kind, None, None, "只能預約部署、擴縮、換映像檔、刪除這四種操作。"
+    if not _K8S_NAME_RE.match(name) or len(name) > 63:
+        return kind, None, None, "服務名稱不正確。"
+    if kind == "scale":
+        from guardian.yaml_validator import max_replicas
+        try:
+            replicas = int(data.get("replicas"))
+        except (TypeError, ValueError):
+            return kind, None, None, "副本數要是整數。"
+        if not 1 <= replicas <= max_replicas():
+            return kind, None, None, f"副本數要在 1 到 {max_replicas()} 之間。"
+        return kind, {"name": name, "replicas": replicas}, f"把 {name} 調成 {replicas} 個副本", None
+    if kind == "update_image":
+        image = str(data.get("image") or "").strip()
+        from guardian.yaml_validator import check_image
+        errs = check_image(image) if image else ["請指定新的映像檔。"]
+        if errs:
+            return kind, None, None, "；".join(errs)
+        return kind, {"name": name, "image": image}, f"把 {name} 的映像檔換成 {image}", None
+    return kind, {"name": name}, f"刪除服務 {name}", None
+
+
+@app.route("/api/schedule/when", methods=["POST"])
+def api_schedule_when():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    text = str((request.get_json(silent=True) or {}).get("text") or "")[:500]
+    return jsonify(_parse_when(text))
+
+
+@app.route("/api/schedule", methods=["GET", "POST"])
+def api_schedule():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    user = session["username"]
+    if request.method == "GET":
+        which = request.args.get("status", "all")
+        statuses = {"active": _sched.ACTIVE, "due": ("due",), "final": _sched.FINAL}.get(which)
+        return jsonify({"tasks": [_sched_task_view(t) for t in _sched.list_tasks(user, statuses)]})
+    data = request.get_json(silent=True) or {}
+    try:
+        run_at = float(data.get("run_at"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "請選擇預約時間。"}), 400
+    try:
+        _sched.check_time(run_at)
+    except _sched.ScheduleError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    kind, args, summary, err = _sched_validate(data)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+    try:
+        task = _sched.create(user, _session_ns(), kind, args, summary, run_at, data.get("text") or "")
+    except _sched.ScheduleError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    return jsonify({"ok": True, "task": _sched_task_view(task)})
+
+
+@app.route("/api/schedule/due")
+def api_schedule_due():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    return jsonify({"tasks": [_sched_task_view(t) for t in _sched.due_for(session["username"])]})
+
+
+@app.route("/api/schedule/<int:task_id>/<op>", methods=["POST"])
+def api_schedule_op(task_id, op):
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    user = session["username"]
+    data = request.get_json(silent=True) or {}
+    try:
+        if op == "cancel":
+            t = _sched.cancel(user, task_id)
+        elif op == "snooze":
+            t = _sched.snooze(user, task_id)
+        elif op == "reschedule":
+            t = _sched.reschedule(user, task_id, float(data.get("run_at")))
+        elif op == "start":
+            t = _sched.start(user, task_id)
+        elif op == "done":
+            t = _sched.finish(user, task_id, str(data.get("status")), str(data.get("result") or ""))
+        else:
+            return jsonify({"ok": False, "error": "不支援的操作。"}), 404
+    except (_sched.ScheduleError, TypeError, ValueError) as e:
+        return jsonify({"ok": False, "error": str(e) if isinstance(e, _sched.ScheduleError) else "時間格式不正確。"}), 400
+    if not t:
+        cur = _sched.get(user, task_id)
+        if not cur:
+            return jsonify({"ok": False, "error": "找不到這個預約。"}), 404
+        label = {"running": "正在執行", "done": "已經執行完成", "failed": "已經執行過（失敗）", "blocked": "已經執行過（被擋下）",
+                 "cancelled": "已經取消", "expired": "已經過期", "scheduled": "還沒到期", "due": "等你確認"}.get(cur["status"], cur["status"])
+        verb = {"cancel": "取消", "snooze": "延後提醒", "reschedule": "改時間", "start": "執行", "done": "回報結果"}.get(op, "操作")
+        return jsonify({"ok": False, "error": f"這個預約{label}，不能再{verb}。", "task": _sched_task_view(cur)}), 409
+    return jsonify({"ok": True, "task": _sched_task_view(t)})
+
+
+_CAL_EVENT_LABEL = {"deploy": "部署", "scale": "擴縮", "update": "換版本", "delete": "刪除", "rollback": "回滾", "heal": "自動修復"}
+
+
+@app.route("/api/calendar")
+def api_calendar():
+    """行事曆：一個月的預約、平台紀錄到的事件、備註。手機版唯讀也可以看。"""
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    user = session["username"]
+    month = request.args.get("month") or datetime.now(_TW).strftime("%Y-%m")
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
+        return jsonify({"error": "month 格式要像 2026-10"}), 400
+    y, m = int(month[:4]), int(month[5:])
+    if not 1 <= m <= 12:
+        return jsonify({"error": "月份不正確"}), 400
+    start = datetime(y, m, 1, tzinfo=_TW)
+    end = datetime(y + (m == 12), m % 12 + 1, 1, tzinfo=_TW)
+    days = {}
+
+    def day_of(ts):
+        return datetime.fromtimestamp(ts, _TW).strftime("%Y-%m-%d")
+
+    def slot(d):
+        return days.setdefault(d, {"tasks": [], "events": [], "note": ""})
+
+    for t in _sched.list_tasks(user, since=start.timestamp(), until=end.timestamp()):
+        slot(day_of(t["run_at"]))["tasks"].append(_sched_task_view(t))
+    try:
+        for e in _events.query(_session_ns(), since=start.timestamp()):
+            if e["ts"] >= end.timestamp():
+                continue
+            kind, outcome = e.get("kind"), e.get("outcome")
+            if kind == "review":
+                if outcome != "block":
+                    continue
+                label = "審查擋下"
+            elif kind in _CAL_EVENT_LABEL:
+                label = _CAL_EVENT_LABEL[kind]
+            else:
+                continue
+            d = e.get("data") or {}
+            evs = slot(day_of(e["ts"]))["events"]
+            if len(evs) < 40:
+                evs.append({"ts": e["ts"], "kind": kind, "label": label, "app": e.get("app"), "outcome": outcome,
+                            "detail": str(d.get("root_cause") or d.get("action_label") or d.get("reason") or "")[:120]})
+    except Exception as ex:
+        print(f"[行事曆] 讀取事件紀錄失敗：{ex}")
+    for d, text in _sched.notes_between(user, start.strftime("%Y-%m-%d"), (end - timedelta(days=1)).strftime("%Y-%m-%d")).items():
+        slot(d)["note"] = text
+    return jsonify({"month": month, "today": datetime.now(_TW).strftime("%Y-%m-%d"), "days": days})
+
+
+@app.route("/api/calendar/note", methods=["POST"])
+def api_calendar_note():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    data = request.get_json(silent=True) or {}
+    day = str(data.get("day") or "")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+        return jsonify({"ok": False, "error": "日期格式不正確。"}), 400
+    _sched.set_note(session["username"], day, str(data.get("text") or ""))
+    return jsonify({"ok": True})
+
+
+def _schedule_loop(interval: int = 30):
+    """到期的預約改成「等你確認」並推播到手機；不執行任何操作。"""
+    while True:
+        try:
+            for t in _sched.collect_due():
+                _push.send_async(t["namespace"], {
+                    "title": "⏰ 預約時間到了",
+                    "body": _push.clean_text(f"{t['summary']}。請用電腦打開平台，確認後才會執行。"),
+                    "url": "/m#calendar", "tag": f"sched-{t['id']}"})
+        except Exception as e:
+            print(f"[預約] 檢查到期失敗，下一輪再試：{e}")
+        _time.sleep(interval)
+
+
+# ══════════════════════════════════════════════════════════════════
 # 手機監控版 /m（2026-10-22）：手機只看狀態，不能部署或修改
 # 頁面在 core/mobile_page.py，只呼叫唯讀 API。限制由伺服器執行，不是只靠畫面：
 # 手機登入的 session 標記 readonly，之後只放行下面白名單裡的 API，其他一律 403。
@@ -8064,7 +8957,7 @@ _PHONE_UA_RE = _re_m.compile(r"iPhone|iPod|Android.*Mobile|Mobile.*Android", _re
 
 # 唯讀 session 能用的 API：(方法, 路徑規則)。用白名單，之後新增的 API 預設就會被擋
 _READONLY_API = (
-    ("GET", _re_m.compile(r"^/api/(status|deployments|pods|healer/status|push/status|dashboard)$")),
+    ("GET", _re_m.compile(r"^/api/(status|deployments|pods|healer/status|push/status|dashboard|calendar)$")),
     ("GET", _re_m.compile(r"^/api/pods/[^/]+(/history)?$")),
     ("POST", _re_m.compile(r"^/api/push/(subscribe|unsubscribe|test)$")),
 )
@@ -8141,6 +9034,8 @@ if __name__ == "__main__":
         print("  Healer: background auto-heal loop started (scan every 30s)")
     else:
         print("  Healer: background auto-heal loop NOT started (K8s not connected)")
+    threading.Thread(target=_schedule_loop, daemon=True, kwargs={"interval": 30}).start()
+    print("  Schedule: due-task checker started (every 30s, reminds only — never auto-executes)")
     if CUSTOMER_CLUSTER_MODE:
         threading.Thread(target=_remote_healer_loop, daemon=True, kwargs={"interval": 30}).start()
         print("  Healer: customer-cluster auto-heal loop started (every 30s, via Git)")
