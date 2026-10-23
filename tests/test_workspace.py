@@ -288,3 +288,72 @@ def test_project_defaults_api(web):
     assert r["ok"] and r["project"]["defaults"] == {"min_replicas": 3, "memory": "1Gi", "cpu": "250m"}
     assert a.patch(f"/api/projects/{pid}", json={"defaults": {"memory": "lots"}}).status_code == 400
     assert a.get("/api/projects").get_json()["projects"][0]["defaults"]["min_replicas"] == 3
+
+
+# ── 2026-10-23：回收桶 ──
+def test_trash_chat_delete_restore_and_empty_chat_skips_trash():
+    p = ws.create_project("alice", "商店")
+    ws.put_chat("alice", "chat_1", "有內容", [{"role": "user", "content": "hi"}], project_id=p["id"])
+    ws.put_chat("alice", "chat_2", "新對話", [])
+    ws.delete_chat("alice", "chat_1")
+    ws.delete_chat("alice", "chat_2")
+    assert ws.list_chats("alice") == [] and ws.chats_of("alice", p["id"]) == []
+    trash = ws.list_trash("alice")
+    assert [(x["type"], x["id"], x["days_left"]) for x in trash] == [("chat", "chat_1", 7)]   # 空白對話不進回收桶
+    assert ws.list_trash("bob") == []
+    try:
+        ws.restore_chat("bob", "chat_1")
+        assert False
+    except ws.WorkspaceError:
+        pass
+    r = ws.restore_chat("alice", "chat_1")
+    assert r["project_id"] == p["id"] and ws.chats_of("alice", p["id"])[0]["id"] == "chat_1"   # 專案還在就回到專案
+
+
+def test_trash_project_restore_brings_back_chats_files_and_renames():
+    p = ws.create_project("alice", "商店")
+    ws.put_chat("alice", "chat_1", "專案對話", [{"role": "user", "content": "hi"}], project_id=p["id"])
+    ws.add_file("alice", p["id"], "app.yml", "compose", "services: {}")
+    ws.update_project("alice", p["id"], instructions="至少 2 個")
+    ws.delete_chats_of("alice", p["id"], with_project=True)
+    ws.delete_project_row("alice", p["id"])
+    assert ws.list_projects("alice") == [] and ws.get_project("alice", p["id"]) is None
+    trash = ws.list_trash("alice")
+    assert trash == [{"type": "project", "id": p["id"], "title": "商店", "deleted_at": trash[0]["deleted_at"],
+                      "days_left": 7, "chats": 1, "files": 1}]                     # 跟專案一起刪的對話算在專案裡
+    ws.create_project("alice", "商店")                                                # 名稱被占用
+    r = ws.restore_project("alice", p["id"])
+    assert r["name"] == "商店（復原）" and r["chats"] == 1
+    back = ws.get_project("alice", p["id"])
+    assert back["instructions"] == "至少 2 個" and len(ws.list_files("alice", p["id"])) == 1
+    assert ws.chats_of("alice", p["id"])[0]["id"] == "chat_1"
+
+
+def test_trash_purge_after_7_days_and_manual_purge():
+    import time as _t
+    ws.put_chat("alice", "chat_old", "舊的", [{"role": "user", "content": "x"}])
+    ws.put_chat("alice", "chat_new", "新的", [{"role": "user", "content": "y"}])
+    ws.delete_chat("alice", "chat_old")
+    ws.delete_chat("alice", "chat_new")
+    assert ws.purge_trash(now=_t.time() + 8 * 86400) == 2                               # 7 天後真的刪掉
+    ws.put_chat("alice", "chat_3", "三", [{"role": "user", "content": "z"}])
+    ws.delete_chat("alice", "chat_3")
+    assert not ws.purge_item("bob", "chat", "chat_3")
+    assert ws.purge_item("alice", "chat", "chat_3") and ws.list_trash("alice") == []
+
+
+def test_trash_not_counted_in_limits_and_api(web):
+    a, b = client_as(web, "alice"), client_as(web, "bob")
+    a.put("/api/chats/chat_1", json={"title": "要刪的", "messages": [{"role": "user", "content": "hi"}]})
+    a.delete("/api/chats/chat_1")
+    items = a.get("/api/trash").get_json()["items"]
+    assert [x["id"] for x in items] == ["chat_1"] and b.get("/api/trash").get_json()["items"] == []
+    assert b.post("/api/trash/restore", json={"type": "chat", "id": "chat_1"}).status_code == 404
+    assert a.post("/api/trash/restore", json={"type": "chat", "id": "chat_1"}).get_json()["ok"]
+    assert [c["id"] for c in a.get("/api/chats").get_json()["chats"]] == ["chat_1"]
+    # 刪除專案（移出）→ 專案進回收桶，可以復原
+    pid = a.post("/api/projects", json={"name": "暫時"}).get_json()["project"]["id"]
+    a.post(f"/api/projects/{pid}/delete", json={"remove": {}, "rest": "move"})
+    assert any(x["type"] == "project" and x["id"] == pid for x in a.get("/api/trash").get_json()["items"])
+    assert "服務不會" in a.post("/api/trash/restore", json={"type": "project", "id": pid}).get_json()["message"]
+    assert a.get(f"/api/projects/{pid}").status_code == 200

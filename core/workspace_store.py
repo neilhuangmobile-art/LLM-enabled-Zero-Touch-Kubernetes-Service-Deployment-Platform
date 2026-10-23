@@ -67,11 +67,15 @@ def init(path: str = None) -> None:
             description TEXT NOT NULL DEFAULT '', instructions TEXT NOT NULL DEFAULT '',
             created_at REAL NOT NULL, updated_at REAL NOT NULL,
             PRIMARY KEY (owner, id))""")
-        # 2026-10-23：部署預設值（JSON）。舊的資料庫沒有這一欄，補上
-        try:
-            _conn.execute("ALTER TABLE projects ADD COLUMN defaults TEXT NOT NULL DEFAULT '{}'")
-        except sqlite3.OperationalError:
-            pass
+        # 2026-10-23：部署預設值（JSON）、回收桶（deleted_at、deleted_with）。舊的資料庫沒有這些欄位，補上
+        for stmt in ("ALTER TABLE projects ADD COLUMN defaults TEXT NOT NULL DEFAULT '{}'",
+                     "ALTER TABLE projects ADD COLUMN deleted_at REAL",
+                     "ALTER TABLE chats ADD COLUMN deleted_at REAL",
+                     "ALTER TABLE chats ADD COLUMN deleted_with TEXT"):
+            try:
+                _conn.execute(stmt)
+            except sqlite3.OperationalError:
+                pass
         _conn.execute("""CREATE TABLE IF NOT EXISTS project_services (
             namespace TEXT NOT NULL, app TEXT NOT NULL, owner TEXT NOT NULL, project_id TEXT NOT NULL,
             PRIMARY KEY (namespace, app))""")
@@ -97,7 +101,7 @@ def _clean_text(v, limit: int) -> str:
 def list_chats(owner: str) -> List[Dict]:
     with _lock:
         rows = _db().execute("SELECT id, project_id, title, messages, updated_at FROM chats WHERE owner = ? "
-                             "ORDER BY updated_at", (owner,)).fetchall()
+                             "AND deleted_at IS NULL ORDER BY updated_at", (owner,)).fetchall()
     return [{"id": i, "projectId": p, "title": t, "messages": json.loads(m), "updated_at": u}
             for i, p, t, m, u in rows]
 
@@ -115,7 +119,7 @@ def put_chat(owner: str, chat_id: str, title: str, messages: list, project_id: O
     with _lock:
         exists = _db().execute("SELECT 1 FROM chats WHERE owner = ? AND id = ?", (owner, chat_id)).fetchone()
         if not exists:
-            n = _conn.execute("SELECT COUNT(*) FROM chats WHERE owner = ?", (owner,)).fetchone()[0]
+            n = _conn.execute("SELECT COUNT(*) FROM chats WHERE owner = ? AND deleted_at IS NULL", (owner,)).fetchone()[0]
             if n >= MAX_CHATS:
                 raise WorkspaceError(f"對話已經有 {MAX_CHATS} 則，請先刪掉一些舊對話。")
         _conn.execute("INSERT OR REPLACE INTO chats (owner, id, project_id, title, messages, updated_at) "
@@ -125,8 +129,11 @@ def put_chat(owner: str, chat_id: str, title: str, messages: list, project_id: O
 
 
 def delete_chat(owner: str, chat_id: str) -> bool:
+    """有內容的對話移到回收桶（7 天內可以復原）；空白對話直接刪掉（2026-10-23）。"""
     with _lock:
-        cur = _db().execute("DELETE FROM chats WHERE owner = ? AND id = ?", (owner, chat_id))
+        _db().execute("DELETE FROM chats WHERE owner = ? AND id = ? AND messages = '[]'", (owner, chat_id))
+        cur = _conn.execute("UPDATE chats SET deleted_at = ?, deleted_with = NULL WHERE owner = ? AND id = ? "
+                            "AND deleted_at IS NULL", (time.time(), owner, chat_id))
         _conn.commit()
         return cur.rowcount > 0
 
@@ -135,7 +142,7 @@ def chats_of(owner: str, project_id: str) -> List[Dict]:
     """專案裡的對話（只回標題與時間，不回內容）。"""
     with _lock:
         rows = _db().execute("SELECT id, title, updated_at FROM chats WHERE owner = ? AND project_id = ? "
-                             "ORDER BY updated_at DESC", (owner, project_id)).fetchall()
+                             "AND deleted_at IS NULL ORDER BY updated_at DESC", (owner, project_id)).fetchall()
     return [{"id": i, "title": t, "updated_at": u} for i, t, u in rows]
 
 
@@ -152,7 +159,7 @@ def _project_row(r) -> Dict:
 def list_projects(owner: str) -> List[Dict]:
     with _lock:
         rows = _db().execute("SELECT id, name, description, instructions, created_at, updated_at, defaults FROM projects "
-                             "WHERE owner = ? ORDER BY created_at", (owner,)).fetchall()
+                             "WHERE owner = ? AND deleted_at IS NULL ORDER BY created_at", (owner,)).fetchall()
     return [_project_row(r) for r in rows]
 
 
@@ -161,7 +168,7 @@ def get_project(owner: str, project_id: str) -> Optional[Dict]:
         return None
     with _lock:
         r = _db().execute("SELECT id, name, description, instructions, created_at, updated_at, defaults FROM projects "
-                          "WHERE owner = ? AND id = ?", (owner, project_id)).fetchone()
+                          "WHERE owner = ? AND id = ? AND deleted_at IS NULL", (owner, project_id)).fetchone()
     return _project_row(r) if r else None
 
 
@@ -177,7 +184,7 @@ def _check_name(name: str) -> str:
 def create_project(owner: str, name: str, description: str = "") -> Dict:
     name = _check_name(name)
     with _lock:
-        n = _db().execute("SELECT COUNT(*) FROM projects WHERE owner = ?", (owner,)).fetchone()[0]
+        n = _db().execute("SELECT COUNT(*) FROM projects WHERE owner = ? AND deleted_at IS NULL", (owner,)).fetchone()[0]
         if n >= MAX_PROJECTS:
             raise WorkspaceError(f"專案最多 {MAX_PROJECTS} 個。")
         pid, now = "proj_" + secrets.token_hex(6), time.time()
@@ -241,26 +248,29 @@ def update_project(owner: str, project_id: str, name=None, description=None, ins
 
 
 def delete_project_row(owner: str, project_id: str) -> None:
-    """只刪專案本身；呼叫前要先處理好裡面的對話、服務、檔案（見 web_demo 的刪除專案路由）。
-    保險起見，還留著的對話變成一般對話、服務歸屬與檔案清掉。"""
+    """專案移到回收桶（2026-10-23）；呼叫前要先處理好對話與服務（見 web_demo 的刪除專案路由）。
+    還留著的一般對話變成一般對話、服務歸屬清掉（服務本身不會進回收桶）；檔案、說明、指示、部署預設值留在回收桶的專案裡。"""
     with _lock:
-        _db().execute("UPDATE chats SET project_id = NULL WHERE owner = ? AND project_id = ?", (owner, project_id))
+        _db().execute("UPDATE chats SET project_id = NULL WHERE owner = ? AND project_id = ? AND deleted_at IS NULL",
+                      (owner, project_id))
         _conn.execute("DELETE FROM project_services WHERE owner = ? AND project_id = ?", (owner, project_id))
-        _conn.execute("DELETE FROM project_files WHERE owner = ? AND project_id = ?", (owner, project_id))
-        _conn.execute("DELETE FROM projects WHERE owner = ? AND id = ?", (owner, project_id))
+        _conn.execute("UPDATE projects SET deleted_at = ? WHERE owner = ? AND id = ?", (time.time(), owner, project_id))
         _conn.commit()
 
 
 def move_chats_out(owner: str, project_id: str) -> int:
     with _lock:
-        cur = _db().execute("UPDATE chats SET project_id = NULL WHERE owner = ? AND project_id = ?", (owner, project_id))
+        cur = _db().execute("UPDATE chats SET project_id = NULL WHERE owner = ? AND project_id = ? AND deleted_at IS NULL",
+                            (owner, project_id))
         _conn.commit()
         return cur.rowcount
 
 
-def delete_chats_of(owner: str, project_id: str) -> int:
+def delete_chats_of(owner: str, project_id: str, with_project: bool = False) -> int:
+    """專案裡的對話移到回收桶。with_project=True：跟專案一起刪，復原專案時一起回來。"""
     with _lock:
-        cur = _db().execute("DELETE FROM chats WHERE owner = ? AND project_id = ?", (owner, project_id))
+        cur = _db().execute("UPDATE chats SET deleted_at = ?, deleted_with = ? WHERE owner = ? AND project_id = ? "
+                            "AND deleted_at IS NULL", (time.time(), project_id if with_project else None, owner, project_id))
         _conn.commit()
         return cur.rowcount
 
@@ -354,3 +364,95 @@ def delete_files_of(owner: str, project_id: str) -> int:
         cur = _db().execute("DELETE FROM project_files WHERE owner = ? AND project_id = ?", (owner, project_id))
         _conn.commit()
         return cur.rowcount
+
+
+# ── 回收桶（2026-10-23）：刪除的對話與專案保留 7 天，期間可以復原。服務不會進回收桶（刪服務是真的從叢集刪掉）。──
+TRASH_DAYS = 7
+
+
+def purge_trash(owner: Optional[str] = None, now: float = None) -> int:
+    """把回收桶裡超過 7 天的真的刪掉（owner=None：所有帳號，背景用）。回傳刪了幾筆。"""
+    cutoff = (now or time.time()) - TRASH_DAYS * 86400
+    who, args = ("AND owner = ?", (owner,)) if owner else ("", ())
+    with _lock:
+        old = _db().execute(f"SELECT owner, id FROM projects WHERE deleted_at IS NOT NULL AND deleted_at < ? {who}",
+                            (cutoff, *args)).fetchall()
+        for o, pid in old:
+            _conn.execute("DELETE FROM project_files WHERE owner = ? AND project_id = ?", (o, pid))
+            _conn.execute("DELETE FROM chats WHERE owner = ? AND deleted_with = ?", (o, pid))
+        n = _conn.execute(f"DELETE FROM projects WHERE deleted_at IS NOT NULL AND deleted_at < ? {who}", (cutoff, *args)).rowcount
+        n += _conn.execute(f"DELETE FROM chats WHERE deleted_at IS NOT NULL AND deleted_at < ? {who}", (cutoff, *args)).rowcount
+        _conn.commit()
+    return n
+
+
+def list_trash(owner: str, now: float = None) -> List[Dict]:
+    """自己的回收桶：一般刪除的對話＋刪除的專案（跟專案一起刪的對話算在專案裡）。"""
+    now = now or time.time()
+    purge_trash(owner, now)
+    with _lock:
+        chats = _db().execute("SELECT id, title, deleted_at, project_id FROM chats WHERE owner = ? AND deleted_at IS NOT NULL "
+                              "AND deleted_with IS NULL ORDER BY deleted_at DESC", (owner,)).fetchall()
+        projs = _conn.execute("SELECT id, name, deleted_at FROM projects WHERE owner = ? AND deleted_at IS NOT NULL "
+                              "ORDER BY deleted_at DESC", (owner,)).fetchall()
+        counts = {pid: (_conn.execute("SELECT COUNT(*) FROM chats WHERE owner = ? AND deleted_with = ?", (owner, pid)).fetchone()[0],
+                        _conn.execute("SELECT COUNT(*) FROM project_files WHERE owner = ? AND project_id = ?", (owner, pid)).fetchone()[0])
+                  for pid, _, _ in projs}
+    left = lambda t: max(0, int((t + TRASH_DAYS * 86400 - now) // 86400) + 1)
+    items = [{"type": "chat", "id": i, "title": t, "deleted_at": d, "days_left": left(d)} for i, t, d, _p in chats]
+    items += [{"type": "project", "id": i, "title": n, "deleted_at": d, "days_left": left(d),
+               "chats": counts[i][0], "files": counts[i][1]} for i, n, d in projs]
+    return sorted(items, key=lambda x: -x["deleted_at"])
+
+
+def restore_chat(owner: str, chat_id: str) -> Dict:
+    """復原對話：原本的專案還在就回到專案，不在了就變成一般對話。"""
+    with _lock:
+        r = _db().execute("SELECT project_id, title FROM chats WHERE owner = ? AND id = ? AND deleted_at IS NOT NULL",
+                          (owner, chat_id)).fetchone()
+    if not r:
+        raise WorkspaceError("回收桶裡找不到這則對話，可能已經超過 7 天被刪掉了。")
+    pid = r[0] if r[0] and get_project(owner, r[0]) else None
+    with _lock:
+        _db().execute("UPDATE chats SET deleted_at = NULL, deleted_with = NULL, project_id = ? WHERE owner = ? AND id = ?",
+                      (pid, owner, chat_id))
+        _conn.commit()
+    return {"title": r[1], "project_id": pid}
+
+
+def restore_project(owner: str, project_id: str) -> Dict:
+    """復原專案：說明、指示、部署預設值、檔案、跟它一起刪的對話都回來；服務不會回來。名稱撞到現有專案時加「（復原）」。"""
+    with _lock:
+        r = _db().execute("SELECT name FROM projects WHERE owner = ? AND id = ? AND deleted_at IS NOT NULL",
+                          (owner, project_id)).fetchone()
+    if not r:
+        raise WorkspaceError("回收桶裡找不到這個專案，可能已經超過 7 天被刪掉了。")
+    name = r[0]
+    taken = {p["name"] for p in list_projects(owner)}
+    if name in taken:
+        name = (name[:MAX_PROJECT_NAME - 4] + "（復原）")
+    if len(list_projects(owner)) >= MAX_PROJECTS:
+        raise WorkspaceError(f"專案已經有 {MAX_PROJECTS} 個，請先刪掉一些再復原。")
+    with _lock:
+        _db().execute("UPDATE projects SET deleted_at = NULL, name = ?, updated_at = ? WHERE owner = ? AND id = ?",
+                      (name, time.time(), owner, project_id))
+        n = _conn.execute("UPDATE chats SET deleted_at = NULL, deleted_with = NULL, project_id = ? WHERE owner = ? AND deleted_with = ?",
+                          (project_id, owner, project_id)).rowcount
+        _conn.commit()
+    return {"name": name, "chats": n}
+
+
+def purge_item(owner: str, kind: str, item_id: str) -> bool:
+    """馬上永久刪除回收桶裡的一筆（只刪得到自己的、而且在回收桶裡的）。"""
+    with _lock:
+        if kind == "chat":
+            cur = _db().execute("DELETE FROM chats WHERE owner = ? AND id = ? AND deleted_at IS NOT NULL", (owner, item_id))
+        elif kind == "project":
+            cur = _db().execute("DELETE FROM projects WHERE owner = ? AND id = ? AND deleted_at IS NOT NULL", (owner, item_id))
+            if cur.rowcount:
+                _conn.execute("DELETE FROM project_files WHERE owner = ? AND project_id = ?", (owner, item_id))
+                _conn.execute("DELETE FROM chats WHERE owner = ? AND deleted_with = ?", (owner, item_id))
+        else:
+            return False
+        _conn.commit()
+        return cur.rowcount > 0

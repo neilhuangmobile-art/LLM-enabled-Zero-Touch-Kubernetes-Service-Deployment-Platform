@@ -2414,6 +2414,7 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
       <button class="nav-item" type="button" data-page="calendar" onclick="showPage('calendar')"><svg viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>行事曆<span class="nav-badge" id="nav-due-badge" hidden></span></button>
       <button class="nav-item" type="button" data-page="dashboard" onclick="showPage('dashboard')"><svg viewBox="0 0 16 16" fill="none"><path d="M2.5 11a5.5 5.5 0 1111 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M8 11l2.6-3.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>資源總覽</button>
       <button class="nav-item" type="button" data-page="gitops" onclick="showPage('gitops')"><svg viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 6v1a3 3 0 003 3h1M11 6v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>部署紀錄</button>
+      <button class="nav-item" type="button" data-page="trash" onclick="showPage('trash')"><svg viewBox="0 0 16 16" fill="none"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 8.6a1 1 0 001 .9h4.6a1 1 0 001-.9l.7-8.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>回收桶</button>
       <div class="nav-section proj-section"><span>專案</span><button type="button" class="proj-add" onclick="openProjectModal()" data-tip="新增專案" aria-label="新增專案">+</button></div>
       <div id="project-list"></div>
       <div class="nav-section">最近的對話</div>
@@ -2463,6 +2464,12 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
     </div>
 
     <!-- Chat Page -->
+    <div class="page" id="page-trash">
+      <div class="page-head"><div><h1 class="page-title">回收桶</h1>
+        <p class="page-sub">刪除的對話和專案會在這裡保留 7 天，期間可以復原，之後會自動永久刪除。刪掉的服務不會進回收桶（服務是真的從叢集刪掉）。</p></div></div>
+      <div id="trash-body"></div>
+    </div>
+
     <div class="page" id="page-project">
       <div class="page-head"><div><h1 class="page-title" id="proj-title">專案</h1>
         <p class="page-sub" id="proj-sub"></p></div>
@@ -2958,7 +2965,7 @@ function toggleTheme(){
 syncThemeBtn();
 try { window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', syncThemeBtn); } catch(e){}
 
-const PAGE_TITLES = {chat:'對話', services:'我的服務', healer:'自動修復', calendar:'行事曆', dashboard:'資源總覽', gitops:'部署紀錄', project:'專案'};
+const PAGE_TITLES = {chat:'對話', services:'我的服務', healer:'自動修復', calendar:'行事曆', dashboard:'資源總覽', gitops:'部署紀錄', project:'專案', trash:'回收桶'};
 // 舊頁面名稱（書籤、舊卡片上的按鈕）導到合併後的新頁面
 const PAGE_ALIAS = {pods:'services', deployments:'services', metrics:'dashboard', deploy:'chat', dataset:'chat', kb:'chat'};
 
@@ -2982,6 +2989,7 @@ function showPage(name){
   if(name === 'calendar') loadCalendarPage();
   if(name === 'dashboard') loadDashboardPage();
   if(name === 'project') loadProjectPage();
+  if(name === 'trash') loadTrashPage();
   renderProjectList();
 }
 
@@ -3327,6 +3335,8 @@ function newChat(projectId){
 
 function deleteChat(id, e){
   e.stopPropagation();
+  const gone = chats.find(ch => ch.id === id);
+  if(gone && gone.messages.length) setComposerHint('已經把「' + gone.title + '」移到回收桶，7 天內可以在左邊的「回收桶」復原。');
   chats = chats.filter(ch=>ch.id!==id);
   delete _chatSent[id];
   fetch('/api/chats/' + encodeURIComponent(id), {method:'DELETE'}).then(r => {
@@ -3489,6 +3499,28 @@ function projServicesHTML(p){
   return `<div class="proj-box"><h2>服務</h2>${rows}
     <div class="proj-actions" style="justify-content:flex-start"><span class="proj-msg" id="proj-svc-msg"></span></div>
     <label class="lbl">把現有的服務移進這個專案</label>${add}</div>`;
+}
+// 2026-10-23：回收桶頁面
+async function loadTrashPage(){
+  const body = document.getElementById('trash-body');
+  let d;
+  try { d = await projFetch('/api/trash'); } catch(e){ body.innerHTML = `<div class="proj-box">${emptyBlock('讀不到回收桶。', e.message)}</div>`; return; }
+  if(!d.items.length){ body.innerHTML = '<div class="proj-box"><p class="proj-muted">回收桶是空的。</p><div class="proj-actions" style="justify-content:flex-start"><span class="proj-msg" id="trash-msg"></span></div></div>'; return; }
+  body.innerHTML = `<div class="proj-box">${d.items.map(x => `
+    <div class="proj-row"><span class="grow"><b>${x.type === 'project' ? '專案' : '對話'}</b>　${esc(x.title)}
+      ${x.type === 'project' && (x.chats || x.files) ? `<span class="proj-muted">（含 ${x.chats ? x.chats + ' 則對話' : ''}${x.chats && x.files ? '、' : ''}${x.files ? x.files + ' 個檔案' : ''}）</span>` : ''}</span>
+      <span class="proj-muted">${projTime(x.deleted_at)} 刪除，還剩 ${esc(x.days_left)} 天</span>
+      <button type="button" class="btn btn-sm" onclick="trashAction('restore','${x.type}','${escAttr(x.id)}')">復原</button>
+      <button type="button" class="btn btn-sm danger" onclick="trashAction('purge','${x.type}','${escAttr(x.id)}','${escAttr(x.title)}')">永久刪除</button></div>`).join('')}
+    <div class="proj-actions" style="justify-content:flex-start"><span class="proj-msg" id="trash-msg"></span></div></div>`;
+}
+async function trashAction(action, type, id, title){
+  if(action === 'purge' && !(await askConfirm('永久刪除', `確定要永久刪除「${esc(title || '')}」嗎？刪掉之後就沒辦法復原了。`, '永久刪除', '取消'))) return;
+  let d;
+  try { d = await projFetch('/api/trash/' + action, 'POST', {type, id}); } catch(e){ d = {ok:false, message:e.message}; }
+  if(d.ok && action === 'restore'){ await loadProjects(); clearTimeout(_chatSaveTimer); await _flushChats(); chatsLoaded = false; chats = []; await initChats(); }
+  await loadTrashPage();
+  projSetMsg('trash-msg', d.message || '', !!d.ok);
 }
 // 2026-10-23：摘要分頁（只算這個專案裡的服務，數字都是平台紀錄算出來的）
 async function loadProjSummary(p){
@@ -3678,11 +3710,11 @@ function openDeleteProject(){
     <div class="q">請勾選想要移除的部分：</div>
     <label><input type="checkbox" id="pd-all" onchange="pdSync(this)"> <span>整個專案<span class="note">勾選後會自動勾選下列所有選項</span></span></label>
     <label><input type="checkbox" class="pd-part" data-k="chats" onchange="pdSync()"> <span>對話（${p.chats.length} 則）</span></label>
-    <label><input type="checkbox" class="pd-part" data-k="services" onchange="pdSync()"> <span>服務（${nSvc} 個${svcList}）${nSvc ? '<span class="note warn-t">勾選會關掉並刪除正在運行的服務</span>' : ''}</span></label>
+    <label><input type="checkbox" class="pd-part" data-k="services" onchange="pdSync()"> <span>服務（${nSvc} 個${svcList}）${nSvc ? '<span class="note warn-t">勾選會關掉並刪除正在運行的服務，服務不會進回收桶</span>' : ''}</span></label>
     <label><input type="checkbox" class="pd-part" data-k="files" onchange="pdSync()"> <span>檔案（上傳的 compose、YAML，${p.files.length} 個）</span></label>
     <label><input type="checkbox" class="pd-part" data-k="instructions" onchange="pdSync()"> <span>專案指示${hasInst ? '' : '（目前是空的）'}</span></label>
     <div id="pd-rest-box"><div class="q">未勾選的部分要怎麼處理？</div>
-      <label><input type="radio" name="pd-rest" value="move" onchange="pdSync()"> <span>移出專案，然後刪除這個空專案<span class="note">對話會變成一般對話，服務照常運作、不屬於任何專案</span></span></label>
+      <label><input type="radio" name="pd-rest" value="move" onchange="pdSync()"> <span>移出專案，然後刪除這個空專案<span class="note">對話會變成一般對話，服務照常運作、不屬於任何專案；專案本身移到回收桶，7 天內可以復原</span></span></label>
       <label><input type="radio" name="pd-rest" value="keep" onchange="pdSync()"> <span>保留在這個專案中（只刪除勾選的部分）</span></label></div>
     <div class="proj-warn" id="pd-lost" hidden></div>
     <div id="pd-confirm" hidden><label class="lbl" for="pd-name" style="display:block;padding:0;cursor:default">要刪除服務，請輸入專案名稱「${esc(p.name)}」確認：</label>
@@ -3717,7 +3749,7 @@ function pdSync(src){
     const links = [];
     if(lost.includes('files')) p.files.forEach(f => links.push(`<a href="/api/projects/${encodeURIComponent(p.id)}/files/${encodeURIComponent(f.id)}" download>${esc(f.name)}</a>`));
     if(lost.includes('instructions')) links.push('<a href="#" onclick="pdDownloadInstructions();return false">專案指示.txt</a>');
-    lostBox.innerHTML = `${lost.includes('files') ? '檔案' : ''}${lost.length === 2 ? '和' : ''}${lost.includes('instructions') ? '專案指示' : ''}在專案外沒有地方放，會跟專案一起刪除。需要的話先下載備份：${links.join('、')}`;
+    lostBox.innerHTML = `${lost.includes('files') ? '檔案' : ''}${lost.length === 2 ? '和' : ''}${lost.includes('instructions') ? '專案指示' : ''}在專案外沒有地方放，會跟專案一起移到回收桶（7 天內復原專案就會回來）。也可以先下載備份：${links.join('、')}`;
     lostBox.hidden = false;
   } else lostBox.hidden = true;
   const needName = s.parts.services && p.services.length > 0;
@@ -10454,6 +10486,39 @@ def api_project_services(pid):
     return jsonify({"ok": True, "message": f"已經把 {name} 移進專案。"})
 
 
+# ── 回收桶（2026-10-23）──
+@app.route("/api/trash")
+def api_trash():
+    owner, _, err = _ws_guard()
+    if err:
+        return err
+    return jsonify({"ok": True, "days": _ws.TRASH_DAYS, "items": _ws.list_trash(owner)})
+
+
+@app.route("/api/trash/<action>", methods=["POST"])
+def api_trash_action(action):
+    owner, _, err = _ws_guard()
+    if err:
+        return err
+    body = request.get_json(silent=True) or {}
+    kind, item_id = body.get("type"), str(body.get("id") or "")
+    if kind not in ("chat", "project") or action not in ("restore", "purge"):
+        return _ws_err("不認得的動作。")
+    try:
+        if action == "purge":
+            if not _ws.purge_item(owner, kind, item_id):
+                return _ws_err("回收桶裡找不到這一筆。", 404)
+            return jsonify({"ok": True, "message": "已經永久刪除，沒辦法再復原。"})
+        if kind == "chat":
+            r = _ws.restore_chat(owner, item_id)
+            return jsonify({"ok": True, "message": f"已經復原對話「{r['title']}」" + ("，回到原本的專案。" if r["project_id"] else "。")})
+        r = _ws.restore_project(owner, item_id)
+        return jsonify({"ok": True, "message": f"已經復原專案「{r['name']}」" + (f"和 {r['chats']} 則對話" if r["chats"] else "")
+                        + "。服務不會跟著回來，需要的話請重新部署或移入。"})
+    except _ws.WorkspaceError as e:
+        return _ws_err(e, 404)
+
+
 @app.route("/api/projects/<pid>/summary")
 def api_project_summary(pid):
     """2026-10-23：專案摘要。只算這個專案裡的服務：事件紀錄依 app 過濾後交給 agents/report.build_report（固定規則，不用 AI）。"""
@@ -10539,11 +10604,13 @@ def api_project_delete(pid):
         for a in apps:
             ok, msg = k8s_delete_deployment(a, ns)
             (done if ok else failed).append(a if ok else f"{a}（{msg}）")
+    # 2026-10-23 回收桶：專案要刪掉（rest=move）時，對話跟著專案進回收桶、檔案與指示留在回收桶的專案裡，7 天內復原專案會一起回來；
+    # 只刪勾選的部分（rest=keep）時，對話進回收桶，檔案與指示照舊馬上刪掉。服務不會進回收桶。
     if rm["chats"]:
-        _ws.delete_chats_of(owner, pid)
-    if rm["files"]:
+        _ws.delete_chats_of(owner, pid, with_project=(rest == "move"))
+    if rm["files"] and rest == "keep":
         _ws.delete_files_of(owner, pid)
-    if rm["instructions"]:
+    if rm["instructions"] and rest == "keep":
         _ws.update_project(owner, pid, instructions="")
     if failed:
         return jsonify({"ok": False, "project_deleted": False, "deleted_services": done,
@@ -10944,7 +11011,16 @@ def _bg_tick(now, last_due, interval=30):
         except Exception as e:
             print(f"[預約] 檢查到期失敗，下一輪再試：{e}")
     _as_run_due(now)
+    if now - _ws_last_purge[0] >= 3600:   # 2026-10-23：回收桶超過 7 天的真的刪掉
+        _ws_last_purge[0] = now
+        try:
+            _ws.purge_trash()
+        except Exception as e:
+            print(f"[回收桶] 清理失敗：{e}")
     return last_due
+
+
+_ws_last_purge = [0.0]
 
 
 def _schedule_loop(interval: int = 30):

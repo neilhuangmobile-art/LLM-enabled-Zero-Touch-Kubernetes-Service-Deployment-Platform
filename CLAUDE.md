@@ -322,4 +322,4 @@ GitHub org 開的私有 repo（`gitops/tenant_repo.py`），客戶叢集的 Flux
 - 空白對話（沒有任何訊息）不列進「最近的對話」、不存伺服器，送出第一則訊息才成立；載入時會清掉伺服器上的空白對話。
 - 現有對話可以在專案頁「總覽」移進或移出專案（前端改 `projectId` 後 `PUT /api/chats/<id>`）；不會連帶移動服務。
 - 專案頁分頁（2026-10-23 起）：總覽、摘要、服務、排程、檔案、設定。摘要是 `/api/projects/<id>/summary`（事件紀錄只留專案裡的服務，交給 `agents/report.build_report`，不用 AI）；排程分頁用 `/api/autoscale` 只留專案的服務，沿用 `openScheduleEditor()`／`openScheduleSuggest()`。
-- 考慮中：回收桶（刪除的對話、專案保留 7 天可復原），還沒做。
+- **回收桶（2026-10-23）**：`chats`、`projects` 有 `deleted_at`（跟專案一起刪的對話記 `deleted_with`），所有列表與讀取都排除已刪除的；空白對話直接刪。`/api/trash`、`/api/trash/restore|purge`，左側「回收桶」頁面；7 天後由背景迴圈（`_bg_tick`，每小時）真的刪掉。**服務不會進回收桶**（刪服務是真的從叢集刪掉）；刪除專案時檔案、說明、指示留在回收桶的專案裡，復原時一起回來。
