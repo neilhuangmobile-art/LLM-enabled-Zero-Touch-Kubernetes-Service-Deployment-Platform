@@ -3654,6 +3654,20 @@ async function saveProjectDefaults(){
     projSetMsg('proj-dft-msg', '已儲存。', true);
   } catch(e){ projSetMsg('proj-dft-msg', '沒有存成功：' + e.message, false); }
 }
+// 2026-10-23：個人化建議（句子 > 專案部署預設值 > 個人化）。只填部署單還空著的欄位；專案有「至少幾個」時不建議副本數
+async function applyPersonalSuggest(spec, text){
+  let d;
+  try { d = await getJSON('/api/personalize/suggest?text=' + encodeURIComponent(text || '')); } catch(e){ return spec; }
+  if(!d || !d.ok) return spec;
+  const ch = currentChat();
+  const pd = ((ch && ch.projectId ? projectById(ch.projectId) : null) || {}).defaults || {};
+  const notes = [];
+  if(d.memory && !spec.memory){ spec.memory = d.memory; notes.push('記憶體 ' + d.memory); }
+  if(d.cpu && !spec.cpu){ spec.cpu = d.cpu; notes.push('CPU ' + d.cpu); }
+  if(d.pods && !pd.min_replicas && d.pods !== spec.pods){ notes.push(`副本數 ${d.pods} 個（你沒有指定）`); spec.pods = d.pods; }
+  if(notes.length) appendMsg('assistant', `${d.reason}，建議：${notes.join('、')}。可以在部署單上再改；不想要這個建議可以說「不要依我的習慣建議」。`, null, 'text');
+  return spec;
+}
 // 2026-10-23：在專案的對話裡部署時，把專案的部署預設值套到部署單（只改預填值，審查照常）
 function applyProjectDefaults(spec){
   const ch = currentChat();
@@ -3897,6 +3911,8 @@ function matchClientRule(text){
     ['as_exempt_off', /([a-z0-9][a-z0-9-]*)\s*(?:可以|允許|恢復)\s*(?:自動)?\s*休眠/i, m=>({name:m[1]})],
     ['as_exempt_off', /(?:把\s*)?([a-z0-9][a-z0-9-]*)\s*(?:移出|拿出|從)\s*例外/i, m=>({name:m[1]})],
     ['as_cancel', /(?:取消|刪除|關掉|停止|移除)\s*([a-z0-9][a-z0-9-]*)\s*的?\s*(?:分時|排程|時段)/i, m=>({name:m[1]})],
+    ['personalize_off', /(?:不要|不用|別|關掉|停止).{0,4}(?:依|照|按).{0,4}(?:我的)?.{0,2}習慣.{0,4}(?:建議|推薦)?/, null],
+    ['personalize_on', /^(?!.*(?:不要|不用|別|關掉|停止)).*(?:依|照|按)\s*(?:我的)\s*習慣\s*(?:建議|推薦)|(?:恢復|打開|開啟).{0,4}(?:個人化|習慣).{0,2}(?:建議|推薦)/, null],
     ['weekly_off', /(?:每週|每周|週報|周報).{0,6}(?:不要|不用|別|關掉|停止|取消).{0,4}(?:自動|產生|寄|送)?|(?:不要|不用|關掉|停止|取消).{0,4}(?:每週|每周).{0,4}(?:報告|週報)/, null],
     ['weekly_on', /(?:每週|每周).{0,4}(?:報告|週報).{0,4}(?:要|打開|開啟|恢復).{0,4}(?:自動|產生)/, null],
     ['as_suggest', /(?:建議|推薦)\s*([a-z0-9][a-z0-9-]*)\s*的?\s*(?:時段|排程|分時)/i, m=>({name:m[1]})],
@@ -3932,7 +3948,7 @@ function matchClientRule(text){
     const m = t.match(rx);
     if(!m) continue;
     // 「休眠模式是什麼？」這種問概念的句子交給問答，不要當成設定指令
-    if((action.startsWith('as_') || action.startsWith('weekly_')) && action !== 'as_wake' && /[？?]\s*$|是什麼|怎麼|如何|為什麼|嗎/.test(t)) continue;
+    if((action.startsWith('as_') || action.startsWith('weekly_') || action.startsWith('personalize_')) && action !== 'as_wake' && /[？?]\s*$|是什麼|怎麼|如何|為什麼|嗎/.test(t)) continue;
     const args = extract ? extract(m) : {};
     if(extract && Object.values(args).some(v=>v===undefined||v===''||(typeof v==='number'&&isNaN(v)))) continue;
     return {action, args, source:'rule'};
@@ -4158,8 +4174,8 @@ async function startDeployFlow(text, sched, originalText){
       const p = d.parsed;
       const what = {app_name:'服務名稱（例如 shop-web）', image:'映像檔：要跑哪個程式，例如 nginx:1.27、redis:7', pods:'副本數：要同時開幾個'};
       appendMsg('assistant', '還差' + d.missing.map(k => what[k] || k).join('；') + '。請在下面的部署單補上，再按「下一步」。', null, 'text');
-      const flow = newFlow('deploy', text, applyProjectDefaults({app_name:p.app_name || '', image:p.image || '', pods:p.pods || 1, port:p.port || 80,
-                                             memory:p.memory, cpu:p.cpu}));
+      const flow = newFlow('deploy', text, await applyPersonalSuggest(applyProjectDefaults({app_name:p.app_name || '', image:p.image || '', pods:p.pods || 1, port:p.port || 80,
+                                             memory:p.memory, cpu:p.cpu}), originalText || text));
       if(sched){ flow.schedOn = true; flow.when = sched.when || {ts:defaultSchedTs()}; flow.fullText = originalText || text; }   // 預約（2026-10-23 合併時補上）
       appendMsg('assistant', renderFlowCard(flow));
       return;
@@ -4169,10 +4185,10 @@ async function startDeployFlow(text, sched, originalText){
       return;
     }
     const raw = d.raw || d.parsed || {};
-    const flow = newFlow('deploy', text, applyProjectDefaults({
+    const flow = newFlow('deploy', text, await applyPersonalSuggest(applyProjectDefaults({
       app_name: raw.app_name, image: raw.image, pods: raw.pods, port: raw.port,
       memory: raw.memory, cpu: raw.cpu,
-    }));
+    }), originalText || text));
     flow.review = d.review || null;
     flow.resource = d.resource_summary || null;
     flow.scenario = d.scenario || null;
@@ -4261,6 +4277,7 @@ async function handleChat(text){
     else if(action==='clarify'){ startClarify(intent); }
     else if(READ_ACTIONS.includes(action)){ window.__lastIntentArgs = intent.args||{}; setTyping('Fetching'); await runReadAction(action); }
     else if(action.startsWith('as_')){ setTyping('Working'); await runAutoscaleAction(action, intent.args||{}, text); }
+    else if(action === 'personalize_on' || action === 'personalize_off'){ const d = await postJSON('/api/personalize/setting', {on: action === 'personalize_on'}); removeTyping(); appendMsg('assistant', d.message || d.error || '', null, 'text'); }
     else if(action === 'weekly_on' || action === 'weekly_off'){ const d = await postJSON('/api/reports/weekly/setting', {on: action === 'weekly_on'}); removeTyping(); appendMsg('assistant', d.message || d.error || '', null, 'text'); }
     else if(action==='deploy'){ setTyping('Parsing'); await startDeployFlow(body, sched, text); }
     else if(DESTRUCTIVE_KINDS.includes(action)){ setTyping('Preparing'); await startDestructiveFlow(action, intent.args||{}, sched); }
@@ -7000,6 +7017,9 @@ _INTENT_RULES = [
     ("as_exempt_off", re.compile(r"([a-z0-9][a-z0-9-]*)\s*(?:可以|允許|恢復)\s*(?:自動)?\s*休眠", re.I), {1: "name"}),
     ("as_exempt_off", re.compile(r"(?:把\s*)?([a-z0-9][a-z0-9-]*)\s*(?:移出|拿出|從)\s*例外", re.I), {1: "name"}),
     ("as_cancel", re.compile(r"(?:取消|刪除|關掉|停止|移除)\s*([a-z0-9][a-z0-9-]*)\s*的?\s*(?:分時|排程|時段)", re.I), {1: "name"}),
+    # 2026-10-23：個人化建議的開關
+    ("personalize_off", re.compile(r"(?:不要|不用|別|關掉|停止).{0,4}(?:依|照|按).{0,4}(?:我的)?.{0,2}習慣.{0,4}(?:建議|推薦)?"), {}),
+    ("personalize_on", re.compile(r"^(?!.*(?:不要|不用|別|關掉|停止)).*(?:依|照|按)\s*(?:我的)\s*習慣\s*(?:建議|推薦)|(?:恢復|打開|開啟).{0,4}(?:個人化|習慣).{0,2}(?:建議|推薦)"), {}),
     # 2026-10-23：每週報告自動產生的開關（放在「報告」規則前面）
     ("weekly_off", re.compile(r"(?:每週|每周|週報|周報).{0,6}(?:不要|不用|別|關掉|停止|取消).{0,4}(?:自動|產生|寄|送)?|(?:不要|不用|關掉|停止|取消).{0,4}(?:每週|每周).{0,4}(?:報告|週報)"), {}),
     ("weekly_on", re.compile(r"(?:每週|每周).{0,4}(?:報告|週報).{0,4}(?:要|打開|開啟|恢復).{0,4}(?:自動|產生)"), {}),
@@ -7114,7 +7134,7 @@ def _rule_intent(message: str):
         if not groupmap and action not in _SCHED_INTENTS and _QUESTION_MARKERS_RE.search(msg):
             continue
         # 分時擴縮與休眠的設定指令：問句（「x 可以休眠嗎」）交給問答，不要直接改設定
-        if (action.startswith("as_") or action.startswith("weekly_")) and action != "as_wake" and (_QUESTION_MARKERS_RE.search(msg) or "嗎" in msg):
+        if (action.startswith("as_") or action.startswith("weekly_") or action.startswith("personalize_")) and action != "as_wake" and (_QUESTION_MARKERS_RE.search(msg) or "嗎" in msg):
             continue
         args = {}
         implausible = False
@@ -9417,6 +9437,7 @@ def _record_events(resp):
                 rs = out.get("resource_summary") or {}
                 _events.record(ns, "deploy", app_name, "ok" if ok else "fail",
                                {"image": spec.get("image"), "pods": spec.get("pods"), "port": spec.get("port"),
+                                "memory": spec.get("memory"), "cpu": spec.get("cpu"),   # 2026-10-23：個人化建議要用
                                 "monthly_usd": rs.get("monthly_usd"),
                                 "error": None if ok else (kd.get("message") or (out.get("gitops") or {}).get("message"))},
                                username=user)
@@ -10601,6 +10622,31 @@ def api_weekly_report_action(action):
         return jsonify({"ok": True, "message": "以後每週一早上 9 點會自動產生上週的分析報告。" if on
                         else "已經關掉每週自動報告。需要時可以直接說「這週的分析報告」，或說「每週報告要自動產生」打開。"})
     return _ws_err("不認得的動作。")
+
+
+# ── 個人化部署建議（2026-10-23，柏碩清單第 3 項；agents/personalize.py，固定規則、不用 AI）──
+@app.route("/api/personalize/suggest")
+def api_personalize_suggest():
+    owner, ns, err = _ws_guard()
+    if err:
+        return err
+    if _ws.pref_get(owner, "personalize", "on") == "off":
+        return jsonify({"ok": False, "reason": "off"})
+    from agents.personalize import suggest, load_priors
+    history = [e.get("data") or {} for e in reversed(_events.query(ns, kinds=["deploy"]))
+               if e.get("outcome") == "ok"][:50]
+    return jsonify(suggest(history, load_priors(), str(request.args.get("text") or "")[:300]))
+
+
+@app.route("/api/personalize/setting", methods=["POST"])
+def api_personalize_setting():
+    owner, _, err = _ws_guard()
+    if err:
+        return err
+    on = bool((request.get_json(silent=True) or {}).get("on", True))
+    _ws.pref_set(owner, "personalize", "on" if on else "off")
+    return jsonify({"ok": True, "message": "以後部署時會依你的部署習慣預填建議值。" if on
+                    else "已經關掉依習慣建議，部署單只會照你講的內容整理。要恢復就說「依我的習慣建議」。"})
 
 
 # ── 回收桶（2026-10-23）──

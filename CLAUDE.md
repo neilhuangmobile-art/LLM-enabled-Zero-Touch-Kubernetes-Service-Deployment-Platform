@@ -332,3 +332,12 @@ GitHub org 開的私有 repo（`gitops/tenant_repo.py`），客戶叢集的 Flux
 - 對話頁上方的提示（`#weekly-bar`、`checkWeeklyReport()`）；`/api/reports/weekly`、`/api/reports/weekly/seen|setting`；對話說「每週報告不要／要自動產生」。
 - 「每週」會觸發預約功能的時間判斷，`sendChat` 對 `weekly_` 開頭的規則跳過（跟分時擴縮一樣）。
 
+## 個人化部署建議（2026-10-23，柏碩清單第 3 項，隊友負責）
+
+照 `docs/handoff/claude-memory/2026-10-07-personalization-decision.md`：不新增模型、固定規則、先查證公開語料。
+- 語料：Hugging Face `substratusai/the-stack-yaml-k8s`（The Stack 篩出的真實 K8s YAML，276,520 個檔案，解析出 61,303 個可用的 Deployment）。
+  `scripts/build_style_priors.py` 一次性分析（用 venv 的 pyarrow／sklearn，網站不需要），產出 `agents/style_priors.json`（只有統計數字）。
+- `agents/personalize.py`：少於 3 次部署 → 最像的風格的記憶體／CPU；3 次以上 → 風格值與自己的中位數加權（w = n／(n+5)），副本數也只在 3 次以上才建議。
+- `/api/personalize/suggest`、`/api/personalize/setting`；前端 `applyPersonalSuggest()`：**句子 > 專案部署預設值 > 個人化**，只填空著的欄位。部署事件多記 memory、cpu。
+- 統計發現：三種風格主要差在健康檢查與釘版本，副本數／記憶體／CPU 中位數幾乎一樣（1、128Mi、100m），所以個人化主要靠使用者自己的紀錄。
+

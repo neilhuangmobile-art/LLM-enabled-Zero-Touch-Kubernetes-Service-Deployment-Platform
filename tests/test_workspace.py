@@ -409,3 +409,20 @@ def test_weekly_report_api_and_rules(web):
     assert web._rule_intent("每週報告不要自動產生")["action"] == "weekly_off"
     assert web._rule_intent("每週報告要自動產生")["action"] == "weekly_on"
     assert web._rule_intent("每週報告要自動產生嗎？") is None or web._rule_intent("每週報告要自動產生嗎？")["action"] not in ("weekly_on", "weekly_off")
+
+
+# ── 2026-10-23：個人化部署建議 API ──
+def test_personalize_api_uses_own_history_and_can_be_turned_off(web, monkeypatch):
+    evs = {"user-alice": [{"ts": 1, "kind": "deploy", "app": f"a{i}", "outcome": "ok",
+                           "data": {"pods": 2, "memory": "256Mi", "cpu": "200m", "image": "nginx:1.27"}} for i in range(4)]
+                         + [{"ts": 2, "kind": "deploy", "app": "x", "outcome": "fail", "data": {"pods": 9}}],
+           "user-bob": []}
+    monkeypatch.setattr(web._events, "query", lambda ns, since=0, kinds=None, limit=5000: list(evs.get(ns, [])))
+    a, b = client_as(web, "alice"), client_as(web, "bob")
+    d = a.get("/api/personalize/suggest?text=部署 nginx").get_json()
+    assert d["ok"] and d["n"] == 4 and d["pods"] is not None and d["memory"] and "過去 4 次" in d["reason"]
+    assert a.get("/api/personalize/suggest?text=部署 3 個 nginx").get_json()["pods"] is None
+    assert not b.get("/api/personalize/suggest").get_json()["ok"]                # bob 沒有紀錄，也看不到 alice 的
+    assert "關掉" in a.post("/api/personalize/setting", json={"on": False}).get_json()["message"]
+    assert a.get("/api/personalize/suggest").get_json() == {"ok": False, "reason": "off"}
+    assert web._rule_intent("不要依我的習慣建議")["action"] == "personalize_off"
