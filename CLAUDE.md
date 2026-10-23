@@ -323,3 +323,12 @@ GitHub org 開的私有 repo（`gitops/tenant_repo.py`），客戶叢集的 Flux
 - 現有對話可以在專案頁「總覽」移進或移出專案（前端改 `projectId` 後 `PUT /api/chats/<id>`）；不會連帶移動服務。
 - 專案頁分頁（2026-10-23 起）：總覽、摘要、服務、排程、檔案、設定。摘要是 `/api/projects/<id>/summary`（事件紀錄只留專案裡的服務，交給 `agents/report.build_report`，不用 AI）；排程分頁用 `/api/autoscale` 只留專案的服務，沿用 `openScheduleEditor()`／`openScheduleSuggest()`。
 - **回收桶（2026-10-23）**：`chats`、`projects` 有 `deleted_at`（跟專案一起刪的對話記 `deleted_with`），所有列表與讀取都排除已刪除的；空白對話直接刪。`/api/trash`、`/api/trash/restore|purge`，左側「回收桶」頁面；7 天後由背景迴圈（`_bg_tick`，每小時）真的刪掉。**服務不會進回收桶**（刪服務是真的從叢集刪掉）；刪除專案時檔案、說明、指示留在回收桶的專案裡，復原時一起回來。
+
+## 每週自動分析報告（2026-10-23，柏碩清單第 4 項，隊友負責）
+
+- 背景迴圈（`_bg_tick`，每 10 分鐘）呼叫 `_weekly_report_tick()`：每週一 09:00（台灣時間）之後，替每個帳號產生最近 7 天的報告，存在 `data/workspace.db` 的 `reports`
+  （每帳號留 12 份），並推播。同一週不重複；帳號關掉（`prefs.weekly_report=off`）或 7 天內沒有紀錄就不產生。內容用 `_build_user_report(ns, 7, with_ai=False)`，**背景不呼叫 AI**。
+- 網站在週中第一次啟動時，這週還沒產生過就會馬上補產生一份（正常行為）。
+- 對話頁上方的提示（`#weekly-bar`、`checkWeeklyReport()`）；`/api/reports/weekly`、`/api/reports/weekly/seen|setting`；對話說「每週報告不要／要自動產生」。
+- 「每週」會觸發預約功能的時間判斷，`sendChat` 對 `weekly_` 開頭的規則跳過（跟分時擴縮一樣）。
+

@@ -1589,6 +1589,9 @@ a{color:var(--signal)}
 .proj-del .note{display:block;font-size:12.5px;color:var(--text-3)}
 .proj-del .warn-t{color:var(--stop);font-size:12.5px}
 .proj-warn{font-size:13.5px;background:var(--caution-soft);border:1px solid var(--caution);border-radius:4px;padding:8px 10px;margin-top:10px}
+.weekly-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 16px 0;padding:10px 14px;border:1px solid var(--signal-line);border-radius:6px;background:var(--signal-soft);font-size:14px}
+.weekly-bar[hidden]{display:none}
+.weekly-bar span{flex:1;min-width:200px}
 .proj-dft{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center}
 .proj-dft .lbl{margin:0}
 .proj-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
@@ -2487,6 +2490,7 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
 
     <div class="page active" id="page-chat" style="padding:0;overflow:hidden">
       <div class="chat-shell">
+        <div class="weekly-bar" id="weekly-bar" hidden role="status"></div>
         <div class="chat-messages" id="chat-messages"></div>
         <div class="chat-composer">
           <div class="composer-box">
@@ -2982,7 +2986,7 @@ function showPage(name){
   const nav = document.querySelector(`.nav-item[data-page="${name}"]`);
   if(nav) nav.classList.add('active');
 
-  if(name === 'chat') { initChats(); setTimeout(()=>document.getElementById('chat-input')?.focus(), 0); }
+  if(name === 'chat') { initChats(); checkWeeklyReport(); setTimeout(()=>document.getElementById('chat-input')?.focus(), 0); }
   if(name === 'services') loadServicesPage();
   if(name === 'gitops') loadGitopsPage();
   if(name === 'healer') loadHealerPage();
@@ -3263,6 +3267,36 @@ async function _loadChatsFromServer(){
     }
   }
   return list;
+}
+
+// 2026-10-23：每週自動報告的提示（打開對話頁時，有還沒看的報告就顯示在上方）
+async function checkWeeklyReport(){
+  const bar = document.getElementById('weekly-bar');
+  if(!bar) return;
+  let d;
+  try { d = await getJSON('/api/reports/weekly'); } catch(e){ return; }
+  const r = d && d.report;
+  if(!r || r.seen || !d.enabled){ bar.hidden = true; return; }
+  const per = r.data.period || {};
+  bar.innerHTML = `<span>📊 上週（${esc(per.start || '')} 到 ${esc(per.end || '')}）的分析報告準備好了。</span>
+    <button type="button" class="btn btn-sm primary" onclick="openWeeklyReport()">查看</button>
+    <button type="button" class="btn btn-sm" onclick="weeklyOff()">以後不要自動產生</button>`;
+  bar.hidden = false;
+  window.__weekly = r;
+}
+async function openWeeklyReport(){
+  const r = window.__weekly;
+  if(!r) return;
+  document.getElementById('weekly-bar').hidden = true;
+  if(currentPageName() !== 'chat') showPage('chat');
+  appendWidget('report', Object.assign({}, r.data, {at: nowHM()}), {}, '這是平台每週一自動產生的上週報告，數字都是從平台紀錄算出來的。');
+  postJSON('/api/reports/weekly/seen', {id: r.id});
+}
+async function weeklyOff(){
+  const d = await postJSON('/api/reports/weekly/setting', {on: false});
+  const bar = document.getElementById('weekly-bar');
+  bar.innerHTML = `<span>${esc(d.message || '')}</span>`;
+  setTimeout(() => { bar.hidden = true; }, 6000);
 }
 
 async function initChats(){
@@ -3863,6 +3897,8 @@ function matchClientRule(text){
     ['as_exempt_off', /([a-z0-9][a-z0-9-]*)\s*(?:可以|允許|恢復)\s*(?:自動)?\s*休眠/i, m=>({name:m[1]})],
     ['as_exempt_off', /(?:把\s*)?([a-z0-9][a-z0-9-]*)\s*(?:移出|拿出|從)\s*例外/i, m=>({name:m[1]})],
     ['as_cancel', /(?:取消|刪除|關掉|停止|移除)\s*([a-z0-9][a-z0-9-]*)\s*的?\s*(?:分時|排程|時段)/i, m=>({name:m[1]})],
+    ['weekly_off', /(?:每週|每周|週報|周報).{0,6}(?:不要|不用|別|關掉|停止|取消).{0,4}(?:自動|產生|寄|送)?|(?:不要|不用|關掉|停止|取消).{0,4}(?:每週|每周).{0,4}(?:報告|週報)/, null],
+    ['weekly_on', /(?:每週|每周).{0,4}(?:報告|週報).{0,4}(?:要|打開|開啟|恢復).{0,4}(?:自動|產生)/, null],
     ['as_suggest', /(?:建議|推薦)\s*([a-z0-9][a-z0-9-]*)\s*的?\s*(?:時段|排程|分時)/i, m=>({name:m[1]})],
     ['as_suggest', /([a-z0-9][a-z0-9-]*)\s*(?:的)?\s*(?:建議|推薦)\s*(?:的)?\s*(?:時段|排程|分時)/i, m=>({name:m[1]})],
     ['as_idle_days', /(?:閒置|沒人?用|沒有人用|沒有?流量)\s*(?:超過)?\s*(\d{1,2})\s*天.{0,10}休眠/i, m=>({days:parseInt(m[1],10)})],
@@ -3896,7 +3932,7 @@ function matchClientRule(text){
     const m = t.match(rx);
     if(!m) continue;
     // 「休眠模式是什麼？」這種問概念的句子交給問答，不要當成設定指令
-    if(action.startsWith('as_') && action !== 'as_wake' && /[？?]\s*$|是什麼|怎麼|如何|為什麼|嗎/.test(t)) continue;
+    if((action.startsWith('as_') || action.startsWith('weekly_')) && action !== 'as_wake' && /[？?]\s*$|是什麼|怎麼|如何|為什麼|嗎/.test(t)) continue;
     const args = extract ? extract(m) : {};
     if(extract && Object.values(args).some(v=>v===undefined||v===''||(typeof v==='number'&&isNaN(v)))) continue;
     return {action, args, source:'rule'};
@@ -4192,7 +4228,7 @@ async function handleChat(text){
   let when = null, schedHint = false, body = text;
   // 2026-10-23 合併時補上：分時擴縮的句子（「shop-web 9 點到 18 點 3 個，其他時間 1 個」）也帶著時間，不能被當成一次性預約
   const asHit = matchClientRule(text);
-  if(SCHED_TIME_HINT_RE.test(text) && !(asHit && String(asHit.action || '').startsWith('as_'))){
+  if(SCHED_TIME_HINT_RE.test(text) && !(asHit && /^(as_|weekly_)/.test(String(asHit.action || '')))){
     try{
       const w = await fetch('/api/schedule/when', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})}).then(r => r.json());
       if(w.recurring){
@@ -4225,6 +4261,7 @@ async function handleChat(text){
     else if(action==='clarify'){ startClarify(intent); }
     else if(READ_ACTIONS.includes(action)){ window.__lastIntentArgs = intent.args||{}; setTyping('Fetching'); await runReadAction(action); }
     else if(action.startsWith('as_')){ setTyping('Working'); await runAutoscaleAction(action, intent.args||{}, text); }
+    else if(action === 'weekly_on' || action === 'weekly_off'){ const d = await postJSON('/api/reports/weekly/setting', {on: action === 'weekly_on'}); removeTyping(); appendMsg('assistant', d.message || d.error || '', null, 'text'); }
     else if(action==='deploy'){ setTyping('Parsing'); await startDeployFlow(body, sched, text); }
     else if(DESTRUCTIVE_KINDS.includes(action)){ setTyping('Preparing'); await startDestructiveFlow(action, intent.args||{}, sched); }
     else { await runQA(text); }
@@ -6963,6 +7000,9 @@ _INTENT_RULES = [
     ("as_exempt_off", re.compile(r"([a-z0-9][a-z0-9-]*)\s*(?:可以|允許|恢復)\s*(?:自動)?\s*休眠", re.I), {1: "name"}),
     ("as_exempt_off", re.compile(r"(?:把\s*)?([a-z0-9][a-z0-9-]*)\s*(?:移出|拿出|從)\s*例外", re.I), {1: "name"}),
     ("as_cancel", re.compile(r"(?:取消|刪除|關掉|停止|移除)\s*([a-z0-9][a-z0-9-]*)\s*的?\s*(?:分時|排程|時段)", re.I), {1: "name"}),
+    # 2026-10-23：每週報告自動產生的開關（放在「報告」規則前面）
+    ("weekly_off", re.compile(r"(?:每週|每周|週報|周報).{0,6}(?:不要|不用|別|關掉|停止|取消).{0,4}(?:自動|產生|寄|送)?|(?:不要|不用|關掉|停止|取消).{0,4}(?:每週|每周).{0,4}(?:報告|週報)"), {}),
+    ("weekly_on", re.compile(r"(?:每週|每周).{0,4}(?:報告|週報).{0,4}(?:要|打開|開啟|恢復).{0,4}(?:自動|產生)"), {}),
     # 2026-10-23：從流量建議時段（「建議 shop-web 的時段」「幫 shop-web 建議時段」）
     ("as_suggest", re.compile(r"(?:建議|推薦)\s*([a-z0-9][a-z0-9-]*)\s*的?\s*(?:時段|排程|分時)", re.I), {1: "name"}),
     ("as_suggest", re.compile(r"([a-z0-9][a-z0-9-]*)\s*(?:的)?\s*(?:建議|推薦)\s*(?:的)?\s*(?:時段|排程|分時)", re.I), {1: "name"}),
@@ -7074,7 +7114,7 @@ def _rule_intent(message: str):
         if not groupmap and action not in _SCHED_INTENTS and _QUESTION_MARKERS_RE.search(msg):
             continue
         # 分時擴縮與休眠的設定指令：問句（「x 可以休眠嗎」）交給問答，不要直接改設定
-        if action.startswith("as_") and action != "as_wake" and (_QUESTION_MARKERS_RE.search(msg) or "嗎" in msg):
+        if (action.startswith("as_") or action.startswith("weekly_")) and action != "as_wake" and (_QUESTION_MARKERS_RE.search(msg) or "嗎" in msg):
             continue
         args = {}
         implausible = False
@@ -10486,6 +10526,83 @@ def api_project_services(pid):
     return jsonify({"ok": True, "message": f"已經把 {name} 移進專案。"})
 
 
+# ── 每週自動產生分析報告（2026-10-23，柏碩清單第 4 項）──
+def _weekly_start(now_dt):
+    """這一週的產生時間：週一 09:00（台灣時間）。回傳 (那個時間, 週次字串 2026-W44)。"""
+    from datetime import timedelta as _td
+    d = now_dt.astimezone(_ts.TZ)
+    monday = (d - _td(days=d.weekday())).replace(hour=9, minute=0, second=0, microsecond=0)
+    y, w, _ = monday.isocalendar()
+    return monday, f"{y}-W{w:02d}"
+
+
+def _ns_for_username(username: str) -> str:
+    """背景工作用：跟 _session_ns 同一套規則算出帳號的 namespace（客戶叢集模式的非管理員是 zt-…）。"""
+    if CUSTOMER_CLUSTER_MODE and not _is_admin_user(username):
+        from gitops.tenant_repo import tenant_slug
+        return tenant_slug(username)
+    return _user_namespace(username)
+
+
+def _weekly_report_tick(now=None, usernames=None):
+    """每週一 09:00 之後，替每個帳號產生上一週（7 天）的分析報告並推播。同一週不重複；
+    帳號關掉每週報告、或 7 天內沒有任何紀錄就不產生（不寄空報告）。內容只用平台紀錄算出的數字，不在背景呼叫 AI。"""
+    now_dt = datetime.fromtimestamp(now if now is not None else _time.time(), _ts.TZ)
+    start, week = _weekly_start(now_dt)
+    if now_dt < start:
+        return []
+    made = []
+    for u in list(usernames if usernames is not None else USERS.keys()):
+        try:
+            if _ws.pref_get(u, "weekly_report", "on") == "off" or _ws.has_report(u, week):
+                continue
+            ns = _ns_for_username(u)
+            facts = _build_user_report(ns, 7, with_ai=False)
+            if not facts.get("has_data"):
+                continue
+            if not _ws.add_report(u, week, facts):
+                continue
+            made.append(u)
+            d, h = facts.get("deploys", {}), facts.get("heals", {})
+            parts = [f"部署 {d.get('total', 0)} 次", f"自動修復 {h.get('total', 0)} 次"]
+            if (facts.get("reviews") or {}).get("block"):
+                parts.append(f"審查擋下 {facts['reviews']['block']} 次")
+            _push.send_async(ns, {"title": "📊 上週分析報告", "body": _push.clean_text("、".join(parts) + "。打開平台看完整報告。"),
+                                  "url": "/", "tag": f"weekly-{week}"})
+        except Exception as e:
+            print(f"[每週報告] {u} 產生失敗：{e}")
+    return made
+
+
+_ws_last_weekly = [0.0]
+
+
+@app.route("/api/reports/weekly")
+def api_weekly_report():
+    owner, _, err = _ws_guard()
+    if err:
+        return err
+    r = _ws.latest_report(owner)
+    return jsonify({"ok": True, "enabled": _ws.pref_get(owner, "weekly_report", "on") != "off", "report": r})
+
+
+@app.route("/api/reports/weekly/<action>", methods=["POST"])
+def api_weekly_report_action(action):
+    owner, _, err = _ws_guard()
+    if err:
+        return err
+    body = request.get_json(silent=True) or {}
+    if action == "seen":
+        _ws.mark_report_seen(owner, str(body.get("id") or ""))
+        return jsonify({"ok": True})
+    if action == "setting":
+        on = bool(body.get("on", True))
+        _ws.pref_set(owner, "weekly_report", "on" if on else "off")
+        return jsonify({"ok": True, "message": "以後每週一早上 9 點會自動產生上週的分析報告。" if on
+                        else "已經關掉每週自動報告。需要時可以直接說「這週的分析報告」，或說「每週報告要自動產生」打開。"})
+    return _ws_err("不認得的動作。")
+
+
 # ── 回收桶（2026-10-23）──
 @app.route("/api/trash")
 def api_trash():
@@ -11011,6 +11128,12 @@ def _bg_tick(now, last_due, interval=30):
         except Exception as e:
             print(f"[預約] 檢查到期失敗，下一輪再試：{e}")
     _as_run_due(now)
+    if now - _ws_last_weekly[0] >= 600:   # 2026-10-23：每週一 09:00 之後產生上週的分析報告
+        _ws_last_weekly[0] = now
+        try:
+            _weekly_report_tick(now)
+        except Exception as e:
+            print(f"[每週報告] 檢查失敗：{e}")
     if now - _ws_last_purge[0] >= 3600:   # 2026-10-23：回收桶超過 7 天的真的刪掉
         _ws_last_purge[0] = now
         try:

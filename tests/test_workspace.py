@@ -357,3 +357,55 @@ def test_trash_not_counted_in_limits_and_api(web):
     assert any(x["type"] == "project" and x["id"] == pid for x in a.get("/api/trash").get_json()["items"])
     assert "服務不會" in a.post("/api/trash/restore", json={"type": "project", "id": pid}).get_json()["message"]
     assert a.get(f"/api/projects/{pid}").status_code == 200
+
+
+# ── 2026-10-23：每週自動報告 ──
+def test_reports_store_dedup_keep_12_and_isolation():
+    assert ws.add_report("alice", "2026-W44", {"x": 1})
+    assert ws.add_report("alice", "2026-W44", {"x": 2}) == ""                 # 同一週不重複
+    for w in range(1, 15):
+        ws.add_report("alice", f"2025-W{w:02d}", {"w": w})
+    with ws._lock:
+        n = ws._db().execute("SELECT COUNT(*) FROM reports WHERE owner = 'alice'").fetchone()[0]
+    assert n == ws.MAX_REPORTS
+    assert ws.latest_report("bob") is None
+    r = ws.latest_report("alice")
+    assert not r["seen"] and ws.mark_report_seen("alice", r["id"]) and ws.latest_report("alice")["seen"]
+    assert ws.pref_get("alice", "weekly_report", "on") == "on"
+    ws.pref_set("alice", "weekly_report", "off")
+    assert ws.pref_get("alice", "weekly_report") == "off" and ws.pref_get("bob", "weekly_report", "on") == "on"
+
+
+def test_weekly_tick_timing_empty_and_opt_out(web, monkeypatch):
+    from datetime import datetime
+    from agents.timeslot import TZ
+    sent = []
+    facts = {"alice": {"has_data": True, "deploys": {"total": 3}, "heals": {"total": 1}, "reviews": {"block": 0}, "period": {"start": "10-20", "end": "10-26"}},
+             "bob": {"has_data": False}, "carol": {"has_data": True, "deploys": {"total": 1}, "heals": {"total": 0}, "reviews": {"block": 0}}}
+    monkeypatch.setattr(web, "_build_user_report", lambda ns, days, with_ai=True: dict(facts[ns.replace("user-", "")]))
+    monkeypatch.setattr(web, "_ns_for_username", lambda u: "user-" + u)
+    monkeypatch.setattr(web._push, "send_async", lambda ns, msg: sent.append((ns, msg)))
+    ws.pref_set("carol", "weekly_report", "off")
+    users = ["alice", "bob", "carol"]
+    monday_early = datetime(2026, 10, 26, 8, 30, tzinfo=TZ).timestamp()
+    monday = datetime(2026, 10, 26, 9, 5, tzinfo=TZ).timestamp()
+    assert web._weekly_report_tick(monday_early, users) == []                  # 週一 09:00 前不產生
+    assert web._weekly_report_tick(monday, users) == ["alice"]                 # bob 沒紀錄、carol 關掉
+    assert web._weekly_report_tick(monday + 600, users) == []                  # 同一週不重複
+    assert sent and sent[0][0] == "user-alice" and "部署 3 次" in sent[0][1]["body"]
+    assert ws.latest_report("alice")["week"] == "2026-W44"
+
+
+def test_weekly_report_api_and_rules(web):
+    a = client_as(web, "alice")
+    assert a.get("/api/reports/weekly").get_json() == {"ok": True, "enabled": True, "report": None}
+    rid = ws.add_report("alice", "2026-W44", {"has_data": True})
+    d = a.get("/api/reports/weekly").get_json()
+    assert d["report"]["id"] == rid and not d["report"]["seen"]
+    a.post("/api/reports/weekly/seen", json={"id": rid})
+    assert a.get("/api/reports/weekly").get_json()["report"]["seen"]
+    assert "關掉" in a.post("/api/reports/weekly/setting", json={"on": False}).get_json()["message"]
+    assert a.get("/api/reports/weekly").get_json()["enabled"] is False
+    assert web._rule_intent("每週報告不要自動產生")["action"] == "weekly_off"
+    assert web._rule_intent("每週報告要自動產生")["action"] == "weekly_on"
+    assert web._rule_intent("每週報告要自動產生嗎？") is None or web._rule_intent("每週報告要自動產生嗎？")["action"] not in ("weekly_on", "weekly_off")

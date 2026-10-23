@@ -79,6 +79,11 @@ def init(path: str = None) -> None:
         _conn.execute("""CREATE TABLE IF NOT EXISTS project_services (
             namespace TEXT NOT NULL, app TEXT NOT NULL, owner TEXT NOT NULL, project_id TEXT NOT NULL,
             PRIMARY KEY (namespace, app))""")
+        # 2026-10-23：每週自動產生的分析報告、使用者偏好（例如關掉每週報告）
+        _conn.execute("""CREATE TABLE IF NOT EXISTS reports (
+            owner TEXT NOT NULL, id TEXT NOT NULL, week TEXT NOT NULL, created_at REAL NOT NULL,
+            data TEXT NOT NULL, seen_at REAL, PRIMARY KEY (owner, id))""")
+        _conn.execute("CREATE TABLE IF NOT EXISTS prefs (owner TEXT NOT NULL, key TEXT NOT NULL, value TEXT, PRIMARY KEY (owner, key))")
         _conn.execute("""CREATE TABLE IF NOT EXISTS project_files (
             owner TEXT NOT NULL, project_id TEXT NOT NULL, id TEXT NOT NULL,
             name TEXT NOT NULL, format TEXT NOT NULL, content TEXT NOT NULL, created_at REAL NOT NULL,
@@ -456,3 +461,60 @@ def purge_item(owner: str, kind: str, item_id: str) -> bool:
             return False
         _conn.commit()
         return cur.rowcount > 0
+
+
+# ── 每週報告（2026-10-23）──
+MAX_REPORTS = 12
+
+
+def has_report(owner: str, week: str) -> bool:
+    with _lock:
+        return _db().execute("SELECT 1 FROM reports WHERE owner = ? AND week = ?", (owner, week)).fetchone() is not None
+
+
+def add_report(owner: str, week: str, data: Dict) -> str:
+    """存一份每週報告；同一週已經有就不重複。每個帳號只留最近 MAX_REPORTS 份。"""
+    rid = "rep_" + secrets.token_hex(6)
+    with _lock:
+        if _db().execute("SELECT 1 FROM reports WHERE owner = ? AND week = ?", (owner, week)).fetchone():
+            return ""
+        _conn.execute("INSERT INTO reports (owner, id, week, created_at, data, seen_at) VALUES (?,?,?,?,?,NULL)",
+                      (owner, rid, week, time.time(), json.dumps(data, ensure_ascii=False)))
+        _conn.execute("DELETE FROM reports WHERE owner = ? AND id NOT IN (SELECT id FROM reports WHERE owner = ? "
+                      "ORDER BY created_at DESC LIMIT ?)", (owner, owner, MAX_REPORTS))
+        _conn.commit()
+    return rid
+
+
+def latest_report(owner: str) -> Optional[Dict]:
+    with _lock:
+        r = _db().execute("SELECT id, week, created_at, data, seen_at FROM reports WHERE owner = ? ORDER BY created_at DESC LIMIT 1",
+                          (owner,)).fetchone()
+    return {"id": r[0], "week": r[1], "created_at": r[2], "data": json.loads(r[3]), "seen": r[4] is not None} if r else None
+
+
+def mark_report_seen(owner: str, report_id: str) -> bool:
+    with _lock:
+        cur = _db().execute("UPDATE reports SET seen_at = ? WHERE owner = ? AND id = ? AND seen_at IS NULL",
+                            (time.time(), owner, report_id))
+        _conn.commit()
+        return cur.rowcount > 0
+
+
+def delete_report(owner: str, report_id: str) -> bool:
+    with _lock:
+        cur = _db().execute("DELETE FROM reports WHERE owner = ? AND id = ?", (owner, report_id))
+        _conn.commit()
+        return cur.rowcount > 0
+
+
+def pref_get(owner: str, key: str, default: str = None) -> Optional[str]:
+    with _lock:
+        r = _db().execute("SELECT value FROM prefs WHERE owner = ? AND key = ?", (owner, key)).fetchone()
+    return r[0] if r else default
+
+
+def pref_set(owner: str, key: str, value: str) -> None:
+    with _lock:
+        _db().execute("INSERT OR REPLACE INTO prefs (owner, key, value) VALUES (?,?,?)", (owner, key, str(value)))
+        _conn.commit()
