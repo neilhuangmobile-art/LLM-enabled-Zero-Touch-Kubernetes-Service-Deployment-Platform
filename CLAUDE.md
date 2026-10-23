@@ -341,3 +341,9 @@ GitHub org 開的私有 repo（`gitops/tenant_repo.py`），客戶叢集的 Flux
 - `/api/personalize/suggest`、`/api/personalize/setting`；前端 `applyPersonalSuggest()`：**句子 > 專案部署預設值 > 個人化**，只填空著的欄位。部署事件多記 memory、cpu。
 - 統計發現：三種風格主要差在健康檢查與釘版本，副本數／記憶體／CPU 中位數幾乎一樣（1、128Mi、100m），所以個人化主要靠使用者自己的紀錄。
 
+## 部署請求重送不重複（2026-10-23，柏碩交接文件「口試前品質驗證」）
+
+`/api/deploy` 支援 `idempotency_key`：同帳號、同編號、同規格成功過就回傳上次結果（`replayed`），執行中回 409，失敗不記。
+原本的部署流程在 `_api_deploy_impl()`，外層 `api_deploy()` 只做編號檢查；快取 `_deploy_idem` 在記憶體（24 小時）。
+前端：`flowExecuteDeploy()` 用 `flow.deployKey`（`newRequestKey()`）、`composeDeploy()` 用「流程編號:服務名稱」、`runScheduledTask()` 用「task:預約 id」。測試 `tests/test_deploy_idempotency.py`，security_review 51 節。
+

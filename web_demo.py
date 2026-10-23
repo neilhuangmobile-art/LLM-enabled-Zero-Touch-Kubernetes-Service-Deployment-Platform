@@ -4055,17 +4055,24 @@ async function flowToReview(id){
   if(flow.step === 'review') playReview(id);
 }
 
+function newRequestKey(){
+  try{ if(window.crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+}
 async function flowExecuteDeploy(id){
   const flow = chatFlows[id];
   if(!flowAlive(flow)) return;
   flow.step = 'executing';
+  if(!flow.deployKey) flow.deployKey = newRequestKey();   // 2026-10-23：重試沿用同一個編號，伺服器才認得是同一次部署
   persistFlowCard(id);
   try{
     const r = await fetch('/api/deploy',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({input:flow.originalText, parsed:flow.spec, project_id:flow.projectId || undefined})});
+      body:JSON.stringify({input:flow.originalText, parsed:flow.spec, project_id:flow.projectId || undefined, idempotency_key:flow.deployKey})});
     const d = await r.json();
     if(!flowAlive(flow)) return;
-    if(d.error || d.rejected){
+    if(d.in_progress){
+      flow.step='error'; flow.errorMsg='這個部署還在處理中，請稍等幾秒再按「再試一次」看結果。'; flow.retryStep='review';
+    } else if(d.error || d.rejected){
       flow.step='error'; flow.errorMsg = d.error || d.reason || '部署被擋下了。';
       flow.blockers = (d.review && d.review.blockers) || []; flow.retryStep='review';
     } else if(d.k8s_deploy && d.k8s_deploy.ok === false){
@@ -5492,7 +5499,7 @@ async function composeDeploy(id){
     s.state = 'deploying';
     persistFlowCard(id);
     try{
-      const d = await cpFetch(flow, '/api/deploy', {parsed:cpSpec(s), project_id:flow.projectId || undefined});
+      const d = await cpFetch(flow, '/api/deploy', {parsed:cpSpec(s), project_id:flow.projectId || undefined, idempotency_key:flow.id + ':' + s.app_name});
       if(!flowAlive(flow)) return;
       const ok = !d.error && !d.rejected && !(d.k8s_deploy && d.k8s_deploy.ok === false);
       s.state = ok ? 'deployed' : 'failed';
@@ -6181,7 +6188,7 @@ async function runScheduledTask(id){
   try{ t = await schedOp(id, 'start'); }catch(e){ return {status:'failed', msg:e.message, task:e.task}; }
   let url, body;
   const a = t.args || {};
-  if(t.kind === 'deploy'){ url = '/api/deploy'; body = {input:t.input || '', parsed:a.spec}; }
+  if(t.kind === 'deploy'){ url = '/api/deploy'; body = {input:t.input || '', parsed:a.spec, idempotency_key:'task:' + t.id}; }
   else if(t.kind === 'scale'){ url = '/api/scale'; body = {name:a.name, replicas:a.replicas}; }
   else if(t.kind === 'update_image'){ url = '/api/update'; body = {name:a.name, image:a.image}; }
   else { url = '/api/delete'; body = {name:a.name}; }
@@ -8050,10 +8057,67 @@ def api_deploy_parse():
     })
 
 
+# 2026-10-23：部署請求重送不重複（Idempotency-Key）。前端每一次部署帶一個請求編號；同一個編號、同一份規格
+# 成功過就直接回傳上次的結果（replayed），不再寫 Git、不再部署、不再記事件。只記成功的結果，失敗後重試會照常重新部署。
+# 放在記憶體：網站重啟後就忘了（見 security_review 51 節）。沒帶編號的舊呼叫方式行為完全不變。
+_DEPLOY_IDEM_TTL = 24 * 3600
+_DEPLOY_IDEM_MAX = 2000
+_deploy_idem = {}
+_deploy_idem_lock = threading.Lock()
+
+
+def _deploy_fingerprint(data: dict) -> str:
+    import hashlib
+    basis = {"parsed": data.get("parsed"), "input": None if data.get("parsed") else data.get("input"),
+             "project_id": data.get("project_id")}
+    return hashlib.sha256(json.dumps(basis, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()
+
+
+def _deploy_ok(out: dict, status: int) -> bool:
+    if status >= 400 or not isinstance(out, dict) or out.get("error") or out.get("rejected"):
+        return False
+    return (out.get("k8s_deploy") or {}).get("ok") is not False and (out.get("gitops") or {}).get("ok", True) is not False
+
+
 @app.route("/api/deploy", methods=["POST"])
 def api_deploy():
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
+    data = request.get_json(silent=True) or {}
+    key = str(data.get("idempotency_key") or "").strip()[:100]
+    if not key:
+        return _api_deploy_impl()
+    ident, fp, now = (session["username"], key), _deploy_fingerprint(data), _time.time()
+    with _deploy_idem_lock:
+        for k in [k for k, v in _deploy_idem.items() if now - v["at"] > _DEPLOY_IDEM_TTL]:
+            _deploy_idem.pop(k, None)
+        if len(_deploy_idem) >= _DEPLOY_IDEM_MAX:
+            for k in sorted(_deploy_idem, key=lambda k: _deploy_idem[k]["at"])[:len(_deploy_idem) - _DEPLOY_IDEM_MAX + 1]:
+                _deploy_idem.pop(k, None)
+        hit = _deploy_idem.get(ident)
+        if hit and hit["fp"] == fp:
+            if hit["state"] == "done":
+                return jsonify(dict(hit["resp"], replayed=True)), hit["status"]
+            return jsonify({"error": "這個部署請求正在處理中，請稍候。", "in_progress": True}), 409
+        _deploy_idem[ident] = {"fp": fp, "state": "running", "at": now}
+    done = False
+    try:
+        rv = _api_deploy_impl()
+        resp = app.make_response(rv)
+        out = resp.get_json(silent=True)
+        if _deploy_ok(out, resp.status_code):
+            with _deploy_idem_lock:
+                _deploy_idem[ident] = {"fp": fp, "state": "done", "resp": out, "status": resp.status_code, "at": _time.time()}
+            done = True
+        return resp
+    finally:
+        if not done:
+            with _deploy_idem_lock:
+                if (_deploy_idem.get(ident) or {}).get("state") == "running":
+                    _deploy_idem.pop(ident, None)
+
+
+def _api_deploy_impl():
     user_ns = _session_ns()
     _ensure_user_namespace(user_ns)
     data = request.get_json() or {}
@@ -9419,6 +9483,8 @@ def _record_events(resp):
         if request.method != "POST" or request.path not in _EVENT_ROUTES or "username" not in session:
             return resp
         out = resp.get_json(silent=True) or {}
+        if out.get("replayed") or out.get("in_progress"):
+            return resp    # 2026-10-23：重送的部署請求，上一次已經記過
         body = request.get_json(silent=True) or {}
         ns, user = _session_ns(), session.get("username")
         path = request.path

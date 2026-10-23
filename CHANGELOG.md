@@ -1534,3 +1534,18 @@ Pod 對應到服務、對話規則、建議 API）；乾淨環境 383 項通過�
 **改了什麼**：`web_demo.py` 補回那一行 `</div>`。新增 `tests/test_page_structure.py`：檢查每個 `class="page"` 的頁面都直接放在主畫面底下（拿掉修正時這項測試會失敗）。
 **驗證**：`pytest` 805 項全過；瀏覽器逐頁點過七個頁面都有內容、沒有錯誤；專案「＋」彈窗開關正常。
 
+### 22:29 — 修正：部署請求重送不重複（`/api/deploy` 冪等）
+**為什麼**：柏碩交接文件第五部分「口試前的品質驗證」之一。回應斷掉後按「再試一次」，會重複寫 Git、重複記部署事件和訓練樣本。
+**改了什麼**（`web_demo.py`；原本的部署流程搬進 `_api_deploy_impl()`，內容不變）：
+- `api_deploy()` 外層加請求編號檢查：
+  - 同帳號、同編號、同規格成功過 → 回傳上次的結果（`replayed: true`）；
+  - 執行中 → 409；
+  - 只記成功的結果，24 小時、最多 2000 筆，存在記憶體。
+- `_record_events` 遇到 `replayed`／`in_progress` 不記事件。
+- 前端三處帶 `idempotency_key`：一般部署（每張部署單一個 UUID，重試沿用）、compose／YAML（流程編號:服務名稱）、預約到期執行（預約 id）。
+  收到 409 顯示「還在處理中」，不當成失敗。
+**驗證**：
+- `pytest` 812 項全過（新增 7 項，`tests/test_deploy_idempotency.py`）；Docker Python 3.9 照 CI 跑 372 項通過、0 失敗；JS `node --check` 通過。
+- 瀏覽器模擬回應斷線後按「再試一次」：顯示部署完成，Git commit、訓練樣本、部署事件都只有 1 筆。
+- 測完已刪測試服務與對話，撤銷自動 `gitops: deploy` commit；七個頁面逐頁點過正常。security_review 51 節。
+
