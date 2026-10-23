@@ -59,6 +59,16 @@ def init(path: str = None) -> None:
             idle_days INTEGER,
             exempt TEXT
         )""")
+        # 2026-10-23：每個服務每小時收到的封包數（學時段用）。Prometheus 只保留約 10 天，這裡自己存 60 天
+        _conn.execute("""CREATE TABLE IF NOT EXISTS traffic_hourly (
+            namespace TEXT NOT NULL,
+            app TEXT NOT NULL,
+            hour INTEGER NOT NULL,
+            packets REAL NOT NULL,
+            pods INTEGER NOT NULL,
+            PRIMARY KEY (namespace, app, hour)
+        )""")
+        _conn.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
         _conn.commit()
         _path = path
 
@@ -141,8 +151,49 @@ def set_exempt(namespace: str, app: str, exempt: bool) -> List[str]:
 
 
 def forget_app(namespace: str, app: str) -> None:
-    """服務被刪除時清掉它的排程與例外，避免之後同名的新服務繼承舊設定。"""
+    """服務被刪除時清掉它的排程、例外與流量紀錄，避免之後同名的新服務繼承舊設定或舊的流量規律。"""
     delete_schedule(namespace, app)
+    with _lock:
+        _db().execute("DELETE FROM traffic_hourly WHERE namespace = ? AND app = ?", (namespace, app))
+        _conn.commit()
     s = get_settings(namespace)
     if app in s["exempt"]:
         set_exempt(namespace, app, False)
+
+
+# ── 每小時流量（學時段用，2026-10-23）──
+TRAFFIC_KEEP_DAYS = 60
+
+
+def add_traffic(rows: List[tuple]) -> int:
+    """rows：[(namespace, app, 整點的 UTC 秒, 封包數, Pod 數)]。同一小時重複寫入會取代，不會變兩筆。順便清掉 60 天前的。"""
+    with _lock:
+        _db().executemany("INSERT OR REPLACE INTO traffic_hourly (namespace, app, hour, packets, pods) VALUES (?,?,?,?,?)",
+                          [(n, a, int(h), float(p), max(1, int(c))) for n, a, h, p, c in rows])
+        _conn.execute("DELETE FROM traffic_hourly WHERE hour < ?", (int(time.time()) - TRAFFIC_KEEP_DAYS * 86400,))
+        _conn.commit()
+    return len(rows)
+
+
+def traffic_for(namespace: str, app: str, since: float = 0) -> List[tuple]:
+    """[(整點的 UTC 秒, 封包數, Pod 數)]，舊的在前。"""
+    with _lock:
+        return _db().execute("SELECT hour, packets, pods FROM traffic_hourly WHERE namespace = ? AND app = ? AND hour >= ? "
+                             "ORDER BY hour", (namespace, app, int(since))).fetchall()
+
+
+def has_traffic_hour(hour: int) -> bool:
+    with _lock:
+        return _db().execute("SELECT 1 FROM traffic_hourly WHERE hour = ? LIMIT 1", (int(hour),)).fetchone() is not None
+
+
+def meta_get(key: str) -> Optional[str]:
+    with _lock:
+        row = _db().execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+    return row[0] if row else None
+
+
+def meta_set(key: str, value: str) -> None:
+    with _lock:
+        _db().execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
+        _conn.commit()

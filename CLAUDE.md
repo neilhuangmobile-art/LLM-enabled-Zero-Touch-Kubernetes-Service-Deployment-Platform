@@ -299,6 +299,7 @@ GitHub org 開的私有 repo（`gitops/tenant_repo.py`），客戶叢集的 Flux
 
 - **背景迴圈只有一條：柏碩的 `_schedule_loop`**（每 10 秒醒來；預約到期檢查照舊每 30 秒，`_bg_tick()`）。分時擴縮的三個工作在 `_as_run_due()`，**不要再另開排程器**（2026-10-23 照接手說明改的；舊的 `core/scheduler.py` 做法在備份分支 `backup/capstone6767-before-align-20261023`）。
 - 自動動作（依排程擴縮、休眠、有人連線喚醒）都推播到手機（`_as_notify` → `core/push.py` 的 `send_async`）；使用者自己按「套用」不推播。擴縮前一律經過 `_scale_check()`（跟 `/api/scale` 同一套：副本上限＋叢集容量），只有平台內部的休眠可以到 0。
+- **建議時段（2026-10-23）**：`_as_tick_traffic()` 每 10 分鐘把上一個整點小時每個服務收到的封包數存進 `autoscale.db` 的 `traffic_hourly`（保留 60 天；第一次啟動從 Prometheus 補它現有的最多 10 天）；`agents/timeslot_learn.py` 用固定規則學出時段，`/api/autoscale/suggest` 回建議，**只是建議，使用者按「套用」才生效**。至少 7 天資料；健康檢查流量用 `sleep_mode.expected_probe_packets_per_hour` 扣掉。客戶叢集沒有流量資料，不支援。
 - 閒置天數上限 7 天（Prometheus 只保留 10 天、沒有永久儲存）。喚醒器第一次用要從 Docker Hub 下載 `python:3.12-alpine`。
 - 分時擴縮的 K8s 呼叫一律帶 `_request_timeout=_AS_K8S_TIMEOUT`；`_as_read_dep` 叢集沒回應時丟 `_AsClusterDown`（回 503 中文說明）。
 - 「我的服務」頁有「分時與休眠」模組（`W.autoscale`），「設定排程」彈窗是 `openScheduleEditor()`。

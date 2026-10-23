@@ -324,3 +324,42 @@ def test_background_handles_customer_schedules_without_local_k8s(remote, monkeyp
     monkeypatch.setattr(web_demo, "_as_last_run", {"schedules": 0.0, "idle": 0.0})
     web_demo._as_run_due(1000)
     assert called == [(ZT_NS, True)]                # 本機 K8s 沒連線：只處理客戶叢集的排程
+
+
+# ── 2026-10-23：從流量建議時段 ──
+def test_traffic_rows_map_pods_to_services():
+    series = [{"metric": {"namespace": "user-a", "pod": "web-6d4f8b7c9-abcde"}, "values": [[7200, "100"], [10800, "50"]]},
+              {"metric": {"namespace": "user-a", "pod": "web-6d4f8b7c9-fghij"}, "values": [[7200, "20"]]},
+              {"metric": {"namespace": "user-a", "pod": "web-api-6d4f8b7c9-zzzzz"}, "values": [[7200, "999"]]},
+              {"metric": {"namespace": "user-b", "pod": "web-6d4f8b7c9-abcde"}, "value": [7200, "7"]}]
+    rows = sorted(web_demo._as_traffic_rows(series, {"user-a": ["web"], "user-b": ["web"]}))
+    assert rows == [("user-a", "web", 3600, 120.0, 2), ("user-a", "web", 7200, 50.0, 1), ("user-b", "web", 3600, 7.0, 1)]
+
+
+@pytest.mark.parametrize("msg", ["建議 shop-web 的時段", "幫 shop-web 建議時段", "推薦 shop-web 的排程"])
+def test_suggest_rule(msg):
+    hit = web_demo._rule_intent(msg)
+    assert hit and hit["action"] == "as_suggest" and hit["args"] == {"name": "shop-web"}
+
+
+def test_suggest_api_not_enough_and_ok(monkeypatch, tmp_path):
+    from datetime import timedelta
+    from core import autoscale_store as st
+    st.init(str(tmp_path / "sg.db"))
+    dep = NS(metadata=NS(name="web", annotations={}, labels={}),
+             spec=NS(replicas=3, template=NS(spec=NS(containers=[]))), status=NS(ready_replicas=3))
+    monkeypatch.setattr(web_demo, "_as_guard", lambda remote_ok=False: ("user-as-test", None))
+    monkeypatch.setattr(web_demo, "_as_read_dep", lambda ns, app: dep if app == "web" else None)
+    c = _client()
+    d = c.get("/api/autoscale/suggest?name=web").get_json()
+    assert not d["ok"] and d["reason"] == "not_enough"
+    start = _t(2026, 10, 5, 0)
+    rows = []
+    for h in range(10 * 24):
+        t = start + timedelta(hours=h)
+        rows.append(("user-as-test", "web", int(t.timestamp()), 600 + (8000 if t.weekday() < 5 and 9 <= t.hour < 18 else 0), 2))
+    monkeypatch.setattr(web_demo._time, "time", lambda: start.timestamp() + 10 * 86400)
+    st.add_traffic(rows)
+    d = c.get("/api/autoscale/suggest?name=web").get_json()
+    assert d["ok"] and d["plan"]["windows"][0]["days"] == [0, 1, 2, 3, 4] and d["explain"] and d["rows"]
+    assert c.get("/api/autoscale/suggest?name=nope").status_code == 404

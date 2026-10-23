@@ -3731,6 +3731,8 @@ function matchClientRule(text){
     ['as_exempt_off', /([a-z0-9][a-z0-9-]*)\s*(?:可以|允許|恢復)\s*(?:自動)?\s*休眠/i, m=>({name:m[1]})],
     ['as_exempt_off', /(?:把\s*)?([a-z0-9][a-z0-9-]*)\s*(?:移出|拿出|從)\s*例外/i, m=>({name:m[1]})],
     ['as_cancel', /(?:取消|刪除|關掉|停止|移除)\s*([a-z0-9][a-z0-9-]*)\s*的?\s*(?:分時|排程|時段)/i, m=>({name:m[1]})],
+    ['as_suggest', /(?:建議|推薦)\s*([a-z0-9][a-z0-9-]*)\s*的?\s*(?:時段|排程|分時)/i, m=>({name:m[1]})],
+    ['as_suggest', /([a-z0-9][a-z0-9-]*)\s*(?:的)?\s*(?:建議|推薦)\s*(?:的)?\s*(?:時段|排程|分時)/i, m=>({name:m[1]})],
     ['as_idle_days', /(?:閒置|沒人?用|沒有人用|沒有?流量)\s*(?:超過)?\s*(\d{1,2})\s*天.{0,10}休眠/i, m=>({days:parseInt(m[1],10)})],
     ['as_show', /(?:分時|排程|休眠|例外)(?:擴縮)?\s*(?:的)?\s*(?:設定|狀態|清單|名單|列表|情況)|^(?:列出|查看|顯示|看看?).{0,6}(?:排程|休眠|例外)/i, null],
     ['as_schedule', /^(?!.*(?:部署|佈署|部屬|deploy|擴|縮|調|掛掉|掛了|壞|當機|當掉|錯誤|出錯)).*(?:白天|晚上|夜間|晚間|深夜|凌晨|上班時間|辦公時間|平日|工作日|週末|周末|假日|\d{1,2}\s*(?:點|[:：]\d{2})).{0,40}?\d{1,3}\s*(?:個|副本|pods?)/i, null],
@@ -4058,7 +4060,7 @@ async function handleChat(text){
   let when = null, schedHint = false, body = text;
   // 2026-10-23 合併時補上：分時擴縮的句子（「shop-web 9 點到 18 點 3 個，其他時間 1 個」）也帶著時間，不能被當成一次性預約
   const asHit = matchClientRule(text);
-  if(SCHED_TIME_HINT_RE.test(text) && !(asHit && asHit.action === 'as_schedule')){
+  if(SCHED_TIME_HINT_RE.test(text) && !(asHit && String(asHit.action || '').startsWith('as_'))){
     try{
       const w = await fetch('/api/schedule/when', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})}).then(r => r.json());
       if(w.recurring){
@@ -4573,6 +4575,7 @@ W.autoscale = {
       const btns = (x.sleeping && !x.waking ? `<button type="button" class="btn btn-sm primary" data-act="as-wake" data-name="${esc(x.name)}">喚醒</button>` : '') +
         (d.remote ? '' : `<button type="button" class="btn btn-sm" data-act="as-exempt" data-name="${esc(x.name)}" data-v="${x.exempt ? 0 : 1}">${x.exempt ? '允許休眠' : '不要休眠'}</button>`) +
         (x.schedule ? `<button type="button" class="btn btn-sm" data-act="as-cancel" data-name="${esc(x.name)}">取消排程</button>` : '') +
+        (d.remote ? '' : `<button type="button" class="btn btn-sm" data-act="as-suggest" data-name="${esc(x.name)}">建議時段</button>`) +
         `<button type="button" class="btn btn-sm primary" data-act="as-edit" data-name="${esc(x.name)}">${x.schedule ? '修改排程' : '設定排程'}</button>`;
       return `<tr class="enter" style="animation-delay:${i * 25}ms"><td class="id">${esc(x.name)}${note}</td><td>${state}</td>
         <td class="as-sched">${sched}</td><td class="r"><div class="as-btns">${btns}</div></td></tr>`;
@@ -4620,6 +4623,18 @@ function openScheduleEditor(name){
     <div class="confirm-dialog-actions"><button type="button" class="btn" onclick="closeProjModal()">關閉</button>
       <button type="button" class="btn primary" onclick="previewSchedule('${escAttr(name)}')">預覽</button></div>`);
 }
+// 2026-10-23：從流量建議時段，跟設定排程同一張確認卡
+async function openScheduleSuggest(name){
+  openProjModal(`<h3>${esc(name)} 的建議時段</h3><div id="as-ed-plan"><p class="proj-muted">正在整理過去的流量紀錄…</p></div>
+    <div class="confirm-dialog-actions"><button type="button" class="btn" onclick="closeProjModal()">關閉</button></div>`);
+  let d;
+  try { d = await (await fetch('/api/autoscale/suggest?name=' + encodeURIComponent(name))).json(); }
+  catch(e){ d = {ok:false, error:'讀取失敗：' + (e.message || e)}; }
+  const host = document.getElementById('as-ed-plan');
+  if(!host) return;
+  host.innerHTML = d.ok ? `<p>${esc(d.explain || '')}</p>` + widgetHTML('asplan', d, {})
+                        : `<div class="proj-warn">${esc(d.error || '沒辦法建議時段。')}</div>`;
+}
 async function previewSchedule(name){
   const text = (document.getElementById('as-ed-text').value || '').trim();
   const err = document.getElementById('as-ed-err'), host = document.getElementById('as-ed-plan');
@@ -4645,6 +4660,14 @@ async function runAutoscaleAction(action, args, text){
       removeTyping();
       if(!d.ok){ appendMsg('assistant', d.error || '看不懂這個時段設定。', null, 'text'); return; }
       appendWidget('asplan', d, {}, '我把你說的時段整理成下面這張表，確認沒問題再按「套用」。');
+      return;
+    }
+    if(action === 'as_suggest'){
+      const r = await fetch('/api/autoscale/suggest?name=' + encodeURIComponent(args.name || ''));
+      const d = await r.json().catch(() => ({}));
+      removeTyping();
+      if(!d.ok){ appendMsg('assistant', d.error || '沒辦法建議時段。', null, 'text'); return; }
+      appendWidget('asplan', d, {}, d.explain || '');
       return;
     }
     if(action === 'as_show'){
@@ -5005,6 +5028,7 @@ document.addEventListener('click', function(e){
     return;
   }
   if(act === 'as-edit'){ openScheduleEditor(t.dataset.name); return; }
+  if(act === 'as-suggest'){ openScheduleSuggest(t.dataset.name); return; }
   if(act === 'as-idle-save' && w){
     const sel = w.querySelector('.as-idle-sel');
     t.disabled = true;
@@ -6806,6 +6830,9 @@ _INTENT_RULES = [
     ("as_exempt_off", re.compile(r"([a-z0-9][a-z0-9-]*)\s*(?:可以|允許|恢復)\s*(?:自動)?\s*休眠", re.I), {1: "name"}),
     ("as_exempt_off", re.compile(r"(?:把\s*)?([a-z0-9][a-z0-9-]*)\s*(?:移出|拿出|從)\s*例外", re.I), {1: "name"}),
     ("as_cancel", re.compile(r"(?:取消|刪除|關掉|停止|移除)\s*([a-z0-9][a-z0-9-]*)\s*的?\s*(?:分時|排程|時段)", re.I), {1: "name"}),
+    # 2026-10-23：從流量建議時段（「建議 shop-web 的時段」「幫 shop-web 建議時段」）
+    ("as_suggest", re.compile(r"(?:建議|推薦)\s*([a-z0-9][a-z0-9-]*)\s*的?\s*(?:時段|排程|分時)", re.I), {1: "name"}),
+    ("as_suggest", re.compile(r"([a-z0-9][a-z0-9-]*)\s*(?:的)?\s*(?:建議|推薦)\s*(?:的)?\s*(?:時段|排程|分時)", re.I), {1: "name"}),
     ("as_idle_days", re.compile(r"(?:閒置|沒人?用|沒有人用|沒有?流量)\s*(?:超過)?\s*(\d{1,2})\s*天.{0,10}休眠", re.I), {1: "days"}),
     ("as_show", re.compile(r"(?:分時|排程|休眠|例外)(?:擴縮)?\s*(?:的)?\s*(?:設定|狀態|清單|名單|列表|情況)|^(?:列出|查看|顯示|看看?).{0,6}(?:排程|休眠|例外)", re.I), {}),
     # 2026-10-21：排除「擴、縮、調、掛掉、壞、當機、錯誤」——「晚上 8 點把 web 擴到 3 個」是立即擴縮、「凌晨 3 點掛掉了 2 個」是在描述問題，不是設定時段
@@ -9751,14 +9778,79 @@ def _as_tick_schedules():
                 print(f"[分時擴縮] {s['namespace']}/{s['app']} 套用失敗：{e}")
 
 
-def _as_prom_query(q: str):
-    url = os.environ.get("PROMETHEUS_URL", "http://127.0.0.1:9090").replace("localhost", "127.0.0.1").rstrip("/")
-    r = requests.get(url + "/api/v1/query", params={"query": q}, timeout=15)
+def _as_prom_url() -> str:
+    return os.environ.get("PROMETHEUS_URL", "http://127.0.0.1:9090").replace("localhost", "127.0.0.1").rstrip("/")
+
+
+def _as_prom_range(q: str, start: float, end: float, step: int):
+    r = requests.get(_as_prom_url() + "/api/v1/query_range",
+                     params={"query": q, "start": int(start), "end": int(end), "step": int(step)}, timeout=30)
     r.raise_for_status()
     d = r.json()
     if d.get("status") != "success":
         raise RuntimeError(d.get("error") or "Prometheus 查詢失敗")
     return d["data"]["result"]
+
+
+def _as_prom_query(q: str, at: float = None):
+    url = _as_prom_url()
+    params = {"query": q}
+    if at is not None:
+        params["time"] = int(at)
+    r = requests.get(url + "/api/v1/query", params=params, timeout=15)
+    r.raise_for_status()
+    d = r.json()
+    if d.get("status") != "success":
+        raise RuntimeError(d.get("error") or "Prometheus 查詢失敗")
+    return d["data"]["result"]
+
+
+_AS_TRAFFIC_EVERY = 600            # 每 10 分鐘看一次上一個整點小時存了沒（同一小時重複寫入會取代）
+_AS_TRAFFIC_BACKFILL_DAYS = 10     # 第一次啟動時，從 Prometheus 補它現有的資料（它只保留約 10 天）
+_AS_TRAFFIC_Q = 'sum by (namespace, pod) (increase(container_network_receive_packets_total{namespace=~"user-.+"}[1h]))'
+
+
+def _as_traffic_rows(series, apps_by_ns):
+    """Prometheus 結果 → [(namespace, app, 整點小時, 封包數, Pod 數)]。查詢時間是那一小時的結束，所以整點小時＝時間 − 3600。"""
+    acc = {}
+    for s_ in series:
+        ns, pod = s_.get("metric", {}).get("namespace"), s_.get("metric", {}).get("pod") or ""
+        app = next((a for a in apps_by_ns.get(ns, []) if _sleep.pod_belongs_to(a, pod)), None)
+        if not app:
+            continue
+        values = s_.get("values") or ([s_["value"]] if s_.get("value") else [])
+        for ts, v in values:
+            try:
+                val = float(v)
+            except (TypeError, ValueError):
+                continue
+            key = (ns, app, int(float(ts)) // 3600 * 3600 - 3600)
+            tot, n = acc.get(key, (0.0, 0))
+            acc[key] = (tot + val, n + 1)
+    return [(ns, app, hour, tot, n) for (ns, app, hour), (tot, n) in acc.items()]
+
+
+def _as_tick_traffic(now=None):
+    """2026-10-23：把每個服務每小時收到的封包數存進 autoscale.db（保留 60 天），給「建議時段」用。
+    Prometheus 只保留約 10 天、而且沒有永久儲存，所以要自己存。第一次會把 Prometheus 現有的資料補進來。"""
+    now = _time.time() if now is None else now
+    hour_end = int(now) // 3600 * 3600
+    backfilled = _as_store.meta_get("traffic_backfilled")
+    if backfilled and _as_store.has_traffic_hour(hour_end - 3600):
+        return
+    apps_by_ns = {}
+    for d in k8s_client.AppsV1Api().list_deployment_for_all_namespaces(_request_timeout=_AS_K8S_TIMEOUT).items:
+        if d.metadata.namespace.startswith("user-") and not _as_is_waker(d):
+            apps_by_ns.setdefault(d.metadata.namespace, []).append(d.metadata.name)
+    if not apps_by_ns:
+        return
+    if not backfilled:
+        series = _as_prom_range(_AS_TRAFFIC_Q, hour_end - _AS_TRAFFIC_BACKFILL_DAYS * 86400, hour_end, 3600)
+        n = _as_store.add_traffic(_as_traffic_rows(series, apps_by_ns))
+        _as_store.meta_set("traffic_backfilled", str(int(now)))
+        print(f"[分時擴縮] 從 Prometheus 補進 {n} 筆每小時流量")
+    else:
+        _as_store.add_traffic(_as_traffic_rows(_as_prom_query(_AS_TRAFFIC_Q, at=hour_end), apps_by_ns))
 
 
 def _as_tick_idle():
@@ -9817,7 +9909,7 @@ def _as_tick_idle():
     _as_state["last_idle_check"] = _utc_now_iso()
 
 
-_as_last_run = {"schedules": 0.0, "idle": 0.0}
+_as_last_run = {"schedules": 0.0, "idle": 0.0, "traffic": 0.0}
 
 
 def _as_run_due(now=None):
@@ -9840,6 +9932,9 @@ def _as_run_due(now=None):
     if now - _as_last_run["idle"] >= _AS_IDLE_EVERY:
         _as_last_run["idle"] = now
         jobs.append(("idle", _as_tick_idle))
+    if now - _as_last_run.get("traffic", 0.0) >= _AS_TRAFFIC_EVERY:
+        _as_last_run["traffic"] = now
+        jobs.append(("traffic", _as_tick_traffic))
     for _key, fn in jobs:
         try:
             fn()
@@ -9996,6 +10091,33 @@ def api_autoscale_parse():
     if not dep:
         return _as_not_found(plan["app"])
     return jsonify(_as_plan_view(ns, plan, dep))
+
+
+@app.route("/api/autoscale/suggest")
+def api_autoscale_suggest():
+    """2026-10-23：從過去的每小時流量學出建議的時段（agents/timeslot_learn.py，固定規則）。只是建議，使用者在確認卡按「套用」才生效。"""
+    ns, err = _as_guard(remote_ok=True)
+    if err:
+        return err
+    if _is_remote_ns(ns):
+        return jsonify({"ok": False, "error": "你的叢集回報的資料裡沒有網路流量，沒辦法從流量建議時段；可以直接設定時段，例如「白天 3 個、晚上 1 個」。"}), 400
+    name = str(request.args.get("name") or "").strip()
+    if not _PLAUSIBLE_RESOURCE_NAME_RE.match(name or "-"):
+        return jsonify({"ok": False, "error": "服務名稱的格式不對。"}), 400
+    dep = _as_read_dep(ns, name)
+    if not dep:
+        return _as_not_found(name)
+    from guardian.yaml_validator import max_replicas
+    from agents.timeslot_learn import learn_schedule
+    cs = dep.spec.template.spec.containers or []
+    base = _sleep.expected_probe_packets_per_hour(_sleep.probes_of_container(cs[0])) if cs else 0
+    ann = dep.metadata.annotations or {}
+    cur = int(dep.spec.replicas or 0) or int(ann.get(_sleep.ANN_SLEEP_REPLICAS) or 0)
+    r = learn_schedule(name, _as_store.traffic_for(ns, name, since=_time.time() - _as_store.TRAFFIC_KEEP_DAYS * 86400),
+                       cur, baseline_per_pod=base or None, max_replicas=max_replicas())
+    if not r["ok"]:
+        return jsonify({"ok": False, "error": r["error"], "reason": r["reason"], "days": r.get("days"), "need": r.get("need")})
+    return jsonify({**_as_plan_view(ns, r["plan"], dep), "explain": r["explain"], "days": r["days"]})
 
 
 @app.route("/api/autoscale/schedule", methods=["POST"])
