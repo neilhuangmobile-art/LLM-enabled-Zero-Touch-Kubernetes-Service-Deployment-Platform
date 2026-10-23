@@ -153,9 +153,14 @@ def test_rollback_git_actually_restores_file_content_on_windows_style_path(monke
         stdout = ""
         stderr = ""
 
-    def fake_run(cmd, capture_output, text, timeout):
-        captured_apply_paths.append(cmd)
-        return _FakeCompleted()
+    real_run = rollback_mod.subprocess.run
+
+    def fake_run(cmd, *args, **kwargs):
+        # 只假造 kubectl；git 提交（gitops.manifest_writer.commit_paths）要真的跑，才驗得到有寫進 Git
+        if cmd and cmd[0] == "kubectl":
+            captured_apply_paths.append(cmd)
+            return _FakeCompleted()
+        return real_run(cmd, *args, **kwargs)
 
     monkeypatch.setattr(rollback_mod.subprocess, "run", fake_run)
 
@@ -170,6 +175,9 @@ def test_rollback_git_actually_restores_file_content_on_windows_style_path(monke
     )
     assert "nginx:1.27" not in content
     assert captured_apply_paths, "應該呼叫過 kubectl apply 把還原後的檔案套到叢集"
+    # 2026-10-23：回滾要真的寫進 Git 紀錄（原本 GitPython 執行 hook 失敗，回滾從沒留下 commit）
+    assert repo.head.commit.message.startswith("gitops: revert app"), repo.head.commit.message
+    assert result["details"]["new_commit"]
 
 
 def test_rollback_git_skips_directory_entry_not_just_files(tmp_path):

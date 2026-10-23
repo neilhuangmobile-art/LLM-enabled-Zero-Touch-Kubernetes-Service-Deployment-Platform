@@ -290,29 +290,48 @@ def _build_service_yaml(llm_result: dict, namespace: str) -> Optional[str]:
 # Git 操作
 # ══════════════════════════════════════════════════════════════════
 
+def commit_paths(repo_path: str, paths: list, message: str):
+    """只提交指定的檔案或目錄，回傳 (commit SHA, 錯誤訊息)。
+
+    2026-10-23 全系統檢查發現：原本用 GitPython 的 index.commit()，它會自己執行 pre-commit hook
+    （gitleaks 檢查密碼外洩），在 Windows 上呼叫到的 bash 是 WSL 的，這台電腦的 WSL 沒有 bash，
+    於是每一次 commit 都失敗、檔案留在暫存區——10/9 換電腦裝上 hook 之後，本機模式的部署與回滾
+    全都沒有留下 Git 紀錄（部署本身成功，所以沒人發現）。改用 git 指令：hook 由 Git for Windows
+    自己的 sh 執行，密碼檢查照樣有效。另外：
+    - `git commit -- <路徑>` 只提交這次的檔案，不會把使用者暫存區裡其他東西一起帶進去
+      （index.commit() 會提交整個暫存區）。
+    - 提交失敗就把這些檔案移出暫存區，不留半套的狀態。
+    """
+    import subprocess
+
+    def git(*args):
+        return subprocess.run(["git", "-C", str(repo_path), *args], capture_output=True,
+                              encoding="utf-8", errors="replace", timeout=60)
+
+    rels = [str(p) for p in paths]
+    add = git("add", "--", *rels)
+    if add.returncode != 0:
+        return None, (add.stderr or add.stdout).strip()[:300]
+    commit = git("commit", "-q", "-m", message, "--", *rels)
+    if commit.returncode != 0:
+        git("reset", "-q", "--", *rels)
+        return None, (commit.stderr or commit.stdout).strip()[:300] or "git commit 失敗"
+    sha = git("rev-parse", "HEAD").stdout.strip()
+    return sha, None
+
+
 def _git_commit(repo_path: str, files: list, app_name: str, namespace: str) -> Optional[str]:
     """
-    將指定檔案加入暫存區並提交。
-    返回 commit SHA（前 8 碼），失敗則回傳 None。
+    將指定檔案提交。返回 commit SHA，失敗則回傳 None。
     """
-    try:
-        repo = gitpython.Repo(repo_path, search_parent_directories=True)
-        repo.index.add([os.path.abspath(f) for f in files])
-
-        timestamp  = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-        msg        = f"gitops: deploy {app_name} to {namespace} [{timestamp}]"
-        commit_obj = repo.index.commit(msg)
-        sha        = commit_obj.hexsha
-
+    timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    msg = f"gitops: deploy {app_name} to {namespace} [{timestamp}]"
+    sha, err = commit_paths(repo_path, [os.path.abspath(f) for f in files], msg)
+    if sha:
         print(f"✅ git commit: {sha[:8]} — {msg}")
-        return sha
-
-    except gitpython.InvalidGitRepositoryError:
-        print("⚠️  當前目錄不是 Git 倉庫，跳過 commit")
-        return None
-    except Exception as e:
-        print(f"⚠️  git commit 失敗：{e}")
-        return None
+    else:
+        print(f"⚠️  git commit 失敗：{err}")
+    return sha
 
 
 # ══════════════════════════════════════════════════════════════════

@@ -13,6 +13,9 @@
 > [docs/handoff/SCHOOL_MACHINE_SETUP.md](docs/handoff/SCHOOL_MACHINE_SETUP.md)。那台的使用者是隊友，
 > 記憶快照裡的「使用者」指的是專案負責人，偏好要跟隊友確認。
 
+> **⚠ 2026-10-23 組員接手**：先讀 [docs/handoff/TEAM_HANDOFF_2026-10-23.md](docs/handoff/TEAM_HANDOFF_2026-10-23.md)
+> （接手步驟、新功能、改程式的規則與陷阱、組員負責的分時擴縮／個人化要先對齊的事、已知問題）。
+
 ## 專案是什麼
 
 LLM-enabled Zero-Touch Kubernetes Service Deployment Platform：使用者以自然語言描述需求，
@@ -44,7 +47,8 @@ LLM-enabled Zero-Touch Kubernetes Service Deployment Platform：使用者以自�
 | `healer/` | Pod 監控、LLM 根因診斷、自動補救 |
 | `observability/` | Prometheus 指標、Grafana Dashboard、告警規則（2026-09-15 起真的部署了 kube-prometheus-stack，不再是死代碼，見下方「進行中工作」與 `observability/README.md`） |
 | `training/` | LoRA 微調資料生成、清洗、訓練、評估 |
-| `web_demo.py` | Web Dashboard（Flask），現行唯一入口 |
+| `web_demo.py` | Web Dashboard（Flask），現行唯一入口；`/m` 是手機監控版（唯讀，頁面在 `core/mobile_page.py`） |
+| `core/push.py`、`core/schedule_*.py` | 手機推播；預約任務與行事曆（到期提醒、使用者確認才執行） |
 | `0_touch_generate_pods.py` | 零接觸部署 CLI 入口 |
 
 ## 測試
@@ -291,8 +295,9 @@ GitHub org 開的私有 repo（`gitops/tenant_repo.py`），客戶叢集的 Flux
 
 對話說「shop-web 白天 3 個、晚上 1 個」照時段調副本數；服務太久沒人連線就降到 0，有人連線自動喚醒；「x 不要休眠」加入例外清單。
 程式在 `agents/timeslot.py`（時段解析，全部是固定規則）、`core/autoscale_store.py`（設定，`data/autoscale.db`）、
-`core/sleep_mode.py`（閒置判斷與喚醒器），`web_demo.py` 尾端的 `_autoscale_loop` 是背景迴圈。安全設計見 `docs/security_review.md` 42 節。
+`core/sleep_mode.py`（閒置判斷與喚醒器），背景工作由 `web_demo.py` 的 `_register_autoscale_tasks()` 掛到 `core/scheduler.py`。安全設計見 `docs/security_review.md` 47 節。
 
+- **待決（2026-10-23 合併後）**：現在有兩條背景迴圈——柏碩的預約檢查 `_schedule_loop`（30 秒，`core/schedule_store.py`）和分時擴縮用的 `core/scheduler.py`。柏碩的接手說明（`docs/handoff/TEAM_HANDOFF_2026-10-23.md` 第四部分）建議共用他的迴圈與推播；要統一成哪一條，跟負責人確認後再改，合併時兩邊都維持原樣。
 - 背景工作一律掛在共用排程器 `core/scheduler.py`（`scheduler.register(名稱, 函式, every_seconds=…)`，用法寫在檔案開頭），分時擴縮的三個工作由 `_register_autoscale_tasks()` 註冊；之後的行事曆也掛上來，不要另開第二套迴圈。
 - 閒置天數上限 7 天（Prometheus 只保留 10 天、沒有永久儲存）。喚醒器第一次用要從 Docker Hub 下載 `python:3.12-alpine`。
 - 分時擴縮的 K8s 呼叫一律帶 `_request_timeout=_AS_K8S_TIMEOUT`；`_as_read_dep` 叢集沒回應時丟 `_AsClusterDown`（回 503 中文說明）。
@@ -305,7 +310,7 @@ GitHub org 開的私有 repo（`gitops/tenant_repo.py`），客戶叢集的 Flux
 ## 對話存伺服器＋專案（2026-10-21，隊友陳冠穎負責，在 `dev/capstone6767` 分支）
 
 對話原本只存在瀏覽器 localStorage，改存 `data/workspace.db`（`core/workspace_store.py`，寫法同 autoscale_store）；
-另外新增「專案」：說明、專案指示、對話、服務歸屬、上傳的檔案。安全設計見 `docs/security_review.md` 43 節。
+另外新增「專案」：說明、專案指示、對話、服務歸屬、上傳的檔案。安全設計見 `docs/security_review.md` 48 節。
 
 - 對話、專案、檔案綁登入帳號（owner），服務歸屬綁 namespace；所有查詢都帶 owner，不做共享。
 - 前端 `saveChats()` 的呼叫點沒變，內部改成「有變動的對話合併 0.8 秒後 PUT /api/chats/<id>」；存失敗會在輸入框下方提示。

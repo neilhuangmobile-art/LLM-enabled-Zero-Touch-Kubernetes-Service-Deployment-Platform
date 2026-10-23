@@ -344,19 +344,25 @@ def _rollback_git(
                 "details": {"from": current_sha, "to": previous_sha},
             }
 
-        # 提交還原
-        repo.index.add([rel])
+        # 提交還原（跟部署同一個提交函式：hook 由 git 自己執行、只提交這個服務的目錄，見 commit_paths）
+        from gitops.manifest_writer import commit_paths
         timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         msg = f"gitops: revert {app_name} to {previous_sha} [{timestamp}]"
-        new_commit = repo.index.commit(msg)
+        new_sha, err = commit_paths(repo.working_dir, [rel], msg)
+        if not new_sha:
+            return {
+                "ok"     : True,
+                "message": f"已回滾 {app_name}：{current_sha} → {previous_sha}，但這次回滾沒有寫進 Git 紀錄（{err}）",
+                "details": {"from_sha": current_sha, "to_sha": previous_sha, "new_commit": None},
+            }
 
         return {
             "ok"     : True,
-            "message": f"已回滾 {app_name}：{current_sha} → {previous_sha}，新 commit {new_commit.hexsha[:8]}",
+            "message": f"已回滾 {app_name}：{current_sha} → {previous_sha}，新 commit {new_sha[:8]}",
             "details": {
                 "from_sha"  : current_sha,
                 "to_sha"    : previous_sha,
-                "new_commit": new_commit.hexsha[:8],
+                "new_commit": new_sha[:8],
             },
         }
 

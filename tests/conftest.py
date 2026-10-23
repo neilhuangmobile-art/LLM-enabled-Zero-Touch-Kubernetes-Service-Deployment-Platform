@@ -19,3 +19,8 @@ os.environ["ZT_EVENTS_DB"] = os.path.join(tempfile.mkdtemp(prefix="zt-events-"),
 os.environ["ZT_AUTOSCALE_DB"] = os.path.join(tempfile.mkdtemp(prefix="zt-autoscale-"), "autoscale.db")
 # 對話與專案（core/workspace_store.py）同理
 os.environ["ZT_WORKSPACE_DB"] = os.path.join(tempfile.mkdtemp(prefix="zt-workspace-"), "workspace.db")
+# 推播訂閱與 VAPID 金鑰（core/push.py）同理，測試不能動到正式的訂閱名單與金鑰
+_push_tmp = tempfile.mkdtemp(prefix="zt-push-")
+os.environ["ZT_PUSH_DB"] = os.path.join(_push_tmp, "push.db")
+os.environ["ZT_VAPID_KEY"] = os.path.join(_push_tmp, "vapid_private.pem")
+os.environ["ZT_SCHEDULE_DB"] = os.path.join(_push_tmp, "schedule.db")
