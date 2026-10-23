@@ -2540,6 +2540,7 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
     <!-- 專案：新增專案、刪除專案的卡片（內容由 JS 填） -->
     <div class="modal-bg" id="proj-modal-bg" onclick="if(event.target===this) closeProjModal()">
       <div class="modal proj-modal" role="dialog" aria-modal="true" id="proj-modal"></div>
+    </div>
 
     <!-- 預約時間到了：打開網站或網站開著時跳出來，使用者按「確定執行」才會執行 -->
     <div id="due-overlay" class="due-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="due-title">
