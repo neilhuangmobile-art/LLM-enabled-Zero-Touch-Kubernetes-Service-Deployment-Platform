@@ -247,3 +247,44 @@ def test_project_summary_only_counts_project_services(web, monkeypatch):
     assert all(e["app"] == "web" for e in d["recent"]) and len(d["recent"]) == 3
     assert d["services"] == {"total": 1, "ready": 1, "sleeping": 0, "attention": 0}
     assert b.get(f"/api/projects/{pid}/summary").status_code == 404
+
+
+# ── 2026-10-23：專案的部署預設值 ──
+def test_project_defaults_validation_and_isolation():
+    p = ws.create_project("alice", "商店")
+    assert p["defaults"] == {}
+    p = ws.update_project("alice", p["id"], defaults={"min_replicas": "2", "memory": "256Mi", "cpu": ""}, max_replicas=50)
+    assert p["defaults"] == {"min_replicas": 2, "memory": "256Mi"}
+    assert ws.list_projects("alice")[0]["defaults"] == {"min_replicas": 2, "memory": "256Mi"}
+    for bad in ({"memory": "256MB"}, {"min_replicas": 99}, {"min_replicas": "abc"}, {"cpu": "fast"}, "nope"):
+        try:
+            ws.update_project("alice", p["id"], defaults=bad, max_replicas=50)
+            assert False, bad
+        except ws.WorkspaceError:
+            pass
+    try:
+        ws.update_project("bob", p["id"], defaults={"memory": "1Gi"})
+        assert False
+    except ws.WorkspaceError:
+        pass
+
+
+def test_old_database_gets_defaults_column(tmp_path):
+    import sqlite3
+    path = str(tmp_path / "old.db")
+    c = sqlite3.connect(path)
+    c.execute("CREATE TABLE projects (owner TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', "
+              "instructions TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL, updated_at REAL NOT NULL, PRIMARY KEY (owner, id))")
+    c.execute("INSERT INTO projects VALUES ('alice', 'proj_aaaaaaaaaaaa', '舊專案', '', '', 1, 1)")
+    c.commit(); c.close()
+    ws.init(path)
+    assert ws.get_project("alice", "proj_aaaaaaaaaaaa")["defaults"] == {}
+
+
+def test_project_defaults_api(web):
+    a = client_as(web, "alice")
+    pid = a.post("/api/projects", json={"name": "商店"}).get_json()["project"]["id"]
+    r = a.patch(f"/api/projects/{pid}", json={"defaults": {"min_replicas": 3, "memory": "1Gi", "cpu": "250m"}}).get_json()
+    assert r["ok"] and r["project"]["defaults"] == {"min_replicas": 3, "memory": "1Gi", "cpu": "250m"}
+    assert a.patch(f"/api/projects/{pid}", json={"defaults": {"memory": "lots"}}).status_code == 400
+    assert a.get("/api/projects").get_json()["projects"][0]["defaults"]["min_replicas"] == 3

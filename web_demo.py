@@ -1589,6 +1589,8 @@ a{color:var(--signal)}
 .proj-del .note{display:block;font-size:12.5px;color:var(--text-3)}
 .proj-del .warn-t{color:var(--stop);font-size:12.5px}
 .proj-warn{font-size:13.5px;background:var(--caution-soft);border:1px solid var(--caution);border-radius:4px;padding:8px 10px;margin-top:10px}
+.proj-dft{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center}
+.proj-dft .lbl{margin:0}
 .proj-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .proj-stat{border:1px solid var(--grid);border-radius:6px;background:var(--panel);padding:14px 16px;display:flex;flex-direction:column;gap:2px}
 .proj-stat b{font-size:24px;font-weight:700;font-family:var(--f-id)}
@@ -3464,6 +3466,14 @@ function projOverviewHTML(p){
       <textarea id="proj-inst" maxlength="2000" placeholder="例如：映像檔都用公司的倉庫、web 至少開 2 個副本、記憶體上限 512Mi">${esc(p.instructions)}</textarea>
       <p class="field-hint">AI 回答這個專案裡的問題時會參考專案指示。部署時不會自動改設定，還是以你在部署單上確認的內容為準。</p>
       <div class="proj-actions"><span class="proj-msg" id="proj-ov-msg"></span><button type="button" class="btn primary" onclick="saveProjectText()">儲存</button></div>
+      <h2 style="margin-top:22px">部署預設值</h2>
+      <p class="field-hint">在這個專案的對話裡部署時，會先套用到部署單（句子沒講到的記憶體、CPU 才填；副本數比「至少」少就調高），你還可以在部署單上再改，之後照常審查。</p>
+      <div class="proj-dft">
+        <label class="lbl" for="proj-dft-min">至少幾個副本</label><input type="text" id="proj-dft-min" inputmode="numeric" placeholder="例如 2" value="${escAttr((p.defaults || {}).min_replicas || '')}">
+        <label class="lbl" for="proj-dft-mem">每個副本的記憶體</label><input type="text" id="proj-dft-mem" placeholder="例如 256Mi" value="${escAttr((p.defaults || {}).memory || '')}">
+        <label class="lbl" for="proj-dft-cpu">每個副本的 CPU</label><input type="text" id="proj-dft-cpu" placeholder="例如 100m" value="${escAttr((p.defaults || {}).cpu || '')}">
+      </div>
+      <div class="proj-actions"><span class="proj-msg" id="proj-dft-msg"></span><button type="button" class="btn primary" onclick="saveProjectDefaults()">儲存預設值</button></div>
     </div></div>`;
 }
 function projServicesHTML(p){
@@ -3566,6 +3576,29 @@ async function saveProjectText(){
     document.getElementById('proj-sub').textContent = projData.description || '這個專案的對話、服務和上傳的檔案都整理在這裡。';
     projSetMsg('proj-ov-msg', '已儲存。', true);
   } catch(e){ projSetMsg('proj-ov-msg', '沒有存成功：' + e.message, false); }
+}
+async function saveProjectDefaults(){
+  try {
+    projData = (await projFetch('/api/projects/' + encodeURIComponent(currentProjectId), 'PATCH', {defaults: {
+      min_replicas: document.getElementById('proj-dft-min').value.trim(),
+      memory: document.getElementById('proj-dft-mem').value.trim(),
+      cpu: document.getElementById('proj-dft-cpu').value.trim()}})).project;
+    const i = projects.findIndex(x => x.id === projData.id);
+    if(i >= 0) projects[i].defaults = projData.defaults;
+    projSetMsg('proj-dft-msg', '已儲存。', true);
+  } catch(e){ projSetMsg('proj-dft-msg', '沒有存成功：' + e.message, false); }
+}
+// 2026-10-23：在專案的對話裡部署時，把專案的部署預設值套到部署單（只改預填值，審查照常）
+function applyProjectDefaults(spec){
+  const ch = currentChat();
+  const p = ch && ch.projectId ? projectById(ch.projectId) : null;
+  const d = (p && p.defaults) || {};
+  const notes = [];
+  if(d.memory && !spec.memory){ spec.memory = d.memory; notes.push('記憶體 ' + d.memory); }
+  if(d.cpu && !spec.cpu){ spec.cpu = d.cpu; notes.push('CPU ' + d.cpu); }
+  if(d.min_replicas && (parseInt(spec.pods, 10) || 0) < d.min_replicas){ notes.push(`副本數從 ${spec.pods || 0} 個調成 ${d.min_replicas} 個`); spec.pods = d.min_replicas; }
+  if(notes.length) appendMsg('assistant', `已套用專案「${p.name}」的部署預設值：${notes.join('、')}。可以在部署單上再改。`, null, 'text');
+  return spec;
 }
 async function renameProject(){
   try {
@@ -4057,8 +4090,8 @@ async function startDeployFlow(text, sched, originalText){
       const p = d.parsed;
       const what = {app_name:'服務名稱（例如 shop-web）', image:'映像檔：要跑哪個程式，例如 nginx:1.27、redis:7', pods:'副本數：要同時開幾個'};
       appendMsg('assistant', '還差' + d.missing.map(k => what[k] || k).join('；') + '。請在下面的部署單補上，再按「下一步」。', null, 'text');
-      const flow = newFlow('deploy', text, {app_name:p.app_name || '', image:p.image || '', pods:p.pods || 1, port:p.port || 80,
-                                             memory:p.memory, cpu:p.cpu});
+      const flow = newFlow('deploy', text, applyProjectDefaults({app_name:p.app_name || '', image:p.image || '', pods:p.pods || 1, port:p.port || 80,
+                                             memory:p.memory, cpu:p.cpu}));
       if(sched){ flow.schedOn = true; flow.when = sched.when || {ts:defaultSchedTs()}; flow.fullText = originalText || text; }   // 預約（2026-10-23 合併時補上）
       appendMsg('assistant', renderFlowCard(flow));
       return;
@@ -4068,10 +4101,10 @@ async function startDeployFlow(text, sched, originalText){
       return;
     }
     const raw = d.raw || d.parsed || {};
-    const flow = newFlow('deploy', text, {
+    const flow = newFlow('deploy', text, applyProjectDefaults({
       app_name: raw.app_name, image: raw.image, pods: raw.pods, port: raw.port,
       memory: raw.memory, cpu: raw.cpu,
-    });
+    }));
     flow.review = d.review || null;
     flow.resource = d.resource_summary || null;
     flow.scenario = d.scenario || null;
@@ -10387,7 +10420,9 @@ def api_project(pid):
     if request.method == "PATCH":
         body = request.get_json(silent=True) or {}
         try:
-            p = _ws.update_project(owner, pid, body.get("name"), body.get("description"), body.get("instructions"))
+            from guardian.yaml_validator import max_replicas
+            p = _ws.update_project(owner, pid, body.get("name"), body.get("description"), body.get("instructions"),
+                                   defaults=body.get("defaults"), max_replicas=max_replicas())
         except _ws.WorkspaceError as e:
             return _ws_err(e)
     return jsonify({"ok": True, "project": _ws_project_view(owner, ns, p)})

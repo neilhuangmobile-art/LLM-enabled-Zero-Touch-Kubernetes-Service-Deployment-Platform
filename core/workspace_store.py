@@ -67,6 +67,11 @@ def init(path: str = None) -> None:
             description TEXT NOT NULL DEFAULT '', instructions TEXT NOT NULL DEFAULT '',
             created_at REAL NOT NULL, updated_at REAL NOT NULL,
             PRIMARY KEY (owner, id))""")
+        # 2026-10-23：部署預設值（JSON）。舊的資料庫沒有這一欄，補上
+        try:
+            _conn.execute("ALTER TABLE projects ADD COLUMN defaults TEXT NOT NULL DEFAULT '{}'")
+        except sqlite3.OperationalError:
+            pass
         _conn.execute("""CREATE TABLE IF NOT EXISTS project_services (
             namespace TEXT NOT NULL, app TEXT NOT NULL, owner TEXT NOT NULL, project_id TEXT NOT NULL,
             PRIMARY KEY (namespace, app))""")
@@ -136,12 +141,17 @@ def chats_of(owner: str, project_id: str) -> List[Dict]:
 
 # ── 專案 ──
 def _project_row(r) -> Dict:
-    return {"id": r[0], "name": r[1], "description": r[2], "instructions": r[3], "created_at": r[4], "updated_at": r[5]}
+    try:
+        defaults = json.loads(r[6] or "{}") if len(r) > 6 else {}
+    except ValueError:
+        defaults = {}
+    return {"id": r[0], "name": r[1], "description": r[2], "instructions": r[3], "created_at": r[4], "updated_at": r[5],
+            "defaults": defaults if isinstance(defaults, dict) else {}}
 
 
 def list_projects(owner: str) -> List[Dict]:
     with _lock:
-        rows = _db().execute("SELECT id, name, description, instructions, created_at, updated_at FROM projects "
+        rows = _db().execute("SELECT id, name, description, instructions, created_at, updated_at, defaults FROM projects "
                              "WHERE owner = ? ORDER BY created_at", (owner,)).fetchall()
     return [_project_row(r) for r in rows]
 
@@ -150,7 +160,7 @@ def get_project(owner: str, project_id: str) -> Optional[Dict]:
     if not PROJECT_ID_RE.match(str(project_id or "")):
         return None
     with _lock:
-        r = _db().execute("SELECT id, name, description, instructions, created_at, updated_at FROM projects "
+        r = _db().execute("SELECT id, name, description, instructions, created_at, updated_at, defaults FROM projects "
                           "WHERE owner = ? AND id = ?", (owner, project_id)).fetchone()
     return _project_row(r) if r else None
 
@@ -177,10 +187,44 @@ def create_project(owner: str, name: str, description: str = "") -> Dict:
     return get_project(owner, pid)
 
 
-def update_project(owner: str, project_id: str, name=None, description=None, instructions=None) -> Dict:
+_MEM_RE = re.compile(r"^\d+(Mi|Gi|Ki|M|G)$")
+_CPU_RE = re.compile(r"^(\d{1,6}m|\d{1,3}(\.\d{1,3})?)$")
+
+
+def check_defaults(d, max_replicas: int = 50) -> Dict:
+    """部署預設值（2026-10-23）：至少幾個副本、每個副本的記憶體、CPU。格式不對丟 WorkspaceError；空白的欄位不存。"""
+    if not isinstance(d, dict):
+        raise WorkspaceError("部署預設值的格式不對。")
+    out = {}
+    mr = d.get("min_replicas")
+    if mr not in (None, ""):
+        try:
+            mr = int(mr)
+        except (TypeError, ValueError):
+            raise WorkspaceError("「至少幾個副本」要是整數。")
+        if not 1 <= mr <= max_replicas:
+            raise WorkspaceError(f"「至少幾個副本」要在 1 到 {max_replicas} 之間。")
+        out["min_replicas"] = mr
+    mem = str(d.get("memory") or "").strip()
+    if mem:
+        if not _MEM_RE.match(mem):
+            raise WorkspaceError("記憶體的寫法要像 256Mi 或 1Gi。")
+        out["memory"] = mem
+    cpu = str(d.get("cpu") or "").strip()
+    if cpu:
+        if not _CPU_RE.match(cpu):
+            raise WorkspaceError("CPU 的寫法要像 100m 或 0.5。")
+        out["cpu"] = cpu
+    return out
+
+
+def update_project(owner: str, project_id: str, name=None, description=None, instructions=None,
+                   defaults=None, max_replicas: int = 50) -> Dict:
     p = get_project(owner, project_id)
     if not p:
         raise WorkspaceError("找不到這個專案。")
+    if defaults is not None:
+        p["defaults"] = check_defaults(defaults, max_replicas)
     if name is not None:
         p["name"] = _check_name(name)
     if description is not None:
@@ -188,9 +232,10 @@ def update_project(owner: str, project_id: str, name=None, description=None, ins
     if instructions is not None:
         p["instructions"] = _clean_text(instructions, MAX_PROJECT_TEXT)
     with _lock:
-        _db().execute("UPDATE projects SET name = ?, description = ?, instructions = ?, updated_at = ? "
+        _db().execute("UPDATE projects SET name = ?, description = ?, instructions = ?, defaults = ?, updated_at = ? "
                       "WHERE owner = ? AND id = ?",
-                      (p["name"], p["description"], p["instructions"], time.time(), owner, project_id))
+                      (p["name"], p["description"], p["instructions"], json.dumps(p.get("defaults") or {}),
+                       time.time(), owner, project_id))
         _conn.commit()
     return get_project(owner, project_id)
 
