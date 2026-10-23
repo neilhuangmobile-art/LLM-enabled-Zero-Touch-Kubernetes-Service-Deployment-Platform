@@ -132,3 +132,15 @@ def test_phone_skips_consent(client, monkeypatch):
 
 def test_manifest_starts_at_monitor_view(client):
     assert json.loads(client.get("/manifest.webmanifest").get_data())["start_url"] == "/m"
+
+
+def test_monitor_shows_autoscale_readonly(client):
+    """2026-10-23：手機版顯示分時擴縮與休眠（只讀 GET /api/autoscale），不能設定或取消。"""
+    _login(client, readonly=True)
+    html = client.get("/m", headers={"User-Agent": IPHONE}).get_data(as_text=True)
+    assert "getJSON('/api/autoscale')" in html and "分時擴縮" in html
+    for bad in ("/api/autoscale/schedule", "/api/autoscale/cancel", "/api/autoscale/wake", "/api/autoscale/exempt",
+                "/api/autoscale/settings"):
+        assert bad not in html, bad
+        r = client.post(bad, data=json.dumps({}), content_type="application/json", headers={"User-Agent": DESKTOP})
+        assert r.status_code == 403 and r.get_json().get("readonly") is True
