@@ -8014,6 +8014,21 @@ def api_delete():
 
 
 
+def _scale_check(name, replicas, ns, allow_zero=False):
+    """擴縮前的檢查：副本上限＋叢集容量。使用者手動擴縮（/api/scale）與分時擴縮、休眠、喚醒共用同一套
+    （2026-10-23，照接手說明「自動擴縮要經過 /api/scale 的檢查」）。只有平台內部的休眠可以到 0（allow_zero=True）。
+    回傳 (通過與否, 錯誤訊息, HTTP 狀態碼)。"""
+    from guardian.yaml_validator import max_replicas
+    low = 0 if allow_zero else 1
+    if not low <= replicas <= max_replicas():
+        return False, f"副本數要在 {low} 到 {max_replicas()} 之間", 400
+    if replicas > 0:
+        blocked, risk_msg = _check_scale_risk(name, replicas, ns)
+        if blocked:
+            return False, risk_msg, 409
+    return True, None, 200
+
+
 @app.route("/api/scale", methods=["POST"])
 def api_scale():
     if "username" not in session:
@@ -8030,13 +8045,13 @@ def api_scale():
         return jsonify({"success": False, "error": "replicas must be an integer"}), 400
     if not name:
         return jsonify({"success": False, "error": "Name required"}), 400
-    from guardian.yaml_validator import max_replicas
-    if not 1 <= replicas <= max_replicas():
-        return jsonify({"success": False, "error": f"副本數要在 1 到 {max_replicas()} 之間"}), 400
     user_ns = _session_ns()
-    blocked, risk_msg = _check_scale_risk(name, replicas, user_ns)
-    if blocked:
-        return jsonify({"success": False, "error": risk_msg, "blocked_reason": "resource_exceeded"}), 409
+    ok, err, status = _scale_check(name, replicas, user_ns)
+    if not ok:
+        payload = {"success": False, "error": err}
+        if status == 409:
+            payload["blocked_reason"] = "resource_exceeded"
+        return jsonify(payload), status
     try:
         api = k8s_client.AppsV1Api()
         body = {"spec": {"replicas": replicas}}
@@ -9517,6 +9532,9 @@ def _as_sleep(ns, app, why=""):
         cur = int(dep.spec.replicas or 0)
         if ann.get(_sleep.ANN_SLEEP_REPLICAS) or cur == 0:
             return False, f"{app} 已經在休眠，或副本數本來就是 0。"
+        ok, msg, _status = _scale_check(app, 0, ns, allow_zero=True)
+        if not ok:
+            raise RuntimeError(msg)
         svcs = _as_services_for(ns, dep)
         if svcs:
             body = _sleep.waker_manifest(app, ns, [p for s in svcs for p in _as_target_ports(s, dep)])
@@ -9538,6 +9556,8 @@ def _as_sleep(ns, app, why=""):
                                          _sleep.ANN_WAKING: None}},
             "spec": {"replicas": 0}}, _request_timeout=_AS_K8S_TIMEOUT)
         _events.record(ns, "sleep", app, "ok", {"replicas": cur, "why": why, "auto_wake": bool(svcs)})
+        _as_notify(ns, app, "💤 服務休眠", f"{app} 太久沒有人使用，已經休眠（原本 {cur} 個副本）。"
+                   + ("有人連進來會自動喚醒。" if svcs else f"需要時請說「喚醒 {app}」。"))
         return True, (f"{app} 已經進入休眠（原本 {cur} 個副本）。" +
                       ("有人連進來時會自動喚醒。" if svcs else f"它沒有連線入口，需要時請說「喚醒 {app}」。"))
     except Exception as e:
@@ -9579,8 +9599,8 @@ def _as_wake(ns, app, source="manual", replicas=None):
             _as_finish_wake(ns, dep)
             return True, f"{app} 沒有在休眠，正常運作中。"
         target = int(replicas or ann.get(_sleep.ANN_SLEEP_REPLICAS) or 1)
-        blocked, msg = _check_scale_risk(app, target, ns)
-        if blocked:
+        ok, msg, _status = _scale_check(app, target, ns)
+        if not ok:
             raise RuntimeError(msg)
         apps.patch_namespaced_deployment(app, ns, {"metadata": {"annotations": {_sleep.ANN_WAKING: _utc_now_iso()}},
                                                    "spec": {"replicas": target}}, _request_timeout=_AS_K8S_TIMEOUT)
@@ -9589,6 +9609,9 @@ def _as_wake(ns, app, source="manual", replicas=None):
         _events.record(ns, "wake", app, "ok" if ready else "fail",
                        {"replicas": target, "source": source,
                         "error": None if ready else "3 分鐘內沒有全部就緒"})
+        if source == "traffic":
+            _as_notify(ns, app, "☀ 服務已喚醒" if ready else "⚠ 喚醒還沒完成",
+                       f"有人連到 {app}，" + (f"已經恢復成 {target} 個副本。" if ready else f"已經恢復成 {target} 個副本，但還沒全部就緒。"))
         return ready, (f"{app} 已經喚醒，{target} 個副本都就緒了。" if ready else
                        f"{app} 已經恢復成 {target} 個副本，但 3 分鐘內還沒全部就緒，請到服務詳情看原因。")
     except Exception as e:
@@ -9608,6 +9631,14 @@ def _as_waker_hit(ns, app) -> bool:
         if _sleep.WAKE_MARK in (log or ""):
             return True
     return False
+
+
+def _as_notify(ns, app, title, body):
+    """分時擴縮／休眠的自動動作推播到手機（沿用 core/push.py；沒有訂閱的帳號什麼都不做）。同一個服務的通知用同一個 tag，新的取代舊的。"""
+    try:
+        _push.send_async(ns, {"title": title, "body": _push.clean_text(body), "url": "/m#services", "tag": f"autoscale-{app}"})
+    except Exception as e:
+        print(f"[分時擴縮] 推播失敗：{e}")
 
 
 def _as_spawn(fn, *args):
@@ -9643,8 +9674,9 @@ def _as_tick_wake():
             _as_spawn(_as_wake, ns, name, "traffic")
 
 
-def _as_apply_schedule(ns, app, plan, last_target, now=None):
-    """套用一個排程。只在「該開幾個」改變的那一刻動作，所以使用者在時段中間手動調整的副本數會保留到下一個時段。"""
+def _as_apply_schedule(ns, app, plan, last_target, now=None, notify=False):
+    """套用一個排程。只在「該開幾個」改變的那一刻動作，所以使用者在時段中間手動調整的副本數會保留到下一個時段。
+    notify=True：背景自動套用（不是使用者按「套用」），動作後推播到手機。"""
     from guardian.yaml_validator import max_replicas
     target = _ts.replicas_at(plan, now or datetime.now(_ts.TZ))
     if target is None or target == last_target or (ns, app) in _as_busy:
@@ -9662,12 +9694,16 @@ def _as_apply_schedule(ns, app, plan, last_target, now=None):
         return target
     cur = int(dep.spec.replicas or 0)
     if cur != target:
-        blocked, msg = _check_scale_risk(app, target, ns) if target > cur else (False, None)
-        if blocked:
+        ok, msg, _status = _scale_check(app, target, ns)
+        if not ok:
             _events.record(ns, "scale", app, "fail", {"replicas": target, "source": "schedule", "error": msg})
+            if notify:
+                _as_notify(ns, app, "⚠ 分時擴縮沒有調成", f"{app} 依排程要調成 {target} 個，但{msg}，維持 {cur} 個。")
         else:
             apps.patch_namespaced_deployment_scale(app, ns, {"spec": {"replicas": target}}, _request_timeout=_AS_K8S_TIMEOUT)
             _events.record(ns, "scale", app, "ok", {"replicas": target, "source": "schedule", "from": cur})
+            if notify:
+                _as_notify(ns, app, "⏱ 分時擴縮", f"{app} 依排程從 {cur} 個調成 {target} 個。")
     _as_store.set_last_target(ns, app, target)
     return target
 
@@ -9676,7 +9712,7 @@ def _as_tick_schedules():
     for s in _as_store.all_schedules():
         if s["namespace"].startswith("user-"):
             try:
-                _as_apply_schedule(s["namespace"], s["app"], s["plan"], s["last_target"])
+                _as_apply_schedule(s["namespace"], s["app"], s["plan"], s["last_target"], notify=True)
             except Exception as e:
                 print(f"[分時擴縮] {s['namespace']}/{s['app']} 套用失敗：{e}")
 
@@ -9747,13 +9783,27 @@ def _as_tick_idle():
     _as_state["last_idle_check"] = _utc_now_iso()
 
 
-def _register_autoscale_tasks():
-    """2026-10-21：改掛在共用背景排程器（core/scheduler.py），之後的行事曆也掛同一條，不另開迴圈。
-    間隔跟原本的 _autoscale_loop 一樣：喚醒每次醒來都看、排程每 30 秒、閒置判斷照 _AS_IDLE_EVERY。"""
-    from core import scheduler
-    scheduler.register("分時擴縮／休眠：喚醒", _as_tick_wake, every_seconds=0)
-    scheduler.register("分時擴縮：套用排程", _as_tick_schedules, every_seconds=_AS_SCHEDULE_EVERY)
-    scheduler.register("休眠：閒置判斷", _as_tick_idle, every_seconds=_AS_IDLE_EVERY)
+_as_last_run = {"schedules": 0.0, "idle": 0.0}
+
+
+def _as_run_due(now=None):
+    """分時擴縮與休眠的背景工作。2026-10-23 起掛在柏碩的預約背景迴圈 _schedule_loop 上（接手說明：不要第二套排程器），
+    由它每 10 秒呼叫一次：喚醒每次都看、套用排程每 30 秒、閒置判斷照 _AS_IDLE_EVERY。K8s 沒連線時跳過。"""
+    if not K8S_ENABLED:
+        return
+    now = _time.time() if now is None else now
+    jobs = [(None, _as_tick_wake)]
+    if now - _as_last_run["schedules"] >= _AS_SCHEDULE_EVERY:
+        _as_last_run["schedules"] = now
+        jobs.append(("schedules", _as_tick_schedules))
+    if now - _as_last_run["idle"] >= _AS_IDLE_EVERY:
+        _as_last_run["idle"] = now
+        jobs.append(("idle", _as_tick_idle))
+    for _key, fn in jobs:
+        try:
+            fn()
+        except Exception as e:
+            print(f"[分時擴縮／休眠] {fn.__name__} 失敗：{e}")
 
 
 # ── API ──
@@ -10470,7 +10520,8 @@ def api_schedule_op(task_id, op):
     return jsonify({"ok": True, "task": _sched_task_view(t)})
 
 
-_CAL_EVENT_LABEL = {"deploy": "部署", "scale": "擴縮", "update": "換版本", "delete": "刪除", "rollback": "回滾", "heal": "自動修復"}
+_CAL_EVENT_LABEL = {"deploy": "部署", "scale": "擴縮", "update": "換版本", "delete": "刪除", "rollback": "回滾", "heal": "自動修復",
+                    "sleep": "休眠", "wake": "喚醒"}   # 2026-10-23：分時擴縮的休眠、喚醒也顯示在行事曆
 
 
 @app.route("/api/calendar")
@@ -10534,9 +10585,10 @@ def api_calendar_note():
     return jsonify({"ok": True})
 
 
-def _schedule_loop(interval: int = 30):
-    """到期的預約改成「等你確認」並推播到手機；不執行任何操作。"""
-    while True:
+def _bg_tick(now, last_due, interval=30):
+    """背景迴圈醒來一次要做的事：預約到期檢查（每 interval 秒）＋分時擴縮與休眠（_as_run_due）。回傳這次之後的 last_due。"""
+    if now - last_due >= interval:
+        last_due = now
         try:
             for t in _sched.collect_due():
                 _push.send_async(t["namespace"], {
@@ -10545,7 +10597,17 @@ def _schedule_loop(interval: int = 30):
                     "url": "/m#calendar", "tag": f"sched-{t['id']}"})
         except Exception as e:
             print(f"[預約] 檢查到期失敗，下一輪再試：{e}")
-        _time.sleep(interval)
+    _as_run_due(now)
+    return last_due
+
+
+def _schedule_loop(interval: int = 30):
+    """到期的預約改成「等你確認」並推播到手機；不執行任何操作。
+    2026-10-23：分時擴縮與休眠也掛在這條迴圈（不另開排程器），所以改成每 10 秒醒來；預約檢查照舊每 interval 秒。"""
+    last_due = 0.0
+    while True:
+        last_due = _bg_tick(_time.time(), last_due, interval)
+        _time.sleep(_AS_TICK)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -10560,7 +10622,7 @@ _PHONE_UA_RE = _re_m.compile(r"iPhone|iPod|Android.*Mobile|Mobile.*Android", _re
 
 # 唯讀 session 能用的 API：(方法, 路徑規則)。用白名單，之後新增的 API 預設就會被擋
 _READONLY_API = (
-    ("GET", _re_m.compile(r"^/api/(status|deployments|pods|healer/status|push/status|dashboard|calendar)$")),
+    ("GET", _re_m.compile(r"^/api/(status|deployments|pods|healer/status|push/status|dashboard|calendar|autoscale)$")),   # autoscale：2026-10-23 分時設定唯讀
     ("GET", _re_m.compile(r"^/api/pods/[^/]+(/history)?$")),
     ("POST", _re_m.compile(r"^/api/push/(subscribe|unsubscribe|test)$")),
 )
@@ -10635,10 +10697,7 @@ if __name__ == "__main__":
         _healer_bg_state["started_at"] = _utc_now_iso()
         _healer_bg_state["interval"] = _HEALER_BG_INTERVAL
         print("  Healer: background auto-heal loop started (scan every 30s)")
-        _register_autoscale_tasks()
-        from core import scheduler as _scheduler
-        _scheduler.start(lambda: K8S_ENABLED)
-        print("  Autoscale: schedule / idle-sleep / auto-wake loop started"
+        print("  Autoscale: schedule / idle-sleep / auto-wake run inside the schedule loop below"
               + (f"（測試模式：閒置 {_AS_IDLE_OVERRIDE} 秒就休眠）" if _AS_IDLE_OVERRIDE else ""))
     else:
         print("  Healer: background auto-heal loop NOT started (K8s not connected)")

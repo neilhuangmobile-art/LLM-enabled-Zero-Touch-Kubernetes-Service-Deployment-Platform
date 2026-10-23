@@ -295,10 +295,10 @@ GitHub org 開的私有 repo（`gitops/tenant_repo.py`），客戶叢集的 Flux
 
 對話說「shop-web 白天 3 個、晚上 1 個」照時段調副本數；服務太久沒人連線就降到 0，有人連線自動喚醒；「x 不要休眠」加入例外清單。
 程式在 `agents/timeslot.py`（時段解析，全部是固定規則）、`core/autoscale_store.py`（設定，`data/autoscale.db`）、
-`core/sleep_mode.py`（閒置判斷與喚醒器），背景工作由 `web_demo.py` 的 `_register_autoscale_tasks()` 掛到 `core/scheduler.py`。安全設計見 `docs/security_review.md` 47 節。
+`core/sleep_mode.py`（閒置判斷與喚醒器），背景工作由柏碩的預約迴圈 `_schedule_loop` 每 10 秒呼叫 `_as_run_due()`（2026-10-23 起，只有這一條背景迴圈）。安全設計見 `docs/security_review.md` 47 節。
 
-- **待決（2026-10-23 合併後）**：現在有兩條背景迴圈——柏碩的預約檢查 `_schedule_loop`（30 秒，`core/schedule_store.py`）和分時擴縮用的 `core/scheduler.py`。柏碩的接手說明（`docs/handoff/TEAM_HANDOFF_2026-10-23.md` 第四部分）建議共用他的迴圈與推播；要統一成哪一條，跟負責人確認後再改，合併時兩邊都維持原樣。
-- 背景工作一律掛在共用排程器 `core/scheduler.py`（`scheduler.register(名稱, 函式, every_seconds=…)`，用法寫在檔案開頭），分時擴縮的三個工作由 `_register_autoscale_tasks()` 註冊；之後的行事曆也掛上來，不要另開第二套迴圈。
+- **背景迴圈只有一條：柏碩的 `_schedule_loop`**（每 10 秒醒來；預約到期檢查照舊每 30 秒，`_bg_tick()`）。分時擴縮的三個工作在 `_as_run_due()`，**不要再另開排程器**（2026-10-23 照接手說明改的；舊的 `core/scheduler.py` 做法在備份分支 `backup/capstone6767-before-align-20261023`）。
+- 自動動作（依排程擴縮、休眠、有人連線喚醒）都推播到手機（`_as_notify` → `core/push.py` 的 `send_async`）；使用者自己按「套用」不推播。擴縮前一律經過 `_scale_check()`（跟 `/api/scale` 同一套：副本上限＋叢集容量），只有平台內部的休眠可以到 0。
 - 閒置天數上限 7 天（Prometheus 只保留 10 天、沒有永久儲存）。喚醒器第一次用要從 Docker Hub 下載 `python:3.12-alpine`。
 - 分時擴縮的 K8s 呼叫一律帶 `_request_timeout=_AS_K8S_TIMEOUT`；`_as_read_dep` 叢集沒回應時丟 `_AsClusterDown`（回 503 中文說明）。
 - 「我的服務」頁有「分時與休眠」模組（`W.autoscale`），「設定排程」彈窗是 `openScheduleEditor()`。

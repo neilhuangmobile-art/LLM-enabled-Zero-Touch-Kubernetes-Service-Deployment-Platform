@@ -179,3 +179,66 @@ def test_cluster_timeout_is_not_reported_as_not_found(monkeypatch):
     monkeypatch.setattr(web_demo.k8s_client, "AppsV1Api", lambda *a: _Slow())
     r = _client().post("/api/autoscale/wake", json={"name": "web"})
     assert r.status_code == 503 and "沒有回應" in r.get_json()["error"]
+
+
+# ── 2026-10-23：照柏碩的接手說明對齊（單一背景迴圈、推播、共用 /api/scale 的檢查、行事曆、手機唯讀）──
+def test_bg_tick_runs_schedule_due_every_interval_and_autoscale_every_tick(monkeypatch):
+    calls = []
+    monkeypatch.setattr(web_demo._sched, "collect_due", lambda: calls.append("due") or [])
+    monkeypatch.setattr(web_demo, "_as_run_due", lambda now=None: calls.append("as"))
+    last = web_demo._bg_tick(1000, 0.0, 30)
+    last = web_demo._bg_tick(1010, last, 30)
+    last = web_demo._bg_tick(1030, last, 30)
+    assert calls == ["due", "as", "as", "due", "as"]
+
+
+def test_as_run_due_intervals_and_skips_without_k8s(monkeypatch):
+    calls = []
+    for n in ("_as_tick_wake", "_as_tick_schedules", "_as_tick_idle"):
+        monkeypatch.setattr(web_demo, n, (lambda name: (lambda: calls.append(name)))(n))
+    monkeypatch.setattr(web_demo, "_as_last_run", {"schedules": 0.0, "idle": 0.0})
+    monkeypatch.setattr(web_demo, "K8S_ENABLED", False)
+    web_demo._as_run_due(1000)
+    assert calls == []
+    monkeypatch.setattr(web_demo, "K8S_ENABLED", True)
+    web_demo._as_run_due(1000)
+    web_demo._as_run_due(1010)
+    assert calls == ["_as_tick_wake", "_as_tick_schedules", "_as_tick_idle", "_as_tick_wake"]
+
+
+def test_scale_check_shared_rules(monkeypatch):
+    monkeypatch.setattr(web_demo, "_check_scale_risk", lambda name, n, ns: (n > 8, "叢集空間不夠"))
+    assert web_demo._scale_check("web", 0, "user-a")[2] == 400                  # 使用者不能到 0
+    assert web_demo._scale_check("web", 0, "user-a", allow_zero=True)[0]        # 平台內部的休眠可以
+    assert web_demo._scale_check("web", 9, "user-a")[:2] == (False, "叢集空間不夠")
+    assert web_demo._scale_check("web", 3, "user-a")[0]
+
+
+def test_api_scale_still_rejects_zero(monkeypatch):
+    monkeypatch.setattr(web_demo, "_session_ns", lambda: "user-as-test")
+    monkeypatch.setattr(web_demo, "_is_remote_ns", lambda ns: False)
+    monkeypatch.setattr(web_demo, "K8S_ENABLED", True)
+    r = _client().post("/api/scale", json={"name": "web", "replicas": 0})
+    assert r.status_code == 400 and "1 到" in r.get_json()["error"]
+
+
+def test_scheduled_scale_pushes_only_when_automatic(monkeypatch, tmp_path):
+    from core import autoscale_store as st
+    st.init(str(tmp_path / "push.db"))
+    sent = []
+    monkeypatch.setattr(web_demo._push, "send_async", lambda ns, msg: sent.append((ns, msg)))
+    monkeypatch.setattr(web_demo, "_check_scale_risk", lambda *a, **k: (False, None))
+    apps = _FakeApps(replicas=1)
+    monkeypatch.setattr(web_demo.k8s_client, "AppsV1Api", lambda *a: apps)
+    plan = parse_schedule("web 白天 3 個、晚上 1 個")["plan"]
+    web_demo._as_apply_schedule("user-a", "web", plan, None, _t(2026, 10, 12, 10))                 # 使用者按套用：不推播
+    assert sent == []
+    web_demo._as_apply_schedule("user-a", "web", plan, 3, _t(2026, 10, 12, 21), notify=True)       # 背景自動：推播
+    assert sent and sent[-1][0] == "user-a" and "3 個調成 1 個" in sent[-1][1]["body"]
+    assert sent[-1][1]["url"] == "/m#services" and sent[-1][1]["tag"] == "autoscale-web"
+
+
+def test_calendar_and_readonly_include_autoscale():
+    assert web_demo._CAL_EVENT_LABEL["sleep"] == "休眠" and web_demo._CAL_EVENT_LABEL["wake"] == "喚醒"
+    assert any(m == "GET" and rx.match("/api/autoscale") for m, rx in web_demo._READONLY_API)
+    assert not any(m != "GET" and rx.match("/api/autoscale/schedule") for m, rx in web_demo._READONLY_API)
