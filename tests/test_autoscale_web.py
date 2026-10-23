@@ -49,11 +49,13 @@ def _client(ns="user-as-test"):
     return c
 
 
-def test_api_refuses_customer_cluster(monkeypatch):
+def test_customer_cluster_sleep_features_explain_why(monkeypatch):
+    """2026-10-23：客戶叢集可以用分時擴縮，但休眠、喚醒、例外清單不支援（回報器沒有流量資料），要說明原因。"""
     monkeypatch.setattr(web_demo, "_session_ns", lambda: "zt-someone-0123456789abcdef")
-    monkeypatch.setattr(web_demo, "_is_remote_ns", lambda ns: True)
-    r = _client().post("/api/autoscale/parse", json={"text": "web 白天 3 個、晚上 1 個"})
-    assert r.status_code == 400 and "只支援平台自己的叢集" in r.get_json()["error"]
+    for url, body in (("/api/autoscale/wake", {"name": "web"}), ("/api/autoscale/exempt", {"name": "web"}),
+                      ("/api/autoscale/settings", {"idle_days": 3})):
+        r = _client().post(url, json=body)
+        assert r.status_code == 400 and "網路流量" in r.get_json()["error"] and "分時擴縮可以照常使用" in r.get_json()["error"]
 
 
 def test_api_schedule_rejects_tampered_plan(monkeypatch):
@@ -199,7 +201,9 @@ def test_as_run_due_intervals_and_skips_without_k8s(monkeypatch):
     monkeypatch.setattr(web_demo, "_as_last_run", {"schedules": 0.0, "idle": 0.0})
     monkeypatch.setattr(web_demo, "K8S_ENABLED", False)
     web_demo._as_run_due(1000)
-    assert calls == []
+    assert calls == ["_as_tick_schedules"]          # 本機沒連線：只跑排程（客戶叢集走 Git），不跑喚醒與閒置判斷
+    calls.clear()
+    monkeypatch.setattr(web_demo, "_as_last_run", {"schedules": 0.0, "idle": 0.0})
     monkeypatch.setattr(web_demo, "K8S_ENABLED", True)
     web_demo._as_run_due(1000)
     web_demo._as_run_due(1010)
@@ -242,3 +246,81 @@ def test_calendar_and_readonly_include_autoscale():
     assert web_demo._CAL_EVENT_LABEL["sleep"] == "休眠" and web_demo._CAL_EVENT_LABEL["wake"] == "喚醒"
     assert any(m == "GET" and rx.match("/api/autoscale") for m, rx in web_demo._READONLY_API)
     assert not any(m != "GET" and rx.match("/api/autoscale/schedule") for m, rx in web_demo._READONLY_API)
+
+
+# ── 2026-10-23：分時擴縮支援客戶自帶叢集（副本數寫進客戶的部署設定 repo）──
+ZT_NS = "zt-cust-0123456789abcdef"
+
+
+class _FakeTenantRepo:
+    def __init__(self):
+        self.calls = []
+
+    def set_replicas(self, app, n):
+        self.calls.append((app, n))
+        return {"previous_replicas": None}
+
+
+@pytest.fixture()
+def remote(monkeypatch, tmp_path):
+    from core import autoscale_store as st
+    st.init(str(tmp_path / "remote.db"))
+    report = {"deployments": [{"name": "web", "replicas": 1, "ready": 1}, {"name": "zt-reporter", "replicas": 1, "ready": 1}]}
+    repo = _FakeTenantRepo()
+    sent, events = [], []
+    monkeypatch.setattr(web_demo, "_session_ns", lambda: ZT_NS)
+    monkeypatch.setattr(web_demo, "_remote_report", lambda ns: report)
+    monkeypatch.setattr(web_demo, "_remote_owner", lambda ns: "cust")
+    monkeypatch.setattr(web_demo, "_remote_write_guard", lambda ns: None)
+    monkeypatch.setattr(web_demo, "_tenant_repo", lambda u: repo)
+    monkeypatch.setattr(web_demo, "_check_scale_risk", lambda *a, **k: (False, None))
+    monkeypatch.setattr(web_demo._push, "send_async", lambda ns, msg: sent.append(msg))
+    monkeypatch.setattr(web_demo._events, "record", lambda *a, **k: events.append(a))
+    return SimpleNamespaceRemote(report=report, repo=repo, sent=sent, events=events, store=st)
+
+
+class SimpleNamespaceRemote:
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
+
+
+def test_customer_cluster_parse_and_apply_writes_git(remote):
+    c = _client()
+    d = c.post("/api/autoscale/parse", json={"text": "web 白天 3 個、晚上 1 個"}).get_json()
+    assert d["ok"] and d["current"] == 1
+    r = c.post("/api/autoscale/schedule", json={"plan": d["plan"]}).get_json()
+    assert r["ok"] and "部署設定" in r["message"]
+    target = d["now_target"]
+    if target != 1:
+        assert remote.repo.calls == [("web", target)]
+        assert remote.events and remote.events[-1][1] == "scale" and remote.events[-1][4]["via"] == "git"
+    assert remote.sent == []                        # 使用者自己按套用：不推播
+    lst = c.get("/api/autoscale").get_json()
+    assert lst["remote"] is True and [x["name"] for x in lst["items"]] == ["web"]   # 回報器自己不列出
+    assert lst["items"][0]["schedule"]
+
+
+def test_customer_cluster_background_switch_pushes(remote):
+    plan = parse_schedule("web 白天 3 個、晚上 1 個")["plan"]
+    remote.store.save_schedule(ZT_NS, plan)
+    assert web_demo._as_apply_schedule(ZT_NS, "web", plan, 1, _t(2026, 10, 12, 10), notify=True) == 3
+    assert remote.repo.calls == [("web", 3)]
+    assert remote.sent and "部署設定" in remote.sent[-1]["body"]
+
+
+def test_customer_cluster_offline_is_explained(remote, monkeypatch):
+    monkeypatch.setattr(web_demo, "_remote_report", lambda ns: {})
+    monkeypatch.setattr(web_demo, "_remote_write_guard", lambda ns: "你的叢集目前離線")
+    r = _client().post("/api/autoscale/parse", json={"text": "web 白天 3 個、晚上 1 個"})
+    assert r.status_code == 503 and "離線" in r.get_json()["error"]
+
+
+def test_background_handles_customer_schedules_without_local_k8s(remote, monkeypatch):
+    called = []
+    monkeypatch.setattr(web_demo, "_as_apply_schedule", lambda ns, app, plan, last, notify=False: called.append((ns, notify)))
+    monkeypatch.setattr(web_demo, "K8S_ENABLED", False)
+    remote.store.save_schedule(ZT_NS, parse_schedule("web 白天 3 個、晚上 1 個")["plan"])
+    remote.store.save_schedule("user-local", parse_schedule("api 白天 3 個、晚上 1 個")["plan"])
+    monkeypatch.setattr(web_demo, "_as_last_run", {"schedules": 0.0, "idle": 0.0})
+    web_demo._as_run_due(1000)
+    assert called == [(ZT_NS, True)]                # 本機 K8s 沒連線：只處理客戶叢集的排程

@@ -4553,7 +4553,7 @@ W.autoscale = {
   summary: d => d.ok === false ? '分時與休眠：' + (d.error || '')
     : `分時與休眠：${(d.items || []).filter(x => x.sleeping).length} 個服務休眠中，${(d.items || []).filter(x => x.schedule).length} 個有排程`,
   head: d => `<h2>分時與休眠</h2><span class="meta">${d.ok === false ? '' : `<span>連續 ${esc(d.idle_days)} 天沒人用就休眠</span>`}<span>${esc(d.at)} 的資料</span></span>
-    <div class="filters">${d.ok === false ? '' : `<label class="as-idle">閒置 <select class="as-idle-sel" aria-label="閒置幾天就休眠">${[1,2,3,4,5,6,7].map(n => `<option value="${n}" ${n === Number(d.idle_days) ? 'selected' : ''}>${n}</option>`).join('')}</select> 天就休眠</label>
+    <div class="filters">${d.ok === false || d.remote ? '' : `<label class="as-idle">閒置 <select class="as-idle-sel" aria-label="閒置幾天就休眠">${[1,2,3,4,5,6,7].map(n => `<option value="${n}" ${n === Number(d.idle_days) ? 'selected' : ''}>${n}</option>`).join('')}</select> 天就休眠</label>
       <button type="button" class="chip ghost" data-act="as-idle-save">儲存天數</button>`}<button type="button" class="chip ghost" data-act="refresh">重新整理</button></div>`,
   body: (d, st) => {
     if(d.ok === false) return emptyBlock('這個功能現在不能用。', d.error || '');
@@ -4571,16 +4571,17 @@ W.autoscale = {
         : x.exempt ? '<div class="dim as-note">在例外清單，不會休眠</div>'
         : x.idle_note ? `<div class="dim as-note">${esc(x.idle_note)}</div>` : '';
       const btns = (x.sleeping && !x.waking ? `<button type="button" class="btn btn-sm primary" data-act="as-wake" data-name="${esc(x.name)}">喚醒</button>` : '') +
-        `<button type="button" class="btn btn-sm" data-act="as-exempt" data-name="${esc(x.name)}" data-v="${x.exempt ? 0 : 1}">${x.exempt ? '允許休眠' : '不要休眠'}</button>` +
+        (d.remote ? '' : `<button type="button" class="btn btn-sm" data-act="as-exempt" data-name="${esc(x.name)}" data-v="${x.exempt ? 0 : 1}">${x.exempt ? '允許休眠' : '不要休眠'}</button>`) +
         (x.schedule ? `<button type="button" class="btn btn-sm" data-act="as-cancel" data-name="${esc(x.name)}">取消排程</button>` : '') +
         `<button type="button" class="btn btn-sm primary" data-act="as-edit" data-name="${esc(x.name)}">${x.schedule ? '修改排程' : '設定排程'}</button>`;
       return `<tr class="enter" style="animation-delay:${i * 25}ms"><td class="id">${esc(x.name)}${note}</td><td>${state}</td>
         <td class="as-sched">${sched}</td><td class="r"><div class="as-btns">${btns}</div></td></tr>`;
     }).join('');
     const notes = [];
-    if(d.prometheus_ok === false) notes.push('現在連不上 Prometheus，看不到流量，所以暫時不會讓任何服務休眠。');
+    if(d.remote) notes.push(d.remote_note || '');
+    if(d.prometheus_ok === false && !d.remote) notes.push('現在連不上 Prometheus，看不到流量，所以暫時不會讓任何服務休眠。');
     if(d.test_override_seconds) notes.push(`測試模式：閒置 ${d.test_override_seconds} 秒就會休眠。`);
-    notes.push('休眠是看服務實際收到的網路流量，健康檢查本身的流量不算。休眠中有人連進來會自動喚醒，通常 30 秒到 1 分鐘恢復。');
+    if(!d.remote) notes.push('休眠是看服務實際收到的網路流量，健康檢查本身的流量不算。休眠中有人連進來會自動喚醒，通常 30 秒到 1 分鐘恢復。');
     return asMsg(st) + `<div class="table-wrap"><table><thead><tr><th scope="col">服務</th><th scope="col">狀態</th><th scope="col">分時擴縮</th><th scope="col" class="r">操作</th></tr></thead><tbody>${rows}</tbody></table></div>
       ${pagerHTML(items.length, st.p || 1, W_PER)}
       <div class="w-note">${notes.map(esc).join('<br>')}</div>
@@ -9396,7 +9397,7 @@ def api_report():
 # ── 分時擴縮與休眠模式（2026-10-11）──────────────────────────────────
 # agents/timeslot.py：一句話時段 → 時段表、省錢換算；core/sleep_mode.py：閒置判斷與喚醒器；
 # core/autoscale_store.py：使用者的設定（排程、閒置天數、例外清單）。
-# 只支援本機模式：休眠要看平台自己的 Prometheus，平台也連不進客戶叢集。
+# 休眠只支援本機模式（要看平台自己的 Prometheus）；分時擴縮在客戶叢集也能用，副本數寫進客戶的部署設定 repo（2026-10-23）。
 # 服務是不是在休眠、原本開幾個，記在 Deployment 自己的 annotation 上；背景迴圈每 10 秒對一次帳，
 # 所以服務被手動擴縮、重新部署或刪除時，喚醒器和 Service 都會自動收回原狀，不用每條路徑各自處理。
 from core import autoscale_store as _as_store
@@ -9682,6 +9683,8 @@ def _as_apply_schedule(ns, app, plan, last_target, now=None, notify=False):
     if target is None or target == last_target or (ns, app) in _as_busy:
         return None
     target = min(int(target), max_replicas())
+    if _is_remote_ns(ns):
+        return _as_apply_schedule_remote(ns, app, target, notify)
     apps = k8s_client.AppsV1Api()
     try:
         dep = apps.read_namespaced_deployment(app, ns, _request_timeout=_AS_K8S_TIMEOUT)
@@ -9708,9 +9711,40 @@ def _as_apply_schedule(ns, app, plan, last_target, now=None, notify=False):
     return target
 
 
+def _as_apply_schedule_remote(ns, app, target, notify=False):
+    """客戶叢集（2026-10-23）：時段切換時把副本數寫進客戶的部署設定 repo（跟手動擴縮 _remote_scale 同一條路），
+    客戶叢集的 Flux 拉下來套用。經過同一套 _scale_check，寫事件紀錄，背景自動套用時推播。"""
+    dep = _as_remote_dep(ns, app)
+    if dep is None:
+        return None
+    cur = int(dep.spec.replicas or 0)
+    if cur != target:
+        ok, msg, _status = _scale_check(app, target, ns)
+        if ok:
+            blocked = _remote_write_guard(ns)
+            if blocked:
+                ok, msg = False, blocked
+        if ok:
+            try:
+                _tenant_repo(_remote_owner(ns)).set_replicas(app, target)
+            except Exception as e:
+                ok, msg = False, str(e)[:200]
+        if ok:
+            _events.record(ns, "scale", app, "ok", {"replicas": target, "source": "schedule", "from": cur, "via": "git"})
+            if notify:
+                _as_notify(ns, app, "⏱ 分時擴縮", f"{app} 依排程從 {cur} 個調成 {target} 個（已寫入你的部署設定，叢集同步後生效）。")
+        else:
+            _events.record(ns, "scale", app, "fail", {"replicas": target, "source": "schedule", "error": msg, "via": "git"})
+            if notify:
+                _as_notify(ns, app, "⚠ 分時擴縮沒有調成", f"{app} 依排程要調成 {target} 個，但{msg}")
+    _as_store.set_last_target(ns, app, target)
+    return target
+
+
 def _as_tick_schedules():
     for s in _as_store.all_schedules():
-        if s["namespace"].startswith("user-"):
+        # 平台叢集（user-）要本機 K8s 連線；客戶叢集（zt-）走 Git，不需要（2026-10-23）
+        if (s["namespace"].startswith("user-") and K8S_ENABLED) or _is_remote_ns(s["namespace"]):
             try:
                 _as_apply_schedule(s["namespace"], s["app"], s["plan"], s["last_target"], notify=True)
             except Exception as e:
@@ -9789,9 +9823,16 @@ _as_last_run = {"schedules": 0.0, "idle": 0.0}
 def _as_run_due(now=None):
     """分時擴縮與休眠的背景工作。2026-10-23 起掛在柏碩的預約背景迴圈 _schedule_loop 上（接手說明：不要第二套排程器），
     由它每 10 秒呼叫一次：喚醒每次都看、套用排程每 30 秒、閒置判斷照 _AS_IDLE_EVERY。K8s 沒連線時跳過。"""
-    if not K8S_ENABLED:
-        return
     now = _time.time() if now is None else now
+    if not K8S_ENABLED:
+        # 平台本機的 K8s 沒連線：喚醒與閒置判斷跳過；客戶叢集的排程走 Git，照樣處理
+        if now - _as_last_run["schedules"] >= _AS_SCHEDULE_EVERY:
+            _as_last_run["schedules"] = now
+            try:
+                _as_tick_schedules()
+            except Exception as e:
+                print(f"[分時擴縮] _as_tick_schedules 失敗：{e}")
+        return
     jobs = [(None, _as_tick_wake)]
     if now - _as_last_run["schedules"] >= _AS_SCHEDULE_EVERY:
         _as_last_run["schedules"] = now
@@ -9807,28 +9848,50 @@ def _as_run_due(now=None):
 
 
 # ── API ──
-def _as_guard():
+_AS_REMOTE_NO_SLEEP = ("休眠、喚醒和例外清單目前只支援平台自己的叢集：你的叢集回報的資料裡沒有網路流量，"
+                       "平台判斷不出有沒有人在用。分時擴縮可以照常使用。")
+
+
+def _as_guard(remote_ok=False):
+    """remote_ok=True：分時擴縮（查詢、解析、套用、取消）在客戶叢集也能用，副本數寫進客戶的部署設定 repo（2026-10-23）。"""
     if "username" not in session:
         return None, (jsonify({"error": "Not authenticated"}), 401)
     ns = _session_ns()
     if _is_remote_ns(ns):
-        return None, (jsonify({"ok": False, "error": "分時擴縮和休眠目前只支援平台自己的叢集，"
-                                                     "你使用的是自己電腦的叢集，這個功能之後會支援。"}), 400)
+        if not remote_ok:
+            return None, (jsonify({"ok": False, "error": _AS_REMOTE_NO_SLEEP}), 400)
+        return ns, None
     if not K8S_ENABLED:
         return None, (jsonify({"ok": False, "error": "Kubernetes 沒有連線。請先確認 Docker Desktop 的 Kubernetes 已經啟動。"}), 503)
     return ns, None
 
 
 class _AsClusterDown(Exception):
-    """叢集沒有回應（逾時、連不上），跟「找不到這個服務」分開講。"""
+    """叢集沒有回應（逾時、連不上、客戶叢集沒有回報），跟「找不到這個服務」分開講。"""
 
 
 @app.errorhandler(_AsClusterDown)
 def _as_cluster_down(e):
-    return jsonify({"ok": False, "error": "Kubernetes 叢集沒有回應，請確認 Docker Desktop 的 Kubernetes 正常運作後再試一次。"}), 503
+    return jsonify({"ok": False, "error": str(e) or "Kubernetes 叢集沒有回應，請確認 Docker Desktop 的 Kubernetes 正常運作後再試一次。"}), 503
+
+
+def _as_remote_dep(ns, app):
+    """客戶叢集：從回報器的資料組出分時擴縮需要的欄位（跟 Deployment 物件同樣的取法）。沒有回報時丟 _AsClusterDown 並說明原因。"""
+    rep = _remote_report(ns)
+    if not rep:
+        raise _AsClusterDown(_remote_write_guard(ns) or "還沒有收到你叢集的回報，請確認電腦開著、Docker Desktop 正在執行。")
+    from types import SimpleNamespace as _NS
+    for d in rep.get("deployments") or []:
+        if d.get("name") == app and app != "zt-reporter":
+            return _NS(metadata=_NS(name=app, annotations={}, labels={}),
+                       spec=_NS(replicas=int(d.get("replicas") or 0), template=_NS(spec=_NS(containers=[]))),
+                       status=_NS(ready_replicas=int(d.get("ready") or 0)))
+    return None
 
 
 def _as_read_dep(ns, app):
+    if _is_remote_ns(ns):
+        return _as_remote_dep(ns, app)
     try:
         d = k8s_client.AppsV1Api().read_namespaced_deployment(app, ns, _request_timeout=_AS_K8S_TIMEOUT)
         return None if _as_is_waker(d) else d
@@ -9864,13 +9927,29 @@ def _as_plan_view(ns, plan, dep):
 
 @app.route("/api/autoscale")
 def api_autoscale():
-    ns, err = _as_guard()
+    ns, err = _as_guard(remote_ok=True)
     if err:
         return err
     settings = _as_store.get_settings(ns)
     scheds = {s["app"]: s for s in _as_store.get_schedules(ns)}
     now = datetime.now(_ts.TZ)
     items = []
+    if _is_remote_ns(ns):
+        rep = _remote_report(ns)
+        if not rep:
+            raise _AsClusterDown(_remote_write_guard(ns) or "還沒有收到你叢集的回報，請確認電腦開著、Docker Desktop 正在執行。")
+        for d in _rv.list_deployments(rep):
+            row = {"name": d["name"], "replicas": int(d.get("replicas") or 0), "ready": int(d.get("ready") or 0),
+                   "sleeping": False, "waking": False, "exempt": False}
+            s_ = scheds.get(d["name"])
+            if s_:
+                nxt = _ts.next_change(s_["plan"], now)
+                row["schedule"] = {"rows": _ts.describe(s_["plan"]), "now": _ts.replicas_at(s_["plan"], now),
+                                   "next": {"at": _as_fmt_when(nxt[0]), "replicas": nxt[1]} if nxt else None}
+            items.append(row)
+        items.sort(key=lambda x: x["name"])
+        return jsonify({"ok": True, "remote": True, "remote_note": _AS_REMOTE_NO_SLEEP, "items": items,
+                        "idle_days": settings["idle_days"]})
     try:
         dep_items = k8s_client.AppsV1Api().list_namespaced_deployment(ns, _request_timeout=_AS_K8S_TIMEOUT).items
     except Exception as e:
@@ -9902,7 +9981,7 @@ def api_autoscale():
 
 @app.route("/api/autoscale/parse", methods=["POST"])
 def api_autoscale_parse():
-    ns, err = _as_guard()
+    ns, err = _as_guard(remote_ok=True)
     if err:
         return err
     from guardian.yaml_validator import max_replicas
@@ -9921,7 +10000,7 @@ def api_autoscale_parse():
 
 @app.route("/api/autoscale/schedule", methods=["POST"])
 def api_autoscale_schedule():
-    ns, err = _as_guard()
+    ns, err = _as_guard(remote_ok=True)
     if err:
         return err
     from guardian.yaml_validator import max_replicas
@@ -9944,13 +10023,16 @@ def api_autoscale_schedule():
     now = datetime.now(_ts.TZ)
     target = _as_apply_schedule(ns, plan["app"], plan, None, now)
     sleeping = bool((dep.metadata.annotations or {}).get(_sleep.ANN_SLEEP_REPLICAS))
+    if _is_remote_ns(ns):
+        return jsonify({"ok": True, "message": f"已經設定好 {plan['app']} 的分時擴縮。現在 {now.strftime('%H:%M')}，目前應該開 {target} 個副本，"
+                        "已經寫入你的部署設定，你的叢集同步後（通常 1 分鐘內）就會生效。之後每個時段切換時都會自動寫入。"})
     return jsonify({"ok": True, "message": f"已經設定好 {plan['app']} 的分時擴縮。現在 {now.strftime('%H:%M')}，"
                     + (f"它正在休眠，醒來時會開 {target} 個副本。" if sleeping else f"目前應該開 {target} 個副本，已經調整好了。")})
 
 
 @app.route("/api/autoscale/cancel", methods=["POST"])
 def api_autoscale_cancel():
-    ns, err = _as_guard()
+    ns, err = _as_guard(remote_ok=True)
     if err:
         return err
     name = _as_name_arg()

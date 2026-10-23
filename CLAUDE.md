@@ -302,7 +302,7 @@ GitHub org 開的私有 repo（`gitops/tenant_repo.py`），客戶叢集的 Flux
 - 閒置天數上限 7 天（Prometheus 只保留 10 天、沒有永久儲存）。喚醒器第一次用要從 Docker Hub 下載 `python:3.12-alpine`。
 - 分時擴縮的 K8s 呼叫一律帶 `_request_timeout=_AS_K8S_TIMEOUT`；`_as_read_dep` 叢集沒回應時丟 `_AsClusterDown`（回 503 中文說明）。
 - 「我的服務」頁有「分時與休眠」模組（`W.autoscale`），「設定排程」彈窗是 `openScheduleEditor()`。
-- 只支援本機模式；客戶叢集模式（`zt-` 開頭的 namespace）還沒做：要改用回報器的資料判斷閒置，排程改成照時間寫 Git 設定。
+- 客戶叢集模式（`zt-` 開頭的 namespace，2026-10-23）：**分時擴縮可以用**，時段切換時 `_as_apply_schedule_remote()` 用 `_tenant_repo().set_replicas()` 寫進客戶的部署設定 repo（跟手動擴縮同一條路），服務狀態從回報器讀（`_as_remote_dep()`）；本機 K8s 沒連線時客戶叢集的排程照樣跑。**休眠、喚醒、例外清單不支援**（回報器沒有網路流量；要做得改回報器並把喚醒器裝進客戶叢集），API 會說明原因（`_AS_REMOTE_NO_SLEEP`）。
 - 測試、展示時可以把閒置期間縮短：環境變數 `ZT_IDLE_SECONDS_OVERRIDE`（秒）只套用在 `ZT_IDLE_OVERRIDE_NAMESPACES` 列出的 namespace，正式運作不要設。
 - **踩過的坑**：設定儲存第一次使用時在鎖裡面又拿同一把鎖，整個網站卡住，已改用 RLock。
 - **分支**：學校那台（隊友）的進度推在 `dev/capstone6767` 分支，合併進 main 前先跟負責人確認。
