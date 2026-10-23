@@ -1589,6 +1589,13 @@ a{color:var(--signal)}
 .proj-del .note{display:block;font-size:12.5px;color:var(--text-3)}
 .proj-del .warn-t{color:var(--stop);font-size:12.5px}
 .proj-warn{font-size:13.5px;background:var(--caution-soft);border:1px solid var(--caution);border-radius:4px;padding:8px 10px;margin-top:10px}
+.proj-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.proj-stat{border:1px solid var(--grid);border-radius:6px;background:var(--panel);padding:14px 16px;display:flex;flex-direction:column;gap:2px}
+.proj-stat b{font-size:24px;font-weight:700;font-family:var(--f-id)}
+.proj-stat span{font-size:13.5px;color:var(--text-2)}
+.proj-stat em{font-style:normal;font-size:12.5px;color:var(--text-3)}
+.proj-stat.warn{border-color:var(--caution)}
+.proj-stat.warn em{color:var(--caution)}
 .proj-err{font-size:13.5px;background:var(--stop-soft);border:1px solid color-mix(in srgb,var(--stop) 50%,transparent);border-radius:4px;padding:8px 10px;margin-top:10px}
 /* 分時擴縮：「我的服務」頁的閒置天數、設定排程彈窗（2026-10-21） */
 .as-idle{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;color:var(--text-2)}
@@ -2460,7 +2467,9 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
         <div class="page-actions"><button type="button" class="btn primary" id="proj-newchat-btn" onclick="projectNewChat()">在這個專案開始新對話</button></div></div>
       <div class="proj-tabs" role="tablist" aria-label="專案分頁">
         <button type="button" role="tab" data-ptab="overview" onclick="setProjTab('overview')">總覽</button>
+        <button type="button" role="tab" data-ptab="summary" onclick="setProjTab('summary')">摘要</button>
         <button type="button" role="tab" data-ptab="services" onclick="setProjTab('services')">服務</button>
+        <button type="button" role="tab" data-ptab="schedule" onclick="setProjTab('schedule')">排程</button>
         <button type="button" role="tab" data-ptab="files" onclick="setProjTab('files')">檔案</button>
         <button type="button" role="tab" data-ptab="settings" onclick="setProjTab('settings')">設定</button>
       </div>
@@ -3420,7 +3429,9 @@ function renderProjectPage(){
     b.classList.toggle('active', on); b.setAttribute('aria-selected', on ? 'true' : 'false');
   });
   const body = document.getElementById('proj-body');
-  if(projTab === 'services') body.innerHTML = projServicesHTML(p);
+  if(projTab === 'summary'){ body.innerHTML = '<div class="proj-box"><p class="proj-muted">正在整理…</p></div>'; loadProjSummary(p); }
+  else if(projTab === 'schedule'){ body.innerHTML = '<div class="proj-box"><p class="proj-muted">正在讀取排程…</p></div>'; loadProjSchedule(p); }
+  else if(projTab === 'services') body.innerHTML = projServicesHTML(p);
   else if(projTab === 'files') body.innerHTML = projFilesHTML(p);
   else if(projTab === 'settings') body.innerHTML = projSettingsHTML(p);
   else body.innerHTML = projOverviewHTML(p);
@@ -3468,6 +3479,62 @@ function projServicesHTML(p){
   return `<div class="proj-box"><h2>服務</h2>${rows}
     <div class="proj-actions" style="justify-content:flex-start"><span class="proj-msg" id="proj-svc-msg"></span></div>
     <label class="lbl">把現有的服務移進這個專案</label>${add}</div>`;
+}
+// 2026-10-23：摘要分頁（只算這個專案裡的服務，數字都是平台紀錄算出來的）
+async function loadProjSummary(p){
+  let d;
+  try { d = await projFetch('/api/projects/' + encodeURIComponent(p.id) + '/summary?days=7'); }
+  catch(e){ d = {ok:false, error:e.message}; }
+  if(projTab !== 'summary' || !projData || projData.id !== p.id) return;
+  const body = document.getElementById('proj-body');
+  if(!d.ok){ body.innerHTML = `<div class="proj-box">${emptyBlock('讀不到摘要。', d.error || '')}</div>`; return; }
+  const sv = d.services;
+  const tile = (n, label, sub, tone) => `<div class="proj-stat ${tone || ''}"><b>${esc(n)}</b><span>${esc(label)}</span>${sub ? `<em>${esc(sub)}</em>` : ''}</div>`;
+  const tiles = [
+    tile(sv.total, '個服務', sv.total ? (sv.attention ? `${sv.attention} 個有狀況` : (sv.sleeping ? `${sv.sleeping} 個休眠中` : '全部正常')) : '還沒有服務', sv.attention ? 'warn' : ''),
+    tile(d.deploys, `近 ${d.days} 天部署`, d.deploys_failed ? `${d.deploys_failed} 次失敗` : ''),
+    tile(d.changes, '次擴縮、換版本或回滾', ''),
+    tile(d.heals, '次自動修復', d.heals_need_you ? `${d.heals_need_you} 次需要你處理` : '', d.heals_need_you ? 'warn' : ''),
+    tile(d.blocked, '次審查擋下', ''),
+  ].join('');
+  const recent = d.recent.length ? d.recent.map(e => `<div class="proj-row"><span class="proj-muted" style="flex:none;width:92px">${projTime(e.ts)}</span>
+      <span class="grow">${esc(e.app || '')}：${esc(e.detail || '')}</span></div>`).join('')
+    : '<p class="proj-muted">這個專案還沒有紀錄，部署或操作之後就會出現在這裡。</p>';
+  const sched = d.schedules.length ? d.schedules.map(x => `<div class="proj-row"><span class="grow">${esc(x.app)}：${esc(x.rows.map(r => r.when + ' ' + r.replicas + ' 個').join('；'))}</span>
+      <span class="proj-muted">${x.next ? `下次 ${esc(x.next.at)} 變成 ${esc(x.next.replicas)} 個` : ''}</span></div>`).join('')
+    : '<p class="proj-muted">這個專案的服務都沒有設定分時擴縮，可以到「排程」分頁設定。</p>';
+  body.innerHTML = `<div class="page-stack">
+    <div class="proj-stats">${tiles}</div>
+    <div class="proj-box"><h2>最近的動態</h2>${recent}</div>
+    <div class="proj-box"><h2>分時擴縮</h2>${sched}</div>
+    <p class="field-hint">${d.days_without_incident != null && d.has_data ? `已經連續 ${esc(d.days_without_incident)} 天沒有需要修復的狀況。` : ''}數字都是從平台紀錄算出來的，只算這個專案裡的服務。</p>
+  </div>`;
+}
+// 2026-10-23：排程分頁（沿用「我的服務」的設定彈窗與確認卡）
+async function loadProjSchedule(p){
+  let d;
+  try { d = await getJSON('/api/autoscale'); } catch(e){ d = {ok:false, error:e.message}; }
+  if(projTab !== 'schedule' || !projData || projData.id !== p.id) return;
+  const body = document.getElementById('proj-body');
+  if(d.ok === false){ body.innerHTML = `<div class="proj-box">${emptyBlock('排程現在不能用。', d.error || '')}</div>`; return; }
+  const mine = new Set(p.services.map(s => s.name));
+  const items = (d.items || []).filter(x => mine.has(x.name));
+  const rows = items.length ? items.map(x => {
+    const st = x.sleeping ? '休眠中' : `${x.ready}/${x.replicas} 個副本就緒`;
+    const sch = x.schedule ? `${x.schedule.rows.map(r => r.when + ' ' + r.replicas + ' 個').join('；')}${x.schedule.next ? `（下次 ${x.schedule.next.at} 變成 ${x.schedule.next.replicas} 個）` : ''}` : '沒有排程';
+    return `<div class="proj-row"><span class="grow"><b>${esc(x.name)}</b><span class="proj-muted">　${esc(st)}</span><br><span class="proj-muted">${esc(sch)}</span></span>
+      ${d.remote ? '' : `<button type="button" class="btn btn-sm" data-act="as-suggest" data-name="${escAttr(x.name)}">建議時段</button>`}
+      ${x.schedule ? `<button type="button" class="btn btn-sm" onclick="projCancelSchedule('${escAttr(x.name)}')">取消排程</button>` : ''}
+      <button type="button" class="btn btn-sm primary" data-act="as-edit" data-name="${escAttr(x.name)}">${x.schedule ? '修改排程' : '設定排程'}</button></div>`;
+  }).join('') : '<p class="proj-muted">這個專案還沒有服務。到「服務」分頁移入，或在專案的對話裡部署。</p>';
+  body.innerHTML = `<div class="proj-box"><h2>分時擴縮</h2>${rows}
+    <div class="proj-actions" style="justify-content:flex-start"><span class="proj-msg" id="proj-sched-msg"></span></div>
+    <p class="field-hint">${d.remote ? esc(d.remote_note || '') : `閒置幾天就休眠、例外清單是整個帳號的設定，請到<a href="#" onclick="showPage('services');return false">我的服務</a>調整。`}</p></div>`;
+}
+async function projCancelSchedule(name){
+  const d = await postJSON('/api/autoscale/cancel', {name});
+  if(projData) await loadProjSchedule(projData);
+  projSetMsg('proj-sched-msg', d.message || d.error || '', !!d.ok);
 }
 function projFilesHTML(p){
   const rows = p.files.length ? p.files.map(f => `
@@ -5022,6 +5089,7 @@ document.addEventListener('click', function(e){
     t.disabled = true; t.textContent = '套用中';
     postJSON('/api/autoscale/schedule', {plan:data.plan})
       .then(d => { if(d.ok && document.getElementById('svc-autoscale') && currentPageName() === 'services') loadServicesPage(true);
+                   if(d.ok && currentPageName() === 'project' && projTab === 'schedule' && projData) loadProjSchedule(projData);
                    return d.ok ? rerenderWidget(w, {msg:d.message, err:false}, Object.assign({}, data, {done:true}))
                                : rerenderWidget(w, {msg:d.error || '沒有套用成功。', err:true}); })
       .catch(e => rerenderWidget(w, {msg:'沒有套用成功：' + (e.message || e), err:true}));
@@ -10349,6 +10417,45 @@ def api_project_services(pid):
         return _ws_err(f"「{name}」已經在專案「{(q or {}).get('name', '')}」裡，一個服務只能屬於一個專案。請先從那個專案移出。", 409)
     _ws.assign_service(ns, name, owner, pid)
     return jsonify({"ok": True, "message": f"已經把 {name} 移進專案。"})
+
+
+@app.route("/api/projects/<pid>/summary")
+def api_project_summary(pid):
+    """2026-10-23：專案摘要。只算這個專案裡的服務：事件紀錄依 app 過濾後交給 agents/report.build_report（固定規則，不用 AI）。"""
+    owner, ns, err = _ws_guard()
+    if err:
+        return err
+    p = _ws.get_project(owner, pid)
+    if not p:
+        return _ws_err("找不到這個專案，可能已經被刪除了。", 404)
+    from agents.report import build_report
+    try:
+        days = max(1, min(30, int(request.args.get("days") or 7)))
+    except ValueError:
+        days = 7
+    apps = set(_ws.services_of(ns, owner, pid))
+    events = [e for e in _events.query(ns, since=_time.time() - days * 86400) if e.get("app") in apps] if apps else []
+    r = build_report(events, days)
+    view = _ws_project_view(owner, ns, p)
+    svcs = view["services"]
+    ops = r["ops"]
+    scheds = {s_["app"]: s_ for s_ in _as_store.get_schedules(ns) if s_["app"] in apps}
+    now = datetime.now(_ts.TZ)
+    sched_rows = []
+    for app_name, s_ in sorted(scheds.items()):
+        nxt = _ts.next_change(s_["plan"], now)
+        sched_rows.append({"app": app_name, "rows": _ts.describe(s_["plan"]),
+                           "next": {"at": _as_fmt_when(nxt[0]), "replicas": nxt[1]} if nxt else None})
+    return jsonify({"ok": True, "days": days, "has_data": r["has_data"],
+                    "services": {"total": len(svcs),
+                                 "ready": sum(1 for x in svcs if x["exists"] and not x["sleeping"] and x["replicas"] and x["ready"] == x["replicas"]),
+                                 "sleeping": sum(1 for x in svcs if x["sleeping"]),
+                                 "attention": sum(1 for x in svcs if not x["exists"] or (not x["sleeping"] and x["ready"] != x["replicas"]))},
+                    "deploys": r["deploys"]["total"], "deploys_failed": r["deploys"]["failed"],
+                    "changes": ops["scale"]["total"] + ops["update"]["total"] + ops["rollback"]["total"],
+                    "heals": r["heals"]["total"], "heals_need_you": r["heals"]["needs_you"],
+                    "blocked": r["reviews"]["block"], "days_without_incident": r["incidents"]["days_without_incident"],
+                    "recent": r["recent"][:10], "schedules": sched_rows})
 
 
 @app.route("/api/projects/<pid>/files/<fid>", methods=["GET", "DELETE"])

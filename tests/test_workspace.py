@@ -226,3 +226,24 @@ def test_real_delete_wrapper_forgets_project(monkeypatch):
     monkeypatch.setattr(wd, "_k8s_delete_deployment_by_mode", lambda app, ns=None: (True, "ok"))
     wd.k8s_delete_deployment("web", "user-alice")
     assert ws.services_of("user-alice", "alice", p["id"]) == []
+
+
+def test_project_summary_only_counts_project_services(web, monkeypatch):
+    """2026-10-23：專案摘要只算專案裡的服務，其他服務的事件不算；別人的專案 404。"""
+    import time as _t
+    now = _t.time()
+    evs = [{"ts": now - 3600, "kind": "deploy", "app": "web", "outcome": "ok", "data": {"image": "nginx", "pods": 1}},
+           {"ts": now - 1800, "kind": "scale", "app": "web", "outcome": "ok", "data": {"replicas": 3}},
+           {"ts": now - 900, "kind": "deploy", "app": "db", "outcome": "ok", "data": {"image": "redis", "pods": 1}},
+           {"ts": now - 600, "kind": "heal", "app": "web", "outcome": "inspect", "data": {"root_cause": "記憶體不足"}}]
+    monkeypatch.setattr(web._events, "query", lambda ns, since=0, kinds=None, limit=5000: [e for e in evs if e["ts"] >= since])
+    a, b = client_as(web, "alice"), client_as(web, "bob")
+    pid = a.post("/api/projects", json={"name": "商店"}).get_json()["project"]["id"]
+    empty = a.get(f"/api/projects/{pid}/summary").get_json()
+    assert empty["ok"] and empty["deploys"] == 0 and empty["recent"] == [] and empty["services"]["total"] == 0
+    a.post(f"/api/projects/{pid}/services", json={"action": "add", "name": "web"})
+    d = a.get(f"/api/projects/{pid}/summary?days=7").get_json()
+    assert d["deploys"] == 1 and d["changes"] == 1 and d["heals"] == 1 and d["heals_need_you"] == 1
+    assert all(e["app"] == "web" for e in d["recent"]) and len(d["recent"]) == 3
+    assert d["services"] == {"total": 1, "ready": 1, "sleeping": 0, "attention": 0}
+    assert b.get(f"/api/projects/{pid}/summary").status_code == 404
