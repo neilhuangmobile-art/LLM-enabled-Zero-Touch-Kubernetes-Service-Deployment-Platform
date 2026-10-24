@@ -2260,6 +2260,23 @@ priors 檔只有統計數字；瀏覽器實測建議出現、專案預設優先�
 - 含「系統」的誘導句會被記違規；
 - 正常的平台使用問題照樣回平台介紹、不記違規。
 
+## 54. 一個服務開多個 port：額外的 port 會不會搶走別人的 port，或讓整個服務連不上？
+
+**風險**：compose／K8s YAML 匯入原本只開第一個 port。開放多個 port 之後，額外的 port 也會在主機上綁定（Docker Desktop 的 LoadBalancer）。如果其中一個 port 已經被別的服務佔用，整個 Service 會卡在 pending，連主 port 都連不上。另外，衝突訊息不能洩漏其他帳號的服務名稱。
+
+**為什麼重要**：host port 是所有帳號共用的實體資源（11 節）；衝突檢查洩漏他人服務名稱的問題 30 節修過一次，不能因為新功能重新打開。
+
+**解決方式**：
+- 部署規格新增 `extra_ports`。匯入時去掉重複、跟主 port 撞的、格式不對的，最多 5 個；`_sanitize_deploy_payload` 在伺服器端再檢查一次。
+- `/api/deploy/conflicts` 的判斷抽成 `_port_conflict_owner()`。`_prepare_deploy` 對每個額外的 port 都檢查，被佔用就擋下；別的帳號佔用時只說「其他帳號的服務」。
+- 沒有 `extra_ports` 的部署，Deployment、Service 跟原本完全一樣。
+
+**驗證**：
+- `tests/test_multi_port.py` 7 項：compose 與 K8s YAML（含用名稱指定的 targetPort）的轉換、數量上限、Git 設定、伺服器端檢查、衝突不洩漏名稱。
+- 實測：一個 nginx 服務開 8095、8096，兩個 port 都回 200；平台刪除後 Deployment、Service、連線入口全部清除，兩個 port 都關閉。
+
+**殘留（實測發現，Docker Desktop 的行為）**：對外 port 一開始就搶不到、一直 pending 的 LoadBalancer Service，被刪除時會卡在 `service.kubernetes.io/load-balancer-cleanup` 清理標記，留在叢集裡。10/24 在學校電腦清掉 4 個，都是 port 80 被 `user-aaa` 的服務佔用造成的。處理方式：`kubectl patch svc <名稱> --type=merge -p '{"metadata":{"finalizers":null}}'`。
+
 ## 尚待排查（優先度較低，不是資源受限，只是還沒排到）
 
 - **2026-10-06 擴充 prompt injection 測試（OWASP AITG-APP-01 範例改寫 + 自行設計，

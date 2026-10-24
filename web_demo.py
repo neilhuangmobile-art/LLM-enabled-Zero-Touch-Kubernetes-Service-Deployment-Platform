@@ -385,7 +385,7 @@ def _k8s_env(app_name, env, force=None):
 
 def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namespace=None,
                env=None, container_port_override=None, expose=True, dns_alias=False,
-               command=None, args=None, volumes=None, secret_keys=None):
+               command=None, args=None, volumes=None, secret_keys=None, extra_ports=None):
     """env／container_port_override／expose／dns_alias 是 docker-compose 匯入用的（2026-10-10）：
     環境變數、容器實際監聽的 port、要不要對外開放（compose 沒寫 ports 的服務只給內部連）、
     另外建一個跟服務同名的內部連線入口（其他服務才能照 compose 的寫法用「db:5432」連過來）。"""
@@ -416,9 +416,10 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
         _probes = recommended_probes(image, cport)
         from gitops.manifest_writer import pod_volumes, build_pvc_docs
         _pod_vols, _vol_mounts = pod_volumes(app_name, volumes)
+        from gitops.manifest_writer import container_ports, extra_service_ports
         container = k8s_client.V1Container(
             name=app_name, image=image,
-            ports=[k8s_client.V1ContainerPort(container_port=cport)],
+            ports=[k8s_client.V1ContainerPort(container_port=c) for c in container_ports(cport, extra_ports)],
             resources=resources,
             # 密碼類環境變數從 Secret 讀（值不寫進設定檔與 Git），其他的直接寫
             env=_k8s_env(app_name, {**recommended_env(image), **(env or {})}, secret_keys) or None,
@@ -448,7 +449,11 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
             metadata=k8s_client.V1ObjectMeta(name=f"{app_name}-svc"),
             spec=k8s_client.V1ServiceSpec(
                 selector={"app": app_name},
-                ports=[k8s_client.V1ServicePort(port=port, target_port=cport)],
+                # 2026-10-24：有額外 port 時每個都要有名稱（K8s 規定）；沒有額外 port 時跟原本完全一樣
+                ports=([k8s_client.V1ServicePort(port=port, target_port=cport)] if not extra_ports else
+                       [k8s_client.V1ServicePort(name="main", port=port, target_port=cport)] +
+                       [k8s_client.V1ServicePort(name=f"e{int(e['port'])}", port=int(e["port"]), target_port=int(e["container"]))
+                        for e in extra_ports]),
                 type="LoadBalancer" if expose else "ClusterIP",
             ),
         )
@@ -459,7 +464,9 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
                 metadata=k8s_client.V1ObjectMeta(name=app_name, labels={"zerotouch/alias-of": app_name}),
                 spec=k8s_client.V1ServiceSpec(selector={"app": app_name}, type="ClusterIP", ports=(
                     [k8s_client.V1ServicePort(name="app", port=cport, target_port=cport)] +
-                    ([k8s_client.V1ServicePort(name="external", port=port, target_port=cport)] if port != cport else []))),
+                    ([k8s_client.V1ServicePort(name="external", port=port, target_port=cport)] if port != cport else []) +
+                    [k8s_client.V1ServicePort(name=p["name"], port=p["port"], target_port=p["targetPort"])
+                     for p in extra_service_ports([{"port": cport}, {"port": port}], extra_ports)])),
             )
         # 保存空間要先建好，Pod 才掛得上；已經存在的不動（PVC 建立後大部分欄位不能改，也不能動到資料）
         for _pvc in build_pvc_docs({"app_name": app_name, "volumes": volumes}, namespace):
@@ -5369,7 +5376,8 @@ const cpBlocked = s => (s.problems || []).some(p => p.level === 'block');
 const cpSpec = s => ({app_name:s.app_name, image:s.image, pods:s.pods, port:s.port, memory:s.memory || undefined, cpu:s.cpu || undefined,
                       env:s.env, container_port:s.container_port, expose:s.expose, dns_alias:s.dns_alias,
                       command:s.command || undefined, args:s.args || undefined, volumes:s.volumes || undefined,
-                      secret_keys:(s.secret_keys || []).length ? s.secret_keys : undefined});
+                      secret_keys:(s.secret_keys || []).length ? s.secret_keys : undefined,
+                      extra_ports:(s.extra_ports || []).length ? s.extra_ports : undefined});
 const CP_LV = {ok:'通過', warn:'提醒', stop:'擋下'};
 function cpVerdicts(rv){
   if(!rv) return '';
@@ -5401,7 +5409,7 @@ function renderComposeCard(flow){
     const envKeys = Object.keys(s.env || {});
     const body = `<div class="cp-body">
       <div class="cp-kv"><span>映像檔 <b>${esc(s.image || '未指定')}</b></span><span>副本 <b>${esc(s.pods)}</b></span>
-        <span>${s.expose ? `對外 port <b>${esc(s.port)}</b>，容器 <b>${esc(s.container_port)}</b>` : `只給內部連線，port <b>${esc(s.container_port)}</b>`}</span>
+        <span>${s.expose ? `對外 port <b>${esc(s.port)}</b>，容器 <b>${esc(s.container_port)}</b>` : `只給內部連線，port <b>${esc(s.container_port)}</b>`}${(s.extra_ports || []).length ? `；另外開 ${(s.extra_ports || []).map(e => s.expose ? `<b>${esc(e.port)}</b>（容器 ${esc(e.container)}）` : `<b>${esc(e.container)}</b>`).join('、')}` : ''}</span>
         ${s.memory ? `<span>記憶體 <b>${esc(s.memory)}</b></span>` : ''}${s.cpu ? `<span>CPU <b>${esc(s.cpu)}</b></span>` : ''}
         ${(s.depends_on || []).length ? `<span>依賴 <b>${esc(s.depends_on.join('、'))}</b></span>` : ''}
         <span>其他服務用 <b>${esc(s.app_name)}:${esc(s.container_port)}</b> 連它</span>
@@ -5414,7 +5422,7 @@ function renderComposeCard(flow){
     </div>`;
     return `<details class="cp-svc" style="--i:${i}" ${cpBlocked(s) || s.state === 'block' || s.state === 'failed' ? 'open' : ''}>
       <summary><span class="nm">${esc(s.app_name)}</span><span class="im">${esc(s.image || '未指定映像檔')}</span>
-        <span class="pt">${s.expose ? `對外 <b>${esc(s.port)}</b>` : '只給內部'}</span>
+        <span class="pt">${s.expose ? `對外 <b>${esc([s.port].concat((s.extra_ports || []).map(e => e.port)).join('、'))}</b>` : '只給內部'}</span>
         <span class="rp">${esc(s.pods)} 個副本</span>${s.review && flow.step !== 'deploying' && flow.step !== 'done' ? cpVerdicts(s.review) : cpStatePill(s)}</summary>${body}</details>`;
   }).join('');
   const top = (cp.problems || []).length ? `<ul class="cp-probs" style="margin-bottom:12px">${cp.problems.map(p => `<li class="${esc(p.level)}">${esc(p.text)}</li>`).join('')}</ul>` : '';
@@ -7660,6 +7668,13 @@ def _sanitize_deploy_payload(raw: dict) -> dict:
                          "size": size if v["kind"] == "pvc" else None})
     if vols:
         clean["volumes"] = vols
+    # 2026-10-24：一個服務多個 port（compose／K8s YAML 匯入）。格式不對的丟掉，最多 5 個，不能跟主 port 重複
+    ep = parsed.get("extra_ports")
+    if isinstance(ep, list) and ep:
+        from agents.compose_import import extra_ports as _extra_ports
+        cleaned = _extra_ports([p for p in ep[:20] if isinstance(p, dict)], clean["port"])
+        if cleaned:
+            clean["extra_ports"] = cleaned
     sk = parsed.get("secret_keys")
     if isinstance(sk, list) and clean.get("env"):
         keys = [str(k) for k in sk[:50] if str(k) in clean["env"]]
@@ -7771,6 +7786,15 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
         return parsed, enriched, None, ({"error": "副本數要在 1 到 100 之間。", "parsed": enriched}, 422)
     if not 1 <= parsed["port"] <= 65535:
         return parsed, enriched, None, ({"error": "Port 要在 1 到 65535 之間。", "parsed": enriched}, 422)
+    # 2026-10-24：額外的 port 被別的服務佔用時擋下。Docker Desktop 一個 LoadBalancer 只要有一個 port 搶不到，
+    # 整個 Service 會卡在 pending，連主 port 都連不上（主 port 的衝突照舊在部署單上先問使用者）
+    if parsed.get("extra_ports") and parsed.get("expose", True):
+        _svcs = k8s_get_services(all_namespaces=True)
+        for _e in parsed["extra_ports"]:
+            _owner, _other = _port_conflict_owner(int(_e["port"]), _session_ns(), parsed["app_name"], _svcs)
+            if _owner:
+                return parsed, enriched, None, ({"error": f"Port {_e['port']} 已經被" + ("其他帳號的服務" if _other else f"「{_owner}」") +
+                                                 "使用，請在檔案裡換一個 port 再上傳。", "parsed": enriched}, 422)
     if parsed.get("memory") and not re.match(r"^\d+(Mi|Gi|Ki|M|G)$", str(parsed["memory"])):
         return parsed, enriched, None, ({"error": "記憶體的寫法要像 128Mi 或 1Gi。", "parsed": enriched}, 422)
 
@@ -7966,6 +7990,23 @@ def _resource_summary(parsed: dict, review: dict) -> dict:
     }
 
 
+def _port_conflict_owner(port: int, user_ns: str, app_name: str, services=None):
+    """這個對外 port 被誰佔用：回傳 (名稱或 "another account" 或 None, 是不是別的帳號)。
+    2026-10-24 從 /api/deploy/conflicts 抽出來，_prepare_deploy 檢查額外的 port 時共用。"""
+    for s in (services if services is not None else k8s_get_services(all_namespaces=True)):
+        if s["port"] != port:
+            continue
+        if s.get("namespace") == user_ns:
+            if s["app"] == app_name:
+                continue  # 就是這次要更新的同一個服務，不算衝突
+            return s["app"] or s["name"], False
+        # 被別的帳號佔用：port 是 host 共用的，衝突一定要講，但不能把
+        # 對方的 app/service 名稱回傳出去——否則逐一試 port 就能列出其他
+        # 帳號部署了什麼（2026-10-08 安全審查，security_review.md 30 節）
+        return "another account", True
+    return None, False
+
+
 @app.route("/api/deploy/conflicts")
 def api_deploy_conflicts():
     """第一步（規格確認）就先問使用者：名稱已存在／port 被佔用，是否仍要繼續。
@@ -7981,21 +8022,7 @@ def api_deploy_conflicts():
     port_conflict_other_account = False
     if port_raw:
         try:
-            port = int(port_raw)
-            for s in k8s_get_services(all_namespaces=True):
-                if s["port"] != port:
-                    continue
-                if s.get("namespace") == user_ns:
-                    if s["app"] == app_name:
-                        continue  # 就是這次要更新的同一個服務，不算衝突
-                    port_conflict = s["app"] or s["name"]
-                else:
-                    # 被別的帳號佔用：port 是 host 共用的，衝突一定要講，但不能把
-                    # 對方的 app/service 名稱回傳出去——否則逐一試 port 就能列出其他
-                    # 帳號部署了什麼（2026-10-08 安全審查，security_review.md 30 節）
-                    port_conflict = "another account"
-                    port_conflict_other_account = True
-                break
+            port_conflict, port_conflict_other_account = _port_conflict_owner(int(port_raw), user_ns, app_name)
         except ValueError:
             pass
     return jsonify({"name_exists": name_exists, "port_conflict": port_conflict,
@@ -8177,7 +8204,7 @@ def _api_deploy_impl():
                                  env=parsed.get("env"), container_port_override=parsed.get("container_port"),
                                  expose=parsed.get("expose", True), dns_alias=parsed.get("dns_alias", False),
                                  command=parsed.get("command"), args=parsed.get("args"), volumes=parsed.get("volumes"),
-                                 secret_keys=parsed.get("secret_keys"))
+                                 secret_keys=parsed.get("secret_keys"), extra_ports=parsed.get("extra_ports"))
         k8s_deploy_result = {"ok": ok, "message": message}
         if not ok:
             review.setdefault("warnings", []).append(f"K8s 部署失敗：{message}")

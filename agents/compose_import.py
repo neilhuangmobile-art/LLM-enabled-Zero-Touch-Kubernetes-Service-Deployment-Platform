@@ -143,6 +143,22 @@ def _env(raw) -> Dict[str, str]:
 
 DEFAULT_VOLUME_SIZE = "1Gi"
 MAX_VOLUMES = 5
+MAX_EXTRA_PORTS = 5   # 2026-10-24：主 port 以外，一個服務最多再開幾個 port
+
+
+def extra_ports(pairs, main_port: int) -> List[Dict]:
+    """第 2 個以後的 port → [{"port": 對外, "container": 容器}]：去掉重複、跟主 port 撞的、格式不對的，最多 MAX_EXTRA_PORTS 個。
+    compose 匯入與 K8s YAML 匯入共用；web_demo._sanitize_deploy_payload 會再檢查一次。"""
+    out, seen = [], {int(main_port)}
+    for p in pairs or []:
+        try:
+            ext, cont = int(p["port"]), int(p["container"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if 1 <= ext <= 65535 and 1 <= cont <= 65535 and ext not in seen:
+            seen.add(ext)
+            out.append({"port": ext, "container": cont})
+    return out[:MAX_EXTRA_PORTS]
 MAX_CMD_ITEMS = 50
 
 
@@ -295,8 +311,10 @@ def parse_compose(text: str, default_port_fn=None) -> Dict:
 
         ports = [p for p in (_parse_port(x) for x in (svc.get("ports") or [])) if p]
         expose = bool(ports)
-        if len(ports) > 1:
-            probs.append({"level": "warn", "text": f"寫了 {len(ports)} 個 port，平台目前只開第一個（{ports[0]['external']}）"})
+        extras = extra_ports([{"port": p["external"], "container": p["container"]} for p in ports[1:]],
+                             ports[0]["external"]) if ports else []
+        if len(ports) > 1 + MAX_EXTRA_PORTS:
+            probs.append({"level": "warn", "text": f"寫了 {len(ports)} 個 port，平台最多開 {1 + MAX_EXTRA_PORTS} 個，其餘不開"})
         if ports:
             port, cport = ports[0]["external"], ports[0]["container"]
         else:
@@ -343,6 +361,7 @@ def parse_compose(text: str, default_port_fn=None) -> Dict:
         services[str(raw_name)] = {
             "service": str(raw_name), "app_name": name, "image": image, "pods": max(1, pods),
             "port": int(port), "container_port": int(cport), "expose": expose, "dns_alias": True,
+            **({"extra_ports": extras} if extras else {}),
             "env": env, "memory": memory, "cpu": cpu, "depends_on": _depends(svc.get("depends_on")),
             "command": _cmd(svc.get("entrypoint")), "args": _cmd(svc.get("command")), "volumes": volumes,
             "problems": probs,

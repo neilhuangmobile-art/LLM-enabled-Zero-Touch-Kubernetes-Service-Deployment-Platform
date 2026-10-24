@@ -128,6 +128,28 @@ _SECRET_ENV_RE = re.compile(r"PASS|SECRET|TOKEN|KEY|CREDENTIAL|PRIVATE", re.IGNO
 _SECRET_VALUE_RE = re.compile(r"[a-z][a-z0-9+.-]{0,20}://[^/\s:@]+:[^/\s@]+@|-----BEGIN [A-Z ]*PRIVATE KEY-----", re.IGNORECASE)
 
 
+def container_ports(cport: int, extras=None) -> list:
+    """容器要開的 port：主 port，加上 extra_ports 的容器 port（2026-10-24，多 port）。"""
+    out = [int(cport)]
+    for e in extras or []:
+        if int(e["container"]) not in out:
+            out.append(int(e["container"]))
+    return out
+
+
+def extra_service_ports(existing: list, extras=None) -> list:
+    """extra_ports 對應的 Service port：每個額外 port 開「容器 port」（內部互連）與「對外 port」（兩者不同時），
+    已經有的 port 號碼不重複開。名稱用 c<容器 port>／e<對外 port>（K8s 規定多個 port 要有不同名稱）。"""
+    used = {p["port"] for p in existing}
+    out = []
+    for e in extras or []:
+        for name, num in ((f"c{int(e['container'])}", int(e["container"])), (f"e{int(e['port'])}", int(e["port"]))):
+            if num not in used:
+                used.add(num)
+                out.append({"name": name, "protocol": "TCP", "port": num, "targetPort": int(e["container"])})
+    return out
+
+
 def split_secret_env(env: dict, force=None):
     """回傳 (一般環境變數, 密碼類環境變數)。force：一定要當密碼的名稱（例如 K8s YAML 裡本來就放在
     Secret 的值，名稱叫 DATABASE_URL 也一樣不能寫進 Git）。"""
@@ -239,7 +261,7 @@ def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
                     "containers": [{
                         "name" : app_name,
                         "image": image,
-                        "ports": [{"containerPort": cport}],
+                        "ports": [{"containerPort": c} for c in container_ports(cport, llm_result.get("extra_ports"))],
                         "resources": resources,
                         "securityContext": {"allowPrivilegeEscalation": False},
                         **recommended_probes(image, cport),
@@ -269,6 +291,7 @@ def _build_service_yaml(llm_result: dict, namespace: str) -> Optional[str]:
     ports = [{"name": "app", "protocol": "TCP", "port": cport, "targetPort": cport}]
     if port != cport:
         ports.append({"name": "external", "protocol": "TCP", "port": port, "targetPort": cport})
+    ports += extra_service_ports(ports, llm_result.get("extra_ports"))
 
     doc = {
         "apiVersion": "v1",

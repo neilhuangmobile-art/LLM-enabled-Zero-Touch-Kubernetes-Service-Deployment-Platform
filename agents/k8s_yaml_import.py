@@ -24,7 +24,7 @@ from typing import Dict, List, Optional
 import yaml
 
 from agents.compose_import import (ComposeError, MAX_COMPOSE_BYTES, MAX_ENV, MAX_SERVICES, MAX_VOLUMES,
-                                   _SECRET_KEY_RE, looks_like_secret, _cpu, _expanded_size_ok, _k8s_name)
+                                   _SECRET_KEY_RE, looks_like_secret, extra_ports, MAX_EXTRA_PORTS, _cpu, _expanded_size_ok, _k8s_name)
 
 MAX_DOCS = 50
 _MEM_RE = re.compile(r"^\d+(?:\.\d+)?(?:Ki|Mi|Gi|Ti|K|M|G|T)?$")
@@ -280,6 +280,7 @@ def parse_k8s_yaml(text: str, default_port_fn=None) -> Dict:
         known = default_port_fn(image) if default_port_fn else None
         cport = int(cports[0]["containerPort"]) if cports else (known or 80)
         port, expose = cport, False
+        extras = []
         name = _name(w)
         if svc:
             sp = [p for p in ((svc.get("spec") or {}).get("ports") or []) if isinstance(p, dict) and p.get("port")]
@@ -294,8 +295,16 @@ def parse_k8s_yaml(text: str, default_port_fn=None) -> Dict:
                     named = next((p for p in cports if p.get("name") == tp), None)
                     if named:
                         cport = int(named["containerPort"])
-                if len(sp) > 1:
-                    probs.append({"level": "warn", "text": f"Service 寫了 {len(sp)} 個 port，平台目前只開第一個（{port}）"})
+                # 2026-10-24：第 2 個以後的 port 也開（targetPort 的解析規則跟第一個相同）
+                more = []
+                for p in sp[1:]:
+                    t = p.get("targetPort")
+                    if isinstance(t, str) and not t.isdigit():
+                        t = next((int(c["containerPort"]) for c in cports if c.get("name") == t), None)
+                    more.append({"port": p.get("port"), "container": t if t is not None else p.get("port")})
+                extras = extra_ports(more, port)
+                if len(sp) > 1 + MAX_EXTRA_PORTS:
+                    probs.append({"level": "warn", "text": f"Service 寫了 {len(sp)} 個 port，平台最多開 {1 + MAX_EXTRA_PORTS} 個，其餘不開"})
             stype = str((svc.get("spec") or {}).get("type") or "ClusterIP")
             expose = stype in ("LoadBalancer", "NodePort")
             if _name(svc) and _name(svc) != name:
@@ -332,6 +341,7 @@ def parse_k8s_yaml(text: str, default_port_fn=None) -> Dict:
         services.append({
             "service": _name(w), "app_name": app_name, "image": image, "pods": pods,
             "port": int(port), "container_port": int(cport), "expose": expose, "dns_alias": True,
+            **({"extra_ports": extras} if extras else {}),
             "env": env, "secret_keys": secret_keys,
             "memory": _mem(limits.get("memory") or requests.get("memory")),
             "cpu": _k8s_cpu(limits.get("cpu") or requests.get("cpu")),

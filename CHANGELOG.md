@@ -1608,3 +1608,23 @@ Pod 對應到服務、對話規則、建議 API）；乾淨環境 383 項通過�
 - 自動啟動腳本在暫存資料夾實跑：建立、重跑覆蓋、取消都成功，捷徑的目標與參數正確。
   沒有在這台的「啟動」資料夾重跑，因為會蓋掉這台已經手動調整過的捷徑。
 
+### 16:08 — 新功能：compose／K8s YAML 一個服務可以開多個 port
+**為什麼**：原本一個服務只開第一個 port，其他的只給警告。這是柏碩列的「已知小限制」，使用者 10/24 指示一起做。
+**改了什麼**：
+- 部署規格新增可省略的 `extra_ports`（最多 5 個）。
+- 匯入：`agents/compose_import.py` 新增 `extra_ports()`；`agents/k8s_yaml_import.py` 的 Service 第 2 個以後的 port 也轉進來，用名稱指定的 targetPort 照原本規則解析。
+- 部署：`web_demo.py` 的 `k8s_deploy()` 容器多開 port、Service 和同名連線入口多加 port（有額外 port 時每個 port 都有名稱）。
+- Git 設定：`gitops/manifest_writer.py` 新增 `container_ports()`、`extra_service_ports()`；客戶叢集模式共用同一套。
+- port 衝突：抽出 `_port_conflict_owner()`，額外的 port 被佔用時在 `_prepare_deploy` 擋下。
+- 介面：前端 compose 卡片顯示所有對外 port；使用手冊補上匯入的說明。security_review 54 節。
+**實測時發現並處理**：
+- 叢集裡卡著 4 個 LoadBalancer Service：
+  - 兩個是我 10/23 測試沒刪乾淨的（指令名稱寫錯）；
+  - 兩個是刪除時卡在 Docker Desktop 的 load balancer 清理（port 80 被 user-aaa 佔用、一直 pending 的服務才會這樣）。
+  已移除清理標記，全部刪除。
+- 使用者 15:04 在網站部署 nginx 時自動產生的 `gitops: deploy` commit，夾在分支歷史裡（還沒推），已經從歷史拿掉。
+**驗證**：
+- `pytest` 830 項全過（新增 `tests/test_multi_port.py` 7 項）；JS `node --check` 通過。
+- 實測一個 nginx 開 8095、8096：兩個都回 200，Git 設定的 Service 有 80、8095、8096。
+- 平台刪除後全部清除，事件紀錄有寫；測試對話、自動 gitops commit 都已撤銷。
+
