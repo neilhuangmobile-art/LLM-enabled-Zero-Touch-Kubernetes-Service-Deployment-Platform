@@ -328,9 +328,11 @@ async function renderDetail(name){
     const d = await getJSON('/api/pods/' + encodeURIComponent(name));
     if(seq !== detailSeq) return;
     const pods = d.pods || [];
-    if(!d.found || !pods.length){ el.innerHTML = '<div class="empty">找不到這個服務，它可能已經被刪除。</div>'; return; }
     const dep = S.deps.find(x => x.name === name);
+    // 2026-10-24：休眠中（副本數 0）的服務沒有 Pod，原本會被當成「找不到」；服務還在部署清單裡就照常顯示
+    if(!dep && (!d.found || !pods.length)){ el.innerHTML = '<div class="empty">找不到這個服務，它可能已經被刪除。</div>'; return; }
     let html = dep ? `<div class="card"><dl class="kv"><dt>服務</dt><dd>${esc(dep.name)}</dd><dt>副本</dt><dd>${esc(dep.ready)}/${esc(dep.replicas)} 個就緒</dd><dt>映像檔</dt><dd>${esc(dep.image)}</dd><dt>最近更新</dt><dd>${esc(dep.updated || dep.age || '')}</dd></dl></div>` : '';
+    if(!pods.length) html += '<div class="card dim">目前沒有執行中的 Pod（服務休眠中，或副本數是 0）。</div>';
     // 2026-10-23：分時擴縮與休眠（只能看，修改要用電腦）
     const asx = asOf(name);
     if(asx){

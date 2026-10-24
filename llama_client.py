@@ -277,7 +277,8 @@ def _extract_pods_count(raw: str) -> Optional[int]:
     要退回預設值 1，還是視為解析失敗）。"""
     count_patterns = [
         r'(?:deploy|run|start|launch|spin\s+up)\s+(-?\d+)\s*(?:pods?|replicas?|instances?)?',
-        r'(-?\d+)\s*(?:pods?|replicas?|instances?|副本|(?:個|个|台)' + _NOT_PEOPLE + r')',
+        # 2026-10-24：減號前面緊接數字時是範圍（「2-10 replicas」），不是負號（外部基準 CloudEval 抓到被讀成 -10）
+        r'((?<!\d)-?\d+)\s*(?:pods?|replicas?|instances?|副本|(?:個|个|台)' + _NOT_PEOPLE + r')',
         r'(?:pods?|replicas?|instances?|副本|數量|数量)\s*(?:=|:|為|是|to)?\s*(-?\d+)',
     ]
     for pat in count_patterns:

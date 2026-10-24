@@ -297,3 +297,12 @@ def test_gemini_stated_fields_survive_incomplete_spec_2026_10_10():
     out = _overlay_stated_fields(base, {"image": "redis", "app_name": "rpt-cache"})
     assert out["app_name"] == "rpt-cache" and out["image"] == "redis:latest" and out["pods"] == 1
     assert _overlay_stated_fields({"error": "x"}, {"app_name": "a"}) == {"error": "x"}
+
+
+def test_range_is_not_a_negative_replica_count():
+    """2026-10-24 外部基準（CloudEval-YAML HPA 題）：「2-10 replicas」被讀成 -10 個副本而直接報錯。"""
+    from llama_client import _extract_pods_count
+    assert _extract_pods_count("2-10 replicas") == 10
+    assert _extract_pods_count("deploy -1 pods") == -1          # 真正的負數照樣抓到，交給邊界檢查擋下
+    assert _extract_pods_count("部署 -3 個 nginx") == -3
+

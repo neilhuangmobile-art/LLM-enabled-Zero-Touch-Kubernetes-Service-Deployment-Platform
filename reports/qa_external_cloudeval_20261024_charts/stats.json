@@ -1,0 +1,214 @@
+{
+  "summary": {
+    "修正前/en": {
+      "原始": {
+        "image": [
+          19,
+          20
+        ],
+        "replicas": [
+          13,
+          15
+        ],
+        "container_port": [
+          11,
+          13
+        ],
+        "name": [
+          14,
+          17
+        ],
+        "all": [
+          14,
+          20
+        ]
+      },
+      "題目有提到": {
+        "image": [
+          19,
+          20
+        ],
+        "replicas": [
+          12,
+          12
+        ],
+        "container_port": [
+          10,
+          12
+        ],
+        "name": [
+          14,
+          16
+        ],
+        "all": [
+          17,
+          20
+        ]
+      }
+    },
+    "修正前/zh": {
+      "原始": {
+        "image": [
+          20,
+          20
+        ],
+        "replicas": [
+          13,
+          15
+        ],
+        "container_port": [
+          12,
+          13
+        ],
+        "name": [
+          16,
+          17
+        ],
+        "all": [
+          16,
+          20
+        ]
+      },
+      "題目有提到": {
+        "image": [
+          20,
+          20
+        ],
+        "replicas": [
+          11,
+          11
+        ],
+        "container_port": [
+          11,
+          12
+        ],
+        "name": [
+          16,
+          16
+        ],
+        "all": [
+          19,
+          20
+        ]
+      }
+    },
+    "修正後/en": {
+      "原始": {
+        "image": [
+          20,
+          20
+        ],
+        "replicas": [
+          13,
+          15
+        ],
+        "container_port": [
+          12,
+          13
+        ],
+        "name": [
+          15,
+          17
+        ],
+        "all": [
+          15,
+          20
+        ]
+      },
+      "題目有提到": {
+        "image": [
+          20,
+          20
+        ],
+        "replicas": [
+          12,
+          12
+        ],
+        "container_port": [
+          11,
+          12
+        ],
+        "name": [
+          15,
+          16
+        ],
+        "all": [
+          18,
+          20
+        ]
+      }
+    },
+    "修正後/zh": {
+      "原始": {
+        "image": [
+          20,
+          20
+        ],
+        "replicas": [
+          13,
+          15
+        ],
+        "container_port": [
+          12,
+          13
+        ],
+        "name": [
+          16,
+          17
+        ],
+        "all": [
+          16,
+          20
+        ]
+      },
+      "題目有提到": {
+        "image": [
+          20,
+          20
+        ],
+        "replicas": [
+          11,
+          11
+        ],
+        "container_port": [
+          11,
+          12
+        ],
+        "name": [
+          16,
+          16
+        ],
+        "all": [
+          19,
+          20
+        ]
+      }
+    }
+  },
+  "excluded_fields_not_in_question": [
+    [
+      "Kubernetes_deployment_q10",
+      "replicas"
+    ],
+    [
+      "Kubernetes_deployment_q12",
+      "replicas"
+    ],
+    [
+      "Kubernetes_deployment_q18",
+      "name"
+    ],
+    [
+      "Kubernetes_deployment_q19",
+      "container_port"
+    ],
+    [
+      "Kubernetes_deployment_q19",
+      "replicas"
+    ],
+    [
+      "Kubernetes_deployment_q9",
+      "replicas"
+    ]
+  ]
+}
