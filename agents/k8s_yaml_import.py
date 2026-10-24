@@ -24,7 +24,7 @@ from typing import Dict, List, Optional
 import yaml
 
 from agents.compose_import import (ComposeError, MAX_COMPOSE_BYTES, MAX_ENV, MAX_SERVICES, MAX_VOLUMES,
-                                   _SECRET_KEY_RE, _cpu, _expanded_size_ok, _k8s_name)
+                                   _SECRET_KEY_RE, looks_like_secret, _cpu, _expanded_size_ok, _k8s_name)
 
 MAX_DOCS = 50
 _MEM_RE = re.compile(r"^\d+(?:\.\d+)?(?:Ki|Mi|Gi|Ti|K|M|G|T)?$")
@@ -314,7 +314,7 @@ def parse_k8s_yaml(text: str, default_port_fn=None) -> Dict:
             probs.append({"level": "info", "text": f"名稱改成 {app_name}（K8s 名稱只能用小寫英文、數字和連字號，且要英文字母開頭）"})
 
         env, secret_keys = _env_from_container(c, configmaps, secrets, probs)
-        named_secret = [k for k in env if _SECRET_KEY_RE.search(k)]
+        named_secret = [k for k, v in env.items() if looks_like_secret(k, v)]
         if secret_keys or named_secret:
             probs.append({"level": "info", "text": "環境變數 " + "、".join(sorted(set(secret_keys + named_secret))[:5]) +
                           " 會另外存成 Kubernetes Secret，不會寫進部署紀錄"})

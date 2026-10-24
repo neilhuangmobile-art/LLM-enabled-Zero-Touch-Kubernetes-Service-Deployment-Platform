@@ -124,6 +124,8 @@ def write_manifest(
 # 名稱像密碼、金鑰的環境變數（2026-10-10，docker-compose 匯入）：值不寫進部署設定檔與 Git，
 # 改存在 Kubernetes Secret「<服務>-secrets」，設定檔只寫「去哪個 Secret 拿」。
 _SECRET_ENV_RE = re.compile(r"PASS|SECRET|TOKEN|KEY|CREDENTIAL|PRIVATE", re.IGNORECASE)
+# 2026-10-24：值裡帶帳號密碼的網址或私鑰本體也算（跟 agents/compose_import._SECRET_VALUE_RE 同一條規則）
+_SECRET_VALUE_RE = re.compile(r"[a-z][a-z0-9+.-]{0,20}://[^/\s:@]+:[^/\s@]+@|-----BEGIN [A-Z ]*PRIVATE KEY-----", re.IGNORECASE)
 
 
 def split_secret_env(env: dict, force=None):
@@ -132,7 +134,7 @@ def split_secret_env(env: dict, force=None):
     force = set(force or [])
     plain, secret = {}, {}
     for k, v in (env or {}).items():
-        (secret if (str(k) in force or _SECRET_ENV_RE.search(str(k))) else plain)[str(k)] = str(v)
+        (secret if (str(k) in force or _SECRET_ENV_RE.search(str(k)) or _SECRET_VALUE_RE.search(str(v))) else plain)[str(k)] = str(v)
     return plain, secret
 
 
