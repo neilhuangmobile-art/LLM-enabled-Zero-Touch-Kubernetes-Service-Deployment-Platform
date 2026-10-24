@@ -17,7 +17,10 @@ from typing import Dict, List, Optional
 PRIORS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "style_priors.json")
 MIN_PERSONAL = 3
 PRIOR_WEIGHT = 5
-_EXPLICIT_PODS_RE = re.compile(r"\d+\s*(?:個|份|台|pods?|replicas?|副本|instances?)", re.I)
+# 句子裡講了副本數就不建議副本數。2026-10-24：補上中文數字與英文數字詞（「開兩個」原本認不得，個人化會把句子講的 2 蓋成 1）
+_EXPLICIT_PODS_RE = re.compile(
+    r"(?:\d+|[一二兩三四五六七八九十百]+|one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:個|份|台|pods?|replicas?|副本|instances?)",
+    re.I)
 _MEM_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*(Ki|Mi|Gi|K|M|G)?\s*$")
 _MEM_MIB = {"Ki": 1 / 1024, "Mi": 1, "Gi": 1024, "K": 1000 / 1024 ** 2, "M": 1000 ** 2 / 1024 ** 2, "G": 1000 ** 3 / 1024 ** 2, None: 1 / 1024 ** 2}
 

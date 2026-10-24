@@ -7436,7 +7436,7 @@ def api_chat():
     message = data.get("message","").strip()
     history = data.get("history",[])
     if not message:
-        return jsonify({"error": "Empty message"}), 400
+        return jsonify({"error": "訊息是空的。"}), 400
     if len(history) > 40:
         history = history[-40:]
     if _looks_like_system_help(message):
@@ -7740,8 +7740,9 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
 
     missing = [k for k in ("app_name", "image", "pods") if not parsed.get(k)]
     if missing:
-        # 2026-10-21：多帶 missing，前端改成直接出部署單讓使用者補（error 字串維持原樣，其他呼叫端不受影響）
-        return parsed, enriched, None, ({"error": f"Missing required field(s): {', '.join(missing)}", "parsed": enriched,
+        # 2026-10-21：多帶 missing，前端改成直接出部署單讓使用者補。2026-10-24：訊息改中文（沒有呼叫端比對這個字串）
+        _labels = {"app_name": "服務名稱", "image": "映像檔", "pods": "副本數"}
+        return parsed, enriched, None, ({"error": "還缺少：" + "、".join(_labels.get(k, k) for k in missing) + "。", "parsed": enriched,
                                          "missing": missing}, 422)
     # 2026-10-03：app_name 格式不合法時（例如純數字開頭的「123」），過去完全沒在這裡
     # 擋下——Deployment 名稱本身符合 K8s 規則，但這個系統一定會另外建一個
@@ -7764,13 +7765,13 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
         parsed["pods"] = int(parsed["pods"])
         parsed["port"] = int(parsed.get("port", 80))
     except (TypeError, ValueError):
-        return parsed, enriched, None, ({"error": "Invalid pods or port", "parsed": enriched}, 422)
+        return parsed, enriched, None, ({"error": "副本數和 Port 要是整數。", "parsed": enriched}, 422)
     if not 1 <= parsed["pods"] <= 100:
-        return parsed, enriched, None, ({"error": "pods must be between 1 and 100", "parsed": enriched}, 422)
+        return parsed, enriched, None, ({"error": "副本數要在 1 到 100 之間。", "parsed": enriched}, 422)
     if not 1 <= parsed["port"] <= 65535:
-        return parsed, enriched, None, ({"error": "port must be between 1 and 65535", "parsed": enriched}, 422)
+        return parsed, enriched, None, ({"error": "Port 要在 1 到 65535 之間。", "parsed": enriched}, 422)
     if parsed.get("memory") and not re.match(r"^\d+(Mi|Gi|Ki|M|G)$", str(parsed["memory"])):
-        return parsed, enriched, None, ({"error": "memory must look like 128Mi or 1Gi", "parsed": enriched}, 422)
+        return parsed, enriched, None, ({"error": "記憶體的寫法要像 128Mi 或 1Gi。", "parsed": enriched}, 422)
 
     review = _review_deployment(parsed)
     try:
@@ -8294,7 +8295,7 @@ def api_delete():
         return jsonify({"error": "Not authenticated"}), 401
     name = (request.get_json() or {}).get("name","").strip()
     if not name:
-        return jsonify({"error": "Name required"}), 400
+        return jsonify({"error": "請提供服務名稱。"}), 400
     ok, msg = k8s_delete_deployment(name, _session_ns())
     return jsonify({"success": ok, "message": msg, "error": None if ok else msg})
 
@@ -8328,9 +8329,9 @@ def api_scale():
     try:
         replicas = int(data.get("replicas", 1))
     except (TypeError, ValueError):
-        return jsonify({"success": False, "error": "replicas must be an integer"}), 400
+        return jsonify({"success": False, "error": "副本數要是整數。"}), 400
     if not name:
-        return jsonify({"success": False, "error": "Name required"}), 400
+        return jsonify({"success": False, "error": "請提供服務名稱。"}), 400
     user_ns = _session_ns()
     ok, err, status = _scale_check(name, replicas, user_ns)
     if not ok:
@@ -9160,9 +9161,9 @@ def _remote_scale(data):
     try:
         replicas = int(data.get("replicas", 1))
     except (TypeError, ValueError):
-        return jsonify({"success": False, "error": "replicas must be an integer"}), 400
+        return jsonify({"success": False, "error": "副本數要是整數。"}), 400
     if not name:
-        return jsonify({"success": False, "error": "Name required"}), 400
+        return jsonify({"success": False, "error": "請提供服務名稱。"}), 400
     from guardian.yaml_validator import max_replicas
     if not 1 <= replicas <= max_replicas():
         return jsonify({"success": False, "error": f"副本數要在 1 到 {max_replicas()} 之間"}), 400

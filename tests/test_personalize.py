@@ -48,6 +48,9 @@ def test_explicit_pods_in_sentence_not_overridden():
     hist = [{"pods": 4, "image": "app:1"}] * 5
     assert suggest(hist, PRIORS, "部署 2 個 nginx")["pods"] is None
     assert suggest(hist, PRIORS, "部署 nginx")["pods"] is not None
+    # 2026-10-24：中文數字、英文數字詞也算講了副本數（「開兩個」原本認不得，會被習慣值蓋掉）
+    for text in ("cache 服務開兩個，memory 給大一點 1Gi", "幫我部署十個 nginx", "redis 開三個副本", "deploy three pods of nginx"):
+        assert suggest(hist, PRIORS, text)["pods"] is None, text
 
 
 def test_rounding_looks_human():

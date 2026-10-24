@@ -42,3 +42,7 @@ data/
 
 # scripts/start_services.ps1 的輸出
 logs/
+
+# 2026-10-24：每次部署 web_demo.py 都會寫一份 yamls/deployments/<app>.yaml（只寫不讀，真正的部署紀錄在 manifests/ 的 GitOps commit），
+# 久了會累積很多未追蹤的檔案（柏碩交接文件第五部分）。已經在版控裡的舊檔照原樣保留；yamls/templates/ 不受影響。
+yamls/deployments/*.yaml
