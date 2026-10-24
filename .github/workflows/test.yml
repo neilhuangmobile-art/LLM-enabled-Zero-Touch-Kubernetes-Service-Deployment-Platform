@@ -23,7 +23,7 @@ jobs:
       # 依賴也只會優雅跳過、不會讓整個 collection 階段炸掉（2026-09-14 這次踩過的坑：
       # @pytest.mark.integration 標記本身擋不住 collection 階段的 import 錯誤）。
       - name: Install minimal test dependencies
-        run: pip install pytest==8.4.2 pyyaml==6.0.3 kubernetes==34.1.0
+        run: pip install pytest==8.4.2 pyyaml==6.0.3 kubernetes==35.0.0
 
       - name: Syntax check all Python files
         run: python -m compileall -q .

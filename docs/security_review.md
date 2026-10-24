@@ -2277,6 +2277,35 @@ priors 檔只有統計數字；瀏覽器實測建議出現、專案預設優先�
 
 **殘留（實測發現，Docker Desktop 的行為）**：對外 port 一開始就搶不到、一直 pending 的 LoadBalancer Service，被刪除時會卡在 `service.kubernetes.io/load-balancer-cleanup` 清理標記，留在叢集裡。10/24 在學校電腦清掉 4 個，都是 port 80 被 `user-aaa` 的服務佔用造成的。處理方式：`kubectl patch svc <名稱> --type=merge -p '{"metadata":{"finalizers":null}}'`。
 
+## 55. 套件的已知漏洞：網站對外開放，舊版套件的漏洞怎麼處理？
+
+**風險**：2026-10-24 用 pip-audit 掃描學校電腦的 venv，有 17 個套件共 166 個已知漏洞。其中 flask、requests、urllib3、starlette 直接處理網路請求；transformers 處理使用者輸入的文字。
+
+**為什麼重要**：網站已經透過對外網址開放，柏碩的交接文件把這項列為「建議盡快升級」。
+
+**解決方式**：先備份套件清單，分三批升級，每批跑完全部測試才進下一批。
+1. **第一批（小版本）**：flask 3.1.3、requests 2.33.0、urllib3 2.8.0、certifi、filelock、GitPython 3.2.1、pillow 13、json-repair、setuptools、sentence-transformers 5.7。
+   kubernetes 34.1.0 限制 urllib3 必須低於 2.4，所以一起升到 35.0.0：36 以後要 Python 3.10，CI 是 3.9；37 改用 pydantic 模型。CI 的 kubernetes 也改成 35.0.0。
+2. **第二批**：fastapi 0.162.0＋starlette 1.9.0。新版 FastAPI 多了 OpenTelemetry 監測介面，預設不匯出任何資料，要設 `FASTAPI_OTEL_AUTO_CONFIGURE=true` 才會，我們沒有設。
+3. **第三批**：transformers 4.45.2 → 4.57.6（tokenizers 0.22.2），修掉 28 個漏洞（20 個 ReDoS、6 個載入惡意模型、2 個圖片處理）。
+   代價是生成變慢：同一顆 1.5B 模型對照，每秒字數 50.6 → 40.4（約慢 20%）；模型伺服器實測 /infer 1035→1567ms；/classify 811→1125ms；/diagnose 1013→1335ms；/chat 962→1883ms。使用者選擇安全優先。
+- `requirements.txt` 更新版本，並為間接依賴加上安全下限。
+
+**驗證**：
+- pip-audit：**17 個套件、166 個漏洞 → 6 個套件、19 個漏洞**。
+- `pytest` 830 項全過；Docker Python 3.9（kubernetes 35.0.0）照 CI 跑 381 項通過、0 失敗。
+- 模型伺服器四個端點（`/infer`、`/classify`、`/diagnose`、`/chat`）回答正確，顯存 8.74 → 8.63GB。
+- 瀏覽器七個頁面、意圖判斷、部署解析正常。
+
+**殘留**：
+- transformers 還有 9 個：只有 5.x 才修或沒有修正版。5.x 是大改版，這次沒升。
+- chromadb 5 個、accelerate 1 個：沒有修正版。
+- datasets、fsspec 只有訓練用，datasets 限制 fsspec 版本。
+- pytest 9 會改 CI 環境，這次沒升。
+- 模型伺服器只綁 127.0.0.1、只載入固定的 Qwen 模型、不處理圖片，所以殘留漏洞的實際暴露偏低。
+- 家裡 AMD 那台要重新 `pip install -r requirements.txt`。
+- `torch_dtype` 參數在 transformers 4.57 會出棄用警告（不影響運作），升 5.x 前要改成 `dtype`。
+
 ## 尚待排查（優先度較低，不是資源受限，只是還沒排到）
 
 - **2026-10-06 擴充 prompt injection 測試（OWASP AITG-APP-01 範例改寫 + 自行設計，

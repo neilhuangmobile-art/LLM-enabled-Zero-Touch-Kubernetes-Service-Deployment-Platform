@@ -1628,3 +1628,19 @@ Pod 對應到服務、對話規則、建議 API）；乾淨環境 383 項通過�
 - 實測一個 nginx 開 8095、8096：兩個都回 200，Git 設定的 Service 有 80、8095、8096。
 - 平台刪除後全部清除，事件紀錄有寫；測試對話、自動 gitops commit 都已撤銷。
 
+### 16:29 — 安全：套件升級，pip-audit 從 166 個漏洞降到 19 個
+**為什麼**：柏碩交接文件列為「建議盡快升級」，使用者 10/24 指示這台能做的一次做完；transformers 是否升級由使用者決定（選安全優先）。
+**改了什麼**：
+- **第一批**：flask 3.1.3、requests 2.33.0、urllib3 2.8.0、certifi、filelock、GitPython 3.2.1、pillow 13、json-repair、setuptools、sentence-transformers 5.7；
+  kubernetes 35.0.0（34.1.0 限制 urllib3 必須低於 2.4）。
+- **第二批**：fastapi 0.162.0＋starlette 1.9.0。
+- **第三批**：transformers 4.57.6＋tokenizers 0.22.2。
+- `requirements.txt` 更新版本並加上間接依賴的安全下限；CI 的 kubernetes 改成 35.0.0。
+**取捨**：transformers 4.57.6 生成約慢 20%（1.5B 模型對照：每秒 50.6 → 40.4 字）。模型伺服器實測：/infer 1035→1567ms；/classify 811→1125ms；/diagnose 1013→1335ms；/chat 962→1883ms。回答內容不變。
+**驗證**：
+- pip-audit：17 個套件、166 個漏洞 → 6 個套件、19 個漏洞（殘留見 security_review 55 節）。
+- `pytest` 830 項全過；Docker Python 3.9 照 CI 跑 381 項通過、0 失敗。
+- 模型伺服器四個端點回答正確；瀏覽器七個頁面、意圖判斷、部署解析正常。
+**NVIDIA 顯卡驗證**（交接清單一項）：學校 RTX 5080 Laptop，CUDA，部署 3B 與監控 1.5B 都是 GPU bf16，顯存 8.63／9.12GB；四個端點中位數 1.1～1.9 秒。
+**要通知柏碩**：家裡 AMD 那台要重新 `pip install -r requirements.txt`。
+
