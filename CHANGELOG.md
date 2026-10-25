@@ -1697,3 +1697,8 @@ Pod 對應到服務、對話規則、建議 API）；乾淨環境 383 項通過�
 背景安全審查指出：組員新增的回收桶、專案檔案等按鈕用 `onclick="f('${escAttr(標題)}')"` 傳值。`escAttr` 把 `'` 換成 `&#39;`，但瀏覽器先解回 `'` 才執行，標題或檔名有單引號就會跳出字串：一般情況是「it's」這種標題讓「永久刪除」失效，刻意構造則能執行任意程式。新增 `jsArg()`（先 JSON 編碼再做屬性跳脫），7 處改用它。
 **驗證**：瀏覽器建立標題為 `it's "x"');window.__pwned=1;//<img src=x onerror=…>` 的對話並丟進回收桶，按「永久刪除」，函式收到完整標題、注入的程式沒有執行；`pytest` 全過。（`docs/security_review.md` 57 節）
 
+### 21:30 — 修復：AMD 那台補回部署範例索引（小模型 few-shot 原本是空的）
+`dataset/finetune_samples.jsonl` 與 `rag/deploy_index.json` 不進版控，10/9 換電腦時沒有搬，小模型解析部署時一直拿不到範例。`generate_finetune_data.py`（`random.seed(42)`、純樣板）重新產生的 1,800 筆就是原本那批，再加上平台自動累積的 14 筆真實部署輸入，`python rag/build_index.py --deploy` 建出 1,812 筆索引（原本 1,802 筆＝1,800＋2 筆真實輸入）。
+**驗證**：關掉 Gemini 正規化、用規則解析不了的句子走小模型，log 出現「注入 3 筆部署範例 few-shot」，輸出副本數與名稱正確。
+**順帶發現（未修）**：同一次測試中，使用者說「redis 7.2」，小模型輸出 `redis:7.2-alpine`。部署解析路徑只檢查副本數範圍（`llama_client._validate`），沒有核對映像檔是否出現在原句；參數查證目前只做在意圖分類（`model_server._clean_intent`）。使用者在規格確認卡上看得到也改得了，但不會被自動擋下。
+
