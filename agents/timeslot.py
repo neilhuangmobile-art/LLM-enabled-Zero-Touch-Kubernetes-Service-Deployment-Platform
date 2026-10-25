@@ -237,15 +237,20 @@ def savings(plan: Dict, cost_per_replica_hour: float) -> Dict:
     month = 730 / 168
     scheduled = round(replica_hours_week * month * cost_per_replica_hour, 2)
     always = round(peak_hours_week * month * cost_per_replica_hour, 2)
+    c = round(cost_per_replica_hour, 5)   # 位數要夠，使用者照算式自己乘才會得到同一個數字
+    how = (f"每個副本每小時約 {c} 美元。整天開 {peak} 個：{c} × {peak} 個 × 730 小時 ≈ {always} 美元；"
+           f"排程後一週合計 {round(replica_hours_week, 1)} 個副本小時，換算成一個月再乘單價 ≈ {scheduled} 美元；"
+           f"兩者相減就是省下的 {round(always - scheduled, 2)} 美元。")
     return {"peak": peak, "avg_replicas": round(sum(samples) / len(samples), 2),
             "scheduled_usd": scheduled, "always_peak_usd": always,
-            "saved_usd": round(always - scheduled, 2),
+            "saved_usd": round(always - scheduled, 2), "how": how,
             "saved_pct": round((1 - replica_hours_week / peak_hours_week) * 100) if peak_hours_week else 0}
 
 
 def cost_per_replica_hour(cpu_mc: int, mem_bytes: int) -> float:
-    """跟 agents/cost_agent._estimate_monthly_cost 同一組牌價（$0.048/vCPU/hr、$0.006/GiB/hr）。"""
-    return (cpu_mc or 100) / 1000 * 0.048 + (mem_bytes or 128 * 1024 ** 2) / 1024 ** 3 * 0.006
+    """跟 agents/cost_agent._estimate_monthly_cost 同一組牌價。"""
+    from agents.cost_agent import CPU_USD_PER_HOUR, MEM_USD_PER_GIB_HOUR
+    return (cpu_mc or 100) / 1000 * CPU_USD_PER_HOUR + (mem_bytes or 128 * 1024 ** 2) / 1024 ** 3 * MEM_USD_PER_GIB_HOUR
 
 
 def next_change(plan: Dict, now: datetime) -> Optional[Tuple[datetime, int]]:

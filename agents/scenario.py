@@ -199,6 +199,10 @@ def has_scenario(attrs: Dict) -> bool:
 
 
 # ── 換算 ───────────────────────────────────────────────────────────
+def _fmt_days(days) -> str:
+    return str(int(days)) if float(days).is_integer() else str(days)
+
+
 def _monthly_usd(replicas: int, res: Dict) -> float:
     """沿用成本代理的計價公式（依 requests 計算），不另外發明一套。"""
     manifest = {"spec": {"replicas": replicas, "template": {"spec": {"containers": [
@@ -264,6 +268,7 @@ def plan(attrs: Dict, image: str, app_name: str = "", explicit_replicas: Optiona
     # 兩項省下的金額加起來剛好是「基準月費 − 照情境推算的費用」，不會重複計算。
     comparisons = []
     baseline = rec_month
+    naive = replicas
     if total and attrs.get("concurrent_users") is None and per:
         naive = min(MAX_SCENARIO_REPLICAS, max(1, math.ceil(total / per)))
         if naive > replicas:
@@ -284,6 +289,13 @@ def plan(attrs: Dict, image: str, app_name: str = "", explicit_replicas: Optiona
             "baseline_usd": round(baseline, 2),
             "scenario_usd": round(rec_month * span, 2),
             "basis": "依公有雲（AWS）牌價估算，以一個月為比較期間。放在你自己的電腦或學校叢集不另外收費，省下的是電腦資源",
+            # 2026-10-25：畫面上要說得出這幾個金額怎麼來的
+            "how": (f"照情境開 {replicas} 個副本，一個月約 {round(rec_month, 2)} 美元"
+                    + (f"，只用 {int(days) if float(days).is_integer() else days} 天，所以是 {round(rec_month, 2)} × {_fmt_days(days)}／30 ≈ {round(rec_month * span, 3)} 美元"
+                       if days and days < MONTH_DAYS else "")
+                    + f"。沒考慮情境的作法約 {round(baseline, 2)} 美元"
+                    + (f"（把 {total} 人都當成同時在線，開 {naive} 個副本、整個月開著）" if baseline != rec_month else "（同樣的副本數、整個月開著）")
+                    + f"，相減省下約 {round(baseline - rec_month * span, 2)} 美元。每個副本的月費算法同成本審查。"),
         }
 
     return {

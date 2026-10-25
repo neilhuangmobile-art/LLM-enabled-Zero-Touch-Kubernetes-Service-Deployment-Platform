@@ -936,11 +936,14 @@ def _my_deployment_resource_breakdown(namespace: str) -> dict:
             {"resources": {"requests": {"cpu": f"{total_cpu_mc}m", "memory": str(total_mem_b)}}}
         ]}}}}
         monthly_usd = _estimate_monthly_cost(pseudo_manifest).get("estimated_usd")
+    from agents.cost_agent import explain_monthly
     return {
         "deployments": deployments,
         "total_cpu_cores": round(total_cpu_mc / 1000, 2),
         "total_mem_gib": round(total_mem_b / (1024 ** 3), 2),
         "monthly_usd": monthly_usd,
+        # 2026-10-25：畫面上的月費附算式
+        "monthly_how": explain_monthly(total_cpu_mc / 1000, total_mem_b / (1024 ** 3), monthly_usd) if monthly_usd else "",
     }
 
 
@@ -1050,6 +1053,7 @@ def _dashboard_summary(namespace: str) -> dict:
             result["my_total_cpu_cores"] = my["total_cpu_cores"]
             result["my_total_mem_gib"] = my["total_mem_gib"]
             result["my_monthly_usd"] = my["monthly_usd"]
+            result["my_monthly_how"] = my.get("monthly_how", "")
         except Exception:
             pass
     return result
@@ -2070,6 +2074,7 @@ tr.enter{animation:rowIn .3s ease both}
 .facts div:last-child{border-right:0}
 .facts dt{font-size:13px;color:var(--text-3)}
 .facts dd{margin:0;font-family:var(--f-display);font-size:18px;font-weight:600}
+.cost-how{font-size:12.5px;color:var(--text-3);margin-top:4px;font-weight:normal}.cost-how summary{cursor:pointer;color:var(--text-2);width:max-content}.cost-how div{padding-top:4px;line-height:1.6;white-space:normal}
 .w-note{padding:10px 18px;border-top:1px solid var(--grid);font-size:13px;color:var(--text-3)}
 
 /* 詳情（抽屜與對話內共用） */
@@ -2170,6 +2175,7 @@ tr.enter{animation:rowIn .3s ease both}
 @keyframes scan{0%{transform:translateY(-100%);opacity:1}100%{transform:translateY(0);opacity:0}}
 .reviewer .verdict,.reviewer p,.reviewer .r-list,.reviewer .r-more{transition:opacity .25s}
 .res-line{display:flex;flex-wrap:wrap;gap:6px 22px;padding:12px 18px;border-top:1px solid var(--grid);font-size:14px;color:var(--text-2)}
+.res-line + .cost-how{padding:0 18px 12px;margin-top:-4px}
 .res-line b{font-family:var(--f-display);color:var(--text);font-weight:600}
 .res-line .neg{color:var(--stop)}
 .decision{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:14px 18px;border-top:1px solid var(--grid)}
@@ -3424,6 +3430,8 @@ function escAttr(v){ return esc(v).replace(/"/g, '&quot;').replace(/'/g, '&#39;'
 // 2026-10-25：放進 onclick="f(...)" 的文字一律用這個。escAttr 把 ' 換成 &#39;，但瀏覽器會先解回 ' 再執行，
 // 標題或檔名有單引號就會跳出字串（「it's」讓按鈕失效，刻意構造則可執行任意程式）。先 JSON 編碼再做屬性跳脫才安全。
 function jsArg(v){ return escAttr(JSON.stringify(String(v == null ? '' : v))); }
+// 2026-10-25：畫面上的金額都附「怎麼算的」，展開看代入實際數字的算式（算式由後端產生，跟計價程式同一組單價）
+function costHow(t, label){ return t ? `<details class="cost-how"><summary>${esc(label || '怎麼算的')}</summary><div>${esc(t)}</div></details>` : ''; }
 function projectById(id){ return projects.find(p => p.id === id); }
 function chatProjectBadge(ch){
   const p = ch && ch.projectId ? projectById(ch.projectId) : null;
@@ -4641,7 +4649,7 @@ W.resources = {
       <dl class="facts">
         <div><dt>我的服務</dt><dd>${(d.my_deployments || []).length} 個</dd></div>
         <div><dt>我佔用的資源</dt><dd>${d.my_total_cpu_cores ?? 0} 核 / ${d.my_total_mem_gib ?? 0} GiB</dd></div>
-        <div><dt>依公有雲牌價估算</dt><dd>每月 $${d.my_monthly_usd ?? 0}</dd></div>
+        <div><dt>依公有雲牌價估算</dt><dd>每月 $${d.my_monthly_usd ?? 0}${costHow(d.my_monthly_how)}</dd></div>
       </dl>
       ${usedNote ? `<div class="w-note">${usedNote}，記憶體以實際用量計算。</div>` : ''}`;
   },
@@ -4732,7 +4740,7 @@ W.report = {
       <section class="rp-sec"><h3>每日活動<span class="rp-tag fact">統計</span></h3>${rpDaily(d.series)}</section>
       <section class="rp-sec"><h3>部署前把關<span class="rp-tag fact">統計</span></h3>
         <div class="rp-cols"><div><h4>擋下的原因</h4>${rpHBars(cats, 'var(--caution)', '期間內沒有被擋下的部署。')}
-          ${rv.blocked_cost_usd ? `<p class="rp-foot" style="margin-top:8px">因為成本或叢集容量被擋下的部署，如果上線估計每月要 $${esc(rv.blocked_cost_usd)}。</p>` : ''}</div>
+          ${rv.blocked_cost_usd ? `<p class="rp-foot" style="margin-top:8px">因為成本或叢集容量被擋下的部署，如果上線估計每月要 $${esc(rv.blocked_cost_usd)}。</p>${costHow(rv.blocked_cost_how)}` : ''}${live.monthly_usd != null ? costHow(live.monthly_how, '目前服務的每月費用怎麼算') : ''}</div>
           <div><h4>最常出現的審查提醒</h4>${rpHBars(rv.top_warnings, 'var(--signal)', '期間內沒有審查提醒。')}</div></div></section>
       <section class="rp-sec"><h3>自動修復<span class="rp-tag fact">統計</span></h3>
         <div class="rp-cols"><div><h4>原因</h4>${rpHBars(hl.top_causes, 'var(--pass)', '期間內 Healer 沒有處理任何狀況。')}</div>
@@ -4774,7 +4782,7 @@ W.autoscale = {
         ? `<div>${esc(x.schedule.rows.map(r => r.when + ' ' + r.replicas + ' 個').join('；'))}</div>` +
           (x.schedule.next ? `<div class="dim">下次 ${esc(x.schedule.next.at)} 變成 ${esc(x.schedule.next.replicas)} 個</div>` : '')
         : '<span class="dim">沒有</span>';
-      const note = x.sleeping ? `<div class="dim as-note">${esc(asWhen(x.sleeping_since))} 開始休眠${x.saving_usd ? `，每月約省 $${asUsd(x.saving_usd)}` : ''}</div>`
+      const note = x.sleeping ? `<div class="dim as-note">${esc(asWhen(x.sleeping_since))} 開始休眠${x.saving_usd ? `，每月約省 $${asUsd(x.saving_usd)}` : ''}${costHow(x.saving_how)}</div>`
         : x.exempt ? '<div class="dim as-note">在例外清單，不會休眠</div>'
         : x.idle_note ? `<div class="dim as-note">${esc(x.idle_note)}</div>` : '';
       const btns = (x.sleeping && !x.waking ? `<button type="button" class="btn btn-sm primary" data-act="as-wake" data-name="${esc(x.name)}">喚醒</button>` : '') +
@@ -4808,7 +4816,7 @@ W.asplan = {
       ${d.rows.map((r, i) => `<tr class="enter" style="animation-delay:${i * 40}ms"><td>${esc(r.when)}</td><td class="r num">${esc(r.replicas)} 個</td></tr>`).join('')}</tbody></table></div>`;
     const save = `<div class="as-save"><div class="as-save-top"><span>跟整天開 ${esc(sv.peak)} 個相比</span><b>每月約省 $${asUsd(sv.saved_usd)}（${esc(sv.saved_pct)}%）</b></div>
       <div class="as-bar" aria-hidden="true"><div class="as-bar-fill" style="width:${100 - pct}%"></div></div>
-      <div class="dim">排程後每月約 $${asUsd(sv.scheduled_usd)}，整天開滿約 $${asUsd(sv.always_peak_usd)}。依公有雲牌價估算，放在自己電腦或學校叢集不另外收費。</div></div>`;
+      <div class="dim">排程後每月約 $${asUsd(sv.scheduled_usd)}，整天開滿約 $${asUsd(sv.always_peak_usd)}。依公有雲牌價估算，放在自己電腦或學校叢集不另外收費。</div>${costHow(sv.how)}</div>`;
     const nowLine = d.sleeping ? '這個服務現在在休眠，套用後醒來時會照時段開。'
       : `現在 ${esc(d.now)}，目前開 ${esc(d.current)} 個，套用後會${d.now_target === d.current ? '維持' : '調成'} ${esc(d.now_target)} 個` +
         (d.next ? `；下一次是 ${esc(d.next.at)} 變成 ${esc(d.next.replicas)} 個。` : '。');
@@ -5566,7 +5574,7 @@ function scenarioHTML(sc){
         <div class="scn-bar mine"><span>照情境推算</span><div class="track"><div class="fill" style="width:${pct(sv.scenario_usd)}%"></div></div><b>$${esc(sv.scenario_usd)}</b></div>
       </div>
       <ul>${(sv.items || []).map(i => `<li><span>${esc(i.label)}</span><b>省 $${esc(i.usd)}</b></li>`).join('')}</ul>
-      <p class="scn-basis">${esc(sv.basis || '')}</p></div>`;
+      <p class="scn-basis">${esc(sv.basis || '')}</p>${costHow(sv.how, '省下的金額怎麼算')}</div>`;
   }
   return `<section class="scn" aria-label="情境推算">
     <div class="scn-head"><span class="scn-tag">SCENARIO</span><h3>${head}</h3></div>
@@ -5661,7 +5669,7 @@ function renderReviewCard(flow){
       parts.push(`部署後叢集還剩 <b class="${r.cpu_cores < 0 ? 'neg' : ''}">${r.cpu_cores}</b> 核、<b class="${r.mem_gib < 0 ? 'neg' : ''}">${r.mem_gib}</b> GiB`);
     }
     if(rs.monthly_usd != null) parts.push(`依公有雲牌價估算每月 <b>$${rs.monthly_usd}</b>`);
-    if(parts.length) res = `<div class="res-line">${parts.map(p => `<span>${p}</span>`).join('')}</div>`;
+    if(parts.length) res = `<div class="res-line">${parts.map(p => `<span>${p}</span>`).join('')}</div>${costHow(rs.cost_how, '每月費用怎麼算')}`;
   }
   const seal = {approve:['ok', '放行'], warn:['warn', '注意'], block:['stop', '退回']}[decision] || ['stop', '退回'];
   let say, actions;
@@ -7991,6 +7999,7 @@ def _resource_summary(parsed: dict, review: dict) -> dict:
         "node_bound": node_bound,
         "monthly_usd": est.get("estimated_usd"),
         "cost_note": est.get("note"),
+        "cost_how": est.get("how"),
         "decision": review.get("decision"),
         "cluster_capacity": cluster_capacity,
         "cluster_used": cluster_used,
@@ -9680,6 +9689,7 @@ def _report_live(ns: str) -> dict:
         live["cpu_cores"] = dash.get("my_total_cpu_cores")
         live["mem_gib"] = dash.get("my_total_mem_gib")
         live["monthly_usd"] = dash.get("my_monthly_usd")
+        live["monthly_how"] = dash.get("my_monthly_how", "")
     except Exception:
         pass
     return live
@@ -10369,7 +10379,10 @@ def api_autoscale():
                "sleeping_since": ann.get(_sleep.ANN_SLEEPING_SINCE),
                "exempt": app_name in settings["exempt"], "idle_note": _as_state["idle"].get(ns, {}).get(app_name)}
         if sleeping:
-            row["saving_usd"] = round(_as_cost_per_replica_hour(d) * row["sleep_replicas"] * 730, 2)
+            c = _as_cost_per_replica_hour(d)
+            row["saving_usd"] = round(c * row["sleep_replicas"] * 730, 2)
+            row["saving_how"] = (f"醒著時開 {row['sleep_replicas']} 個副本，每個副本每小時約 {round(c, 5)} 美元："
+                                 f"{round(c, 5)} × {row['sleep_replicas']} 個 × 730 小時 ≈ {row['saving_usd']} 美元，休眠期間不用付。")
         s = scheds.get(app_name)
         if s:
             nxt = _ts.next_change(s["plan"], now)

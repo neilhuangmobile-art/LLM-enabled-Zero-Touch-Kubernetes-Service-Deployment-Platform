@@ -306,10 +306,29 @@ def _analyze_container_resources(container: Dict) -> List[Dict]:
     return issues
 
 
+# 計價單價集中在這裡，timeslot、情境推算、畫面上的算式說明都引用同一組數字
+CPU_USD_PER_HOUR = 0.048      # 每核每小時（美元）
+MEM_USD_PER_GIB_HOUR = 0.006  # 每 GiB 每小時（美元）
+HOURS_PER_MONTH = 730
+
+
+def _num(v: float) -> str:
+    return f"{v:.3f}".rstrip("0").rstrip(".")
+
+
+def explain_monthly(cpu_cores: float, mem_gib: float, usd: float) -> str:
+    """2026-10-25：畫面上的月費要說得出怎麼算——把代入的實際數字寫成一行算式。"""
+    return (f"CPU 合計 {_num(cpu_cores)} 核 × {CPU_USD_PER_HOUR} 美元 × {HOURS_PER_MONTH} 小時 ＋ "
+            f"記憶體合計 {_num(mem_gib)} GiB × {MEM_USD_PER_GIB_HOUR} 美元 × {HOURS_PER_MONTH} 小時 ≈ {usd} 美元。"
+            f"核數與記憶體以每個副本的預留量（requests）乘上副本數，沒填的以 100m、128Mi 計；"
+            f"單價依公有雲隨需方案牌價粗估，一個月以 {HOURS_PER_MONTH} 小時計，只用來比較方案，不是實際帳單。")
+
+
 def _estimate_monthly_cost(manifest: Dict) -> Dict:
     """
     粗略估算月費（USD）。
-    假設：c5.xlarge (4 vCPU / 8GiB) 約 $0.17/hr，以比例計算。
+    單價見檔案上方 CPU_USD_PER_HOUR、MEM_USD_PER_GIB_HOUR（2026-10-25：原註解寫「依 c5.xlarge $0.17/hr 換算」，
+    但 4 核＋8GiB 用這兩個單價算是 $0.24/hr，對不上，改成只說明是公有雲牌價粗估）。
     """
     spec          = manifest.get("spec", {})
     replicas      = spec.get("replicas", 1)
@@ -331,8 +350,8 @@ def _estimate_monthly_cost(manifest: Dict) -> Dict:
     monthly_mem_gib   = (total_mem_mi * replicas) / 1024
 
     # 粗略估算（基於 AWS On-Demand 定價）
-    cpu_cost = monthly_cpu_core  * 0.048 * 730   # ~$0.048/vCPU/hr
-    mem_cost = monthly_mem_gib   * 0.006 * 730   # ~$0.006/GiB/hr
+    cpu_cost = monthly_cpu_core  * CPU_USD_PER_HOUR * HOURS_PER_MONTH
+    mem_cost = monthly_mem_gib   * MEM_USD_PER_GIB_HOUR * HOURS_PER_MONTH
     total    = round(cpu_cost + mem_cost, 2)
 
     return {
@@ -340,7 +359,8 @@ def _estimate_monthly_cost(manifest: Dict) -> Dict:
         "cpu_cores":      round(monthly_cpu_core, 2),
         "memory_gib":     round(monthly_mem_gib, 2),
         "estimated_usd":  total,
-        "note":           "粗估值（基於 AWS c5 On-Demand，僅供參考）",
+        "note":           "粗估值（依公有雲隨需方案牌價，僅供參考）",
+        "how":            explain_monthly(monthly_cpu_core, monthly_mem_gib, total),
     }
 
 

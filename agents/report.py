@@ -107,9 +107,13 @@ def build_report(events: List[Dict], days: int, now: float = None, live: Dict = 
         for b in bl[:3]:
             block_reasons[_issue_key(b)] += 1
     # 因為成本或叢集容量被擋下的部署，原本估計每月要花多少（依公有雲牌價）
-    blocked_cost_usd = round(sum(float((e.get("data") or {}).get("monthly_usd") or 0) for e in blocked
-                                 if {blocker_category(b) for b in (e.get("data") or {}).get("blockers") or []}
-                                 & {"cost", "capacity"}), 2)
+    _costly = [float((e.get("data") or {}).get("monthly_usd") or 0) for e in blocked
+               if {blocker_category(b) for b in (e.get("data") or {}).get("blockers") or []} & {"cost", "capacity"}]
+    blocked_cost_usd = round(sum(_costly), 2)
+    # 2026-10-25：畫面上要說得出怎麼算
+    blocked_cost_how = (f"被擋下的 {len(_costly)} 筆部署，各自在審查時估算的月費相加"
+                        f"（{' ＋ '.join(str(round(c, 2)) for c in _costly[:6])}{' ＋ …' if len(_costly) > 6 else ''}）"
+                        f"≈ {blocked_cost_usd} 美元；每筆月費的算法同成本審查。") if _costly else ""
     warn_issues = Counter()
     for e in reviews:
         for msg in (e.get("data") or {}).get("issues") or []:
@@ -190,7 +194,7 @@ def build_report(events: List[Dict], days: int, now: float = None, live: Dict = 
                     "warn": decisions.get("warn", 0), "block": decisions.get("block", 0),
                     "block_by_category": {CATEGORY_LABEL[c]: n for c, n in block_cats.most_common()},
                     "top_block_reasons": block_reasons.most_common(5),
-                    "blocked_cost_usd": blocked_cost_usd,
+                    "blocked_cost_usd": blocked_cost_usd, "blocked_cost_how": blocked_cost_how,
                     "top_warnings": warn_issues.most_common(5)},
         "ops": ops,
         "heals": {"total": len(heals), "ok": heal_ok, "needs_you": heal_inspect,
