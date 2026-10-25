@@ -33,15 +33,36 @@ def test_cold_start_uses_nearest_style():
     assert nearest_style(hist2, PRIORS)["id"] == "experimental"
 
 
-def test_weight_moves_toward_personal_with_more_history():
-    few = [{"pods": 1, "memory": "1Gi", "image": "app:1"}] * 3
-    many = [{"pods": 1, "memory": "1Gi", "image": "app:1"}] * 45
+def test_three_deploys_use_own_habit():
+    # 2026-10-25 改：部署 3 次以上直接用自己最近 5 次的中位數（原本跟公開風格加權混合，10 次後仍只有習慣的七成）
+    few = [{"pods": 3, "memory": "1Gi", "cpu": "500m", "image": "app:1"}] * 3
+    many = [{"pods": 3, "memory": "1Gi", "cpu": "500m", "image": "app:1"}] * 45
     a, b = suggest(few, PRIORS), suggest(many, PRIORS)
-    assert a["ok"] and b["ok"]
-    from agents.personalize import mem_mib
-    # 次數越多越接近他自己的 1Gi
-    assert abs(mem_mib(b["memory"]) - 1024) < abs(mem_mib(a["memory"]) - 1024)
-    assert "過去 45 次" in b["reason"]
+    assert (a["memory"], a["cpu"], a["pods"]) == ("1Gi", "500m", 3) == (b["memory"], b["cpu"], b["pods"])
+    assert "過去 45 次" in b["reason"] and "大多開 3 個副本" in b["reason"]
+
+
+def test_follows_habit_change_with_recent_deploys():
+    # 新的在前：最近 3 次改用 2Gi，之前 10 次都是 256Mi → 跟著最近的習慣
+    hist = [{"pods": 4, "memory": "2Gi", "cpu": "1000m", "image": "r:7"}] * 3 + [{"pods": 2, "memory": "256Mi", "cpu": "250m", "image": "r:7"}] * 10
+    r = suggest(hist, PRIORS)
+    assert r["memory"] == "2Gi" and r["pods"] == 4
+
+
+def test_one_as_article_is_not_a_replica_count():
+    hist = [{"pods": 3, "image": "app:1"}] * 5
+    assert suggest(hist, PRIORS, "幫我部署一個 nginx")["pods"] == 3
+    assert suggest(hist, PRIORS, "部署一個副本的 nginx")["pods"] is None
+    assert suggest(hist, PRIORS, "deploy one pod of nginx")["pods"] is None
+
+
+def test_constant_probe_feature_does_not_force_production():
+    # 實際的 style_priors.json：平台每次都加健康檢查，原本人人都被分成正式環境型
+    real = load_priors()
+    if not real:
+        pytest.skip("沒有 style_priors.json")
+    cheap = [{"pods": 1, "memory": "128Mi", "cpu": "100m", "image": "nginx:latest"}] * 2
+    assert nearest_style(cheap, real)["id"] != "production"
 
 
 def test_explicit_pods_in_sentence_not_overridden():
