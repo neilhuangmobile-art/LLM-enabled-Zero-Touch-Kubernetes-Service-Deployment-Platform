@@ -3421,6 +3421,9 @@ function renderChatList(){
 let projects = [], currentProjectId = null, projTab = 'overview', projData = null;
 const PROJ_ICON = '<svg class="proj-ico" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M1.75 4.25a1 1 0 011-1h3.2l1.5 1.5h5.8a1 1 0 011 1v6.5a1 1 0 01-1 1H2.75a1 1 0 01-1-1v-8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>';
 function escAttr(v){ return esc(v).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+// 2026-10-25：放進 onclick="f(...)" 的文字一律用這個。escAttr 把 ' 換成 &#39;，但瀏覽器會先解回 ' 再執行，
+// 標題或檔名有單引號就會跳出字串（「it's」讓按鈕失效，刻意構造則可執行任意程式）。先 JSON 編碼再做屬性跳脫才安全。
+function jsArg(v){ return escAttr(JSON.stringify(String(v == null ? '' : v))); }
 function projectById(id){ return projects.find(p => p.id === id); }
 function chatProjectBadge(ch){
   const p = ch && ch.projectId ? projectById(ch.projectId) : null;
@@ -3532,7 +3535,7 @@ function projServicesHTML(p){
   const rows = p.services.length ? p.services.map(s => {
     const st = !s.exists ? '找不到這個服務，可能已經在別的地方被刪除了' : s.sleeping ? '休眠中' : `${s.ready}/${s.replicas} 個副本就緒`;
     return `<div class="proj-row"><span class="grow">${esc(s.name)}</span><span class="proj-muted">${esc(st)}</span>
-      <button type="button" class="btn btn-sm" data-tip="移出後服務照常運作" onclick="projServiceAction('remove','${escAttr(s.name)}')">移出專案</button></div>`;
+      <button type="button" class="btn btn-sm" data-tip="移出後服務照常運作" onclick="projServiceAction('remove',${jsArg(s.name)})">移出專案</button></div>`;
   }).join('') : '<p class="proj-muted">這個專案還沒有服務。在專案的對話裡部署，或從下面把現有的服務移進來。</p>';
   const add = p.available_services.length
     ? `<div class="proj-actions" style="justify-content:flex-start"><select id="proj-add-svc" aria-label="選擇要移進專案的服務">${p.available_services.map(n => `<option value="${escAttr(n)}">${esc(n)}</option>`).join('')}</select>
@@ -3552,8 +3555,8 @@ async function loadTrashPage(){
     <div class="proj-row"><span class="grow"><b>${x.type === 'project' ? '專案' : '對話'}</b>　${esc(x.title)}
       ${x.type === 'project' && (x.chats || x.files) ? `<span class="proj-muted">（含 ${x.chats ? x.chats + ' 則對話' : ''}${x.chats && x.files ? '、' : ''}${x.files ? x.files + ' 個檔案' : ''}）</span>` : ''}</span>
       <span class="proj-muted">${projTime(x.deleted_at)} 刪除，還剩 ${esc(x.days_left)} 天</span>
-      <button type="button" class="btn btn-sm" onclick="trashAction('restore','${x.type}','${escAttr(x.id)}')">復原</button>
-      <button type="button" class="btn btn-sm danger" onclick="trashAction('purge','${x.type}','${escAttr(x.id)}','${escAttr(x.title)}')">永久刪除</button></div>`).join('')}
+      <button type="button" class="btn btn-sm" onclick="trashAction('restore',${jsArg(x.type)},${jsArg(x.id)})">復原</button>
+      <button type="button" class="btn btn-sm danger" onclick="trashAction('purge',${jsArg(x.type)},${jsArg(x.id)},${jsArg(x.title)})">永久刪除</button></div>`).join('')}
     <div class="proj-actions" style="justify-content:flex-start"><span class="proj-msg" id="trash-msg"></span></div></div>`;
 }
 async function trashAction(action, type, id, title){
@@ -3608,7 +3611,7 @@ async function loadProjSchedule(p){
     const sch = x.schedule ? `${x.schedule.rows.map(r => r.when + ' ' + r.replicas + ' 個').join('；')}${x.schedule.next ? `（下次 ${x.schedule.next.at} 變成 ${x.schedule.next.replicas} 個）` : ''}` : '沒有排程';
     return `<div class="proj-row"><span class="grow"><b>${esc(x.name)}</b><span class="proj-muted">　${esc(st)}</span><br><span class="proj-muted">${esc(sch)}</span></span>
       ${d.remote ? '' : `<button type="button" class="btn btn-sm" data-act="as-suggest" data-name="${escAttr(x.name)}">建議時段</button>`}
-      ${x.schedule ? `<button type="button" class="btn btn-sm" onclick="projCancelSchedule('${escAttr(x.name)}')">取消排程</button>` : ''}
+      ${x.schedule ? `<button type="button" class="btn btn-sm" onclick="projCancelSchedule(${jsArg(x.name)})">取消排程</button>` : ''}
       <button type="button" class="btn btn-sm primary" data-act="as-edit" data-name="${escAttr(x.name)}">${x.schedule ? '修改排程' : '設定排程'}</button></div>`;
   }).join('') : '<p class="proj-muted">這個專案還沒有服務。到「服務」分頁移入，或在專案的對話裡部署。</p>';
   body.innerHTML = `<div class="proj-box"><h2>分時擴縮</h2>${rows}
@@ -3625,7 +3628,7 @@ function projFilesHTML(p){
       <div class="proj-row"><span class="grow">${esc(f.name)}</span>
         <span class="proj-muted">${f.format === 'k8s' ? 'Kubernetes YAML' : 'docker-compose'}，${Math.max(1, Math.round(f.size / 1000))} KB，${projTime(f.created_at)}</span>
         <a class="btn btn-sm" href="/api/projects/${encodeURIComponent(p.id)}/files/${encodeURIComponent(f.id)}" download>下載</a>
-        <button type="button" class="btn btn-sm danger" onclick="projDeleteFile('${f.id}','${escAttr(f.name)}')">刪除</button></div>`).join('')
+        <button type="button" class="btn btn-sm danger" onclick="projDeleteFile(${jsArg(f.id)},${jsArg(f.name)})">刪除</button></div>`).join('')
     : '<p class="proj-muted">還沒有檔案。在這個專案的對話裡上傳 docker-compose 或 Kubernetes YAML，原始檔案會留在這裡。</p>';
   return `<div class="proj-box"><h2>檔案</h2>${rows}</div>`;
 }
@@ -4819,12 +4822,12 @@ function openScheduleEditor(name){
   openProjModal(`<h3>設定 ${esc(name)} 的分時擴縮</h3>
     <label class="lbl" for="as-ed-text">什麼時段開幾個？</label>
     <input type="text" id="as-ed-text" placeholder="例如：白天 3 個、晚上 1 個" onkeydown="if(event.key==='Enter')previewSchedule('${escAttr(name)}')">
-    <div class="as-ed-ex">${ex.map(x => `<button type="button" class="chip ghost" onclick="document.getElementById('as-ed-text').value='${escAttr(x)}'">${esc(x)}</button>`).join('')}</div>
+    <div class="as-ed-ex">${ex.map(x => `<button type="button" class="chip ghost" onclick="document.getElementById('as-ed-text').value=${jsArg(x)}">${esc(x)}</button>`).join('')}</div>
     <p class="field-hint">白天是 08:00 到 20:00；平日是週一到週五。只在時段切換的那一刻調整，最少保留 1 個。</p>
     <div class="proj-err" id="as-ed-err" hidden></div>
     <div id="as-ed-plan"></div>
     <div class="confirm-dialog-actions"><button type="button" class="btn" onclick="closeProjModal()">關閉</button>
-      <button type="button" class="btn primary" onclick="previewSchedule('${escAttr(name)}')">預覽</button></div>`);
+      <button type="button" class="btn primary" onclick="previewSchedule(${jsArg(name)})">預覽</button></div>`);
 }
 // 2026-10-23：從流量建議時段，跟設定排程同一張確認卡
 async function openScheduleSuggest(name){
