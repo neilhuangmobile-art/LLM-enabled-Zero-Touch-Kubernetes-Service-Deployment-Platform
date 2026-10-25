@@ -403,7 +403,9 @@ def list_trash(owner: str, now: float = None) -> List[Dict]:
         counts = {pid: (_conn.execute("SELECT COUNT(*) FROM chats WHERE owner = ? AND deleted_with = ?", (owner, pid)).fetchone()[0],
                         _conn.execute("SELECT COUNT(*) FROM project_files WHERE owner = ? AND project_id = ?", (owner, pid)).fetchone()[0])
                   for pid, _, _ in projs}
-    left = lambda t: max(0, int((t + TRASH_DAYS * 86400 - now) // 86400) + 1)
+    # 無條件進位：剛刪除時剩 7 天（原本「無條件捨去 + 1」在刪除時間與現在完全相同時會算成 8 天，
+    # Windows 時鐘解析度約 15ms，同一瞬間刪除再查詢就會發生）
+    left = lambda t: max(0, -int(-(t + TRASH_DAYS * 86400 - now) // 86400))
     items = [{"type": "chat", "id": i, "title": t, "deleted_at": d, "days_left": left(d)} for i, t, d, _p in chats]
     items += [{"type": "project", "id": i, "title": n, "deleted_at": d, "days_left": left(d),
                "chats": counts[i][0], "files": counts[i][1]} for i, n, d in projs]

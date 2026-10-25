@@ -363,3 +363,29 @@ def test_suggest_api_not_enough_and_ok(monkeypatch, tmp_path):
     d = c.get("/api/autoscale/suggest?name=web").get_json()
     assert d["ok"] and d["plan"]["windows"][0]["days"] == [0, 1, 2, 3, 4] and d["explain"] and d["rows"]
     assert c.get("/api/autoscale/suggest?name=nope").status_code == 404
+
+
+# ── 2026-10-25：叢集沒有網路流量指標時，休眠與建議時段要講清楚，不能顯示「再等 7 天」 ──
+def test_idle_tick_detects_missing_traffic_metric(monkeypatch):
+    def fake_query(q, at=None):
+        if q.startswith("prometheus_tsdb_lowest_timestamp_seconds"):
+            return [{"value": [0, "1"]}]
+        if q.startswith("count(container_network_receive_packets_total)"):
+            return []
+        raise AssertionError(q)
+    monkeypatch.setitem(web_demo._as_state, "traffic_metric", None)
+    monkeypatch.setattr(web_demo, "_as_prom_query", fake_query)
+    monkeypatch.setattr(web_demo, "k8s_client", NS(AppsV1Api=lambda: None,
+                                                   CoreV1Api=lambda: NS(list_namespace=lambda **k: NS(items=[]))))
+    web_demo._as_tick_idle()
+    assert web_demo._as_state["traffic_metric"] is False
+
+
+def test_suggest_api_explains_missing_traffic_metric(monkeypatch):
+    dep = NS(metadata=NS(name="web", annotations={}, labels={}),
+             spec=NS(replicas=3, template=NS(spec=NS(containers=[]))), status=NS(ready_replicas=3))
+    monkeypatch.setitem(web_demo._as_state, "traffic_metric", False)
+    monkeypatch.setattr(web_demo, "_as_guard", lambda remote_ok=False: ("user-as-test", None))
+    monkeypatch.setattr(web_demo, "_as_read_dep", lambda ns, app: dep if app == "web" else None)
+    d = _client().get("/api/autoscale/suggest?name=web").get_json()
+    assert not d["ok"] and d["reason"] == "no_metric" and "網路流量" in d["error"] and "還要" not in d["error"]

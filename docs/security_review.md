@@ -2306,6 +2306,23 @@ priors 檔只有統計數字；瀏覽器實測建議出現、專案預設優先�
 - 家裡 AMD 那台要重新 `pip install -r requirements.txt`。
 - `torch_dtype` 參數在 transformers 4.57 會出棄用警告（不影響運作），升 5.x 前要改成 `dtype`。
 
+## 56. 自動休眠在某些叢集永遠不會發生，畫面卻寫得像正在運作
+
+**風險**：自動休眠與「從歷史流量建議時段」都靠 Prometheus 的容器網路流量指標（`container_network_receive_packets_total`）。2026-10-25 在 AMD 那台（Docker Desktop 內建 Kubernetes v1.36、docker 執行環境）實測，Prometheus 有 CPU 與記憶體指標，但完全沒有任何 `container_network_*` 指標，流量紀錄表 0 筆。畫面卻顯示「連續 5 天沒人用就休眠」，按「建議時段」回覆「大約還要 7 天，平台每小時會自動記錄」，等多久都不會發生。
+
+**為什麼重要**：專案原則是不能有靜默失敗、狀態要反映現況。使用者會以為閒置的服務會自己省錢，或以為等一週就能拿到建議。組員 10/24 在學校 NVIDIA 筆電測休眠是正常的，代表同一份程式在不同叢集表現不同，只看一台的測試會漏掉。
+
+**解決方式**：
+- 每 10 分鐘的閒置檢查順便查 `count(container_network_receive_packets_total)`，結果存在 `_as_state["traffic_metric"]`。
+- 沒有指標時：「分時與休眠」區塊標題改成「自動休眠無法使用」，表格上方說明原因與還能做什麼（自己設定時段）；每個服務標「叢集沒有網路流量資料，不會自動休眠」；「建議時段」回 `reason: no_metric` 與同一段說明。
+- 原本的安全設計不變：查不到流量時本來就不會休眠（`decide_idle` 回 False），這次只是把「不會動作」講清楚。
+
+**驗證**：
+- 新增 `test_idle_tick_detects_missing_traffic_metric`、`test_suggest_api_explains_missing_traffic_metric`，`pytest` 834 項全過。
+- 本機模式測試網站上，`/api/autoscale` 回 `traffic_metric: false`，畫面截圖確認說明出現在表格上方。
+
+**殘留**：要讓這台也能休眠，得換一個會回報容器網路流量的叢集（組員測過的學校筆電可以），或改用其他資料來源判斷有沒有人在用，目前沒有做。
+
 ## 尚待排查（優先度較低，不是資源受限，只是還沒排到）
 
 - **2026-10-06 擴充 prompt injection 測試（OWASP AITG-APP-01 範例改寫 + 自行設計，

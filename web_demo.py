@@ -4755,7 +4755,7 @@ function asUsd(v){ return esc((Number(v) || 0).toFixed(2)); }
 W.autoscale = {
   summary: d => d.ok === false ? '分時與休眠：' + (d.error || '')
     : `分時與休眠：${(d.items || []).filter(x => x.sleeping).length} 個服務休眠中，${(d.items || []).filter(x => x.schedule).length} 個有排程`,
-  head: d => `<h2>分時與休眠</h2><span class="meta">${d.ok === false ? '' : `<span>連續 ${esc(d.idle_days)} 天沒人用就休眠</span>`}<span>${esc(d.at)} 的資料</span></span>
+  head: d => `<h2>分時與休眠</h2><span class="meta">${d.ok === false ? '' : d.traffic_metric === false && !d.remote ? '<span>自動休眠無法使用</span>' : `<span>連續 ${esc(d.idle_days)} 天沒人用就休眠</span>`}<span>${esc(d.at)} 的資料</span></span>
     <div class="filters">${d.ok === false || d.remote ? '' : `<label class="as-idle">閒置 <select class="as-idle-sel" aria-label="閒置幾天就休眠">${[1,2,3,4,5,6,7].map(n => `<option value="${n}" ${n === Number(d.idle_days) ? 'selected' : ''}>${n}</option>`).join('')}</select> 天就休眠</label>
       <button type="button" class="chip ghost" data-act="as-idle-save">儲存天數</button>`}<button type="button" class="chip ghost" data-act="refresh">重新整理</button></div>`,
   body: (d, st) => {
@@ -4786,7 +4786,9 @@ W.autoscale = {
     if(d.prometheus_ok === false && !d.remote) notes.push('現在連不上 Prometheus，看不到流量，所以暫時不會讓任何服務休眠。');
     if(d.test_override_seconds) notes.push(`測試模式：閒置 ${d.test_override_seconds} 秒就會休眠。`);
     if(!d.remote) notes.push('休眠是看服務實際收到的網路流量，健康檢查本身的流量不算。休眠中有人連進來會自動喚醒，通常 30 秒到 1 分鐘恢復。');
-    return asMsg(st) + `<div class="table-wrap"><table><thead><tr><th scope="col">服務</th><th scope="col">狀態</th><th scope="col">分時擴縮</th><th scope="col" class="r">操作</th></tr></thead><tbody>${rows}</tbody></table></div>
+    // 叢集沒有網路流量指標時，休眠與建議時段永遠不會動作——放在表格上方講清楚，不塞在底下的小字
+    const noMetric = d.traffic_metric === false && !d.remote && d.prometheus_ok !== false ? asMsg({msg: d.traffic_metric_note}) : '';
+    return asMsg(st) + noMetric + `<div class="table-wrap"><table><thead><tr><th scope="col">服務</th><th scope="col">狀態</th><th scope="col">分時擴縮</th><th scope="col" class="r">操作</th></tr></thead><tbody>${rows}</tbody></table></div>
       ${pagerHTML(items.length, st.p || 1, W_PER)}
       <div class="w-note">${notes.map(esc).join('<br>')}</div>
       <div class="w-note">可以直接說：「shop-web 白天 3 個、晚上 1 個」「shop-web 不要休眠」「閒置 3 天就休眠」「喚醒 shop-web」。</div>`;
@@ -6170,10 +6172,11 @@ function showDue(tasks){
   let added = 0;
   tasks.forEach(t => { if(!have.has(t.id)){ list.insertAdjacentHTML('beforeend', dueItemHTML(t)); added++; } });
   if(added || ov.hidden) ov.hidden = false;
-  // 正在對話頁：對話裡也放一張同樣的卡
+  // 正在對話頁：對話裡也放一張同樣的卡。空白對話不放（2026-10-25）：放了這則對話就不再是空白、會被存檔，
+  // 有預約等確認時每次打開網站都會多一則只有這張卡的「新對話」；彈出視窗已經列出同樣的預約
   if(currentPageName() === 'chat') tasks.forEach(t => {
     const ch = currentChat();
-    if(ch && !ch.messages.some(m => String(m.content || '').includes(`data-due-card="${t.id}"`)))
+    if(ch && ch.messages.length && !ch.messages.some(m => String(m.content || '').includes(`data-due-card="${t.id}"`)))
       appendMsg('assistant', `<div class="module flow" data-due-card="${t.id}">${flowHead('預約時間到了', '<span class="meta">' + schedPill('due') + '</span>')}<div class="body">${dueItemHTML(t, true)}</div></div>`);
   });
 }
@@ -9723,7 +9726,12 @@ from agents import timeslot as _ts
 
 _as_lock = threading.Lock()
 _as_busy = set()                     # 正在休眠或喚醒的 (namespace, 服務)，同一個服務不能同時被兩個執行緒處理
-_as_state = {"idle": {}, "prometheus_ok": None, "last_idle_check": None}
+_as_state = {"idle": {}, "prometheus_ok": None, "traffic_metric": None, "last_idle_check": None}
+# 2026-10-25：有些叢集的 Prometheus 根本沒有容器網路指標（實測 Docker Desktop 內建 K8s v1.36、docker 執行環境），
+# 這時休眠與「建議時段」永遠拿不到資料。之前畫面照樣寫「連續 5 天沒人用就休眠」「大約還要 7 天」，等多久都不會發生，
+# 所以閒置檢查順便確認指標存在，沒有就在畫面上講清楚。
+_AS_NO_TRAFFIC_METRIC = ("這個叢集的監控沒有提供網路流量資料（Docker Desktop 內建的 Kubernetes 不會回報容器的網路流量），"
+                         "平台無法判斷服務有沒有人在用，所以不會自動休眠，也無法從流量建議時段。分時擴縮仍然可以自己設定時段。")
 _AS_TICK = 10
 # 2026-10-21：分時擴縮／休眠的 K8s 呼叫一律設逾時（連線 5 秒、讀取 15 秒），叢集卡住時不會讓請求或背景迴圈跟著卡住
 _AS_K8S_TIMEOUT = (5, 15)
@@ -10153,6 +10161,10 @@ def _as_tick_idle():
     except Exception:
         _as_state["prometheus_ok"] = False
         return
+    try:
+        _as_state["traffic_metric"] = bool(_as_prom_query("count(container_network_receive_packets_total)"))
+    except Exception:
+        _as_state["traffic_metric"] = None
     apps = k8s_client.AppsV1Api()
     for ns in [n.metadata.name for n in k8s_client.CoreV1Api().list_namespace(_request_timeout=_AS_K8S_TIMEOUT).items if n.metadata.name.startswith("user-")]:
         settings = _as_store.get_settings(ns)
@@ -10192,6 +10204,8 @@ def _as_tick_idle():
                 expected = _sleep.expected_probe_packets_per_hour(_sleep.probes_of_container(cs[0])) if cs else 0
                 mine = {k: {p: v for p, v in s.items() if _sleep.pod_belongs_to(app, p)} for k, s in series.items()}
                 idle, why = _sleep.decide_idle(now, active, window, mine["busiest"], mine["typical"], expected, bucket, lowest)
+                if _as_state["traffic_metric"] is False:
+                    idle, why = False, "叢集沒有網路流量資料，不會自動休眠"
                 notes[app] = why
                 if idle and (ns, app) not in _as_busy:
                     _as_spawn(_as_sleep, ns, app, why)
@@ -10360,6 +10374,7 @@ def api_autoscale():
     items.sort(key=lambda x: (not x["sleeping"], x["name"]))
     return jsonify({"ok": True, "idle_days": settings["idle_days"], "items": items,
                     "prometheus_ok": _as_state["prometheus_ok"], "last_idle_check": _as_state["last_idle_check"],
+                    "traffic_metric": _as_state["traffic_metric"], "traffic_metric_note": _AS_NO_TRAFFIC_METRIC,
                     "test_override_seconds": (_AS_IDLE_OVERRIDE or None)
                     if (not _AS_IDLE_OVERRIDE_NS or ns in _AS_IDLE_OVERRIDE_NS) else None})
 
@@ -10397,6 +10412,8 @@ def api_autoscale_suggest():
     dep = _as_read_dep(ns, name)
     if not dep:
         return _as_not_found(name)
+    if _as_state["traffic_metric"] is False:
+        return jsonify({"ok": False, "reason": "no_metric", "error": _AS_NO_TRAFFIC_METRIC})
     from guardian.yaml_validator import max_replicas
     from agents.timeslot_learn import learn_schedule
     cs = dep.spec.template.spec.containers or []
