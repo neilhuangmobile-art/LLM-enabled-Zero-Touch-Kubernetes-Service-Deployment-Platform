@@ -16,8 +16,9 @@
 # 2026-10-09 從 4.44.2 升到 4.45.2：4.44 生成時會替整段 prompt 的每個位置都算完整詞彙表
 # logits（Qwen 15 萬詞 × fp32），長 prompt 瞬間多吃約 3GB 顯存；4.45 改成只算最後一個位置。
 # 實測 RX 9060 XT 長 prompt 壓測 reserved 13.27GB → 10.05GB，/infer 結果不變。
-transformers==4.45.2          # Qwen2.5 需要
-tokenizers==0.20.3            # transformers 4.45 需要 >= 0.20
+# 2026-10-24 安全升級 4.45.2 → 4.57.6：修掉 pip-audit 列出的 28 個漏洞（多為 ReDoS）；代價是生成約慢 20%（學校 RTX 5080 實測），使用者選安全優先。
+transformers==4.57.6          # Qwen2.5 需要；5.x 是大改版，這次沒升
+tokenizers==0.22.2            # transformers 4.57 需要
 peft==0.17.1                  # adapter_config 相容性（本次未掛 adapter，之後重訓才用）
 accelerate==0.34.2
 
@@ -26,21 +27,23 @@ trl==0.9.6
 datasets==2.21.0
 
 # ── Model Server ──────────────────────────────────────────────
-fastapi==0.128.8
+fastapi==0.162.0              # 2026-10-24：配合 starlette 1.x 修漏洞；新的 fastapi.telemetry 預設不送出任何資料
 uvicorn==0.39.0
 pydantic==2.12.5
+starlette>=1.3.1,<2          # 2026-10-24 安全下限（pip-audit）
 
 # ── K8s 部署 ──────────────────────────────────────────────────
-kubernetes==34.1.0
+kubernetes==35.0.0           # 2026-10-24：34.1.0 限制 urllib3<2.4，無法修 urllib3 漏洞；36 以後要 Python 3.10，CI 是 3.9
+urllib3>=2.8.0,<3             # 2026-10-24 安全下限（pip-audit）
 pyyaml==6.0.3
 
 # ── 可觀測性（observability/prometheus_client.py 用，2026-09-15 起真的接上
 #    kube-prometheus-stack 之後才第一次被實際呼叫，之前這個依賴一直沒被列出來
 #    是因為程式碼從沒被執行過，不是漏寫，只是先前沒被發現的死代碼）───────
-requests==2.32.5
+requests==2.33.0
 
 # ── Web Demo ──────────────────────────────────────────────────
-flask==3.1.2
+flask==3.1.3
 waitress==3.0.2               # 2026-10-09：正式 WSGI 伺服器，網站上外網用（取代 Flask 開發伺服器）
 pywebpush==2.5.0              # 2026-10-22：手機推播通知（Web Push + VAPID），會帶入 py-vapid、http-ece
 
@@ -51,7 +54,7 @@ anthropic==0.125.0
 google-genai==1.47.0
 
 # ── 工具 ──────────────────────────────────────────────────────
-json_repair==0.44.1
+json_repair==0.64.2
 numpy==1.26.4
 
 # ── RAG ───────────────────────────────────────────────────────
@@ -59,12 +62,20 @@ scikit-learn==1.6.1          # TF-IDF（含部署範例 few-shot 索引 rag/depl
 # 散文知識庫（/chat）用 chromadb 語意向量；embedding 顯存 >= 10GB 自動上 GPU，否則 CPU
 #（RAG_EMBED_DEVICE 可強制）。未安裝時 retriever 自動退回 TF-IDF。
 # 注意：chromadb 會把 protobuf 升到 6.x，與全域環境其他套件可能衝突（目前兩台都裝全域環境）。
-sentence-transformers==5.1.2
+sentence-transformers==5.7.0
 chromadb==1.5.9
 
 # ── GitOps（選用，未安裝時自動跳過）──────────────────────────
-gitpython==3.1.46
+gitpython==3.2.1
+cryptography==50.0.2         # gitops/tenant_repo.py 產生客戶 repo 的部署金鑰；原本靠 kubernetes 34 間接安裝（2026-10-25 明確列出）
 
 # ── 語言一致性（選用）：小模型偶爾漏簡體字，用 OpenCC s2twp 轉台灣繁體 ──
 # 純 Python、無需編譯；未安裝時 /chat、/diagnose 原樣輸出。
 opencc-python-reimplemented==0.1.7
+
+# ── 間接依賴的安全下限（2026-10-24 pip-audit；不是直接 import，但版本太舊有已知漏洞）──
+certifi>=2026.10.19
+filelock>=4.2.1
+pillow>=13.0.0
+setuptools>=84.1.0
+# 已知殘留（沒有修正版本或要大改版）：datasets／fsspec（只有訓練用，datasets 限制 fsspec）、accelerate、chromadb、transformers 5.x 才修的 15 個

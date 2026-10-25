@@ -1,0 +1,53 @@
+{
+  "dataset": "ai4cloud/CloudEval-YAML (MIT)",
+  "run_at": "2026-10-24 16:38",
+  "problems": 20,
+  "by_lang": {
+    "en": {
+      "n": 20,
+      "all_correct": 14,
+      "fields": {
+        "image": {
+          "judged": 20,
+          "correct": 19
+        },
+        "replicas": {
+          "judged": 15,
+          "correct": 13
+        },
+        "container_port": {
+          "judged": 13,
+          "correct": 11
+        },
+        "name": {
+          "judged": 17,
+          "correct": 14
+        }
+      },
+      "latency_median_ms": 1404.4
+    },
+    "zh": {
+      "n": 20,
+      "all_correct": 16,
+      "fields": {
+        "image": {
+          "judged": 20,
+          "correct": 20
+        },
+        "replicas": {
+          "judged": 15,
+          "correct": 13
+        },
+        "container_port": {
+          "judged": 13,
+          "correct": 12
+        },
+        "name": {
+          "judged": 17,
+          "correct": 16
+        }
+      },
+      "latency_median_ms": 1489.9
+    }
+  }
+}

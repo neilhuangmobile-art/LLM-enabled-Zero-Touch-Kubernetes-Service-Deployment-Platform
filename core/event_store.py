@@ -20,7 +20,7 @@ import time
 from typing import Dict, List, Optional
 
 RETENTION_DAYS = 180
-KINDS = {"review", "deploy", "scale", "update", "delete", "rollback", "heal", "snapshot"}
+KINDS = {"review", "deploy", "scale", "update", "delete", "rollback", "heal", "snapshot", "sleep", "wake"}
 
 _lock = threading.Lock()
 _conn: Optional[sqlite3.Connection] = None

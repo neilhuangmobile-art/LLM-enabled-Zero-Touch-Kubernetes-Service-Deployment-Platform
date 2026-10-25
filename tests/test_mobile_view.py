@@ -132,3 +132,25 @@ def test_phone_skips_consent(client, monkeypatch):
 
 def test_manifest_starts_at_monitor_view(client):
     assert json.loads(client.get("/manifest.webmanifest").get_data())["start_url"] == "/m"
+
+
+def test_monitor_shows_autoscale_readonly(client):
+    """2026-10-23：手機版顯示分時擴縮與休眠（只讀 GET /api/autoscale），不能設定或取消。"""
+    _login(client, readonly=True)
+    html = client.get("/m", headers={"User-Agent": IPHONE}).get_data(as_text=True)
+    assert "getJSON('/api/autoscale')" in html and "分時擴縮" in html
+    for bad in ("/api/autoscale/schedule", "/api/autoscale/cancel", "/api/autoscale/wake", "/api/autoscale/exempt",
+                "/api/autoscale/settings"):
+        assert bad not in html, bad
+        r = client.post(bad, data=json.dumps({}), content_type="application/json", headers={"User-Agent": DESKTOP})
+        assert r.status_code == 403 and r.get_json().get("readonly") is True
+
+
+def test_sleeping_service_detail_not_reported_missing(client):
+    """2026-10-24 實測：休眠中（副本數 0、沒有 Pod）的服務點進去會顯示「找不到這個服務」。
+    服務還在部署清單裡就要照常顯示詳情。"""
+    _login(client, readonly=True)
+    html = client.get("/m", headers={"User-Agent": IPHONE}).get_data(as_text=True)
+    assert "if(!dep && (!d.found || !pods.length))" in html
+    assert "目前沒有執行中的 Pod" in html
+

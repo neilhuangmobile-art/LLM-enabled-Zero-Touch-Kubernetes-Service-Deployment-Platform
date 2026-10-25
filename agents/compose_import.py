@@ -30,6 +30,14 @@ MAX_ENV = 50
 
 _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,100}$")
 _SECRET_KEY_RE = re.compile(r"PASS|SECRET|TOKEN|KEY|CREDENTIAL|PRIVATE", re.IGNORECASE)
+# 2026-10-24：名稱看不出來、但值裡有帳號密碼的也算（DATABASE_URL=postgres://user:pass@db/app、私鑰本體）
+_SECRET_VALUE_RE = re.compile(r"[a-z][a-z0-9+.-]{0,20}://[^/\s:@]+:[^/\s@]+@|-----BEGIN [A-Z ]*PRIVATE KEY-----", re.IGNORECASE)
+
+
+def looks_like_secret(key, value=None) -> bool:
+    """環境變數要不要當密碼存成 Kubernetes Secret：名稱像密碼，或值裡帶帳號密碼／私鑰。
+    compose 匯入、K8s YAML 匯入、gitops/manifest_writer.split_secret_env 都用這一個判斷。"""
+    return bool(_SECRET_KEY_RE.search(str(key)) or (value is not None and _SECRET_VALUE_RE.search(str(value))))
 
 
 class ComposeError(ValueError):
@@ -135,6 +143,22 @@ def _env(raw) -> Dict[str, str]:
 
 DEFAULT_VOLUME_SIZE = "1Gi"
 MAX_VOLUMES = 5
+MAX_EXTRA_PORTS = 5   # 2026-10-24：主 port 以外，一個服務最多再開幾個 port
+
+
+def extra_ports(pairs, main_port: int) -> List[Dict]:
+    """第 2 個以後的 port → [{"port": 對外, "container": 容器}]：去掉重複、跟主 port 撞的、格式不對的，最多 MAX_EXTRA_PORTS 個。
+    compose 匯入與 K8s YAML 匯入共用；web_demo._sanitize_deploy_payload 會再檢查一次。"""
+    out, seen = [], {int(main_port)}
+    for p in pairs or []:
+        try:
+            ext, cont = int(p["port"]), int(p["container"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if 1 <= ext <= 65535 and 1 <= cont <= 65535 and ext not in seen:
+            seen.add(ext)
+            out.append({"port": ext, "container": cont})
+    return out[:MAX_EXTRA_PORTS]
 MAX_CMD_ITEMS = 50
 
 
@@ -287,8 +311,10 @@ def parse_compose(text: str, default_port_fn=None) -> Dict:
 
         ports = [p for p in (_parse_port(x) for x in (svc.get("ports") or [])) if p]
         expose = bool(ports)
-        if len(ports) > 1:
-            probs.append({"level": "warn", "text": f"寫了 {len(ports)} 個 port，平台目前只開第一個（{ports[0]['external']}）"})
+        extras = extra_ports([{"port": p["external"], "container": p["container"]} for p in ports[1:]],
+                             ports[0]["external"]) if ports else []
+        if len(ports) > 1 + MAX_EXTRA_PORTS:
+            probs.append({"level": "warn", "text": f"寫了 {len(ports)} 個 port，平台最多開 {1 + MAX_EXTRA_PORTS} 個，其餘不開"})
         if ports:
             port, cport = ports[0]["external"], ports[0]["container"]
         else:
@@ -300,10 +326,10 @@ def parse_compose(text: str, default_port_fn=None) -> Dict:
             probs.append({"level": "info", "text": f"沒有對外 port，只給其他服務在內部連線（port {cport}）"})
 
         env = _env(svc.get("environment"))
-        secret_keys = [k for k in env if _SECRET_KEY_RE.search(k)]
+        secret_keys = [k for k, v in env.items() if looks_like_secret(k, v)]
         if secret_keys:
             probs.append({"level": "warn", "text": "環境變數 " + "、".join(secret_keys[:5]) +
-                          " 看起來是密碼或金鑰，會另外存成 Kubernetes Secret，不會寫進部署紀錄。"
+                          " 看起來是密碼或金鑰（名稱或內容），會另外存成 Kubernetes Secret，不會寫進部署紀錄。"
                           "使用客戶叢集模式時，會放在你自己的私有設定 repo 裡"})
         if len(env) > MAX_ENV:
             env = dict(list(env.items())[:MAX_ENV])
@@ -335,6 +361,7 @@ def parse_compose(text: str, default_port_fn=None) -> Dict:
         services[str(raw_name)] = {
             "service": str(raw_name), "app_name": name, "image": image, "pods": max(1, pods),
             "port": int(port), "container_port": int(cport), "expose": expose, "dns_alias": True,
+            **({"extra_ports": extras} if extras else {}),
             "env": env, "memory": memory, "cpu": cpu, "depends_on": _depends(svc.get("depends_on")),
             "command": _cmd(svc.get("entrypoint")), "args": _cmd(svc.get("command")), "volumes": volumes,
             "problems": probs,

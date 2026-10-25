@@ -47,7 +47,7 @@ LLM-enabled Zero-Touch Kubernetes Service Deployment Platform：使用者以自�
 | `healer/` | Pod 監控、LLM 根因診斷、自動補救 |
 | `observability/` | Prometheus 指標、Grafana Dashboard、告警規則（2026-09-15 起真的部署了 kube-prometheus-stack，不再是死代碼，見下方「進行中工作」與 `observability/README.md`） |
 | `training/` | LoRA 微調資料生成、清洗、訓練、評估 |
-| `web_demo.py` | Web Dashboard（Flask），現行唯一入口；`/m` 是手機監控版（唯讀，頁面在 `core/mobile_page.py`） |
+| `web_demo.py` | Web Dashboard（Flask），現行唯一入口；`/m` 是手機監控版（唯讀，頁面在 `core/mobile_page.py`；10/23 起也顯示分時擴縮與休眠，只讀 `GET /api/autoscale`） |
 | `core/push.py`、`core/schedule_*.py` | 手機推播；預約任務與行事曆（到期提醒、使用者確認才執行） |
 | `0_touch_generate_pods.py` | 零接觸部署 CLI 入口 |
 
@@ -86,6 +86,7 @@ collection 直接失敗）。2026-09-14 實測過：push 上去 CI 第一次真�
 之後新增需要重依賴的測試檔要照抄這個寫法。驗證方式：本機建一個只裝
 `pytest+pyyaml+kubernetes`（跟 CI 一致）的乾淨 venv 重現，不要只在裝好全部依賴的
 開發環境裡跑過就當作沒問題。
+**2026-10-25 補充**：用 Docker `python:3.9-slim` 模擬 CI 時要先 `apt-get install git`。slim 映像檔沒有 git，需要 git 的測試（例如 `tests/test_tenant_repo.py`）會被跳過，CI 失敗了本機卻顯示通過；也要用 `git archive HEAD` 只放進版控裡的檔案。
 
 ## 工作慣例
 
@@ -290,3 +291,60 @@ GitHub org 開的私有 repo（`gitops/tenant_repo.py`），客戶叢集的 Flux
 - **踩過的坑**：Healer 不能用「還原最近一次變更」修映像檔問題，會讓設定來回跳；要用
   `restore_previous_image` 加冷卻時間。新的 GitHub org 預設關閉 deploy key，要手動開。這台電腦的網路
   遇到大量平行下載會卡住，第一次拉 Flux 映像檔可能要重啟 Docker Desktop。
+
+## 分時擴縮與閒置休眠（2026-10-11 完成本機模式，隊友陳冠穎負責）
+
+對話說「shop-web 白天 3 個、晚上 1 個」照時段調副本數；服務太久沒人連線就降到 0，有人連線自動喚醒；「x 不要休眠」加入例外清單。
+程式在 `agents/timeslot.py`（時段解析，全部是固定規則）、`core/autoscale_store.py`（設定，`data/autoscale.db`）、
+`core/sleep_mode.py`（閒置判斷與喚醒器），背景工作由柏碩的預約迴圈 `_schedule_loop` 每 10 秒呼叫 `_as_run_due()`（2026-10-23 起，只有這一條背景迴圈）。安全設計見 `docs/security_review.md` 47 節。
+
+- **背景迴圈只有一條：柏碩的 `_schedule_loop`**（每 10 秒醒來；預約到期檢查照舊每 30 秒，`_bg_tick()`）。分時擴縮的三個工作在 `_as_run_due()`，**不要再另開排程器**（2026-10-23 照接手說明改的；舊的 `core/scheduler.py` 做法在備份分支 `backup/capstone6767-before-align-20261023`）。
+- 自動動作（依排程擴縮、休眠、有人連線喚醒）都推播到手機（`_as_notify` → `core/push.py` 的 `send_async`）；使用者自己按「套用」不推播。擴縮前一律經過 `_scale_check()`（跟 `/api/scale` 同一套：副本上限＋叢集容量），只有平台內部的休眠可以到 0。
+- **建議時段（2026-10-23）**：`_as_tick_traffic()` 每 10 分鐘把上一個整點小時每個服務收到的封包數存進 `autoscale.db` 的 `traffic_hourly`（保留 60 天；第一次啟動從 Prometheus 補它現有的最多 10 天）；`agents/timeslot_learn.py` 用固定規則學出時段，`/api/autoscale/suggest` 回建議，**只是建議，使用者按「套用」才生效**。至少 7 天資料；健康檢查流量用 `sleep_mode.expected_probe_packets_per_hour` 扣掉。客戶叢集沒有流量資料，不支援。
+- 閒置天數上限 7 天（Prometheus 只保留 10 天、沒有永久儲存）。喚醒器第一次用要從 Docker Hub 下載 `python:3.12-alpine`。
+- 分時擴縮的 K8s 呼叫一律帶 `_request_timeout=_AS_K8S_TIMEOUT`；`_as_read_dep` 叢集沒回應時丟 `_AsClusterDown`（回 503 中文說明）。
+- 「我的服務」頁有「分時與休眠」模組（`W.autoscale`），「設定排程」彈窗是 `openScheduleEditor()`。
+- 客戶叢集模式（`zt-` 開頭的 namespace，2026-10-23）：**分時擴縮可以用**，時段切換時 `_as_apply_schedule_remote()` 用 `_tenant_repo().set_replicas()` 寫進客戶的部署設定 repo（跟手動擴縮同一條路），服務狀態從回報器讀（`_as_remote_dep()`）；本機 K8s 沒連線時客戶叢集的排程照樣跑。**休眠、喚醒、例外清單不支援**（回報器沒有網路流量；要做得改回報器並把喚醒器裝進客戶叢集），API 會說明原因（`_AS_REMOTE_NO_SLEEP`）。
+- 測試、展示時可以把閒置期間縮短：環境變數 `ZT_IDLE_SECONDS_OVERRIDE`（秒）只套用在 `ZT_IDLE_OVERRIDE_NAMESPACES` 列出的 namespace，正式運作不要設。
+- **踩過的坑**：設定儲存第一次使用時在鎖裡面又拿同一把鎖，整個網站卡住，已改用 RLock。
+- **分支**：學校那台（隊友）的進度推在 `dev/capstone6767` 分支，合併進 main 前先跟負責人確認。
+
+## 對話存伺服器＋專案（2026-10-21，隊友陳冠穎負責，在 `dev/capstone6767` 分支）
+
+對話原本只存在瀏覽器 localStorage，改存 `data/workspace.db`（`core/workspace_store.py`，寫法同 autoscale_store）；
+另外新增「專案」：說明、專案指示、對話、服務歸屬、上傳的檔案。安全設計見 `docs/security_review.md` 48 節。
+
+- 對話、專案、檔案綁登入帳號（owner），服務歸屬綁 namespace；所有查詢都帶 owner，不做共享。
+- 前端 `saveChats()` 的呼叫點沒變，內部改成「有變動的對話合併 0.8 秒後 PUT /api/chats/<id>」；存失敗會在輸入框下方提示。
+  舊的 localStorage 對話第一次載入時自動上傳，原資料改名成 `k8s_chats_<帳號>_backup`。
+- `/api/deploy`、`/api/import/parse`、`/api/chat` 多收可省略的 `project_id`；沒帶就跟原本一樣。
+- `k8s_delete_deployment` 外層包裝刪除成功後會清掉服務的專案歸屬（實際刪除邏輯移到 `_k8s_delete_deployment_by_mode`）。
+- 專案指示只當 AI 問答的背景資料，**不會**自動改部署規格。**部署預設值**（2026-10-23，`projects.defaults`：至少幾個副本、記憶體、CPU，`workspace_store.check_defaults` 檢查格式）只在專案對話的部署單上預填（前端 `applyProjectDefaults()`），使用者看得到也能改，之後照常審查。
+- 空白對話（沒有任何訊息）不列進「最近的對話」、不存伺服器，送出第一則訊息才成立；載入時會清掉伺服器上的空白對話。
+- 現有對話可以在專案頁「總覽」移進或移出專案（前端改 `projectId` 後 `PUT /api/chats/<id>`）；不會連帶移動服務。
+- 專案頁分頁（2026-10-23 起）：總覽、摘要、服務、排程、檔案、設定。摘要是 `/api/projects/<id>/summary`（事件紀錄只留專案裡的服務，交給 `agents/report.build_report`，不用 AI）；排程分頁用 `/api/autoscale` 只留專案的服務，沿用 `openScheduleEditor()`／`openScheduleSuggest()`。
+- **回收桶（2026-10-23）**：`chats`、`projects` 有 `deleted_at`（跟專案一起刪的對話記 `deleted_with`），所有列表與讀取都排除已刪除的；空白對話直接刪。`/api/trash`、`/api/trash/restore|purge`，左側「回收桶」頁面；7 天後由背景迴圈（`_bg_tick`，每小時）真的刪掉。**服務不會進回收桶**（刪服務是真的從叢集刪掉）；刪除專案時檔案、說明、指示留在回收桶的專案裡，復原時一起回來。
+
+## 每週自動分析報告（2026-10-23，柏碩清單第 4 項，隊友負責）
+
+- 背景迴圈（`_bg_tick`，每 10 分鐘）呼叫 `_weekly_report_tick()`：每週一 09:00（台灣時間）之後，替每個帳號產生最近 7 天的報告，存在 `data/workspace.db` 的 `reports`
+  （每帳號留 12 份），並推播。同一週不重複；帳號關掉（`prefs.weekly_report=off`）或 7 天內沒有紀錄就不產生。內容用 `_build_user_report(ns, 7, with_ai=False)`，**背景不呼叫 AI**。
+- 網站在週中第一次啟動時，這週還沒產生過就會馬上補產生一份（正常行為）。
+- 對話頁上方的提示（`#weekly-bar`、`checkWeeklyReport()`）；`/api/reports/weekly`、`/api/reports/weekly/seen|setting`；對話說「每週報告不要／要自動產生」。
+- 「每週」會觸發預約功能的時間判斷，`sendChat` 對 `weekly_` 開頭的規則跳過（跟分時擴縮一樣）。
+
+## 個人化部署建議（2026-10-23，柏碩清單第 3 項，隊友負責）
+
+照 `docs/handoff/claude-memory/2026-10-07-personalization-decision.md`：不新增模型、固定規則、先查證公開語料。
+- 語料：Hugging Face `substratusai/the-stack-yaml-k8s`（The Stack 篩出的真實 K8s YAML，276,520 個檔案，解析出 61,303 個可用的 Deployment）。
+  `scripts/build_style_priors.py` 一次性分析（用 venv 的 pyarrow／sklearn，網站不需要），產出 `agents/style_priors.json`（只有統計數字）。
+- `agents/personalize.py`：少於 3 次部署 → 最像的風格的記憶體／CPU；3 次以上 → 風格值與自己的中位數加權（w = n／(n+5)），副本數也只在 3 次以上才建議。
+- `/api/personalize/suggest`、`/api/personalize/setting`；前端 `applyPersonalSuggest()`：**句子 > 專案部署預設值 > 個人化**，只填空著的欄位。部署事件多記 memory、cpu。
+- 統計發現：三種風格主要差在健康檢查與釘版本，副本數／記憶體／CPU 中位數幾乎一樣（1、128Mi、100m），所以個人化主要靠使用者自己的紀錄。
+
+## 部署請求重送不重複（2026-10-23，柏碩交接文件「口試前品質驗證」）
+
+`/api/deploy` 支援 `idempotency_key`：同帳號、同編號、同規格成功過就回傳上次結果（`replayed`），執行中回 409，失敗不記。
+原本的部署流程在 `_api_deploy_impl()`，外層 `api_deploy()` 只做編號檢查；快取 `_deploy_idem` 在記憶體（24 小時）。
+前端：`flowExecuteDeploy()` 用 `flow.deployKey`（`newRequestKey()`）、`composeDeploy()` 用「流程編號:服務名稱」、`runScheduledTask()` 用「task:預約 id」。測試 `tests/test_deploy_idempotency.py`，security_review 51 節。
+

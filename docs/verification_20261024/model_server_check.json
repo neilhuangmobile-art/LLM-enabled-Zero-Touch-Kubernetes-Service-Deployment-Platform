@@ -1,0 +1,56 @@
+{
+  "health": {
+    "status": "ok",
+    "deploy_loaded": true,
+    "monitor_loaded": true,
+    "model_loaded": true,
+    "gpu": "NVIDIA GeForce RTX 5080 Laptop GPU",
+    "gpu_backend": "cuda",
+    "deploy_precision": "gpu-bf16",
+    "monitor_precision": "gpu-bf16",
+    "vram_allocated_gb": 8.62,
+    "vram_reserved_gb": 8.81
+  },
+  "endpoints": {
+    "/infer": {
+      "n": 5,
+      "median_ms": 1567,
+      "min_ms": 1423,
+      "max_ms": 2725,
+      "sample": "{\"result\": {\"pods\": 3, \"image\": \"redis:7-alpine\", \"app_name\": \"cache-server\", \"port\": 6379}}"
+    },
+    "/classify": {
+      "n": 5,
+      "median_ms": 1125,
+      "min_ms": 1086,
+      "max_ms": 1176,
+      "sample": "{\"result\": {\"action\": \"scale\", \"args\": {\"name\": \"web\", \"replicas\": 5}, \"confidence\": 0.98, \"raw\": \"{\\\"action\\\":\\\"scale\\\",\\\"args\\\":{\\\"name\\\":\\\"web\\\",\\\"replicas\\\":5},\\\"confidence\\\":0.98}\"}}"
+    },
+    "/diagnose": {
+      "n": 5,
+      "median_ms": 1335,
+      "min_ms": 1304,
+      "max_ms": 1613,
+      "sample": "{\"diagnosis\": {\"root_cause\": \"無法連線到資料庫端點db:5432\", \"severity\": \"high\", \"action\": \"check_dependencies\", \"suggestion\": \"確認資料庫服務已啟動且可訪問\", \"raw\": \"{\\\"root_cause\\\":\\\"無法連接到資料庫端點db:5432\\\",\\\"severity\\\":\\\"high\\\",\\\"action\\\":\\\"check_dependencies\\\",\\\"suggestion\\\":\\\"確認資料庫服務已啟動且可訪問\\\"}\"}}"
+    },
+    "/chat": {
+      "n": 5,
+      "median_ms": 1883,
+      "min_ms": 1432,
+      "max_ms": 2578,
+      "sample": "{\"reply\": \"Pod 是 Kubernetes 中的最小部署單位，而 Deployment 管理著多個 Pod 並確保它們的狀態。簡單來說，Pod 是執行應用的地方，Deployment 負責管理和更新這些地方的應用例項。\"}"
+    }
+  },
+  "health_after": {
+    "status": "ok",
+    "deploy_loaded": true,
+    "monitor_loaded": true,
+    "model_loaded": true,
+    "gpu": "NVIDIA GeForce RTX 5080 Laptop GPU",
+    "gpu_backend": "cuda",
+    "deploy_precision": "gpu-bf16",
+    "monitor_precision": "gpu-bf16",
+    "vram_allocated_gb": 8.63,
+    "vram_reserved_gb": 9.12
+  }
+}

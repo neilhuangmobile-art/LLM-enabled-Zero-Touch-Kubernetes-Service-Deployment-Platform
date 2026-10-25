@@ -1,0 +1,81 @@
+{
+  "source": "https://huggingface.co/datasets/substratusai/the-stack-yaml-k8s",
+  "license_note": "依各原始 repo 授權；本檔只含統計數字，不含任何檔案內容",
+  "generated_at": "2026-10-23",
+  "files_read": 276520,
+  "deployments": 61303,
+  "feature_order": [
+    "log2(1+replicas)",
+    "has_resources",
+    "has_probe",
+    "pinned_tag"
+  ],
+  "feature_mean": [
+    1.1899,
+    0.3338,
+    0.2686,
+    0.6336
+  ],
+  "feature_std": [
+    0.4323,
+    0.4716,
+    0.4432,
+    0.4818
+  ],
+  "styles": [
+    {
+      "share": 0.294,
+      "count": 17998,
+      "replicas_median": 1.0,
+      "mem_mib_median": 128.0,
+      "cpu_m_median": 100.0,
+      "resources_rate": 0.243,
+      "probe_rate": 0.0,
+      "pinned_rate": 0.0,
+      "center": [
+        -0.0035,
+        -0.1929,
+        -0.6061,
+        -1.3151
+      ],
+      "id": "experimental",
+      "label": "實驗型：多半單副本、沒設資源上限"
+    },
+    {
+      "share": 0.438,
+      "count": 26834,
+      "replicas_median": 1.0,
+      "mem_mib_median": 128.0,
+      "cpu_m_median": 100.0,
+      "resources_rate": 0.275,
+      "probe_rate": 0.0,
+      "pinned_rate": 1.0,
+      "center": [
+        -0.063,
+        -0.1254,
+        -0.6061,
+        0.7604
+      ],
+      "id": "middle",
+      "label": "中間型"
+    },
+    {
+      "share": 0.269,
+      "count": 16471,
+      "replicas_median": 1,
+      "mem_mib_median": 122.0703125,
+      "cpu_m_median": 100.0,
+      "resources_rate": 0.53,
+      "probe_rate": 1.0,
+      "pinned_rate": 0.729,
+      "center": [
+        0.1064,
+        0.4151,
+        1.6496,
+        0.1983
+      ],
+      "id": "production",
+      "label": "正式環境型：有設資源與健康檢查"
+    }
+  ]
+}

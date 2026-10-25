@@ -15,6 +15,10 @@ os.environ["CUSTOMER_CLUSTER_MODE"] = "0"
 # 事件紀錄（core/event_store.py）寫到暫存檔，不要混進開發者 data/events.db 的真實紀錄
 import tempfile
 os.environ["ZT_EVENTS_DB"] = os.path.join(tempfile.mkdtemp(prefix="zt-events-"), "events.db")
+# 分時擴縮與休眠設定（core/autoscale_store.py）同理
+os.environ["ZT_AUTOSCALE_DB"] = os.path.join(tempfile.mkdtemp(prefix="zt-autoscale-"), "autoscale.db")
+# 對話與專案（core/workspace_store.py）同理
+os.environ["ZT_WORKSPACE_DB"] = os.path.join(tempfile.mkdtemp(prefix="zt-workspace-"), "workspace.db")
 # 推播訂閱與 VAPID 金鑰（core/push.py）同理，測試不能動到正式的訂閱名單與金鑰
 _push_tmp = tempfile.mkdtemp(prefix="zt-push-")
 os.environ["ZT_PUSH_DB"] = os.path.join(_push_tmp, "push.db")

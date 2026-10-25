@@ -124,6 +124,30 @@ def write_manifest(
 # 名稱像密碼、金鑰的環境變數（2026-10-10，docker-compose 匯入）：值不寫進部署設定檔與 Git，
 # 改存在 Kubernetes Secret「<服務>-secrets」，設定檔只寫「去哪個 Secret 拿」。
 _SECRET_ENV_RE = re.compile(r"PASS|SECRET|TOKEN|KEY|CREDENTIAL|PRIVATE", re.IGNORECASE)
+# 2026-10-24：值裡帶帳號密碼的網址或私鑰本體也算（跟 agents/compose_import._SECRET_VALUE_RE 同一條規則）
+_SECRET_VALUE_RE = re.compile(r"[a-z][a-z0-9+.-]{0,20}://[^/\s:@]+:[^/\s@]+@|-----BEGIN [A-Z ]*PRIVATE KEY-----", re.IGNORECASE)
+
+
+def container_ports(cport: int, extras=None) -> list:
+    """容器要開的 port：主 port，加上 extra_ports 的容器 port（2026-10-24，多 port）。"""
+    out = [int(cport)]
+    for e in extras or []:
+        if int(e["container"]) not in out:
+            out.append(int(e["container"]))
+    return out
+
+
+def extra_service_ports(existing: list, extras=None) -> list:
+    """extra_ports 對應的 Service port：每個額外 port 開「容器 port」（內部互連）與「對外 port」（兩者不同時），
+    已經有的 port 號碼不重複開。名稱用 c<容器 port>／e<對外 port>（K8s 規定多個 port 要有不同名稱）。"""
+    used = {p["port"] for p in existing}
+    out = []
+    for e in extras or []:
+        for name, num in ((f"c{int(e['container'])}", int(e["container"])), (f"e{int(e['port'])}", int(e["port"]))):
+            if num not in used:
+                used.add(num)
+                out.append({"name": name, "protocol": "TCP", "port": num, "targetPort": int(e["container"])})
+    return out
 
 
 def split_secret_env(env: dict, force=None):
@@ -132,7 +156,7 @@ def split_secret_env(env: dict, force=None):
     force = set(force or [])
     plain, secret = {}, {}
     for k, v in (env or {}).items():
-        (secret if (str(k) in force or _SECRET_ENV_RE.search(str(k))) else plain)[str(k)] = str(v)
+        (secret if (str(k) in force or _SECRET_ENV_RE.search(str(k)) or _SECRET_VALUE_RE.search(str(v))) else plain)[str(k)] = str(v)
     return plain, secret
 
 
@@ -237,7 +261,7 @@ def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
                     "containers": [{
                         "name" : app_name,
                         "image": image,
-                        "ports": [{"containerPort": cport}],
+                        "ports": [{"containerPort": c} for c in container_ports(cport, llm_result.get("extra_ports"))],
                         "resources": resources,
                         "securityContext": {"allowPrivilegeEscalation": False},
                         **recommended_probes(image, cport),
@@ -267,6 +291,7 @@ def _build_service_yaml(llm_result: dict, namespace: str) -> Optional[str]:
     ports = [{"name": "app", "protocol": "TCP", "port": cport, "targetPort": cport}]
     if port != cport:
         ports.append({"name": "external", "protocol": "TCP", "port": port, "targetPort": cport})
+    ports += extra_service_ports(ports, llm_result.get("extra_ports"))
 
     doc = {
         "apiVersion": "v1",

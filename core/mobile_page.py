@@ -209,7 +209,7 @@ dl.kv dt{color:var(--text-3)} dl.kv dd{margin:0;word-break:break-word}
 <script>
 const NEEDS_SETUP = {{ 'true' if needs_setup else 'false' }};
 const TITLES = {overview:'總覽', services:'服務', charts:'圖表', calendar:'行事曆', history:'修復紀錄', settings:'設定'};
-const S = {status:null, deps:[], pods:[], healer:null, dash:null, dashError:null, loadedAt:null, error:null};
+const S = {status:null, deps:[], pods:[], healer:null, dash:null, dashError:null, loadedAt:null, error:null, autoscale:null};
 
 function esc(v){ return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 async function getJSON(url){
@@ -254,6 +254,9 @@ async function refresh(){
     S.status = st; S.deps = dp.deployments || []; S.pods = pd.pods || []; S.healer = hl;
     S.loadedAt = new Date(); S.error = null;
     loadMCal();
+    // 2026-10-23：分時擴縮與休眠的設定（唯讀；抓不到不影響其他畫面）
+    getJSON('/api/autoscale').then(a => { S.autoscale = a && a.ok !== false ? a : null; if(!location.hash.startsWith('#services/')) renderServices(); })
+      .catch(() => { S.autoscale = null; });
     // 圖表資料另外抓：Prometheus 慢或連不上時，不要拖住上面的狀態
     getJSON('/api/dashboard').then(d => { S.dash = d; S.dashError = null; renderCharts(); })
       .catch(e => { S.dashError = e.message || String(e); renderCharts(); });
@@ -299,8 +302,11 @@ function renderOverview(){
   document.getElementById('dot-ov').classList.toggle('show', bad.length > 0);
 }
 
+function asOf(name){ return ((S.autoscale && S.autoscale.items) || []).find(x => x.name === name) || null; }
 function svcRow(d, s){
-  return `<button type="button" class="svc" data-svc="${esc(d.name)}"><span class="nm"><b>${esc(d.name)}</b><span>${esc(d.ready)}/${esc(d.replicas)} 個就緒 · ${esc(d.image || '')}</span></span><span class="tag ${s.cls}">${esc(s.label)}</span><span class="chev">›</span></button>`;
+  const a = asOf(d.name);
+  const extra = a ? (a.sleeping ? ' · 💤 休眠中' : '') + (a.schedule ? ' · ⏱ 分時擴縮' : '') : '';
+  return `<button type="button" class="svc" data-svc="${esc(d.name)}"><span class="nm"><b>${esc(d.name)}</b><span>${esc(d.ready)}/${esc(d.replicas)} 個就緒 · ${esc(d.image || '')}${esc(extra)}</span></span><span class="tag ${s.cls}">${esc(s.label)}</span><span class="chev">›</span></button>`;
 }
 
 function renderServices(){
@@ -322,9 +328,20 @@ async function renderDetail(name){
     const d = await getJSON('/api/pods/' + encodeURIComponent(name));
     if(seq !== detailSeq) return;
     const pods = d.pods || [];
-    if(!d.found || !pods.length){ el.innerHTML = '<div class="empty">找不到這個服務，它可能已經被刪除。</div>'; return; }
     const dep = S.deps.find(x => x.name === name);
+    // 2026-10-24：休眠中（副本數 0）的服務沒有 Pod，原本會被當成「找不到」；服務還在部署清單裡就照常顯示
+    if(!dep && (!d.found || !pods.length)){ el.innerHTML = '<div class="empty">找不到這個服務，它可能已經被刪除。</div>'; return; }
     let html = dep ? `<div class="card"><dl class="kv"><dt>服務</dt><dd>${esc(dep.name)}</dd><dt>副本</dt><dd>${esc(dep.ready)}/${esc(dep.replicas)} 個就緒</dd><dt>映像檔</dt><dd>${esc(dep.image)}</dd><dt>最近更新</dt><dd>${esc(dep.updated || dep.age || '')}</dd></dl></div>` : '';
+    if(!pods.length) html += '<div class="card dim">目前沒有執行中的 Pod（服務休眠中，或副本數是 0）。</div>';
+    // 2026-10-23：分時擴縮與休眠（只能看，修改要用電腦）
+    const asx = asOf(name);
+    if(asx){
+      const rows = asx.schedule ? asx.schedule.rows.map(r => `<dt>${esc(r.when)}</dt><dd>${esc(r.replicas)} 個</dd>`).join('') : '<dt>排程</dt><dd>沒有設定</dd>';
+      const nxt = asx.schedule && asx.schedule.next ? `<dt>下次變化</dt><dd>${esc(asx.schedule.next.at)} 變成 ${esc(asx.schedule.next.replicas)} 個</dd>` : '';
+      const sleepLine = (S.autoscale && S.autoscale.remote) ? '' : `<dt>休眠</dt><dd>${asx.sleeping ? `休眠中，醒來開 ${esc(asx.sleep_replicas)} 個` : asx.exempt ? '在例外清單，不會休眠' : '太久沒人用會自動休眠'}</dd>`;
+      html += `<div class="card"><div class="sec" style="margin-top:0">分時擴縮</div><dl class="kv">${rows}${nxt}${sleepLine}</dl>
+        <div class="dim" style="font-size:12.5px;margin-top:8px">手機只能查看；要設定或修改排程請用電腦開啟平台。${(S.autoscale && S.autoscale.remote_note) ? '<br>' + esc(S.autoscale.remote_note) : ''}</div></div>`;
+    }
     // Healer 對這個服務最近一次的判斷（比 Kubernetes 的代碼好懂）
     const heal = ((S.healer && S.healer.recent_actions) || []).find(a => (a.pod || '').startsWith(name + '-') || a.pod === name);
     if(heal) html += `<div class="card"><div class="sec" style="margin-top:0">Healer 最近的判斷（${esc(fmtTime(heal.time, true))}）</div>

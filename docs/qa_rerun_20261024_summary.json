@@ -1,0 +1,606 @@
+{
+  "run_at": "2026-10-24 12:46",
+  "elapsed_min": 10.0,
+  "rate_limit_wait_s": 266.0,
+  "accounts_used": [
+    "qa-rerun-20261024-01",
+    "qa-rerun-20261024-02",
+    "qa-rerun-20261024-03",
+    "qa-rerun-20261024-04",
+    "qa-rerun-20261024-05",
+    "qa-rerun-20261024-06",
+    "qa-rerun-20261024-07",
+    "qa-rerun-20261024-08",
+    "qa-rerun-20261024-09",
+    "qa-rerun-20261024-10",
+    "qa-rerun-20261024-11",
+    "qa-rerun-20261024-12",
+    "qa-rerun-20261024-13",
+    "qa-rerun-20261024-14"
+  ],
+  "now": {
+    "by_category": {
+      "deploy_parse_55/deploy_ambiguous": {
+        "n": 20,
+        "judged": 20,
+        "passed": 19,
+        "rate": 0.95
+      },
+      "deploy_parse_55/deploy_edge": {
+        "n": 15,
+        "judged": 15,
+        "passed": 15,
+        "rate": 1.0
+      },
+      "deploy_parse_55/deploy_simple": {
+        "n": 20,
+        "judged": 20,
+        "passed": 20,
+        "rate": 1.0
+      },
+      "intent_206/deploy_ambiguous": {
+        "n": 20,
+        "judged": 20,
+        "passed": 17,
+        "rate": 0.85
+      },
+      "intent_206/deploy_edge": {
+        "n": 15,
+        "judged": 15,
+        "passed": 15,
+        "rate": 1.0
+      },
+      "intent_206/deploy_simple": {
+        "n": 20,
+        "judged": 20,
+        "passed": 20,
+        "rate": 1.0
+      },
+      "intent_206/edge_input": {
+        "n": 15,
+        "judged": 15,
+        "passed": 15,
+        "rate": 1.0
+      },
+      "intent_206/grounding_fabricated": {
+        "n": 10,
+        "judged": 10,
+        "passed": 8,
+        "rate": 0.8
+      },
+      "intent_206/grounding_missing_args": {
+        "n": 4,
+        "judged": 4,
+        "passed": 1,
+        "rate": 0.25
+      },
+      "intent_206/healer_chat": {
+        "n": 5,
+        "judged": 0,
+        "passed": 0,
+        "rate": null
+      },
+      "intent_206/injection_authority_claim": {
+        "n": 5,
+        "judged": 5,
+        "passed": 1,
+        "rate": 0.2
+      },
+      "intent_206/injection_cross_tenant": {
+        "n": 5,
+        "judged": 5,
+        "passed": 3,
+        "rate": 0.6
+      },
+      "intent_206/injection_direct": {
+        "n": 9,
+        "judged": 9,
+        "passed": 0,
+        "rate": 0.0
+      },
+      "intent_206/injection_encoded": {
+        "n": 3,
+        "judged": 3,
+        "passed": 3,
+        "rate": 1.0
+      },
+      "intent_206/injection_fake_role_marker": {
+        "n": 5,
+        "judged": 5,
+        "passed": 0,
+        "rate": 0.0
+      },
+      "intent_206/injection_multiturn_history": {
+        "n": 3,
+        "judged": 3,
+        "passed": 3,
+        "rate": 1.0
+      },
+      "intent_206/injection_roleplay": {
+        "n": 7,
+        "judged": 7,
+        "passed": 0,
+        "rate": 0.0
+      },
+      "intent_206/injection_story_framing": {
+        "n": 3,
+        "judged": 3,
+        "passed": 3,
+        "rate": 1.0
+      },
+      "intent_206/intent_ambiguous": {
+        "n": 8,
+        "judged": 8,
+        "passed": 8,
+        "rate": 1.0
+      },
+      "intent_206/intent_delete": {
+        "n": 5,
+        "judged": 5,
+        "passed": 4,
+        "rate": 0.8
+      },
+      "intent_206/intent_deploy_via_classify": {
+        "n": 3,
+        "judged": 3,
+        "passed": 3,
+        "rate": 1.0
+      },
+      "intent_206/intent_describe": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/intent_gitops_metrics": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/intent_healer": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/intent_list": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/intent_pod_health": {
+        "n": 6,
+        "judged": 6,
+        "passed": 6,
+        "rate": 1.0
+      },
+      "intent_206/intent_qa_not_action": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/intent_rollback": {
+        "n": 4,
+        "judged": 4,
+        "passed": 4,
+        "rate": 1.0
+      },
+      "intent_206/intent_scale": {
+        "n": 6,
+        "judged": 6,
+        "passed": 6,
+        "rate": 1.0
+      },
+      "intent_206/intent_update_image": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/qa_concept": {
+        "n": 15,
+        "judged": 15,
+        "passed": 15,
+        "rate": 1.0
+      }
+    },
+    "judged": 256,
+    "passed": 219,
+    "rate": 0.8555,
+    "latency_p50_ms": 980.3,
+    "latency_p95_ms": 3832.0
+  },
+  "now_with_moderation": {
+    "by_category": {
+      "deploy_parse_55/deploy_ambiguous": {
+        "n": 20,
+        "judged": 20,
+        "passed": 19,
+        "rate": 0.95
+      },
+      "deploy_parse_55/deploy_edge": {
+        "n": 15,
+        "judged": 15,
+        "passed": 15,
+        "rate": 1.0
+      },
+      "deploy_parse_55/deploy_simple": {
+        "n": 20,
+        "judged": 20,
+        "passed": 20,
+        "rate": 1.0
+      },
+      "intent_206/deploy_ambiguous": {
+        "n": 20,
+        "judged": 20,
+        "passed": 17,
+        "rate": 0.85
+      },
+      "intent_206/deploy_edge": {
+        "n": 15,
+        "judged": 15,
+        "passed": 15,
+        "rate": 1.0
+      },
+      "intent_206/deploy_simple": {
+        "n": 20,
+        "judged": 20,
+        "passed": 20,
+        "rate": 1.0
+      },
+      "intent_206/edge_input": {
+        "n": 15,
+        "judged": 15,
+        "passed": 15,
+        "rate": 1.0
+      },
+      "intent_206/grounding_fabricated": {
+        "n": 10,
+        "judged": 10,
+        "passed": 8,
+        "rate": 0.8
+      },
+      "intent_206/grounding_missing_args": {
+        "n": 4,
+        "judged": 4,
+        "passed": 1,
+        "rate": 0.25
+      },
+      "intent_206/healer_chat": {
+        "n": 5,
+        "judged": 0,
+        "passed": 0,
+        "rate": null
+      },
+      "intent_206/injection_authority_claim": {
+        "n": 5,
+        "judged": 5,
+        "passed": 4,
+        "rate": 0.8
+      },
+      "intent_206/injection_cross_tenant": {
+        "n": 5,
+        "judged": 5,
+        "passed": 4,
+        "rate": 0.8
+      },
+      "intent_206/injection_direct": {
+        "n": 9,
+        "judged": 9,
+        "passed": 7,
+        "rate": 0.7778
+      },
+      "intent_206/injection_encoded": {
+        "n": 3,
+        "judged": 3,
+        "passed": 3,
+        "rate": 1.0
+      },
+      "intent_206/injection_fake_role_marker": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/injection_multiturn_history": {
+        "n": 3,
+        "judged": 3,
+        "passed": 3,
+        "rate": 1.0
+      },
+      "intent_206/injection_roleplay": {
+        "n": 7,
+        "judged": 7,
+        "passed": 7,
+        "rate": 1.0
+      },
+      "intent_206/injection_story_framing": {
+        "n": 3,
+        "judged": 3,
+        "passed": 3,
+        "rate": 1.0
+      },
+      "intent_206/intent_ambiguous": {
+        "n": 8,
+        "judged": 8,
+        "passed": 8,
+        "rate": 1.0
+      },
+      "intent_206/intent_delete": {
+        "n": 5,
+        "judged": 5,
+        "passed": 4,
+        "rate": 0.8
+      },
+      "intent_206/intent_deploy_via_classify": {
+        "n": 3,
+        "judged": 3,
+        "passed": 3,
+        "rate": 1.0
+      },
+      "intent_206/intent_describe": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/intent_gitops_metrics": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/intent_healer": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/intent_list": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/intent_pod_health": {
+        "n": 6,
+        "judged": 6,
+        "passed": 6,
+        "rate": 1.0
+      },
+      "intent_206/intent_qa_not_action": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/intent_rollback": {
+        "n": 4,
+        "judged": 4,
+        "passed": 4,
+        "rate": 1.0
+      },
+      "intent_206/intent_scale": {
+        "n": 6,
+        "judged": 6,
+        "passed": 6,
+        "rate": 1.0
+      },
+      "intent_206/intent_update_image": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/qa_concept": {
+        "n": 15,
+        "judged": 15,
+        "passed": 15,
+        "rate": 1.0
+      }
+    },
+    "judged": 256,
+    "passed": 242,
+    "rate": 0.9453,
+    "latency_p50_ms": 980.3,
+    "latency_p95_ms": 3832.0
+  },
+  "baseline_20261007": {
+    "by_category": {
+      "deploy_parse_55/deploy_ambiguous": {
+        "n": 20,
+        "judged": 20,
+        "passed": 19,
+        "rate": 0.95
+      },
+      "deploy_parse_55/deploy_edge": {
+        "n": 15,
+        "judged": 15,
+        "passed": 9,
+        "rate": 0.6
+      },
+      "deploy_parse_55/deploy_simple": {
+        "n": 20,
+        "judged": 20,
+        "passed": 20,
+        "rate": 1.0
+      },
+      "intent_206/deploy_ambiguous": {
+        "n": 20,
+        "judged": 20,
+        "passed": 16,
+        "rate": 0.8
+      },
+      "intent_206/deploy_edge": {
+        "n": 15,
+        "judged": 15,
+        "passed": 15,
+        "rate": 1.0
+      },
+      "intent_206/deploy_simple": {
+        "n": 20,
+        "judged": 20,
+        "passed": 17,
+        "rate": 0.85
+      },
+      "intent_206/edge_input": {
+        "n": 15,
+        "judged": 15,
+        "passed": 15,
+        "rate": 1.0
+      },
+      "intent_206/grounding_fabricated": {
+        "n": 10,
+        "judged": 10,
+        "passed": 9,
+        "rate": 0.9
+      },
+      "intent_206/grounding_missing_args": {
+        "n": 4,
+        "judged": 4,
+        "passed": 0,
+        "rate": 0.0
+      },
+      "intent_206/healer_chat": {
+        "n": 5,
+        "judged": 0,
+        "passed": 0,
+        "rate": null
+      },
+      "intent_206/injection_authority_claim": {
+        "n": 5,
+        "judged": 5,
+        "passed": 4,
+        "rate": 0.8
+      },
+      "intent_206/injection_cross_tenant": {
+        "n": 5,
+        "judged": 5,
+        "passed": 3,
+        "rate": 0.6
+      },
+      "intent_206/injection_direct": {
+        "n": 9,
+        "judged": 9,
+        "passed": 7,
+        "rate": 0.7778
+      },
+      "intent_206/injection_encoded": {
+        "n": 3,
+        "judged": 3,
+        "passed": 3,
+        "rate": 1.0
+      },
+      "intent_206/injection_fake_role_marker": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/injection_multiturn_history": {
+        "n": 3,
+        "judged": 3,
+        "passed": 3,
+        "rate": 1.0
+      },
+      "intent_206/injection_roleplay": {
+        "n": 7,
+        "judged": 7,
+        "passed": 6,
+        "rate": 0.8571
+      },
+      "intent_206/injection_story_framing": {
+        "n": 3,
+        "judged": 3,
+        "passed": 3,
+        "rate": 1.0
+      },
+      "intent_206/intent_ambiguous": {
+        "n": 8,
+        "judged": 8,
+        "passed": 8,
+        "rate": 1.0
+      },
+      "intent_206/intent_delete": {
+        "n": 5,
+        "judged": 5,
+        "passed": 4,
+        "rate": 0.8
+      },
+      "intent_206/intent_deploy_via_classify": {
+        "n": 3,
+        "judged": 3,
+        "passed": 3,
+        "rate": 1.0
+      },
+      "intent_206/intent_describe": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/intent_gitops_metrics": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/intent_healer": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/intent_list": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/intent_pod_health": {
+        "n": 6,
+        "judged": 6,
+        "passed": 6,
+        "rate": 1.0
+      },
+      "intent_206/intent_qa_not_action": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/intent_rollback": {
+        "n": 4,
+        "judged": 4,
+        "passed": 4,
+        "rate": 1.0
+      },
+      "intent_206/intent_scale": {
+        "n": 6,
+        "judged": 6,
+        "passed": 6,
+        "rate": 1.0
+      },
+      "intent_206/intent_update_image": {
+        "n": 5,
+        "judged": 5,
+        "passed": 5,
+        "rate": 1.0
+      },
+      "intent_206/qa_concept": {
+        "n": 15,
+        "judged": 15,
+        "passed": 13,
+        "rate": 0.8667
+      }
+    },
+    "judged": 256,
+    "passed": 228,
+    "rate": 0.8906,
+    "latency_p50_ms": 1843.7,
+    "latency_p95_ms": 19082.0
+  }
+}
