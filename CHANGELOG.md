@@ -1664,3 +1664,19 @@ Pod 對應到服務、對話規則、建議 API）；乾淨環境 383 項通過�
 - 外部基準修正後重跑一次。
 - 測試服務、測試 namespace、測試帳號都已刪除，網站改回正常模式。
 
+## 2026-10-25
+
+### 18:25 — 修正：GitHub CI 失敗（`cryptography` 沒有安裝）
+**怎麼發現的**：使用者在 GitHub 的分支頁看到 main 與 dev/capstone6767 最新的檢查是 ✗。
+用 GitHub API 讀 a78b7fc 的 CI 紀錄：`tests/test_tenant_repo.py` 失敗，`No module named 'cryptography'`；6b1af86 以前都通過。
+**原因**：
+- 10/24 套件升級時，CI 的 kubernetes 從 34.1.0 改成 35.0.0。舊版會間接安裝 `cryptography`，新版不會；`gitops/tenant_repo.py` 產生部署金鑰時直接用到它。
+- 我推送前用 Docker `python:3.9-slim` 模擬 CI 並顯示通過，但這個映像檔沒有 git，需要 git 的測試全被跳過（112 項跳過，GitHub 是 88 項），所以沒抓到。
+**改了什麼**：
+- `.github/workflows/test.yml` 的安裝清單加上 `cryptography==50.0.2`。
+- `requirements.txt` 明確列出 `cryptography==50.0.2`。
+- `CLAUDE.md` 測試段落補上模擬 CI 的正確做法：裝 git、只用版控裡的檔案。
+**驗證**：Docker `python:3.9-slim`＋git、`git archive HEAD`，照 CI 安裝：
+- 修正前重現同樣的失敗（1 失敗、404 通過、88 跳過，跟 GitHub 一模一樣）；
+- 修正後 405 通過、0 失敗。
+

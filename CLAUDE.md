@@ -86,6 +86,7 @@ collection 直接失敗）。2026-09-14 實測過：push 上去 CI 第一次真�
 之後新增需要重依賴的測試檔要照抄這個寫法。驗證方式：本機建一個只裝
 `pytest+pyyaml+kubernetes`（跟 CI 一致）的乾淨 venv 重現，不要只在裝好全部依賴的
 開發環境裡跑過就當作沒問題。
+**2026-10-25 補充**：用 Docker `python:3.9-slim` 模擬 CI 時要先 `apt-get install git`。slim 映像檔沒有 git，需要 git 的測試（例如 `tests/test_tenant_repo.py`）會被跳過，CI 失敗了本機卻顯示通過；也要用 `git archive HEAD` 只放進版控裡的檔案。
 
 ## 工作慣例
 

@@ -67,6 +67,7 @@ chromadb==1.5.9
 
 # ── GitOps（選用，未安裝時自動跳過）──────────────────────────
 gitpython==3.2.1
+cryptography==50.0.2         # gitops/tenant_repo.py 產生客戶 repo 的部署金鑰；原本靠 kubernetes 34 間接安裝（2026-10-25 明確列出）
 
 # ── 語言一致性（選用）：小模型偶爾漏簡體字，用 OpenCC s2twp 轉台灣繁體 ──
 # 純 Python、無需編譯；未安裝時 /chat、/diagnose 原樣輸出。
