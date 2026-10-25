@@ -1,0 +1,213 @@
+{
+ "run": "2026-10-26",
+ "total_records": 150,
+ "tests": 135,
+ "passed": 125,
+ "by_group": {
+  "B10 參數查證": {
+   "passed": 1,
+   "total": 2
+  },
+  "B11 預約": {
+   "passed": 3,
+   "total": 3
+  },
+  "B12 分時擴縮": {
+   "passed": 3,
+   "total": 3
+  },
+  "B13 休眠喚醒": {
+   "passed": 3,
+   "total": 6
+  },
+  "B14 自動修復": {
+   "passed": 3,
+   "total": 3
+  },
+  "B15 專案個人化": {
+   "passed": 3,
+   "total": 3
+  },
+  "B16 報告": {
+   "passed": 2,
+   "total": 2
+  },
+  "B4/D27 頁面與瀏覽器": {
+   "passed": 10,
+   "total": 15
+  },
+  "B5 讀取 API": {
+   "passed": 26,
+   "total": 26
+  },
+  "B6 對話": {
+   "passed": 10,
+   "total": 11
+  },
+  "B7 部署全流程": {
+   "passed": 6,
+   "total": 6
+  },
+  "B8 情境與金額": {
+   "passed": 3,
+   "total": 3
+  },
+  "B9 匯入": {
+   "passed": 6,
+   "total": 6
+  },
+  "C 外網": {
+   "passed": 16,
+   "total": 16
+  },
+  "D22 模型伺服器沒開": {
+   "passed": 5,
+   "total": 5
+  },
+  "D23 K8s 連不上": {
+   "passed": 5,
+   "total": 5
+  },
+  "D24 沒有 Gemini 金鑰": {
+   "passed": 3,
+   "total": 3
+  },
+  "D25 不同顯卡": {
+   "passed": 10,
+   "total": 10
+  },
+  "D26 沒有 Prometheus": {
+   "passed": 1,
+   "total": 1
+  },
+  "D28 深淺色": {
+   "passed": 2,
+   "total": 2
+  },
+  "D29 慢速網路": {
+   "passed": 4,
+   "total": 4
+  }
+ },
+ "latency_ms_median": 147.8,
+ "open_failures": [
+  {
+   "id": "B6-3",
+   "name": "意圖：qa-web 現在健康嗎",
+   "actual": "qa"
+  },
+  {
+   "id": "B10-2",
+   "name": "沒講映像檔不代為猜測",
+   "actual": {
+    "error": null,
+    "image": "nginx:latest",
+    "missing": null
+   }
+  },
+  {
+   "id": "B13",
+   "name": "休眠喚醒",
+   "actual": "AttributeError: 'NoneType' object has no attribute 'strip'"
+  },
+  {
+   "id": "B4-Safari 核心-手機",
+   "name": "Safari 核心・手機 390px：7 頁",
+   "actual": {
+    "js錯誤": [
+     "TypeError: null is not an object (evaluating 'cpuEl.innerHTML = msg')",
+     "TypeError: null is not an object (evaluating 'body.innerHTML = `<div class=\"proj-box\">${emptyBlock('讀不到回收桶。', e.message)"
+    ],
+    "超出寬度": [],
+    "空白頁": [
+     "chat",
+     "services",
+     "healer",
+     "calendar",
+     "dashboard",
+     "gitops",
+     "trash"
+    ]
+   }
+  },
+  {
+   "id": "B4-Safari 核心-平板",
+   "name": "Safari 核心・平板 768px：7 頁",
+   "actual": {
+    "js錯誤": [
+     "TypeError: null is not an object (evaluating 'cpuEl.innerHTML = msg')",
+     "TypeError: null is not an object (evaluating 'body.innerHTML = `<div class=\"proj-box\">${emptyBlock('讀不到回收桶。', e.message)"
+    ],
+    "超出寬度": [],
+    "空白頁": [
+     "chat",
+     "services",
+     "healer",
+     "calendar",
+     "dashboard",
+     "gitops",
+     "trash"
+    ]
+   }
+  },
+  {
+   "id": "B4-Safari 核心-筆電",
+   "name": "Safari 核心・筆電 1366px：7 頁",
+   "actual": {
+    "js錯誤": [
+     "TypeError: null is not an object (evaluating 'cpuEl.innerHTML = msg')",
+     "TypeError: null is not an object (evaluating 'body.innerHTML = `<div class=\"proj-box\">${emptyBlock('讀不到回收桶。', e.message)"
+    ],
+    "超出寬度": [],
+    "空白頁": [
+     "chat",
+     "services",
+     "healer",
+     "calendar",
+     "dashboard",
+     "gitops",
+     "trash"
+    ]
+   }
+  },
+  {
+   "id": "B4-Safari 核心-大螢幕",
+   "name": "Safari 核心・大螢幕 1920px：7 頁",
+   "actual": {
+    "js錯誤": [
+     "TypeError: null is not an object (evaluating 'cpuEl.innerHTML = msg')",
+     "TypeError: null is not an object (evaluating 'body.innerHTML = `<div class=\"proj-box\">${emptyBlock('讀不到回收桶。', e.message)"
+    ],
+    "超出寬度": [],
+    "空白頁": [
+     "chat",
+     "services",
+     "healer",
+     "calendar",
+     "dashboard",
+     "gitops",
+     "trash"
+    ]
+   }
+  },
+  {
+   "id": "B4-Safari 核心-m",
+   "name": "Safari 核心・手機監控版",
+   "actual": {
+    "js錯誤": [],
+    "超出寬度": 0,
+    "分頁數": 0
+   }
+  },
+  {
+   "id": "B13-1",
+   "name": "進入休眠（副本數 0、接上喚醒器）",
+   "actual": "[K8s] 已連線\n(False, 'qa-web 沒有進入休眠：喚醒器沒有在 2 分鐘內啟動（可能是映像檔下載失敗），這次先不休眠')"
+  },
+  {
+   "id": "B13-2",
+   "name": "有人連線時顯示喚醒頁",
+   "actual": "<!DOCTYPE html>\n<html>\n<head>\n<title>Welcome to nginx!</titl"
+  }
+ ]
+}

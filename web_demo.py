@@ -8227,6 +8227,12 @@ def _api_deploy_impl():
             review.setdefault("warnings", []).append(f"K8s 部署失敗：{message}")
         else:
             _ws_assign_after_deploy(data.get("project_id"), parsed.get("app_name"), user_ns)
+    else:
+        # 2026-10-26 全系統測試發現：沒連上 K8s 時這裡原本回 None，前端、重送快取、事件紀錄都把「沒有失敗」當成功——
+        # 畫面顯示部署完成、事件記成部署成功，連上叢集後按「再試一次」還會直接拿到這次的舊結果，服務永遠不會啟動。
+        k8s_deploy_result = {"ok": False, "not_connected": True,
+                             "message": "目前沒有連上 Kubernetes，服務沒有真的啟動。請先開啟 Docker Desktop，並在設定裡啟用 Kubernetes，"
+                                        "等畫面左下角顯示「已連線」後，再按「再試一次」。"}
 
     return jsonify({"parsed": enriched, "k8s": K8S_ENABLED, "review": review, "gitops": gitops_result,
                     "k8s_deploy": k8s_deploy_result, "resource_summary": _resource_summary(parsed, review)})

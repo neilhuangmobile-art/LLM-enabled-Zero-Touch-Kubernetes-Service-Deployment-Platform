@@ -76,3 +76,18 @@ def test_healer_namespace_scope(monkeypatch):
     assert importlib.reload(cfg).healer_owns_namespace("anything")   # 都沒設定：全部處理（原本的行為）
     monkeypatch.undo()
     importlib.reload(cfg)
+
+
+def test_scan_skips_sleep_waker_pods(monkeypatch):
+    """2026-10-26 全系統測試：Healer 曾對休眠用的喚醒器執行「檢查相依服務」。喚醒器由休眠模組管理，掃描時要跳過。"""
+    from types import SimpleNamespace as NS
+    from healer import pod_watcher as pw
+    pods = [NS(metadata=NS(name="zt-waker-web-abc", labels={"zerotouch/waker": "web"})),
+            NS(metadata=NS(name="web-abc", labels={"app": "web"}))]
+    fake_v1 = NS(list_namespaced_pod=lambda ns: NS(items=pods))
+    monkeypatch.setattr(pw, "K8S_AVAILABLE", True)
+    monkeypatch.setattr(pw, "_load_k8s_config", lambda: None)
+    monkeypatch.setattr(pw, "k8s_client", NS(CoreV1Api=lambda: fake_v1), raising=False)
+    monkeypatch.setattr(pw, "_check_pod", lambda pod: {"pod_name": pod.metadata.name})
+    monkeypatch.setattr(pw, "_print_issue", lambda issue: None)
+    assert [i["pod_name"] for i in pw.scan_once("user-x")] == ["web-abc"]

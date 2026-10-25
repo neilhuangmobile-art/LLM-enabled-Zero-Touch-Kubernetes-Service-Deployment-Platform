@@ -85,6 +85,10 @@ def scan_once(namespace: str = "default", auto_heal: bool = False) -> list:
         return []
 
     for pod in pods.items:
+        # 2026-10-26 全系統測試：休眠用的喚醒器是平台自己的元件，啟動或被收回的那幾秒狀態看起來不正常，
+        # Healer 曾對它執行「檢查相依服務」，可能干擾休眠流程。喚醒器的生命週期由休眠模組管理，Healer 不碰。
+        if "zerotouch/waker" in ((pod.metadata.labels or {}) if pod.metadata else {}):
+            continue
         issue = _check_pod(pod)
         if issue:
             issues.append(issue)

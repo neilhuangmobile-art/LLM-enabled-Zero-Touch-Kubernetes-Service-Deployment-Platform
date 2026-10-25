@@ -124,3 +124,18 @@ def test_exception_clears_running_mark(env, monkeypatch):
     except RuntimeError:
         pass          # 其他測試把 Flask 設成直接拋出例外時，會走到這裡；兩種情況都要清掉執行中標記
     assert ("alice", "k6") not in wd._deploy_idem
+
+
+def test_not_connected_is_a_failure_not_cached_and_logged_as_fail(env, monkeypatch):
+    """2026-10-26 全系統測試：沒連上 K8s 時原本回 k8s_deploy=None，前端顯示部署完成、重送快取記成成功、
+    事件記成部署成功；連上叢集後按「再試一次」會拿到舊結果，服務永遠不會啟動。"""
+    monkeypatch.setattr(wd, "K8S_ENABLED", False)
+    c = _client()
+    r1 = _deploy(c, "nc1")
+    kd = r1.get_json()["k8s_deploy"]
+    assert kd["ok"] is False and kd["not_connected"] and "Kubernetes" in kd["message"]
+    assert [e["outcome"] for e in _deploy_events(env["ns"])] == ["fail"]
+    # 連上叢集後用同一個請求編號重送：要真的部署，不能回放上一次沒部署成功的結果
+    monkeypatch.setattr(wd, "K8S_ENABLED", True)
+    r2 = _deploy(c, "nc1")
+    assert not r2.get_json().get("replayed") and r2.get_json()["k8s_deploy"]["ok"] is True
