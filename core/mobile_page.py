@@ -293,7 +293,14 @@ function renderOverview(){
   let lamp, t, s;
   if(!S.deps.length){ lamp = 'idle'; t = '還沒有部署任何服務'; s = '用電腦在平台上部署第一個服務後，這裡就會顯示它的狀態。'; }
   else if(bad.length){ lamp = 'bad'; t = `${bad.length} 個服務需要注意`; s = 'Healer 會自動處理能修的問題，修不了的會通知你。'; }
-  else { lamp = ''; t = `${S.deps.length} 個服務都正常`; s = '所有服務的 Pod 都在執行而且準備好了。'; }
+  // 2026-10-26：休眠中的服務沒有 Pod，原本也被算成「都正常、Pod 都在執行」，跟實際不符
+  else {
+    const asleep = S.deps.filter(d => d.sleeping).length, awake = S.deps.length - asleep;
+    lamp = '';
+    if(!asleep){ t = `${S.deps.length} 個服務都正常`; s = '所有服務的 Pod 都在執行而且準備好了。'; }
+    else if(!awake){ t = `${asleep} 個服務都在休眠`; s = '太久沒人使用，平台先讓它們休眠以節省資源；有人連線就會自動喚醒。'; }
+    else { t = `${awake} 個服務正常、${asleep} 個休眠中`; s = '休眠中的服務有人連線就會自動喚醒；其餘服務的 Pod 都在執行而且準備好了。'; }
+  }
   el.innerHTML = `<div class="card"><div class="hero"><div class="lamp ${lamp}"></div><div><div class="t">${esc(t)}</div><div class="s">${esc(s)}</div></div></div></div>
     <div class="stats"><div class="stat"><div class="n">${S.deps.length}</div><div class="l">服務</div></div>
       <div class="stat"><div class="n" style="color:${badPods ? 'var(--stop)' : 'inherit'}">${badPods}</div><div class="l">異常 Pod</div></div>
