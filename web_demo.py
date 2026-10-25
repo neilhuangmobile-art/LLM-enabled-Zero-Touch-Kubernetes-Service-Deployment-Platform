@@ -4210,6 +4210,7 @@ async function startDeployFlow(text, sched, originalText){
     flow.review = d.review || null;
     flow.resource = d.resource_summary || null;
     flow.scenario = d.scenario || null;
+    flow.grounding = (d.parsed && d.parsed._grounding) || (d.raw && d.raw._grounding) || null;   // 參數查證改過的欄位（2026-10-25）
     if(sched){ flow.schedOn = true; flow.when = sched.when || {ts:defaultSchedTs()}; flow.fullText = originalText || text; }
     appendMsg('assistant', renderFlowCard(flow));
   }catch(e){
@@ -5582,6 +5583,7 @@ function renderSpecCard(flow){
   return flowShell(flow, flowHead('部署單', stepsHTML(1)) + `<div class="body">
     <div class="lead">${flow.scenario && flow.scenario.applies ? '我依你描述的情境推算出下面的規格，推算過程如下。' : '我照你的描述整理成下面的規格。'}有不對的地方直接改，再按「下一步」。${flow.schedOn ? `<br><b>這是預約部署</b>${flow.when && flow.when.ts ? `（${esc(fmtTW(flow.when.ts))}）` : ''}，審查通過後可以在下一步調整時間。` : ''}</div>
     ${scenarioHTML(flow.scenario)}
+    ${(flow.grounding || []).length ? `<ul class="scn-notes">${flow.grounding.map(n => `<li>${esc(n)}，請確認是不是你要的。</li>`).join('')}</ul>` : ''}
     <div class="fgrid">
       <div><label for="${flow.id}-app">服務名稱</label><input id="${flow.id}-app" data-field="app_name" value="${g('app_name')}" placeholder="my-app"><div class="hint">小寫英文字母開頭，只能用小寫字母、數字和連字號，例如 web-frontend</div></div>
       <div><label for="${flow.id}-img">映像檔</label><input id="${flow.id}-img" data-field="image" value="${g('image')}" placeholder="nginx:1.27"></div>

@@ -255,7 +255,7 @@ _CN_DIGIT_MAP = {
 # 2026-10-09 實測「200個人會用」被當成 200 個副本而直接報錯，情境部署會大量出現這種句子。
 _NOT_PEOPLE = r'(?!\s*(?:人|使用者|用戶|用户|同學|同学|學生|学生|會員|会员|客人|訪客|访客|參加|参加|朋友|老師|老师|員工|员工|顧客|顾客|成員|成员|位))'
 _CN_COUNT_RE = re.compile(
-    r'([一二兩两三四五六七八九十])\s*(?:副本|pods?|replicas?|instances?|(?:個|个|台)' + _NOT_PEOPLE + r')',
+    r'([一二兩两三四五六七八九十])\s*(?:副本|pods?|replicas?|instances?|(?:個|个|台|份)' + _NOT_PEOPLE + r')',   # 2026-10-25 補「份」
 )
 # 已知服務關鍵字 + 複合服務詞——偵測「幫我部署兩個服務，一個nginx一個redis」這種
 # 一次要求多個服務的請求，不要靜默只做其中一個（image 比對只會取第一個命中的關鍵字，
@@ -278,7 +278,7 @@ def _extract_pods_count(raw: str) -> Optional[int]:
     count_patterns = [
         r'(?:deploy|run|start|launch|spin\s+up)\s+(-?\d+)\s*(?:pods?|replicas?|instances?)?',
         # 2026-10-24：減號前面緊接數字時是範圍（「2-10 replicas」），不是負號（外部基準 CloudEval 抓到被讀成 -10）
-        r'((?<!\d)-?\d+)\s*(?:pods?|replicas?|instances?|副本|(?:個|个|台)' + _NOT_PEOPLE + r')',
+        r'((?<!\d)-?\d+)\s*(?:pods?|replicas?|instances?|副本|(?:個|个|台|份)' + _NOT_PEOPLE + r')',
         r'(?:pods?|replicas?|instances?|副本|數量|数量)\s*(?:=|:|為|是|to)?\s*(-?\d+)',
     ]
     for pat in count_patterns:
@@ -357,7 +357,10 @@ def _deterministic_deploy_parse(prompt_text: str) -> Optional[dict]:
         if image:
             break
     if image and ':' not in image and '/' not in image:
-        image = f'{image}:latest'
+        # 2026-10-25：「redis 7.2」「nginx 1.27」這種名稱後面空一格接版本的寫法，原本版本被丟掉、變成 latest。
+        # 只認帶小數點的版本號，避免把「nginx 3 個」的 3 當成版本。
+        ver = re.search(r'(?<![A-Za-z0-9])' + re.escape(image) + r'\s*(?:版本|version|v)?\s*(\d+\.\d+(?:\.\d+)?)(?![\d.])', raw, re.IGNORECASE)
+        image = f'{image}:{ver.group(1)}' if ver else f'{image}:latest'
     if not image:
         image = 'nginx:latest'
 
@@ -756,6 +759,52 @@ def _overlay_stated_fields(result: dict, stated: Optional[dict]) -> dict:
     return out
 
 
+# 2026-10-25：部署解析的參數查證。意圖分類早就要求名稱與數字要在原句找得到（model_server._clean_intent），
+# 部署解析卻只檢查副本數範圍——實測使用者說「redis 7.2」，小模型輸出 redis:7.2-alpine，原句沒有的 -alpine
+# 一路進到規格確認卡。這裡對 Gemini／小模型／Claude 產出的映像檔與名稱做同一種查證。
+_IMAGE_ALIASES = {"postgres": ("postgresql", "pg"), "mongo": ("mongodb",), "httpd": ("apache",), "golang": ("go",)}
+_DEFAULT_IMAGE = "nginx:latest"
+
+
+def _alnum(s: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def _ground_deploy_fields(result: dict, prompt_text: str) -> dict:
+    """映像檔名稱要在原句出現（或是常見別名），版本標籤要是使用者講過的；名稱要在原句出現。
+    映像檔找不到根據 → 回錯誤請使用者講清楚；版本標籤沒根據 → 改成原句講的版本，沒講就 latest；
+    名稱沒根據 → 退回跟規則解析器一樣的預設命名（映像檔名稱或 auto-app）。"""
+    if not isinstance(result, dict) or "error" in result or result.get("_parse_error"):
+        return result
+    raw = (prompt_text or "").lower()
+    out, notes = dict(result), []
+    image = str(out.get("image") or "").strip()
+    if image and image != _DEFAULT_IMAGE:
+        repo, _, tag = image.rpartition(":") if ":" in image.split("/")[-1] else (image, "", "")
+        base = repo.split("/")[-1].lower()
+        # 別名要整個詞比對，避免「go」命中 good、google
+        if base not in raw and not any(re.search(r"(?<![a-z])" + re.escape(a) + r"(?![a-z])", raw) for a in _IMAGE_ALIASES.get(base, ())):
+            return {"error": f"沒辦法從你的句子確定要用哪個映像檔（模型猜的是「{image}」，但你沒有提到它）。"
+                             f"請直接寫出映像檔名稱，例如「部署 2 個 redis:7.2」。"}
+        if tag and tag != "latest" and tag.lower() not in raw:
+            m = re.search(re.escape(base) + r"[\s:：]*(?:版本|version|v)?\s*([0-9][0-9a-z._-]*)", raw)
+            stated = m.group(1).rstrip("._-") if m else ""
+            new_tag = stated if stated and tag.lower().startswith(stated) else "latest"
+            out["image"] = f"{repo}:{new_tag}"
+            notes.append(f"映像檔版本 {tag} 不在原句裡，改成 {new_tag}")
+    name = str(out.get("app_name") or "")
+    if name and name != "auto-app":
+        img_base = str(out.get("image") or "").split("/")[-1].split(":")[0].lower()
+        if _alnum(name) not in _alnum(raw) and name.lower() != img_base:
+            fallback = img_base if out.get("image") and out.get("image") != _DEFAULT_IMAGE else "auto-app"
+            out["app_name"] = fallback
+            notes.append(f"服務名稱 {name} 不在原句裡，改用預設名稱 {fallback}")
+    if notes:
+        out["_grounding"] = notes
+        print(f"[參數查證] {prompt_text!r}：" + "；".join(notes))
+    return out
+
+
 def ask_llama(prompt_text: str) -> dict:
     """
     呼叫 LLM 推論（優先順序）：
@@ -795,7 +844,7 @@ def ask_llama(prompt_text: str) -> dict:
                         print(f"[Gemini 翻譯層] {prompt_text!r} →\n{spec_block}")
                         spec = parse_deploy_spec(spec_block)
                         if spec and _validate(spec):
-                            return spec
+                            return _ground_deploy_fields(spec, prompt_text)
                         # 不完整（通常是沒講副本數）時，不能整份丟掉：Gemini 只會寫使用者真的講過的欄位，
                         # 這些欄位要蓋過後面規則或模型補出來的值。2026-10-10 實測「部署 redis，名稱叫 rpt-cache」
                         # Gemini 抓到 app_name，但原本整份被丟掉，名稱變回 redis。
@@ -818,7 +867,7 @@ def ask_llama(prompt_text: str) -> dict:
             return deterministic_error
         if deterministic and _validate(deterministic):
             print("[Parser] deterministic deployment parse")
-            return _overlay_stated_fields(deterministic, gemini_partial)
+            return _ground_deploy_fields(_overlay_stated_fields(deterministic, gemini_partial), prompt_text)
 
         # ── 3. Claude API（opt-in）──
         if os.environ.get("USE_CLAUDE_API") == "1":
@@ -828,7 +877,7 @@ def ask_llama(prompt_text: str) -> dict:
                     result = claude_parse_k8s(model_input)
                     if result is not None:
                         print("[Claude API] 解析成功")
-                        return _overlay_stated_fields(result, gemini_partial)
+                        return _ground_deploy_fields(_overlay_stated_fields(result, gemini_partial), prompt_text)
             except Exception:
                 pass
 
@@ -839,10 +888,10 @@ def ask_llama(prompt_text: str) -> dict:
 
         server_result = _try_server(model_input, examples=examples)
         if server_result is not None:
-            return _overlay_stated_fields(server_result, gemini_partial)
+            return _ground_deploy_fields(_overlay_stated_fields(server_result, gemini_partial), prompt_text)
 
         # ── 5. Fallback：本地直接載入 ──
-        return _overlay_stated_fields(_local_infer(model_input), gemini_partial)
+        return _ground_deploy_fields(_overlay_stated_fields(_local_infer(model_input), gemini_partial), prompt_text)
 
     except Exception as e:
         return {"error": "解析失敗", "raw": str(e)}
