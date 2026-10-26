@@ -779,7 +779,14 @@ def _ground_deploy_fields(result: dict, prompt_text: str) -> dict:
     raw = (prompt_text or "").lower()
     out, notes = dict(result), []
     image = str(out.get("image") or "").strip()
-    if image and image != _DEFAULT_IMAGE:
+    if image == _DEFAULT_IMAGE and "nginx" not in raw:
+        # 2026-10-26 全系統測試：「幫我部署一個快取服務」沒講映像檔，解析器直接補上預設的 nginx，使用者要快取卻拿到
+        # 網頁伺服器、也沒被提醒。預設值只是解析器的佔位，原句沒提到就清空，讓網站在部署單上請使用者補映像檔。
+        out["image"] = ""
+        if str(out.get("app_name") or "") in ("", "nginx"):
+            out["app_name"] = "auto-app"
+        notes.append("原句沒有講映像檔，請在部署單上補上")
+    elif image and image != _DEFAULT_IMAGE:
         repo, _, tag = image.rpartition(":") if ":" in image.split("/")[-1] else (image, "", "")
         base = repo.split("/")[-1].lower()
         # 別名要整個詞比對，避免「go」命中 good、google

@@ -252,7 +252,7 @@ def g_core():
 
     # B6：意圖判斷（等待期間做）
     intents = [("幫我部署兩個 redis", "deploy"), ("把 qa-web 調成 3 個", "scale"), ("qa-web 現在健康嗎", "pod_health"),
-               ("什麼是 ConfigMap", "qa"), ("刪掉 qa-web", "delete"), ("把 qa-web 的映像檔換成 nginx:1.28", "update"),
+               ("什麼是 ConfigMap", "qa"), ("刪掉 qa-web", "delete"), ("把 qa-web 的映像檔換成 nginx:1.28", "update_image"),
                ("qa-web 回滾到上一版", "rollback"), ("列出我的 pods", None), ("deploy 3 nginx pods for web-a", "deploy"),
                ("scale qa-web to 4", "scale")]
     for i, (msg, want) in enumerate(intents):

@@ -423,3 +423,14 @@ def test_internal_markers_and_placeholders_are_stripped():
     out = web_demo._strip_shell_commands("CrashLoopBackOff 怎麼辦", reply)
     assert "[現況]" not in out and "<pod-name>" not in out
     assert "讓 Healer 自動修復" in out
+
+
+@pytest.mark.parametrize("msg,name", [("qa-web 現在健康嗎", "qa-web"), ("auto-app 目前正常嗎", "auto-app"),
+                                      ("shop-web 狀況如何", "shop-web"), ("shop-web 還好嗎", "shop-web")])
+def test_health_question_with_filler_words_2026_10_26(msg, name):
+    """2026-10-26 全系統測試：「qa-web 現在健康嗎」中間多了「現在」就比不到規則，交給模型又判成一般問答。"""
+    assert web_demo._rule_intent(msg) == {"action": "pod_health", "args": {"name": name}}
+
+
+def test_health_rule_does_not_steal_concept_questions():
+    assert web_demo._rule_intent("什麼是 ConfigMap") is None

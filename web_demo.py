@@ -3948,7 +3948,7 @@ function matchClientRule(text){
     ['healer_auto_fix', /^(auto ?fix|fix all|\u81ea\u52d5\u4fee\u5fa9|\u5168\u90e8\u4fee\u5fa9)/i, null],
     ['healer_fix', /^(?:fix|\u4fee\u5fa9)\s+(\S+)/i, m=>({pod_name:m[1]})],
     ['healer_scan', /^(healer|scan)\b|\u6383\u63cf.*(pod|\u58de|\u7570\u5e38)/i, null],
-    ['pod_health', /([a-zA-Z0-9][\w.-]*)\s*(?:\u9019\u500b)?\s*(?:pod|deployment|\u90e8\u7f72)?\s*(?:\u6709\u6c92\u6709\u58de|\u58de\u4e86\u6c92|\u58de\u6389\u4e86\u55ce|\u58de\u4e86\u55ce|\u6b63\u5e38\u55ce|\u5065\u5eb7\u55ce|\u639b\u4e86\u55ce|\u639b\u6389\u4e86\u55ce|\u9084\u6d3b\u8457\u55ce|\u6c92\u4e8b\u5427|\u6709\u554f\u984c\u55ce|ok\s*\u55ce)/i, m=>({name:m[1]})],
+    ['pod_health', /([a-zA-Z0-9][\w.-]*)\s*(?:\u9019\u500b)?\s*(?:pod|deployment|\u90e8\u7f72)?\s*(?:(?:\u73fe\u5728|\u76ee\u524d|\u6700\u8fd1|\u9084|\u5230\u5e95)\s*)?(?:\u72c0\u6cc1\u5982\u4f55|\u72c0\u614b\u5982\u4f55|\u72c0\u6cc1\u600e\u6a23|\u72c0\u614b\u600e\u6a23|\u9084\u597d\u55ce|\u904b\u4f5c\u6b63\u5e38\u55ce|\u6709\u6c92\u6709\u58de|\u58de\u4e86\u6c92|\u58de\u6389\u4e86\u55ce|\u58de\u4e86\u55ce|\u6b63\u5e38\u55ce|\u5065\u5eb7\u55ce|\u639b\u4e86\u55ce|\u639b\u6389\u4e86\u55ce|\u9084\u6d3b\u8457\u55ce|\u6c92\u4e8b\u5427|\u6709\u554f\u984c\u55ce|ok\s*\u55ce)/i, m=>({name:m[1]})],
     ['pod_health', /^is\s+([a-zA-Z0-9][\w.-]*)\s+(?:ok|okay|healthy|broken|down|up|crashing|running|alive)/i, m=>({name:m[1]})],
     ['describe_deployment', /(?:deployment|\u90e8\u7f72)\s+([a-zA-Z0-9][\w.-]*)\s*(?:\u7684?\s*(?:\u72c0\u614b|\u7d30\u7bc0|\u8a73\u60c5|status))/i, m=>({name:m[1]})],
     ['describe_deployment', /([a-zA-Z0-9][\w.-]*)\s*(?:\u9019\u500b)?\s*(?:deployment|\u90e8\u7f72)\s*(?:\u7684?\s*(?:\u72c0\u614b|\u7d30\u7bc0|\u8a73\u60c5))/i, m=>({name:m[1]})],
@@ -7071,7 +7071,7 @@ _INTENT_RULES = [
     ("healer_fix", re.compile(r"^(fix|修復)\s+(\S+)", re.I), {2: "pod_name"}),
     ("healer_scan", re.compile(r"^(healer|scan)\b|掃描.*(pod|壞|異常)", re.I), {}),
     # 單一 pod 健康：名字 + 健康疑問句
-    ("pod_health", re.compile(r"([a-zA-Z0-9][\w.-]*)\s*(?:這個)?\s*(?:pod|deployment|部署)?\s*(?:有沒有壞|壞了沒|壞掉了嗎|壞了嗎|正常嗎|健康嗎|掛了嗎|掛掉了嗎|還活著嗎|沒事吧|有問題嗎|ok\s*嗎)", re.I), {1: "name"}),
+    ("pod_health", re.compile(r"([a-zA-Z0-9][\w.-]*)\s*(?:這個)?\s*(?:pod|deployment|部署)?\s*(?:(?:現在|目前|最近|還|到底)\s*)?(?:有沒有壞|壞了沒|壞掉了嗎|壞了嗎|正常嗎|健康嗎|掛了嗎|掛掉了嗎|還活著嗎|沒事吧|有問題嗎|ok\s*嗎|狀況如何|狀態如何|狀況怎樣|狀態怎樣|還好嗎|運作正常嗎)", re.I), {1: "name"}),
     ("pod_health", re.compile(r"^is\s+([a-zA-Z0-9][\w.-]*)\s+(?:ok|okay|healthy|broken|down|up|crashing|running|alive)", re.I), {1: "name"}),
     # 單一 deployment 狀態——結尾的「狀態/細節/詳情/status」關鍵字一定要有，不能
     # 省略：2026-10-03 實測發現原本寫成 `(?:...)?`（整段可省略），導致「幫我部署

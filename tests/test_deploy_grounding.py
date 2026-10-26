@@ -37,9 +37,14 @@ def test_grounded_values_are_untouched(result, text):
     assert ground(dict(result), text) == result
 
 
-def test_default_image_is_allowed_but_invented_name_is_not():
+def test_default_image_is_cleared_when_not_mentioned_2026_10_26():
+    # 原句沒提到映像檔：解析器補的預設 nginx 要清空，讓網站請使用者補，不能悄悄部署 nginx
     r = ground({"pods": 1, "image": "nginx:latest", "app_name": "web-frontend"}, "部署一個網站")
-    assert r["image"] == "nginx:latest" and r["app_name"] == "auto-app"
+    assert r["image"] == "" and r["app_name"] == "auto-app"
+    r = ground({"pods": 1, "image": "nginx:latest", "app_name": "auto-app"}, "幫我部署一個快取服務")
+    assert r["image"] == ""
+    # 有講 nginx 就照常保留
+    assert ground({"pods": 2, "image": "nginx:latest", "app_name": "nginx"}, "部署兩個 nginx")["image"] == "nginx:latest"
 
 
 def test_errors_pass_through():
