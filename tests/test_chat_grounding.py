@@ -30,6 +30,8 @@ def fake_cluster(monkeypatch):
         web_demo, "k8s_get_deployments",
         lambda namespace=None: [{"name": "auto-app"}, {"name": "my-cache"}, {"name": "zt-smoke"}],
     )
+    monkeypatch.setattr(web_demo, "k8s_get_pods",
+                        lambda app_name=None, namespace=None: [{"name": "my-cache-657b99cf6b-trfd8"}])
     yield
 
 
@@ -54,6 +56,13 @@ class TestVerifyGroundedReply:
         reply = "my-cache 目前健康，2 個 Pod 都在正常執行。"
         result = web_demo._verify_grounded_reply(message, reply)
         assert result == reply
+
+    def test_real_pod_name_claimed_healthy_is_untouched_2026_10_26(self, fake_cluster):
+        # 真實存在的 Pod 名稱不是幻覺，不能被換成更正訊息；捏造的 Pod 名稱照樣要擋
+        reply = "my-cache-657b99cf6b-trfd8 目前是 Running，運作正常。"
+        assert web_demo._verify_grounded_reply("my-cache 狀態如何？", reply) == reply
+        fake = "my-cache-000000000-zzzzz 目前是 Running，運作正常。"
+        assert "不存在" in web_demo._verify_grounded_reply("my-cache 狀態如何？", fake)
 
     def test_k8s_disabled_skips_check_without_crashing(self, monkeypatch):
         monkeypatch.setattr(web_demo, "K8S_ENABLED", False)

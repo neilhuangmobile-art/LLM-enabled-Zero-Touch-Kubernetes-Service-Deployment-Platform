@@ -7305,6 +7305,11 @@ def _verify_grounded_reply(message: str, reply: str, namespace: str = None) -> s
         real_names = {d["name"].lower() for d in k8s_get_deployments(namespace)}
     except Exception:
         return reply
+    try:
+        # 2026-10-26 三人同時使用測試：模型講到真實的 Pod 名稱（服務名加隨機尾碼）也被當成不存在，整段回覆被換成更正訊息
+        real_names |= {str(p.get("name") or "").lower() for p in k8s_get_pods(namespace=namespace)}
+    except Exception:
+        pass
     candidates = set(m.group(0) for m in _IDENTIFIER_CANDIDATE_RE.finditer(message))
     candidates |= set(m.group(0) for m in _IDENTIFIER_CANDIDATE_RE.finditer(reply))
     ghost_names = [c for c in candidates if c.lower() not in real_names and len(c) >= 4]

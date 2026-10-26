@@ -105,7 +105,8 @@ def scenario(u, other_app, barrier):
     record(user=u.name, step="intent", category="intent", input=q, output=act, passed=act == "deploy",
            passed_rule="action == deploy", latency_ms=ms, phase=phase)
 
-    q = f"部署 2 個 nginx:1.27，名稱 {u.app}，port 80"
+    port = getattr(u, "port", 80)   # 2026-10-26：本機模式多人共用主機連接埠，每人要不同 port
+    q = f"部署 2 個 nginx:1.27，名稱 {u.app}，port {port}"
     out, ms = timed(lambda: u.post("/api/deploy/parse", {"input": q}))
     p = out.get("parsed") or {}
     # 2026-10-09 第一次跑時規則只檢查「有沒有 nginx」，把 nginx:1.27 被解析成 nginx:latest 的錯誤
@@ -115,7 +116,7 @@ def scenario(u, other_app, barrier):
            output={k: p.get(k) for k in ("app_name", "pods", "image", "port")}, passed=ok,
            passed_rule="app_name、pods 一致，且 image 完全等於 nginx:1.27", latency_ms=ms, phase=phase)
 
-    spec = {"app_name": u.app, "image": "nginx:1.27", "pods": 2, "port": 80}
+    spec = {"app_name": u.app, "image": "nginx:1.27", "pods": 2, "port": port}
     out, ms = timed(lambda: u.post("/api/deploy", {"parsed": spec}))
     ok = (out.get("k8s_deploy") or {}).get("ok") is True
     record(user=u.name, step="deploy_commit", category="deploy", input=spec,

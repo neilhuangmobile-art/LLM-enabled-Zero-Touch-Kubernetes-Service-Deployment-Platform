@@ -1,36 +1,19 @@
 {
  "run": "2026-10-26",
- "total_records": 150,
- "tests": 135,
- "passed": 125,
+ "total_records": 190,
+ "tests": 155,
+ "passed": 150,
+ "pass_rate": 0.968,
+ "latency_ms": {
+  "n": 99,
+  "p50": 183.6,
+  "p90": 6287.1,
+  "max": 423632.3
+ },
  "by_group": {
-  "B10 參數查證": {
-   "passed": 1,
-   "total": 2
-  },
-  "B11 預約": {
+  "A 環境與安裝": {
    "passed": 3,
    "total": 3
-  },
-  "B12 分時擴縮": {
-   "passed": 3,
-   "total": 3
-  },
-  "B13 休眠喚醒": {
-   "passed": 3,
-   "total": 6
-  },
-  "B14 自動修復": {
-   "passed": 3,
-   "total": 3
-  },
-  "B15 專案個人化": {
-   "passed": 3,
-   "total": 3
-  },
-  "B16 報告": {
-   "passed": 2,
-   "total": 2
   },
   "B4/D27 頁面與瀏覽器": {
    "passed": 10,
@@ -41,8 +24,8 @@
    "total": 26
   },
   "B6 對話": {
-   "passed": 10,
-   "total": 11
+   "passed": 14,
+   "total": 14
   },
   "B7 部署全流程": {
    "passed": 6,
@@ -55,6 +38,34 @@
   "B9 匯入": {
    "passed": 6,
    "total": 6
+  },
+  "B10 參數查證": {
+   "passed": 2,
+   "total": 2
+  },
+  "B11 預約": {
+   "passed": 3,
+   "total": 3
+  },
+  "B12 分時擴縮": {
+   "passed": 3,
+   "total": 3
+  },
+  "B13 休眠喚醒": {
+   "passed": 7,
+   "total": 7
+  },
+  "B14 自動修復": {
+   "passed": 3,
+   "total": 3
+  },
+  "B15 專案個人化": {
+   "passed": 3,
+   "total": 3
+  },
+  "B16 報告": {
+   "passed": 2,
+   "total": 2
   },
   "C 外網": {
    "passed": 16,
@@ -87,127 +98,42 @@
   "D29 慢速網路": {
    "passed": 4,
    "total": 4
+  },
+  "E30 多人同時使用": {
+   "passed": 13,
+   "total": 13
   }
  },
- "latency_ms_median": 147.8,
- "open_failures": [
+ "failed": [
   {
-   "id": "B6-3",
-   "name": "意圖：qa-web 現在健康嗎",
-   "actual": "qa"
-  },
-  {
-   "id": "B10-2",
-   "name": "沒講映像檔不代為猜測",
-   "actual": {
-    "error": null,
-    "image": "nginx:latest",
-    "missing": null
-   }
-  },
-  {
-   "id": "B13",
-   "name": "休眠喚醒",
-   "actual": "AttributeError: 'NoneType' object has no attribute 'strip'"
-  },
-  {
-   "id": "B4-Safari 核心-手機",
-   "name": "Safari 核心・手機 390px：7 頁",
-   "actual": {
-    "js錯誤": [
-     "TypeError: null is not an object (evaluating 'cpuEl.innerHTML = msg')",
-     "TypeError: null is not an object (evaluating 'body.innerHTML = `<div class=\"proj-box\">${emptyBlock('讀不到回收桶。', e.message)"
-    ],
-    "超出寬度": [],
-    "空白頁": [
-     "chat",
-     "services",
-     "healer",
-     "calendar",
-     "dashboard",
-     "gitops",
-     "trash"
-    ]
-   }
-  },
-  {
-   "id": "B4-Safari 核心-平板",
-   "name": "Safari 核心・平板 768px：7 頁",
-   "actual": {
-    "js錯誤": [
-     "TypeError: null is not an object (evaluating 'cpuEl.innerHTML = msg')",
-     "TypeError: null is not an object (evaluating 'body.innerHTML = `<div class=\"proj-box\">${emptyBlock('讀不到回收桶。', e.message)"
-    ],
-    "超出寬度": [],
-    "空白頁": [
-     "chat",
-     "services",
-     "healer",
-     "calendar",
-     "dashboard",
-     "gitops",
-     "trash"
-    ]
-   }
-  },
-  {
-   "id": "B4-Safari 核心-筆電",
-   "name": "Safari 核心・筆電 1366px：7 頁",
-   "actual": {
-    "js錯誤": [
-     "TypeError: null is not an object (evaluating 'cpuEl.innerHTML = msg')",
-     "TypeError: null is not an object (evaluating 'body.innerHTML = `<div class=\"proj-box\">${emptyBlock('讀不到回收桶。', e.message)"
-    ],
-    "超出寬度": [],
-    "空白頁": [
-     "chat",
-     "services",
-     "healer",
-     "calendar",
-     "dashboard",
-     "gitops",
-     "trash"
-    ]
-   }
+   "id": "B4-Safari 核心-m",
+   "group": "B4/D27 頁面與瀏覽器",
+   "name": "Safari 核心・手機監控版",
+   "actual": "{'js錯誤': [], '超出寬度': 0, '分頁數': 0}"
   },
   {
    "id": "B4-Safari 核心-大螢幕",
+   "group": "B4/D27 頁面與瀏覽器",
    "name": "Safari 核心・大螢幕 1920px：7 頁",
-   "actual": {
-    "js錯誤": [
-     "TypeError: null is not an object (evaluating 'cpuEl.innerHTML = msg')",
-     "TypeError: null is not an object (evaluating 'body.innerHTML = `<div class=\"proj-box\">${emptyBlock('讀不到回收桶。', e.message)"
-    ],
-    "超出寬度": [],
-    "空白頁": [
-     "chat",
-     "services",
-     "healer",
-     "calendar",
-     "dashboard",
-     "gitops",
-     "trash"
-    ]
-   }
+   "actual": "{'js錯誤': [\"TypeError: null is not an object (evaluating 'cpuEl.innerHTML = msg')\", 'TypeError: null is not an object (evaluating \\'body.innerHTML = `<div class=\"proj-box\">${emptyBlock(\\'讀不到回收桶。\\', e.m"
   },
   {
-   "id": "B4-Safari 核心-m",
-   "name": "Safari 核心・手機監控版",
-   "actual": {
-    "js錯誤": [],
-    "超出寬度": 0,
-    "分頁數": 0
-   }
+   "id": "B4-Safari 核心-平板",
+   "group": "B4/D27 頁面與瀏覽器",
+   "name": "Safari 核心・平板 768px：7 頁",
+   "actual": "{'js錯誤': [\"TypeError: null is not an object (evaluating 'cpuEl.innerHTML = msg')\", 'TypeError: null is not an object (evaluating \\'body.innerHTML = `<div class=\"proj-box\">${emptyBlock(\\'讀不到回收桶。\\', e.m"
   },
   {
-   "id": "B13-1",
-   "name": "進入休眠（副本數 0、接上喚醒器）",
-   "actual": "[K8s] 已連線\n(False, 'qa-web 沒有進入休眠：喚醒器沒有在 2 分鐘內啟動（可能是映像檔下載失敗），這次先不休眠')"
+   "id": "B4-Safari 核心-手機",
+   "group": "B4/D27 頁面與瀏覽器",
+   "name": "Safari 核心・手機 390px：7 頁",
+   "actual": "{'js錯誤': [\"TypeError: null is not an object (evaluating 'cpuEl.innerHTML = msg')\", 'TypeError: null is not an object (evaluating \\'body.innerHTML = `<div class=\"proj-box\">${emptyBlock(\\'讀不到回收桶。\\', e.m"
   },
   {
-   "id": "B13-2",
-   "name": "有人連線時顯示喚醒頁",
-   "actual": "<!DOCTYPE html>\n<html>\n<head>\n<title>Welcome to nginx!</titl"
+   "id": "B4-Safari 核心-筆電",
+   "group": "B4/D27 頁面與瀏覽器",
+   "name": "Safari 核心・筆電 1366px：7 頁",
+   "actual": "{'js錯誤': [\"TypeError: null is not an object (evaluating 'cpuEl.innerHTML = msg')\", 'TypeError: null is not an object (evaluating \\'body.innerHTML = `<div class=\"proj-box\">${emptyBlock(\\'讀不到回收桶。\\', e.m"
   }
  ]
 }
