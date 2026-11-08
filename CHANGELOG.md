@@ -1746,3 +1746,42 @@ Pod 對應到服務、對話規則、建議 API）；乾淨環境 383 項通過�
 - **聊天回覆提到真實 Pod 名稱被換成「不存在」的更正訊息**：三人同時使用測試抓到。事實查核的名稱清單原本只有服務名稱，改成也放入使用者 namespace 的 Pod 名稱；捏造的 Pod 名稱仍會被擋（`tests/test_chat_grounding.py`、`docs/security_review.md` 59 節）。
 - **三人同時使用**（本機模式）：問答、部署、擴縮、隔離、刪除 13 項全過；全新虛擬環境照 requirements.txt 安裝 265 秒、686 項通過。全系統測試最終 155 項、150 項通過，未過的 5 項都是 Safari 核心，需要 iPhone 實測（`docs/qa_full_20261026.md`）。
 - 新增 `qa_full_20261026_summarize.py`（摘要與各類別通過率圖）、`qa_concurrent_local_20261026.py`（本機模式三人同時使用）。
+
+
+## 2026-11-07
+
+### 14:30 — 測試：ZeroTouch 與 Claude Code 對照實驗
+- 同一句新手需求分別交給 ZeroTouch 與 Claude Code（Opus 5.5，無人值守模式，權限只限自己的 namespace），共六組實驗：部署 22 題 × 3 輪、補一次資料後重試、日常操作、故障修復、匯入 Compose／YAML、新手問答。通過標準在開跑前寫死，安全設定由 Trivy 評分。
+- 結果：ZeroTouch 部署回應中位數 1.9 秒（Claude 45.4 秒）、每次約 0.00025 美元（Claude 0.25 美元）、22 題中 21 題三輪結果相同（Claude 12 題）、危險要求一律沒有部署；部署題通過率 59.1%（Claude 93.9%），差距主要來自情境描述沒講映像檔就退回、有狀態服務不補密碼、英文需求捏造映像檔。
+- 測試程式在 `scripts/bench/`，原始資料、文字報告、圖表在 `docs/bench_20261106/`，風險整理在 `docs/security_review.md` 60 節。過程中撞到 Claude 每週額度、發現三個測試程式錯誤，作廢重跑的資料保留在 `_invalid_and_backup/`。
+### 開發工具 — 新增：程式碼知識圖譜（graphify）與防止圖譜失真的機制
+- 用 graphify 對程式碼建知識圖譜（只做語法分析、不呼叫 AI）。第一次直接建圖有 12,519 個節點，其中 9,497 個是 YAML 欄位（`yamls/`、`manifests/` 的部署輸出），核心節點前十名有九個是 YAML 的 `spec`，圖幾乎不能用。
+- 新增 `.graphifyignore`（排除 YAML、JSON、文件類檔案，只分析 `.py`、`.js`、`.ps1`）與 `scripts/graphify_rebuild.py`：群組依「主要來自哪個檔案」命名，不依群組編號，重新分群也不會對錯名稱；建完會檢查有沒有非程式碼節點、節點數暴增、或連線指向專案內不存在的節點，有就不覆蓋原圖。`--check` 只檢查不重建。
+- 驗證：重建後 3,015 個節點、136 個群組，名稱全部不重複；官方 `graphify update` 會把 `.md` 掃進來（多 974 個節點）並把群組改成英文函式名稱，兩種情況 `--check` 都抓得到、重建後恢復；新增再刪除一個程式檔，圖都正確更新、沒有殘留節點。
+- 這台電腦另外裝了 `.git/hooks/post-commit`，commit 後在背景重建（不進版控）。`graphify-out/` 已加進 `.gitignore`。
+
+### 修正 — 對照實驗找到的 7 項部署弱點
+- 新增 `agents/deploy_fill.py`（映像檔查核、情境預填建議映像檔、資料庫密碼自動產生並存 Secret、背景程式空殼、危險要求告知），接進 `web_demo.py` 的 `_prepare_deploy`；部署單與審查卡顯示「請注意」區塊、建議標籤、可修改的密碼欄。
+- 「換回上一版」加入前後端規則；Healer 遇到探針 port 跟容器 port 不同時改成正確 port；知識庫新增 `rag/k8s_docs/pod_status_explained.md`（OOMKilled、ImagePullBackOff、探針）並重建索引。
+- 驗證：新增測試 26 項，全部 712 項通過；實驗沒過的 7 句實際解析結果正確；植入探針 port 錯誤 52 秒自動修好。修正後的正式重測與盲測還沒跑。詳見 `docs/security_review.md` 61 節。
+
+### 修正 — 自動產生的資料庫密碼不落地；第二次對照實驗的測試程式
+- 用知識圖譜查 `_prepare_deploy()` 的呼叫端，發現預約部署與對話存檔會把部署單上的密碼明文存進 `schedule.db`、`workspace.db`。改成存檔前遮掉、預約到時重新產生（security_review 61 節補充）。
+- 第二次實驗：`scripts/bench/bench_blind.py`（盲測，只印題號）、`grade_blind.py`（gemini-pro-latest 依題目的 pass_if 匿名評分）、`analyze_r2.py`（Wilson 95% 信賴區間、結果三分法、GPU 電費與硬體攤提）、`run_r2.ps1`（一鍵跑完 before → update → after → grade）。每題開始前兩邊 namespace 都清空；Model Server `/health` 新增 `gen_stats` 記錄 GPU 生成時間。
+- 冒煙測試抓到：測試站 `.env` 的 `PUBLIC_BASE_URL` 是 https，登入 cookie 變 Secure，測試程式全部「未登入」卻沒有報錯。已改成啟動測試站時指定 http，並在登入後實際檢查。
+
+## 2026-11-08
+
+### 02:35 — 實驗：第二次對照實驗跑完（盲測 30 題）
+- 盲測通過率（gemini-pro-latest 匿名評分）：ZeroTouch 修正前 11/30＝36.7%、修正後 22/60＝36.7%；Claude Code 45/60＝75.0%。原本 22 題修正後 65/66＝98.5%（已知題型）。資料在 `docs/bench_20261107_r2/`。
+- 測試程式三個問題已修：`run_r2.ps1` 沒有 BOM，PowerShell 5.1 讀不懂中文直接失敗；Claude 開了 `kubectl port-forward`，Windows 上 timeout 不會結束子程序，卡 42 分鐘（改成 Popen＋taskkill /T）；測試帳號違規次數跨題累積被封鎖，B25 起無效（改成每題開始前歸零，作廢紀錄留在 `blind_raw_invalid.jsonl`）。
+
+### 02:55 — 修正：意圖判斷改由 Gemini 先判斷，附上使用者現有的服務
+- 根因：盲測失敗的題目大多在第一關就被當成問答。規則只認得「部署／deploy」字眼，3B 分類器的提示詞把 qa 當成「其他所有情況」、沒把握就選 qa，新手說法（「幫我弄一個網站」「set up a blog」「背景跑的小程式」）實測 4/4 被判成 qa。3B 也不知道使用者有哪些服務，「那個 nginx 網站退回上一版」對不到名稱。修正前後通過率一樣，就是因為前一次的修正都在後面，根本沒被執行到。
+- `/api/intent` 改成：規則 → Gemini（`core/gemini_client.gemini_route_intent`，附服務清單）→ 3B → qa。Gemini 的結果由 `agents/intent_route.validate_routed_intent` 查核：服務名稱要真的存在或在原句出現、副本數要是原句的數字、映像檔版本要在原句出現，不合格改成反問；破壞性操作照舊要使用者在確認卡按確認才執行。
+- 驗證：新增 `tests/test_intent_route.py` 15 個測試；全部 911 個測試通過；12 句實測（含原本失敗的 5 種說法、沒講名稱的擴縮／換版本／回滾／刪除、純問答、要求忽略規則）全部正確，每句約 0.6～1.8 秒；在測試站走完 `/api/intent` 端到端。尚未用新的盲測題驗證通過率。
+
+### 03:10 — 驗證：新盲測題（r3，15 題，只測 ZeroTouch）
+- 題目由 Gemini 新出（開發端沒看過），只出原本最弱的 5 類，每類 3 題。資料在 `docs/bench_20261108_r3/`，一鍵腳本 `scripts/bench/run_r3.ps1`。
+- 結果：4/15＝26.7%（95% CI 10.9–52.0%）。同樣 5 類在第二次實驗修正後是 2/36＝5.6%。部署後的操作 3/3（之前 2/8）；15 題全部判對意圖，沒有一題被當成問答。
+- 剩下的失敗都在部署階段：沒有保存資料用的 PVC（4 題）、使用者自己給的指令／環境變數／port 沒有照用（C07、C09、C11、C12，C12 的密碼被自動產生的蓋掉）、定時工作不是 CronJob、情境題沒指定軟體時被退回（3 題）。

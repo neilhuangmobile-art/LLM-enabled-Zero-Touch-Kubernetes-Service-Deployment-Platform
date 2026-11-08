@@ -317,9 +317,43 @@ def _handle_increase_memory(issue: dict, diagnosis: dict, dry_run: bool) -> dict
         return {"ok": False, "message": f"調整記憶體失敗：{e}"}
 
 
+def _listen_port(c):
+    """容器實際監聽的 port：已知映像檔用它固定的 port，否則用 containerPort 第一個。"""
+    from agents.cost_agent import _LISTEN_PORTS, _image_name
+    known = _LISTEN_PORTS.get(_image_name(getattr(c, "image", "") or ""))
+    if known:
+        return int(known)
+    ports = getattr(c, "ports", None) or []
+    return int(ports[0].container_port) if ports and getattr(ports[0], "container_port", None) else None
+
+
+def _fix_probe_ports(c) -> list:
+    """探針檢查的 port 跟容器實際監聽的 port 不同時，改成正確的 port。回傳改了哪些（給訊息用）。
+
+    2026-11-07 對照實驗：健康檢查 port 設錯（nginx 聽 80、探針打 8081），原本只會加長等待時間，永遠修不好。
+    只改「設定本身就對不上」的情況；兩者相同時不動，照原本的做法加長等待時間。
+    """
+    listen = _listen_port(c)
+    changed = []
+    if not listen:
+        return changed
+    for attr in ("liveness_probe", "readiness_probe", "startup_probe"):
+        probe = getattr(c, attr, None)
+        if not probe:
+            continue
+        for kind in ("http_get", "tcp_socket"):
+            h = getattr(probe, kind, None)
+            port = getattr(h, "port", None) if h else None
+            if isinstance(port, int) and port != listen:
+                h.port = listen
+                changed.append(f"{attr} {port}→{listen}")
+    return changed
+
+
 def _handle_fix_probe(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
     """
-    健康探針失敗 — 將 initialDelaySeconds 加大 30 秒（最多加到 120 秒）。
+    健康探針失敗 — 探針的 port 跟容器實際監聽的不同時改成正確的 port；
+    否則將 initialDelaySeconds 加大 30 秒（最多加到 120 秒）。
     """
     pod_name    = issue["pod_name"]
     namespace   = issue["namespace"]
@@ -339,6 +373,16 @@ def _handle_fix_probe(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
         _load_k8s_config()
         apps_v1 = k8s_client.AppsV1Api()
         deploy  = apps_v1.read_namespaced_deployment(deploy_name, namespace)
+
+        port_fixes = []
+        for c in deploy.spec.template.spec.containers:
+            if container and c.name != container:
+                continue
+            port_fixes += _fix_probe_ports(c)
+        if port_fixes:
+            apps_v1.patch_namespaced_deployment(deploy_name, namespace, deploy)
+            return {"ok": True, "message": f"{deploy_name} 的健康檢查 port 設錯，已改成容器實際監聽的 port（"
+                                           + "、".join(port_fixes) + "）"}
 
         patched = False
         for c in deploy.spec.template.spec.containers:

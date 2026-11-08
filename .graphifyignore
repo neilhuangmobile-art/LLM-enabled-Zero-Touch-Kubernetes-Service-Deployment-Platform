@@ -1,0 +1,26 @@
+# graphify 知識圖譜的排除清單（語法同 .gitignore）
+# 圖譜只分析程式碼。YAML 每個欄位都會變成一個節點，會把圖灌滿雜訊
+# （2026-11-07 實測：12,519 個節點裡有 9,497 個來自 YAML），所以全部排除。
+# 重建方式：python scripts/graphify_rebuild.py
+
+# 平台部署時自動產生的 YAML 輸出（gitops/manifest_writer.py）
+yamls/
+manifests/
+
+# 其他 YAML 設定檔（K8s manifest、告警規則、CI 設定）
+*.yaml
+*.yml
+
+# JSON 都是資料（測試結果、帳號資料 users.json、模型統計），不是程式碼
+*.json
+
+# 文件與其他資料。graphify update 會把 .md 的標題結構也當成節點（實測多出 974 個），
+# 要把文件納入圖譜時，先拿掉這幾行，再用 /graphify 的語意萃取（會消耗 AI token）
+*.md
+*.txt
+*.html
+*.jsonl
+*.csv
+
+# 圖譜本身的輸出
+graphify-out/

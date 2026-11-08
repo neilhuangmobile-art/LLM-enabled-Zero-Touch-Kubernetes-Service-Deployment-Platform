@@ -44,6 +44,7 @@ if hasattr(sys.stderr, "reconfigure"):
 import json
 import re
 import threading
+import time
 import torch
 import uvicorn
 from contextlib import asynccontextmanager
@@ -528,6 +529,12 @@ def _sanitize_user_text(text: str, tok) -> str:
 
 
 # ── 共用生成 ─────────────────────────────────────────────────────
+# 2026-11-07：累計模型實際生成花的時間，給對照實驗算本機 GPU 的電費（/health 的 gen_stats）。
+# 呼叫端在每題前後各讀一次，相減就是那一題用了多少 GPU 時間。只增不減，重啟才歸零。
+_gen_stats = {"calls": 0, "gen_ms": 0.0, "new_tokens": 0}
+_gen_stats_lock = threading.Lock()
+
+
 def _generate(model, tok, messages: List[Dict[str, str]], lock: threading.Lock,
               max_new_tokens: int, temperature: float) -> str:
     """以 chat template 組 prompt 並生成，回傳新產生的文字（不含 prompt）。"""
@@ -549,7 +556,13 @@ def _generate(model, tok, messages: List[Dict[str, str]], lock: threading.Lock,
         gen_kwargs["temperature"] = temperature
 
     with lock, torch.no_grad():
+        _t0 = time.perf_counter()
         out = model.generate(input_ids=input_ids, attention_mask=attention_mask, **gen_kwargs)
+        _ms = (time.perf_counter() - _t0) * 1000
+    with _gen_stats_lock:
+        _gen_stats["calls"] += 1
+        _gen_stats["gen_ms"] += _ms
+        _gen_stats["new_tokens"] += int(out.shape[1] - input_len)
     return tok.decode(out[0][input_len:], skip_special_tokens=True).strip()
 
 
@@ -643,6 +656,7 @@ def health():
         # allocated = 模型權重 + 當下張量；reserved = PyTorch 快取池（含已釋放但沒還給驅動的）
         "vram_allocated_gb": round(torch.cuda.memory_allocated() / 2**30, 2) if _gpu_available else None,
         "vram_reserved_gb": round(torch.cuda.memory_reserved() / 2**30, 2) if _gpu_available else None,
+        "gen_stats": dict(_gen_stats, gen_ms=round(_gen_stats["gen_ms"], 1)),
     }
 
 

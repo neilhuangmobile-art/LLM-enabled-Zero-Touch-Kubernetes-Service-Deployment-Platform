@@ -158,15 +158,19 @@ def container_port(image: str, port: int, explicit: int = None) -> int:
 _HTTP_PROBE_IMAGES = {"nginx", "nginx-unprivileged", "httpd"}
 
 
-def recommended_probes(image: str, port: int) -> dict:
+def recommended_probes(image: str, port: int, command=None) -> dict:
     """部署時自動加的健康檢查，三處部署設定共用（同 recommended_resources）。
 
     2026-10-10 組員極限測試：暫停 nginx 的 worker 25 秒（程式還在、但不回應），43.5% 請求逾時，
     K8s 仍顯示 Ready。網頁伺服器加 HTTP 檢查：卡住約 10 秒就不再分流量給它，超過 30 秒才重啟
     （短暫卡頓不會被誤殺）。其他程式只加連線檢查判斷能不能接流量，不設重啟條件，
     避免 port 設錯時陷入一直重啟的循環。
+
+    2026-11-07：背景程式的空殼（agents/deploy_fill.KEEPALIVE_COMMAND）沒有在聽任何 port，
+    加連線檢查會永遠不就緒，所以不加。
     """
-    if not port:
+    from agents.deploy_fill import KEEPALIVE_COMMAND
+    if not port or (command and list(command) == KEEPALIVE_COMMAND):
         return {}
     if _image_name(image) in _HTTP_PROBE_IMAGES:
         http = {"path": "/", "port": int(port)}

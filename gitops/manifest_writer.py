@@ -264,7 +264,7 @@ def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
                         "ports": [{"containerPort": c} for c in container_ports(cport, llm_result.get("extra_ports"))],
                         "resources": resources,
                         "securityContext": {"allowPrivilegeEscalation": False},
-                        **recommended_probes(image, cport),
+                        **recommended_probes(image, cport, llm_result.get("command")),
                         **_extra,
                         "env": env_entries(app_name, env_vars, llm_result.get("secret_keys")),
                     }],

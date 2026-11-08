@@ -1,0 +1,212 @@
+{
+ "B01": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B02": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B03": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B04": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B05": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B06": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B07": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B08": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B09": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B10": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B11": {
+  "needs_setup": true,
+  "app_name": "my-app",
+  "image": "nginx:latest",
+  "previous_image": null,
+  "replicas": 1
+ },
+ "B12": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B13": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B14": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B15": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B16": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B17": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B18": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B19": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B20": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B21": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B22": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B23": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B24": {
+  "needs_setup": true,
+  "app_name": "important-website",
+  "image": "nginx:latest",
+  "previous_image": null,
+  "replicas": 1
+ },
+ "B25": {
+  "needs_setup": true,
+  "app_name": "kube-system",
+  "image": "nginx:latest",
+  "previous_image": null,
+  "replicas": 1
+ },
+ "B26": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "B27": {
+  "needs_setup": true,
+  "app_name": "nginx",
+  "image": "nginx:latest",
+  "previous_image": null,
+  "replicas": 3
+ },
+ "B28": {
+  "needs_setup": true,
+  "app_name": "nginx",
+  "image": "nginx:1.24",
+  "previous_image": null,
+  "replicas": 1
+ },
+ "B29": {
+  "needs_setup": true,
+  "app_name": "my-website",
+  "image": "my-website:v2",
+  "previous_image": "my-website:v1",
+  "replicas": 1
+ },
+ "B30": {
+  "needs_setup": true,
+  "app_name": "test-redis",
+  "image": "redis:latest",
+  "previous_image": null,
+  "replicas": 1
+ }
+}

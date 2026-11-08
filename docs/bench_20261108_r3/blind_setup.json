@@ -1,0 +1,107 @@
+{
+ "C01": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "C02": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "C03": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "C04": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "C05": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "C06": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "C07": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "C08": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "C09": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "C10": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "C11": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "C12": {
+  "needs_setup": false,
+  "app_name": null,
+  "image": null,
+  "previous_image": null,
+  "replicas": null
+ },
+ "C13": {
+  "needs_setup": true,
+  "app_name": "wordpress",
+  "image": "wordpress:latest",
+  "previous_image": null,
+  "replicas": 4
+ },
+ "C14": {
+  "needs_setup": true,
+  "app_name": "postgres",
+  "image": "postgres:14",
+  "previous_image": null,
+  "replicas": 1
+ },
+ "C15": {
+  "needs_setup": true,
+  "app_name": "grafana",
+  "image": "grafana/grafana:latest",
+  "previous_image": null,
+  "replicas": 1
+ }
+}

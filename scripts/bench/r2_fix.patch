@@ -1,0 +1,331 @@
+diff --git a/agents/cost_agent.py b/agents/cost_agent.py
+index 47aa94c..a2ca9c1 100644
+--- a/agents/cost_agent.py
++++ b/agents/cost_agent.py
+@@ -158,15 +158,19 @@ def container_port(image: str, port: int, explicit: int = None) -> int:
+ _HTTP_PROBE_IMAGES = {"nginx", "nginx-unprivileged", "httpd"}
+ 
+ 
+-def recommended_probes(image: str, port: int) -> dict:
++def recommended_probes(image: str, port: int, command=None) -> dict:
+     """部署時自動加的健康檢查，三處部署設定共用（同 recommended_resources）。
+ 
+     2026-10-10 組員極限測試：暫停 nginx 的 worker 25 秒（程式還在、但不回應），43.5% 請求逾時，
+     K8s 仍顯示 Ready。網頁伺服器加 HTTP 檢查：卡住約 10 秒就不再分流量給它，超過 30 秒才重啟
+     （短暫卡頓不會被誤殺）。其他程式只加連線檢查判斷能不能接流量，不設重啟條件，
+     避免 port 設錯時陷入一直重啟的循環。
++
++    2026-11-07：背景程式的空殼（agents/deploy_fill.KEEPALIVE_COMMAND）沒有在聽任何 port，
++    加連線檢查會永遠不就緒，所以不加。
+     """
+-    if not port:
++    from agents.deploy_fill import KEEPALIVE_COMMAND
++    if not port or (command and list(command) == KEEPALIVE_COMMAND):
+         return {}
+     if _image_name(image) in _HTTP_PROBE_IMAGES:
+         http = {"path": "/", "port": int(port)}
+diff --git a/gitops/manifest_writer.py b/gitops/manifest_writer.py
+index ec1fa98..9bc7ef3 100644
+--- a/gitops/manifest_writer.py
++++ b/gitops/manifest_writer.py
+@@ -264,7 +264,7 @@ def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
+                         "ports": [{"containerPort": c} for c in container_ports(cport, llm_result.get("extra_ports"))],
+                         "resources": resources,
+                         "securityContext": {"allowPrivilegeEscalation": False},
+-                        **recommended_probes(image, cport),
++                        **recommended_probes(image, cport, llm_result.get("command")),
+                         **_extra,
+                         "env": env_entries(app_name, env_vars, llm_result.get("secret_keys")),
+                     }],
+diff --git a/healer/remediate.py b/healer/remediate.py
+index 21a1a54..8917d78 100644
+--- a/healer/remediate.py
++++ b/healer/remediate.py
+@@ -317,9 +317,43 @@ def _handle_increase_memory(issue: dict, diagnosis: dict, dry_run: bool) -> dict
+         return {"ok": False, "message": f"調整記憶體失敗：{e}"}
+ 
+ 
++def _listen_port(c):
++    """容器實際監聽的 port：已知映像檔用它固定的 port，否則用 containerPort 第一個。"""
++    from agents.cost_agent import _LISTEN_PORTS, _image_name
++    known = _LISTEN_PORTS.get(_image_name(getattr(c, "image", "") or ""))
++    if known:
++        return int(known)
++    ports = getattr(c, "ports", None) or []
++    return int(ports[0].container_port) if ports and getattr(ports[0], "container_port", None) else None
++
++
++def _fix_probe_ports(c) -> list:
++    """探針檢查的 port 跟容器實際監聽的 port 不同時，改成正確的 port。回傳改了哪些（給訊息用）。
++
++    2026-11-07 對照實驗：健康檢查 port 設錯（nginx 聽 80、探針打 8081），原本只會加長等待時間，永遠修不好。
++    只改「設定本身就對不上」的情況；兩者相同時不動，照原本的做法加長等待時間。
++    """
++    listen = _listen_port(c)
++    changed = []
++    if not listen:
++        return changed
++    for attr in ("liveness_probe", "readiness_probe", "startup_probe"):
++        probe = getattr(c, attr, None)
++        if not probe:
++            continue
++        for kind in ("http_get", "tcp_socket"):
++            h = getattr(probe, kind, None)
++            port = getattr(h, "port", None) if h else None
++            if isinstance(port, int) and port != listen:
++                h.port = listen
++                changed.append(f"{attr} {port}→{listen}")
++    return changed
++
++
+ def _handle_fix_probe(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
+     """
+-    健康探針失敗 — 將 initialDelaySeconds 加大 30 秒（最多加到 120 秒）。
++    健康探針失敗 — 探針的 port 跟容器實際監聽的不同時改成正確的 port；
++    否則將 initialDelaySeconds 加大 30 秒（最多加到 120 秒）。
+     """
+     pod_name    = issue["pod_name"]
+     namespace   = issue["namespace"]
+@@ -340,6 +374,16 @@ def _handle_fix_probe(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
+         apps_v1 = k8s_client.AppsV1Api()
+         deploy  = apps_v1.read_namespaced_deployment(deploy_name, namespace)
+ 
++        port_fixes = []
++        for c in deploy.spec.template.spec.containers:
++            if container and c.name != container:
++                continue
++            port_fixes += _fix_probe_ports(c)
++        if port_fixes:
++            apps_v1.patch_namespaced_deployment(deploy_name, namespace, deploy)
++            return {"ok": True, "message": f"{deploy_name} 的健康檢查 port 設錯，已改成容器實際監聽的 port（"
++                                           + "、".join(port_fixes) + "）"}
++
+         patched = False
+         for c in deploy.spec.template.spec.containers:
+             if container and c.name != container:
+diff --git a/web_demo.py b/web_demo.py
+index 4345d91..b7ad42c 100644
+--- a/web_demo.py
++++ b/web_demo.py
+@@ -413,7 +413,7 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
+         _res = recommended_resources(image, app_name, memory, cpu)
+         resources = k8s_client.V1ResourceRequirements(requests=_res["requests"], limits=_res["limits"])
+         # 健康檢查用 dict 傳給 client（序列化時原樣送出，欄位名稱就是 K8s 的 camelCase）
+-        _probes = recommended_probes(image, cport)
++        _probes = recommended_probes(image, cport, command)
+         from gitops.manifest_writer import pod_volumes, build_pvc_docs
+         _pod_vols, _vol_mounts = pod_volumes(app_name, volumes)
+         from gitops.manifest_writer import container_ports, extra_service_ports
+@@ -1292,7 +1292,7 @@ def _build_agent_manifest(parsed):
+         "ports": [{"containerPort": cport}],
+         "resources": recommended_resources(image, app_name, memory, cpu),
+         "securityContext": {"allowPrivilegeEscalation": False},
+-        **recommended_probes(image, cport),
++        **recommended_probes(image, cport, parsed.get("command")),
+     }
+     env = {**recommended_env(image), **(parsed.get("env") or {})}
+     if env:
+@@ -1925,6 +1925,9 @@ tbody tr:hover td{background:var(--signal-soft)}
+ .scn-notes{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+ .scn-notes li{position:relative;padding:7px 10px 7px 26px;font-size:13.5px;line-height:1.55;color:var(--text-2);background:color-mix(in srgb,var(--caution) 9%,transparent);border-radius:5px}
+ .scn-notes li::before{content:"";position:absolute;left:11px;top:14px;width:6px;height:6px;border-radius:50%;background:var(--caution)}
++.fill-notices{margin:12px 0;padding:10px 14px;border-left:4px solid var(--caution);background:color-mix(in srgb,var(--caution) 12%,transparent);border-radius:6px;font-size:14px;line-height:1.6}
++.fill-notices ul{margin:6px 0 0;padding-left:18px}
++.sug-tag{display:inline-block;margin-left:6px;padding:0 6px;font-size:11.5px;border-radius:4px;background:color-mix(in srgb,var(--caution) 22%,transparent);color:var(--text)}
+ .scn-save{margin-top:14px;padding-top:12px;border-top:1px dashed var(--grid-2)}
+ .scn-save-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+ .scn-save-top span{font-size:13.5px;color:var(--text-2)}
+@@ -3243,7 +3246,9 @@ function _currentChatKey(){ return 'k8s_current_chat_' + CURRENT_USER; }
+ // 「這台瀏覽器正在看哪一則」(currentChatId) 照舊存 localStorage。舊的 localStorage 對話第一次載入時自動搬上伺服器。
+ let chatsLoaded = false, _chatsLoading = null, _chatSaveTimer = null, _chatSaveFailed = false;
+ const _chatSent = {};   // 每則對話最後一次成功存到伺服器的內容，用來判斷哪些有變
+-function _chatPayload(ch){ return JSON.stringify({title:ch.title, messages:ch.messages, projectId:ch.projectId || null}); }
++// 2026-11-07：部署單上自動產生的資料庫密碼只留在這個分頁的記憶體，存回伺服器前清掉（不進 workspace.db）
++function redactSecrets(html){ return String(html).replace(/(data-secret="[^"]*"[^>]*?value=")[^"]*(")/g, '$1$2'); }
++function _chatPayload(ch){ return JSON.stringify({title:ch.title, messages:(ch.messages || []).map(m => (m && typeof m.content === 'string') ? Object.assign({}, m, {content:redactSecrets(m.content)}) : m), projectId:ch.projectId || null}); }
+ 
+ async function _putChat(ch){
+   const body = _chatPayload(ch);
+@@ -3960,6 +3965,7 @@ function matchClientRule(text){
+     ['scale', /\u628a?\s*(\S+?)\s*(?:\u64f4|\u7e2e|\u8abf).*?(\d+)/i, m=>({name:m[1],replicas:parseInt(m[2],10)})],
+     ['update_image', /update\s+(\S+)\s+to\s+(\S+)/i, m=>({name:m[1],image:m[2]})],
+     ['update_image', /\u628a?\s*(\S+?)\s*\u7684?\s*(?:image|\u6620\u50cf\u6a94?|\u93e1\u50cf\u6a94?)\s*(?:\u63db\u6210|\u6539\u6210|\u6539\u70ba|\u66f4\u65b0\u6210|\u66f4\u65b0\u70ba|to)?\s*(\S+)/i, m=>({name:m[1],image:m[2]})],
++    ['rollback', /([a-z][a-z0-9-]{0,58}).{0,30}?(?:換回|回到|退回|退到|恢復|還原|回復|改回)\s*(?:到\s*)?(?:上一版|上個版本|上一個版本|前一版|前一個版本|之前的版本|舊版)/i, m=>({name:m[1]})],
+     ['rollback', /rollback\s+(\S+)/i, m=>({name:m[1]})],
+     ['rollback', /(\S+)\s*(?:\u56de\u6efe|\u56de\u5fa9|\u9084\u539f)/i, m=>({name:m[1]})],
+   ];
+@@ -4200,8 +4206,9 @@ async function startDeployFlow(text, sched, originalText){
+       const p = d.parsed;
+       const what = {app_name:'服務名稱（例如 shop-web）', image:'映像檔：要跑哪個程式，例如 nginx:1.27、redis:7', pods:'副本數：要同時開幾個'};
+       appendMsg('assistant', '還差' + d.missing.map(k => what[k] || k).join('；') + '。請在下面的部署單補上，再按「下一步」。', null, 'text');
+-      const flow = newFlow('deploy', text, await applyPersonalSuggest(applyProjectDefaults({app_name:p.app_name || '', image:p.image || '', pods:p.pods || 1, port:p.port || 80,
+-                                             memory:p.memory, cpu:p.cpu}), originalText || text));
++      const flow = newFlow('deploy', text, await applyPersonalSuggest(applyProjectDefaults(Object.assign(specExtras(p), {app_name:p.app_name || '', image:p.image || '', pods:p.pods || 1, port:p.port || 80,
++                                             memory:p.memory, cpu:p.cpu})), originalText || text));
++      flow.notices = p._notices || [];
+       if(sched){ flow.schedOn = true; flow.when = sched.when || {ts:defaultSchedTs()}; flow.fullText = originalText || text; }   // 預約（2026-10-23 合併時補上）
+       appendMsg('assistant', renderFlowCard(flow));
+       return;
+@@ -4211,10 +4218,11 @@ async function startDeployFlow(text, sched, originalText){
+       return;
+     }
+     const raw = d.raw || d.parsed || {};
+-    const flow = newFlow('deploy', text, await applyPersonalSuggest(applyProjectDefaults({
++    const flow = newFlow('deploy', text, await applyPersonalSuggest(applyProjectDefaults(Object.assign(specExtras(raw), {
+       app_name: raw.app_name, image: raw.image, pods: raw.pods, port: raw.port,
+       memory: raw.memory, cpu: raw.cpu,
+-    }), originalText || text));
++    })), originalText || text));
++    flow.notices = raw._notices || (d.parsed && d.parsed._notices) || [];
+     flow.review = d.review || null;
+     flow.resource = d.resource_summary || null;
+     flow.scenario = d.scenario || null;
+@@ -5304,9 +5312,16 @@ document.addEventListener('keydown', function(e){
+ // ══════════════════════════════════════════════════════════════════
+ //  部署單與操作確認卡（取代舊的 B1～B4 卡片；流程邏輯與按鈕行為不變）
+ // ══════════════════════════════════════════════════════════════════
++// 卡片狀態會跟著對話存檔：密碼類環境變數的值遮掉（重新整理後流程本來就會失效，不需要原值）
++function maskSpecSecrets(spec){
++  if(!spec || !spec.env || !(spec.secret_keys || []).length) return spec;
++  const env = Object.assign({}, spec.env);
++  spec.secret_keys.forEach(k => { if(k in env) env[k] = ''; });
++  return Object.assign({}, spec, {env});
++}
+ function flowStateAttrs(flow){
+   const st = {id:flow.id, seq:flow.seq, kind:flow.kind, step:flow.step, originalText:flow.originalText,
+-              spec:flow.spec, review:flow.review, resource:flow.resource, rollout:flow.rollout || null,
++              spec:maskSpecSecrets(flow.spec), review:flow.review, resource:flow.resource, rollout:flow.rollout || null,
+               resultMsg:flow.resultMsg || null, errorMsg:flow.errorMsg || null, blockers:flow.blockers || null,
+               retryStep:flow.retryStep || null, pendingSync:!!flow.pendingSync, scenario:flow.scenario || null,
+               compose:flow.compose || null, source:flow.source || null, projectId:flow.projectId || null,
+@@ -5584,6 +5599,18 @@ function scenarioHTML(sc){
+     ${save}</section>`;
+ }
+ 
++// 2026-11-07：平台替使用者補的東西、沒照做的危險要求，用顯眼的區塊列出來（部署單與審查卡都顯示）
++function noticesHTML(flow){
++  const ns = flow.notices || [];
++  return ns.length ? `<section class="fill-notices" role="note" aria-label="系統補充說明"><b>請注意</b><ul>${ns.map(n => `<li>${esc(n)}</li>`).join('')}</ul></section>` : '';
++}
++// 部署單以外、但要一路帶到部署的欄位（資料庫密碼、背景程式的指令等）
++const SPEC_EXTRA_KEYS = ['env', 'secret_keys', 'command', 'args', 'expose', 'image_suggested'];
++function specExtras(src){
++  const o = {};
++  SPEC_EXTRA_KEYS.forEach(k => { if(src && src[k] != null) o[k] = src[k]; });
++  return o;
++}
+ function renderSpecCard(flow){
+   const s = flow.spec || {};
+   const out = s.output || s;
+@@ -5592,9 +5619,11 @@ function renderSpecCard(flow){
+     <div class="lead">${flow.scenario && flow.scenario.applies ? '我依你描述的情境推算出下面的規格，推算過程如下。' : '我照你的描述整理成下面的規格。'}有不對的地方直接改，再按「下一步」。${flow.schedOn ? `<br><b>這是預約部署</b>${flow.when && flow.when.ts ? `（${esc(fmtTW(flow.when.ts))}）` : ''}，審查通過後可以在下一步調整時間。` : ''}</div>
+     ${scenarioHTML(flow.scenario)}
+     ${(flow.grounding || []).length ? `<ul class="scn-notes">${flow.grounding.map(n => `<li>${esc(n)}，請確認是不是你要的。</li>`).join('')}</ul>` : ''}
++    ${noticesHTML(flow)}
+     <div class="fgrid">
+       <div><label for="${flow.id}-app">服務名稱</label><input id="${flow.id}-app" data-field="app_name" value="${g('app_name')}" placeholder="my-app"><div class="hint">小寫英文字母開頭，只能用小寫字母、數字和連字號，例如 web-frontend</div></div>
+-      <div><label for="${flow.id}-img">映像檔</label><input id="${flow.id}-img" data-field="image" value="${g('image')}" placeholder="nginx:1.27"></div>
++      <div><label for="${flow.id}-img">映像檔${s.image_suggested ? ' <span class="sug-tag">建議</span>' : ''}</label><input id="${flow.id}-img" data-field="image" value="${g('image')}" placeholder="nginx:1.27">${s.image_suggested ? '<div class="hint">這是系統建議的，可以改成你自己的程式</div>' : ''}</div>
++      ${(s.secret_keys || []).filter(k => s.env && s.env[k] != null).map(k => `<div><label for="${flow.id}-sec-${esc(k)}">資料庫密碼（${esc(k)}）</label><input id="${flow.id}-sec-${esc(k)}" data-secret="${esc(k)}" value="${esc(s.env[k])}" autocomplete="off"><div class="hint">已自動產生，可以改成你自己的；存在 Secret，不會寫進 Git</div></div>`).join('')}
+       <div><label for="${flow.id}-pods">副本數</label><input id="${flow.id}-pods" data-field="pods" type="number" min="1" max="50" value="${g('pods') || 1}"></div>
+       <div><label for="${flow.id}-port">Port</label><input id="${flow.id}-port" data-field="port" type="number" min="1" max="65535" value="${g('port') || 80}"></div>
+       <div><label for="${flow.id}-mem">每個副本的記憶體（選填）</label><input id="${flow.id}-mem" data-field="memory" value="${g('memory')}" placeholder="例如 256Mi"></div>
+@@ -5608,7 +5637,14 @@ function readSpecCard(id){
+   const root = document.querySelector(`[data-flow-id="${id}"]`);
+   if(!root) return null;
+   const get = f => (root.querySelector(`[data-field="${f}"]`)?.value || '').trim();
+-  const spec = {app_name:get('app_name'), image:get('image'), pods:parseInt(get('pods'), 10), port:parseInt(get('port'), 10)};
++  const flow = chatFlows[id] || {};
++  const spec = Object.assign(specExtras(flow.spec), {app_name:get('app_name'), image:get('image'), pods:parseInt(get('pods'), 10), port:parseInt(get('port'), 10)});
++  // 使用者改了映像檔，就不再是系統建議的，背景程式的空殼指令也不適用了
++  if(flow.spec && spec.image !== flow.spec.image){ delete spec.image_suggested; delete spec.command; delete spec.args; delete spec.expose; }
++  root.querySelectorAll('[data-secret]').forEach(el => {
++    const v = el.value.trim();
++    if(v){ spec.env = Object.assign({}, spec.env, {[el.dataset.secret]: v}); }
++  });
+   const mem = get('memory'), cpu = get('cpu');
+   if(mem) spec.memory = mem;
+   if(cpu) spec.cpu = cpu;
+@@ -5697,7 +5733,7 @@ function renderReviewCard(flow){
+       ${reviewerOf('成本審查', a.cost, cEst != null ? `依公有雲牌價估算每月約 $${cEst}。` : '', '成本', rv)}
+       ${reviewerOf('效能審查', a.perf, '', '效能', rv)}
+     </div>
+-    ${res}
++    ${noticesHTML(flow)}${res}
+     ${flow.schedOn && decision !== 'block' ? `<div class="body" style="padding-bottom:0">${schedBoxHTML(flow)}</div>` : ''}
+     <div class="decision">
+       <div class="seal ${seal[0]}" aria-hidden="true"><svg viewBox="0 0 76 76"><circle class="ring-o" cx="38" cy="38" r="36"/><circle class="ticks" cx="38" cy="38" r="30"/><text x="38" y="45" text-anchor="middle">${seal[1]}</text></svg></div>
+@@ -7091,6 +7127,8 @@ _INTENT_RULES = [
+     ("update_image", re.compile(r"update\s+(\S+)\s+to\s+(\S+)", re.I), {1: "name", 2: "image"}),
+     # 「映像檔」的「檔」要一起吃掉，不然「映像檔換成 nginx:1.28」會把「檔換成」當成映像檔名稱（2026-10-23 全系統檢查）
+     ("update_image", re.compile(r"把?\s*(\S+?)\s*的?\s*(?:image|映像檔?|鏡像檔?)\s*(?:換成|改成|改為|更新成|更新為|to)?\s*(\S+)", re.I), {1: "name", 2: "image"}),
++    # 2026-11-07 對照實驗：「shop-web 剛剛換的版本有問題，幫我換回上一版」原本沒有規則，被分類器判成換映像檔
++    ("rollback", re.compile(r"([a-z][a-z0-9-]{0,58}).{0,30}?(?:換回|回到|退回|退到|恢復|還原|回復|改回)\s*(?:到\s*)?(?:上一版|上個版本|上一個版本|前一版|前一個版本|之前的版本|舊版)", re.I), {1: "name"}),
+     ("rollback", re.compile(r"rollback\s+(\S+)", re.I), {1: "name"}),
+     ("rollback", re.compile(r"(\S+)\s*(?:回滾|回復|還原)", re.I), {1: "name"}),
+     # deploy：前端有更完整的複合 regex，這裡只當 server 端安全網（args 交給 /api/deploy/parse 解析）
+@@ -7751,7 +7789,13 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
+     parsed = _sanitize_deploy_payload(parsed_override) if parsed_override else ask_llama(user_input)
+     if "error" in parsed:
+         return None, None, None, ({"error": parsed["error"]}, 422)
++    notices = []   # 2026-11-07：要讓使用者看到的補全與提醒（部署單、審查卡都會顯示）
++    from agents import deploy_fill
+     if not parsed_override:
++        # 模型捏造的映像檔（對照實驗：英文需求被補成 website:latest）當作沒講
++        if parsed.get("image") and not deploy_fill.image_grounded(parsed["image"], user_input):
++            print(f"[映像檔查核] 原句找不到根據，捨棄：{parsed['image']}")
++            parsed["image"] = None
+         try:
+             scenario = _apply_scenario(user_input, parsed)
+         except Exception as e:
+@@ -7759,12 +7803,40 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
+             scenario = None
+         if scenario:
+             parsed["_scenario"] = scenario
++        # 網站類的情境沒講映像檔：預填建議值並標明，使用者在部署單上看得到、改得掉
++        if not parsed.get("image"):
++            _sug = deploy_fill.suggest_scenario_image(user_input, bool(scenario))
++            if _sug:
++                parsed["image"] = _sug
++                parsed["image_suggested"] = True
++                notices.append(f"你沒有指定要跑的程式，先建議用 {_sug}（網頁伺服器，會先顯示預設頁面），"
++                               "之後可以換成你自己的網站程式")
++        # 背景程式沒給啟動指令：建一個保持運作的空殼，不對外開放
++        if parsed.get("image") and deploy_fill.needs_keepalive(parsed["image"], user_input, bool(parsed.get("command")),
++                                                               bool(_PORT_MENTION_RE.search(user_input))):
++            parsed["command"] = list(deploy_fill.KEEPALIVE_COMMAND)
++            parsed["expose"] = False
++            notices.append("你沒有說要執行哪個程式，先建立一個保持運作的空殼（目前沒有在做事），"
++                           "請之後指定你的程式或啟動指令")
++        _danger = deploy_fill.danger_notice(deploy_fill.danger_requests(user_input))
++        if _danger:
++            notices.append(_danger)
+         # 使用者沒講 port 時，常見服務用它自己的預設 port（redis 6379 等），不要一律給 80。
+         # 2026-10-10：加上健康檢查後，port 錯了服務會一直停在未就緒；原本則是看起來正常、其實連不上。
+         from agents.cost_agent import default_port
+         _known = default_port(parsed.get("image"))
+         if _known and int(parsed.get("port") or 80) == 80 and not _PORT_MENTION_RE.search(user_input):
+             parsed["port"] = _known
++    # 資料庫啟動一定要有密碼：自動產生並存進 Secret（部署單上可以改）
++    if parsed.get("image"):
++        _add, _keys = deploy_fill.db_required_env(parsed["image"], parsed.get("env"))
++        if _add:
++            parsed["env"] = {**(parsed.get("env") or {}), **_add}
++            parsed["secret_keys"] = sorted(set(parsed.get("secret_keys") or []) | set(_keys))
++            notices.append("資料庫需要密碼才能啟動，已經自動產生一組，存在 K8s 的 Secret「"
++                           f"{parsed.get('app_name') or '<服務名稱>'}-secrets」裡，不會寫進 Git；部署單上可以改成你自己的")
++    if notices:
++        parsed["_notices"] = notices
+ 
+     enriched = enrich_parsed_result(user_input, parsed)
+     if not enriched["is_k8s"]:
+@@ -11137,6 +11209,9 @@ def _sched_validate(data: dict):
+             reasons = "；".join(str(b) for b in (review.get("blockers") or [])[:3])
+             return kind, None, None, "審查沒有通過，不能預約" + (f"：{reasons}" if reasons else "。")
+         spec = {k: v for k, v in spec.items() if not str(k).startswith("_")}
++        # 2026-11-07：密碼類環境變數不存進預約資料庫；到時間真正部署時，資料庫密碼會重新自動產生
++        if isinstance(spec.get("env"), dict) and spec.get("secret_keys"):
++            spec["env"] = {k: v for k, v in spec["env"].items() if k not in set(spec["secret_keys"])}
+         summary = f"部署 {parsed.get('app_name')}（{parsed.get('image')}，{parsed.get('pods')} 個副本）"
+         return kind, {"spec": spec}, summary, None
+     name = str(data.get("name") or "").strip()

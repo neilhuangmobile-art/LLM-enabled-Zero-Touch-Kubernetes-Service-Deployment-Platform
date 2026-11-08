@@ -1,0 +1,92 @@
+{
+ "blind": {
+  "zerotouch": {
+   "overall": {
+    "passed": 4,
+    "n": 15,
+    "pct": 26.7,
+    "ci95": [
+     10.9,
+     52.0
+    ]
+   },
+   "by_category": {
+    "只描述情境、沒說要用什麼軟體": {
+     "passed": 0,
+     "n": 3,
+     "pct": 0.0,
+     "ci95": [
+      0,
+      56.2
+     ]
+    },
+    "背景執行、沒有網頁的程式": {
+     "passed": 0,
+     "n": 3,
+     "pct": 0.0,
+     "ci95": [
+      0,
+      56.2
+     ]
+    },
+    "英文或中英夾雜": {
+     "passed": 1,
+     "n": 3,
+     "pct": 33.3,
+     "ci95": [
+      6.1,
+      79.2
+     ]
+    },
+    "資料庫或需要保存資料的服務": {
+     "passed": 0,
+     "n": 3,
+     "pct": 0.0,
+     "ci95": [
+      0,
+      56.2
+     ]
+    },
+    "部署完之後的操作": {
+     "passed": 3,
+     "n": 3,
+     "pct": 100.0,
+     "ci95": [
+      43.8,
+      100
+     ]
+    }
+   },
+   "three_way": {
+    "沒有部署（反問或擋下）": 3,
+    "通過": 4,
+    "部署了但不符合": 8
+   },
+   "ungraded": 0,
+   "gpu_cost": {
+    "n": 15,
+    "avg_gpu_ms": 0.0,
+    "used_gpu_share": 0.0,
+    "electricity_usd_per_deploy": 0.0,
+    "hardware_usd_per_deploy": {
+     "10": 0.03187,
+     "100": 0.00319,
+     "1000": 0.00032
+    },
+    "assumptions": {
+     "gpu_board_power_w": 160.0,
+     "gpu_price_usd": 349.0,
+     "amortize_years": 3,
+     "electricity_twd_per_kwh": 4.5,
+     "twd_per_usd": 32.0,
+     "deploys_per_day_scenarios": [
+      10,
+      100,
+      1000
+     ]
+    }
+   },
+   "claude_api_usd_per_task": null
+  }
+ }
+}
