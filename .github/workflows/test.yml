@@ -6,7 +6,8 @@ on:
 
 jobs:
   unit-tests:
-    runs-on: ubuntu-latest
+    # 2026-11-11：ubuntu-latest 換成 26.04 後裝不到 Python 3.9（setup-python 只有 22.04、24.04 的 3.9），固定 24.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
