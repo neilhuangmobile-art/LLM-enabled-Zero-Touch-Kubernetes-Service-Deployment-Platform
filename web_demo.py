@@ -8690,9 +8690,9 @@ def api_dataset_run():
     import subprocess
     data = request.get_json() or {}
     flags = data.get("flags", "--skip-output")
-    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "enrich_dataset.py")
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "training", "enrich_dataset.py")   # 2026-11-11 移到 training/
     if not os.path.exists(script):
-        return jsonify({"success": False, "error": "enrich_dataset.py not found", "log": ""})
+        return jsonify({"success": False, "error": "training/enrich_dataset.py not found", "log": ""})
     # enrich_dataset.py 用了 `dict | None` union 語法，需要 Python 3.10+；
     # sys.executable 這台是 3.9，改用 PATH 上的 python3（Anaconda，3.11）。
     py = shutil.which("python3") or shutil.which("python") or sys.executable

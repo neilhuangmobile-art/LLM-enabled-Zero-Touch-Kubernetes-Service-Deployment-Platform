@@ -24,7 +24,7 @@ D__/
 # （merge_and_train.py 執行時會自動 patch train_local.py 生成 train_local_merged.py；
 #  agents/orchestrator.py 的 save_report=True、0_touch_generate_pods.py 都會生 reports/agent_report_*.json；
 #  model_server.log 是常駐服務的 log 檔）
-train_local_merged.py
+training/train_local_merged.py
 reports/agent_report_*.json
 model_server.log
 *.log
@@ -56,3 +56,6 @@ users.json
 
 # 2026-11-11：平台寫的部署紀錄改存在獨立的 repo（預設 data/gitops，core/config.GITOPS_REPO_PATH），不進原始碼 repo
 manifests/
+
+# 2026-11-11 repo 整理：原始訓練資料集改放 GitHub Release（下載到 dataset/，dataset/ 已忽略）；一次性的解析輸出不進版控
+parse_full.json
