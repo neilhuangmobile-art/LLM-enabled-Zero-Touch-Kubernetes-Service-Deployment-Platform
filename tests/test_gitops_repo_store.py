@@ -38,6 +38,7 @@ def test_existing_repo_is_left_alone(tmp_path):
 
 
 def test_deploy_commit_goes_to_gitops_repo_not_parent(tmp_path):
+    pytest.importorskip("git")   # write_manifest 沒有 GitPython 時不 commit（CI 只裝最少依賴）
     parent = tmp_path / "code"
     parent.mkdir()
     _git(parent, "init", "-q")
