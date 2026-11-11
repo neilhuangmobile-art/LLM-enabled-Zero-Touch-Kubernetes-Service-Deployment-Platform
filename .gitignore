@@ -59,3 +59,6 @@ manifests/
 
 # 2026-11-11 repo 整理：原始訓練資料集改放 GitHub Release（下載到 dataset/，dataset/ 已忽略）；一次性的解析輸出不進版控
 parse_full.json
+
+# 2026-11-11 repo 整理：Claude Code 的本機設定不進版控；專案規則與 skill 的版控副本在 docs/development/
+.claude/
