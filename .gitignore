@@ -50,3 +50,6 @@ yamls/deployments/*.yaml
 # graphify 程式碼知識圖譜的輸出（2026-11-07）：python scripts/graphify_rebuild.py 重新產生
 graphify-out/
 .claude/settings.local.json
+
+# 2026-11-11：帳號資料（密碼雜湊）不進版控，見 docs/security_review.md 63 節。網站找不到時從空的帳號表開始
+users.json
