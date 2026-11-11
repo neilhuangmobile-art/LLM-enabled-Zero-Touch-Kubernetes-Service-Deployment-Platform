@@ -1785,3 +1785,14 @@ Pod 對應到服務、對話規則、建議 API）；乾淨環境 383 項通過�
 - 題目由 Gemini 新出（開發端沒看過），只出原本最弱的 5 類，每類 3 題。資料在 `docs/bench_20261108_r3/`，一鍵腳本 `scripts/bench/run_r3.ps1`。
 - 結果：4/15＝26.7%（95% CI 10.9–52.0%）。同樣 5 類在第二次實驗修正後是 2/36＝5.6%。部署後的操作 3/3（之前 2/8）；15 題全部判對意圖，沒有一題被當成問答。
 - 剩下的失敗都在部署階段：沒有保存資料用的 PVC（4 題）、使用者自己給的指令／環境變數／port 沒有照用（C07、C09、C11、C12，C12 的密碼被自動產生的蓋掉）、定時工作不是 CronJob、情境題沒指定軟體時被退回（3 題）。
+
+## 2026-11-11
+
+### 18:30 — 資安：users.json 停止版控，刪除舊測試帳號
+外部工程師從公開 repo 驗證出舊測試帳號 `admin` 的未加鹽 SHA-256 雜湊就是 `admin123`。這台伺服器刪除 `admin` 等 6 個測試帳號（`aaa` 的 namespace 一併刪除），`users.json` 移出版控並加進 `.gitignore`，沒有改寫歷史（帳號已刪，舊雜湊失效）。驗證：`admin`／`admin123` 登入回「帳號或密碼不正確」，展示帳號照常登入。詳見 `docs/security_review.md` 63 節。
+
+### 19:00 — 架構：部署紀錄改寫到獨立的本機 repo
+平台每次部署都把 manifest commit 進原始碼 repo（main 上 251 個 commit 有 59 個是 `gitops: deploy`）。新增 `core/config.GITOPS_REPO_PATH`（預設 `data/gitops`，設成 `.` 也會改回預設），第一次使用時自動 `git init` 並匯入原本的 `manifests/`；部署、回滾、部署歷史、命令列入口都改用它，`manifests/` 移出版控。測試改用暫存 repo。新增 `tests/test_gitops_repo_store.py`（5 項），完整測試 916 項通過。
+
+### 19:30 — 整理：repo 結構與 README
+教授反映 repo 不像有在整理。新增 `README.md`；根目錄的訓練腳本移到 `training/`、測試評估腳本移到 `experiments/`（路徑計算與引用一併修正）；三個原始資料集改放 GitHub Release；`yamls/deployments/`、`parse_full.json` 移出版控；AI 開發工具的設定與紀錄移到 `docs/development/`，根目錄 `CLAUDE.md` 只留入口；`.claude/` 不再版控。打 tag `v0.4`（第四次進度報告版本）。

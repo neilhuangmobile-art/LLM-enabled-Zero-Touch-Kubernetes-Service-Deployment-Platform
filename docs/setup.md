@@ -106,13 +106,13 @@ python scripts/download_models.py
 
 ```bash
 # 生成訓練資料
-python generate_finetune_data.py
+python training/generate_finetune_data.py
 
 # 清洗資料集
-python clean_dataset.py
+python training/clean_dataset.py
 
 # 開始 LoRA 訓練（需 GPU）
-python train_local.py
+python training/train_local.py
 ```
 
 訓練完成後權重儲存於 `llama3_k8s_lora_results/`。
