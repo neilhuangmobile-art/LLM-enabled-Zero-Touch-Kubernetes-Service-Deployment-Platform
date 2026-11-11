@@ -315,6 +315,43 @@ def _build_service_yaml(llm_result: dict, namespace: str) -> Optional[str]:
 # Git 操作
 # ══════════════════════════════════════════════════════════════════
 
+def ensure_gitops_repo(repo_path: str, import_from: Optional[str] = None) -> bool:
+    """確保部署紀錄 repo 存在（2026-11-11，部署紀錄跟原始碼分開）。
+
+    - 資料夾不存在或還不是 git repo：建立並 `git init`。一定要先 init，否則 rollback 用的
+      `Repo(search_parent_directories=True)` 會往上找到原始碼 repo，又把紀錄寫回去。
+    - 新建時如果 `import_from`（原始碼 repo 舊的 manifests/）存在，複製進來當第一個 commit，
+      讓「換回上一版」接得上之前的部署。
+    回傳 True 表示這次新建了 repo。"""
+    import shutil
+    import subprocess
+    root = Path(repo_path)
+    if (root / ".git").exists():
+        return False
+    root.mkdir(parents=True, exist_ok=True)
+
+    def git(*args):
+        return subprocess.run(["git", "-C", str(root), *args], capture_output=True,
+                              encoding="utf-8", errors="replace", timeout=60)
+
+    git("init", "-q")
+    # 不依賴使用者的全域 git 設定：沒設 user.name 的電腦 commit 會失敗，部署紀錄就默默沒留下
+    git("config", "user.name", "ZeroTouch GitOps")
+    git("config", "user.email", "gitops@zerotouch.local")
+    (root / "README.md").write_text(
+        "# ZeroTouch 部署紀錄\n\n平台自動寫入的 Kubernetes manifests 與部署歷史（「換回上一版」從這裡讀）。"
+        "這個 repo 由 web_demo.py 自動建立與提交，不要手動修改。\n", encoding="utf-8")
+    paths = ["README.md"]
+    src = Path(import_from) if import_from else None
+    if src and src.is_dir() and not (root / "manifests").exists():
+        shutil.copytree(src, root / "manifests")
+        paths.append("manifests")
+    sha, err = commit_paths(str(root), paths, "gitops: 建立部署紀錄 repo" + ("（匯入原本的 manifests）" if len(paths) > 1 else ""))
+    if err:
+        print(f"⚠️  部署紀錄 repo 第一個 commit 失敗：{err}")
+    return True
+
+
 def commit_paths(repo_path: str, paths: list, message: str):
     """只提交指定的檔案或目錄，回傳 (commit SHA, 錯誤訊息)。
 

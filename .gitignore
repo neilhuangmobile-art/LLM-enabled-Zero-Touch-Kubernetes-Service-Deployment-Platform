@@ -53,3 +53,6 @@ graphify-out/
 
 # 2026-11-11：帳號資料（密碼雜湊）不進版控，見 docs/security_review.md 63 節。網站找不到時從空的帳號表開始
 users.json
+
+# 2026-11-11：平台寫的部署紀錄改存在獨立的 repo（預設 data/gitops，core/config.GITOPS_REPO_PATH），不進原始碼 repo
+manifests/

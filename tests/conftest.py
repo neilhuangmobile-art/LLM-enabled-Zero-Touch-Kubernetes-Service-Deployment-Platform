@@ -24,3 +24,5 @@ _push_tmp = tempfile.mkdtemp(prefix="zt-push-")
 os.environ["ZT_PUSH_DB"] = os.path.join(_push_tmp, "push.db")
 os.environ["ZT_VAPID_KEY"] = os.path.join(_push_tmp, "vapid_private.pem")
 os.environ["ZT_SCHEDULE_DB"] = os.path.join(_push_tmp, "schedule.db")
+# 部署紀錄 repo（core/config.GITOPS_REPO_PATH，2026-11-11）同理：測試不能在開發者的 data/gitops 建 repo 或寫 commit
+os.environ["GITOPS_REPO_PATH"] = os.path.join(tempfile.mkdtemp(prefix="zt-gitops-"), "gitops")

@@ -62,6 +62,17 @@ DATASET_PATH = os.path.join(DATASET_DIR, "finetune_samples.jsonl")
 # ── YAML 輸出 ────────────────────────────────────────────────────
 YAML_DIR     = os.path.join(ROOT, "yamls", "deployments")
 
+# ── 部署紀錄（GitOps）repo ───────────────────────────────────────
+# 2026-11-11：平台幫使用者部署時寫的 manifests 與「gitops: deploy」commit 原本直接寫進原始碼 repo
+# （main 上 251 個 commit 有 59 個是這種），跟程式碼混在一起。改成寫到獨立的本機 git repo，
+# 預設 data/gitops（data/ 不進版控）。設成 "." 或專案根目錄會再把紀錄寫回原始碼 repo，一律改用預設值。
+_GITOPS_DEFAULT = os.path.join(ROOT, "data", "gitops")
+_gitops_env = os.environ.get("GITOPS_REPO_PATH", "").strip()
+GITOPS_REPO_PATH = os.path.abspath(os.path.join(ROOT, _gitops_env)) if _gitops_env else _GITOPS_DEFAULT
+if os.path.normcase(GITOPS_REPO_PATH) == os.path.normcase(os.path.abspath(ROOT)):
+    print("[config] GITOPS_REPO_PATH 指向原始碼 repo，改用 data/gitops（部署紀錄不再混進程式碼）")
+    GITOPS_REPO_PATH = _GITOPS_DEFAULT
+
 # ── 報告輸出 ─────────────────────────────────────────────────────
 REPORTS_DIR          = os.path.join(ROOT, "reports")
 EVAL_REPORT          = os.path.join(REPORTS_DIR, "eval_report.json")

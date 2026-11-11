@@ -11,7 +11,7 @@ import threading, json, urllib.request, hashlib, secrets, re, uuid, requests
 from datetime import datetime, timezone, timedelta
 from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
 
-from core.config import ROOT, YAML_DIR, MODEL_SERVER_URL, ADMIN_EMAILS, healer_owns_namespace
+from core.config import ROOT, YAML_DIR, MODEL_SERVER_URL, ADMIN_EMAILS, healer_owns_namespace, GITOPS_REPO_PATH
 from llama_client import ask_llama, save_gold_sample, chat_llama, classify_intent
 from core.claude_client import claude_chat, is_available as claude_available
 from rag import kb_manager
@@ -274,6 +274,20 @@ def _rate_limit():
             HTML, logged_in=False, page=page, error=msg, k8s=K8S_ENABLED, username='',
             google_login_available=_google_oauth_configured()), 429, headers
     return jsonify({"error": msg, "retry_after": headers["Retry-After"]}), 429, headers
+
+_GITOPS_READY = False
+
+
+def _gitops_repo() -> str:
+    """部署紀錄 repo 的路徑；第一次用到時確保它存在（2026-11-11，見 gitops.manifest_writer.ensure_gitops_repo）。
+    新建時會把原始碼 repo 裡舊的 manifests/ 匯入，「換回上一版」才接得上之前的部署。"""
+    global _GITOPS_READY
+    if not _GITOPS_READY:
+        from gitops.manifest_writer import ensure_gitops_repo
+        ensure_gitops_repo(GITOPS_REPO_PATH, import_from=os.path.join(ROOT, "manifests"))
+        _GITOPS_READY = True
+    return GITOPS_REPO_PATH
+
 
 # ── Simple in-memory user store (replace with DB for production) ──
 USERS = {}
@@ -8305,7 +8319,7 @@ def _api_deploy_impl():
     gitops_result = None
     try:
         from gitops.manifest_writer import write_manifest
-        gitops_result = write_manifest(parsed, repo_path=ROOT, namespace=user_ns, dry_run=False, commit=True)
+        gitops_result = write_manifest(parsed, repo_path=_gitops_repo(), namespace=user_ns, dry_run=False, commit=True)
     except Exception as e:
         gitops_result = {"ok": False, "message": str(e), "files": [], "commit_sha": None}
         review.setdefault("warnings", []).append(f"GitOps manifest write failed: {e}")
@@ -8561,7 +8575,7 @@ def api_rollback():
                               lambda res: f"已把 {app_name} 回滾到上一版設定（{res.get('rolled_back_to')}）。")
     try:
         from gitops.rollback import rollback
-        result = rollback(app_name, namespace=user_ns, repo_path=ROOT, strategy="auto", dry_run=False)
+        result = rollback(app_name, namespace=user_ns, repo_path=_gitops_repo(), strategy="auto", dry_run=False)
         if result.get("ok"):
             return jsonify({
                 "success": True,
@@ -8714,7 +8728,7 @@ def api_gitops():
         # GitOps 紀錄混在一起顯示——這也是隔離範圍的一部分，不是只有 Pod/Deployment。
         result = subprocess.run(
             ["git", "log", "--pretty=format:%H|%s|%ai", "--", f"manifests/{user_ns}/"],
-            cwd=os.path.dirname(os.path.abspath(__file__)),
+            cwd=_gitops_repo(),   # 2026-11-11：部署紀錄在獨立的 repo（core/config.GITOPS_REPO_PATH）
             capture_output=True, encoding="utf-8", errors="replace", timeout=10
         )
         commits = []

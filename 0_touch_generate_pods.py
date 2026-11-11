@@ -242,7 +242,10 @@ def main():
     # GitOps：將 YAML 寫入 Git 倉庫（可選，無 gitpython 或非 git 目錄時自動跳過）
     try:
         from gitops.manifest_writer import write_manifest
-        gitops_result = write_manifest(final_json, repo_path=".", dry_run=False, commit=True)
+        from core.config import GITOPS_REPO_PATH
+        from gitops.manifest_writer import ensure_gitops_repo
+        ensure_gitops_repo(GITOPS_REPO_PATH)   # 2026-11-11：部署紀錄寫到獨立的 repo，不寫進原始碼
+        gitops_result = write_manifest(final_json, repo_path=GITOPS_REPO_PATH, dry_run=False, commit=True)
         if gitops_result.get("committed"):
             print(f"[GitOps] 已 commit：{gitops_result.get('commit_hash', '')[:8]}")
         else:
