@@ -91,9 +91,12 @@ def scan_once(namespace: str = "default", auto_heal: bool = False) -> list:
             continue
         issue = _check_pod(pod)
         if issue:
+            # 2026-11-17 定時執行（Job 產生的 Pod）：只回報，不自動修復（修復動作都是改 Deployment，套不上去）
+            issue["job_pod"] = any(getattr(o, "kind", None) == "Job"
+                                   for o in (getattr(getattr(pod, "metadata", None), "owner_references", None) or []))
             issues.append(issue)
             _print_issue(issue)
-            if auto_heal:
+            if auto_heal and not issue["job_pod"]:
                 _trigger_heal(issue)
 
     if not issues:

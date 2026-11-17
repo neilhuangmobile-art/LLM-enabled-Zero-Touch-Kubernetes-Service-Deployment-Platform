@@ -1,0 +1,2691 @@
+{
+ "_about": "部署解析選軟體用的知識表（多代理人流程）。official=Docker 官方映像檔，說明取自 docker-library/docs 的 README-short.txt；其餘是廠商自己發布的常用映像檔，說明取自 Docker Hub 或該專案的 GitHub 描述；linuxserver/* 取自 LinuxServer.io 官方 API，port 與 data_path 是它設定資料裡必填的第一個。重抓：scripts/build_software_catalog.py",
+ "fetched": "2026-11-17",
+ "items": [
+  {
+   "image": "adminer",
+   "desc": "Database management in a single PHP file.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/adminer/README-short.txt"
+  },
+  {
+   "image": "aerospike",
+   "desc": "Aerospike – the reliable, high performance, distributed database optimized for flash and RAM.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/aerospike/README-short.txt"
+  },
+  {
+   "image": "almalinux",
+   "desc": "The official build of AlmaLinux OS.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/almalinux/README-short.txt"
+  },
+  {
+   "image": "alpine",
+   "desc": "A minimal Docker image based on Alpine Linux with a complete package index and only 5 MB in size!",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/alpine/README-short.txt"
+  },
+  {
+   "image": "alt",
+   "desc": "The official build of ALT Linux.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/alt/README-short.txt"
+  },
+  {
+   "image": "amazoncorretto",
+   "desc": "Corretto is a no-cost, production-ready distribution of the Open Java Development Kit (OpenJDK).",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/amazoncorretto/README-short.txt"
+  },
+  {
+   "image": "amazonlinux",
+   "desc": "Amazon Linux provides a stable, secure, and high-performance execution environment for applications.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/amazonlinux/README-short.txt"
+  },
+  {
+   "image": "api-firewall",
+   "desc": "A light-weighted API Firewall to protect your API endpoints with API Schema validation.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/api-firewall/README-short.txt"
+  },
+  {
+   "image": "arangodb",
+   "desc": "ArangoDB - a scalable graph database system to drive value from connected data, faster.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/arangodb/README-short.txt"
+  },
+  {
+   "image": "archlinux",
+   "desc": "Arch Linux is a simple, lightweight Linux distribution aimed for flexibility.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/archlinux/README-short.txt"
+  },
+  {
+   "image": "azul-zulu",
+   "desc": "Azul Zulu is a fully tested, compatibility verified, and trusted binary distribution of OpenJDK.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/azul-zulu/README-short.txt"
+  },
+  {
+   "image": "backdrop",
+   "desc": "The comprehensive CMS for small to medium sized businesses and non-profits.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/backdrop/README-short.txt"
+  },
+  {
+   "image": "bash",
+   "desc": "Bash is the GNU Project's Bourne Again SHell",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/bash/README-short.txt"
+  },
+  {
+   "image": "bonita",
+   "desc": "Bonita is an open-source business process management and workflow suite",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/bonita/README-short.txt"
+  },
+  {
+   "image": "buildpack-deps",
+   "desc": "A collection of common build dependencies used for installing various modules, e.g., gems.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/buildpack-deps/README-short.txt"
+  },
+  {
+   "image": "busybox",
+   "desc": "Busybox base image.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/busybox/README-short.txt"
+  },
+  {
+   "image": "caddy",
+   "desc": "Caddy 2 is a powerful, enterprise-ready, open source web server with automatic HTTPS written in Go.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/caddy/README-short.txt"
+  },
+  {
+   "image": "cassandra",
+   "desc": "Apache Cassandra is an open-source distributed storage system.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/cassandra/README-short.txt"
+  },
+  {
+   "image": "chronograf",
+   "desc": "Chronograf is a visualization tool for time series data in InfluxDB.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/chronograf/README-short.txt"
+  },
+  {
+   "image": "cirros",
+   "desc": "CirrOS is a Tiny OS that specializes in running on a cloud.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/cirros/README-short.txt"
+  },
+  {
+   "image": "clearlinux",
+   "desc": "DEPRECATED; Official docker build of Clear Linux OS for Intel Architecture",
+   "official": true,
+   "deprecated": true,
+   "source": "github.com/docker-library/docs/clearlinux/README-short.txt"
+  },
+  {
+   "image": "clickhouse",
+   "desc": "ClickHouse is the fastest and most resource efficient OSS database for real-time apps and analytics.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/clickhouse/README-short.txt"
+  },
+  {
+   "image": "clojure",
+   "desc": "Clojure is a dialect of Lisp that runs on the JVM.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/clojure/README-short.txt"
+  },
+  {
+   "image": "composer",
+   "desc": "Composer is a dependency manager written in and for PHP.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/composer/README-short.txt"
+  },
+  {
+   "image": "convertigo",
+   "desc": "Enterprise-grade full-stack open-source AI-driven Low Code & No Code platform for web & mobile apps",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/convertigo/README-short.txt"
+  },
+  {
+   "image": "couchbase",
+   "desc": "Couchbase Server is a NoSQL document database with a distributed architecture.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/couchbase/README-short.txt"
+  },
+  {
+   "image": "couchdb",
+   "desc": "CouchDB is a database that uses JSON for documents, an HTTP API, & JavaScript/declarative indexing.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/couchdb/README-short.txt"
+  },
+  {
+   "image": "crate",
+   "desc": "CrateDB is an open-source, distributed SQL database empowering you to turn data into business value.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/crate/README-short.txt"
+  },
+  {
+   "image": "dart",
+   "desc": "Dart is a client-optimized language for fast apps on any platform.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/dart/README-short.txt"
+  },
+  {
+   "image": "debian",
+   "desc": "Debian is a Linux distribution that's composed entirely of free and open-source software.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/debian/README-short.txt"
+  },
+  {
+   "image": "docker",
+   "desc": "Docker in Docker! (commonly known as \"dind\")",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/docker/README-short.txt"
+  },
+  {
+   "image": "drupal",
+   "desc": "Drupal is an open source content management platform powering millions of websites and applications.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/drupal/README-short.txt"
+  },
+  {
+   "image": "eclipse-mosquitto",
+   "desc": "Eclipse Mosquitto is an open source message broker which implements MQTT version 5, 3.1.1 and 3.1",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/eclipse-mosquitto/README-short.txt"
+  },
+  {
+   "image": "eclipse-temurin",
+   "desc": "Official Images for OpenJDK binaries built by Eclipse Temurin.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/eclipse-temurin/README-short.txt"
+  },
+  {
+   "image": "eggdrop",
+   "desc": "The official Docker image of Eggdrop- IRC's oldest actively-developed bot!",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/eggdrop/README-short.txt"
+  },
+  {
+   "image": "elasticsearch",
+   "desc": "Elasticsearch is a powerful open source search and analytics engine that makes data easy to explore.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/elasticsearch/README-short.txt"
+  },
+  {
+   "image": "elixir",
+   "desc": "Elixir is a dynamic, functional language for building scalable and maintainable applications.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/elixir/README-short.txt"
+  },
+  {
+   "image": "emqx",
+   "desc": "DEPRECATED; The most scalable open-source MQTT broker for IoT, IIoT, connected vehicles, and more.",
+   "official": true,
+   "deprecated": true,
+   "source": "github.com/docker-library/docs/emqx/README-short.txt"
+  },
+  {
+   "image": "erlang",
+   "desc": "Erlang is a programming language used to build massively scalable systems with high availability.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/erlang/README-short.txt"
+  },
+  {
+   "image": "espocrm",
+   "desc": "EspoCRM is a highly customizable open source CRM software.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/espocrm/README-short.txt"
+  },
+  {
+   "image": "fedora",
+   "desc": "Official Docker builds of Fedora",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/fedora/README-short.txt"
+  },
+  {
+   "image": "flink",
+   "desc": "Apache Flink® is a powerful open-source distributed stream and batch processing framework.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/flink/README-short.txt"
+  },
+  {
+   "image": "fluentd",
+   "desc": "Fluentd is an open source data collector for unified logging layer",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/fluentd/README-short.txt"
+  },
+  {
+   "image": "friendica",
+   "desc": "Welcome to the free social web.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/friendica/README-short.txt"
+  },
+  {
+   "image": "gazebo",
+   "desc": "Gazebo is an open source project for simulating robots, offering robust physics and rendering.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/gazebo/README-short.txt"
+  },
+  {
+   "image": "gcc",
+   "desc": "The GNU Compiler Collection is a compiling system that supports several languages.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/gcc/README-short.txt"
+  },
+  {
+   "image": "geonetwork",
+   "desc": "GeoNetwork is a FOSS catalog for spatially referenced resources.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/geonetwork/README-short.txt"
+  },
+  {
+   "image": "ghost",
+   "desc": "Publish by web and email newsletter, with member signups and subscription payments.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/ghost/README-short.txt"
+  },
+  {
+   "image": "golang",
+   "desc": "Go (golang) is a general purpose, higher-level, imperative programming language.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/golang/README-short.txt"
+  },
+  {
+   "image": "gradle",
+   "desc": "Gradle is a fast, reliable, and flexible open-source build tool with an elegant, extensible DSL.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/gradle/README-short.txt"
+  },
+  {
+   "image": "groovy",
+   "desc": "Apache Groovy is a multi-faceted language for the Java platform.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/groovy/README-short.txt"
+  },
+  {
+   "image": "haproxy",
+   "desc": "HAProxy - The Reliable, High Performance TCP/HTTP Load Balancer",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/haproxy/README-short.txt"
+  },
+  {
+   "image": "haskell",
+   "desc": "Haskell is an advanced purely-functional programming language.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/haskell/README-short.txt"
+  },
+  {
+   "image": "haxe",
+   "desc": "Haxe is a modern, high level, static typed programming language with multiple compilation targets.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/haxe/README-short.txt"
+  },
+  {
+   "image": "hello-world",
+   "desc": "Hello World! (an example of minimal Dockerization)",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/hello-world/README-short.txt"
+  },
+  {
+   "image": "hitch",
+   "desc": "Hitch is a libev-based high performance SSL/TLS proxy by Varnish Software.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/hitch/README-short.txt"
+  },
+  {
+   "image": "httpd",
+   "desc": "The Apache HTTP Server Project",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/httpd/README-short.txt"
+  },
+  {
+   "image": "hylang",
+   "desc": "Hy is a Lisp dialect that translates expressions into Python's abstract syntax tree.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/hylang/README-short.txt"
+  },
+  {
+   "image": "ibm-semeru-runtimes",
+   "desc": "IBM Semeru Runtimes Official Images for OpenJDK and Eclipse OpenJ9 binaries.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/ibm-semeru-runtimes/README-short.txt"
+  },
+  {
+   "image": "ibmjava",
+   "desc": "Official IBM® SDK, Java™ Technology Edition Docker Image.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/ibmjava/README-short.txt"
+  },
+  {
+   "image": "influxdb",
+   "desc": "InfluxDB is the open source time series database built for real-time analytic workloads.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/influxdb/README-short.txt"
+  },
+  {
+   "image": "irssi",
+   "desc": "irssi - The IRC client of the future",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/irssi/README-short.txt"
+  },
+  {
+   "image": "jetty",
+   "desc": "Jetty provides a Web server and javax.servlet container.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/jetty/README-short.txt"
+  },
+  {
+   "image": "joomla",
+   "desc": "Joomla! is an open source content management system.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/joomla/README-short.txt"
+  },
+  {
+   "image": "jruby",
+   "desc": "JRuby (http://www.jruby.org) is an implementation of Ruby (http://www.ruby-lang.org) on the JVM.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/jruby/README-short.txt"
+  },
+  {
+   "image": "julia",
+   "desc": "Julia is a high-level, high-performance dynamic programming language for technical computing.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/julia/README-short.txt"
+  },
+  {
+   "image": "kapacitor",
+   "desc": "Kapacitor is an open source framework for processing, monitoring, and alerting on time series data.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/kapacitor/README-short.txt"
+  },
+  {
+   "image": "kibana",
+   "desc": "Kibana gives shape to any kind of data — structured and unstructured — indexed in Elasticsearch.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/kibana/README-short.txt"
+  },
+  {
+   "image": "kong",
+   "desc": "The Cloud-Native API Gateway for APIs and Microservices",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/kong/README-short.txt"
+  },
+  {
+   "image": "krakend",
+   "desc": "KrakenD is a stateless, high-performance, enterprise-ready, open source API gateway written in Go.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/krakend/README-short.txt"
+  },
+  {
+   "image": "lightstreamer",
+   "desc": "Lightstreamer is a real-time messaging server optimized for the Internet.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/lightstreamer/README-short.txt"
+  },
+  {
+   "image": "liquibase",
+   "desc": "DEPRECATED; Liquibase is DevOps for your database.",
+   "official": true,
+   "deprecated": true,
+   "source": "github.com/docker-library/docs/liquibase/README-short.txt"
+  },
+  {
+   "image": "logstash",
+   "desc": "Logstash is a tool for managing events and logs.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/logstash/README-short.txt"
+  },
+  {
+   "image": "mageia",
+   "desc": "Official Mageia base image",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/mageia/README-short.txt"
+  },
+  {
+   "image": "mariadb",
+   "desc": "MariaDB Server is a high performing open source relational database, forked from MySQL.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/mariadb/README-short.txt"
+  },
+  {
+   "image": "matomo",
+   "desc": "Matomo is the leading open-source analytics platform that gives you more than powerful analytics.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/matomo/README-short.txt"
+  },
+  {
+   "image": "maven",
+   "desc": "Apache Maven is a software project management and comprehension tool.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/maven/README-short.txt"
+  },
+  {
+   "image": "mediawiki",
+   "desc": "MediaWiki is a free software open source wiki package written in PHP.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/mediawiki/README-short.txt"
+  },
+  {
+   "image": "memcached",
+   "desc": "Free & open source, high-performance, distributed memory object caching system.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/memcached/README-short.txt"
+  },
+  {
+   "image": "mongo",
+   "desc": "MongoDB document databases provide high availability and easy scalability.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/mongo/README-short.txt"
+  },
+  {
+   "image": "mongo-express",
+   "desc": "DEPRECATED; Web-based MongoDB admin interface, written with Node.js and express",
+   "official": true,
+   "deprecated": true,
+   "source": "github.com/docker-library/docs/mongo-express/README-short.txt"
+  },
+  {
+   "image": "monica",
+   "desc": "Monica – the Personal Relationship Manager.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/monica/README-short.txt"
+  },
+  {
+   "image": "mysql",
+   "desc": "MySQL is a widely used, open-source relational database management system (RDBMS).",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/mysql/README-short.txt"
+  },
+  {
+   "image": "nats",
+   "desc": "NATS is an open-source, high-performance, cloud native messaging system.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/nats/README-short.txt"
+  },
+  {
+   "image": "neo4j",
+   "desc": "Neo4j is a highly scalable, robust native graph database.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/neo4j/README-short.txt"
+  },
+  {
+   "image": "neurodebian",
+   "desc": "NeuroDebian provides neuroscience research software for Debian, Ubuntu, and other derivatives.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/neurodebian/README-short.txt"
+  },
+  {
+   "image": "nextcloud",
+   "desc": "Nextcloud manual docker image",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/nextcloud/README-short.txt"
+  },
+  {
+   "image": "nginx",
+   "desc": "Official build of Nginx.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/nginx/README-short.txt"
+  },
+  {
+   "image": "nim",
+   "desc": "Nim is a statically typed, imperative programming language focusing on efficiency and elegance.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/nim/README-short.txt"
+  },
+  {
+   "image": "node",
+   "desc": "Node.js is a JavaScript-based platform for server-side and networking applications.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/node/README-short.txt"
+  },
+  {
+   "image": "odoo",
+   "desc": "Odoo (formerly known as OpenERP) is a suite of open-source business apps.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/odoo/README-short.txt"
+  },
+  {
+   "image": "open-liberty",
+   "desc": "Open Liberty multi-architecture images based on Ubuntu",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/open-liberty/README-short.txt"
+  },
+  {
+   "image": "openjdk",
+   "desc": "Pre-release / non-production builds of OpenJDK",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/openjdk/README-short.txt"
+  },
+  {
+   "image": "oraclelinux",
+   "desc": "Official Docker builds of Oracle Linux.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/oraclelinux/README-short.txt"
+  },
+  {
+   "image": "orientdb",
+   "desc": "OrientDB a Multi-Model Open Source NoSQL DBMS that combines graphs and documents.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/orientdb/README-short.txt"
+  },
+  {
+   "image": "percona",
+   "desc": "Percona Server is a fork of the MySQL relational database management system created by Percona.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/percona/README-short.txt"
+  },
+  {
+   "image": "perl",
+   "desc": "Perl is a high-level, general-purpose, interpreted, dynamic programming language.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/perl/README-short.txt"
+  },
+  {
+   "image": "photon",
+   "desc": "Photon OS is an open source minimal Linux container host.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/photon/README-short.txt"
+  },
+  {
+   "image": "php",
+   "desc": "While designed for web development, the PHP scripting language also provides general-purpose use.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/php/README-short.txt"
+  },
+  {
+   "image": "php-zendserver",
+   "desc": "DEPRECATED; Zend Server - the integrated PHP application platform for mobile and web apps.",
+   "official": true,
+   "deprecated": true,
+   "source": "github.com/docker-library/docs/php-zendserver/README-short.txt"
+  },
+  {
+   "image": "phpmyadmin",
+   "desc": "phpMyAdmin - A web interface for MySQL and MariaDB.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/phpmyadmin/README-short.txt"
+  },
+  {
+   "image": "plone",
+   "desc": "DEPRECATED. Plone is a free and open source content management system built on top of Zope.",
+   "official": true,
+   "deprecated": true,
+   "source": "github.com/docker-library/docs/plone/README-short.txt"
+  },
+  {
+   "image": "postfixadmin",
+   "desc": "Postfix Admin - web based administration interface for Postfix mail servers.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/postfixadmin/README-short.txt"
+  },
+  {
+   "image": "postgres",
+   "desc": "The PostgreSQL object-relational database system provides reliability and data integrity.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/postgres/README-short.txt"
+  },
+  {
+   "image": "pypy",
+   "desc": "PyPy is a fast, compliant alternative implementation of the Python language.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/pypy/README-short.txt"
+  },
+  {
+   "image": "python",
+   "desc": "Python is an interpreted, interactive, object-oriented, open-source programming language.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/python/README-short.txt"
+  },
+  {
+   "image": "r-base",
+   "desc": "R is a system for statistical computation and graphics.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/r-base/README-short.txt"
+  },
+  {
+   "image": "rabbitmq",
+   "desc": "RabbitMQ is an open source multi-protocol messaging broker.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/rabbitmq/README-short.txt"
+  },
+  {
+   "image": "rakudo-star",
+   "desc": "Rakudo is a compiler for the Raku programming language.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/rakudo-star/README-short.txt"
+  },
+  {
+   "image": "redis",
+   "desc": "Redis is the world’s fastest data platform for caching, vector search, and NoSQL databases.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/redis/README-short.txt"
+  },
+  {
+   "image": "redmine",
+   "desc": "Redmine is a flexible project management web application written using Ruby on Rails framework",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/redmine/README-short.txt"
+  },
+  {
+   "image": "registry",
+   "desc": "Distribution implementation for storing and distributing of container images and artifacts",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/registry/README-short.txt"
+  },
+  {
+   "image": "rethinkdb",
+   "desc": "RethinkDB is an open-source, document database that makes it easy to build and scale realtime apps.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/rethinkdb/README-short.txt"
+  },
+  {
+   "image": "rocket.chat",
+   "desc": "The Complete Open Source Chat Solution",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/rocket.chat/README-short.txt"
+  },
+  {
+   "image": "rockylinux",
+   "desc": "The official build of Rocky Linux.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/rockylinux/README-short.txt"
+  },
+  {
+   "image": "ros",
+   "desc": "The Robot Operating System (ROS) is an open source project for building robot applications.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/ros/README-short.txt"
+  },
+  {
+   "image": "ruby",
+   "desc": "Ruby is a dynamic, reflective, object-oriented, general-purpose, open-source programming language.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/ruby/README-short.txt"
+  },
+  {
+   "image": "rust",
+   "desc": "Rust is a systems programming language focused on safety, speed, and concurrency.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/rust/README-short.txt"
+  },
+  {
+   "image": "sapmachine",
+   "desc": "Official SapMachine Docker Image, SAP's build of OpenJDK.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/sapmachine/README-short.txt"
+  },
+  {
+   "image": "satosa",
+   "desc": "SATOSA translates between auth protocols such as SAML2, OpenID Connect, and OAuth2.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/satosa/README-short.txt"
+  },
+  {
+   "image": "silverpeas",
+   "desc": "Silverpeas is a turnkey and open-source Collaborative and Social-Networking Portal.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/silverpeas/README-short.txt"
+  },
+  {
+   "image": "solr",
+   "desc": "Solr is the blazing-fast, open source, multi-modal search platform built on Apache Lucene.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/solr/README-short.txt"
+  },
+  {
+   "image": "sonarqube",
+   "desc": "Official images for SonarQube, code analysis tool for code quality and security",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/sonarqube/README-short.txt"
+  },
+  {
+   "image": "spark",
+   "desc": "Apache Spark - A unified analytics engine for large-scale data processing",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/spark/README-short.txt"
+  },
+  {
+   "image": "spiped",
+   "desc": "Spiped is a utility for creating symmetrically encrypted and authenticated pipes between sockets.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/spiped/README-short.txt"
+  },
+  {
+   "image": "storm",
+   "desc": "Apache Storm is a free and open source distributed realtime computation system.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/storm/README-short.txt"
+  },
+  {
+   "image": "swift",
+   "desc": "Swift is a high-performance system programming language, to learn more about Swift visit swift.org.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/swift/README-short.txt"
+  },
+  {
+   "image": "swipl",
+   "desc": "SWI-Prolog offers a comprehensive free Prolog environment.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/swipl/README-short.txt"
+  },
+  {
+   "image": "teamspeak",
+   "desc": "TeamSpeak is software for quality voice communication via the Internet.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/teamspeak/README-short.txt"
+  },
+  {
+   "image": "telegraf",
+   "desc": "Telegraf is an agent for collecting metrics and writing them to InfluxDB or other outputs.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/telegraf/README-short.txt"
+  },
+  {
+   "image": "tomcat",
+   "desc": "Apache Tomcat is an open source implementation of the Java Servlet and JavaServer Pages technologies",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/tomcat/README-short.txt"
+  },
+  {
+   "image": "tomee",
+   "desc": "Apache TomEE is an all-Apache Java EE certified stack where Apache Tomcat is top dog.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/tomee/README-short.txt"
+  },
+  {
+   "image": "traefik",
+   "desc": "Traefik, The Cloud Native Edge Router",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/traefik/README-short.txt"
+  },
+  {
+   "image": "ubuntu",
+   "desc": "Ubuntu is a Debian-based Linux operating system based on free software.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/ubuntu/README-short.txt"
+  },
+  {
+   "image": "varnish",
+   "desc": "Varnish is an HTTP accelerator designed for content-heavy dynamic web sites as well as APIs.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/varnish/README-short.txt"
+  },
+  {
+   "image": "websphere-liberty",
+   "desc": "WebSphere Liberty multi-architecture images based on Ubuntu",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/websphere-liberty/README-short.txt"
+  },
+  {
+   "image": "wordpress",
+   "desc": "The WordPress rich content management system can utilize plugins, widgets, and themes.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/wordpress/README-short.txt"
+  },
+  {
+   "image": "xwiki",
+   "desc": "XWiki: The Advanced Open Source Enterprise Wiki.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/xwiki/README-short.txt"
+  },
+  {
+   "image": "yourls",
+   "desc": "YOURLS is a set of PHP scripts that will allow you to run Your Own URL Shortener.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/yourls/README-short.txt"
+  },
+  {
+   "image": "znc",
+   "desc": "ZNC - An advanced IRC bouncer",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/znc/README-short.txt"
+  },
+  {
+   "image": "zookeeper",
+   "desc": "Apache ZooKeeper is an open-source server which enables highly reliable distributed coordination.",
+   "official": true,
+   "deprecated": false,
+   "source": "github.com/docker-library/docs/zookeeper/README-short.txt"
+  },
+  {
+   "image": "gitea/gitea",
+   "desc": "Gitea: Git with a cup of tea - A painless self-hosted Git service.",
+   "official": false,
+   "deprecated": false,
+   "source": "hub.docker.com/v2/repositories/gitea/gitea/ description"
+  },
+  {
+   "image": "grafana/grafana",
+   "desc": "The open and composable observability and data visualization platform. Visualize metrics, logs, and traces from multiple sources like Prometheus, Loki, Elasticsearch, InfluxDB, Postgres and many more. ",
+   "official": false,
+   "deprecated": false,
+   "source": "api.github.com/repos/grafana/grafana description"
+  },
+  {
+   "image": "prom/prometheus",
+   "desc": "The Prometheus monitoring system and time series database.",
+   "official": false,
+   "deprecated": false,
+   "source": "api.github.com/repos/prometheus/prometheus description"
+  },
+  {
+   "image": "louislam/uptime-kuma",
+   "desc": "A fancy self-hosted monitoring tool",
+   "official": false,
+   "deprecated": false,
+   "source": "hub.docker.com/v2/repositories/louislam/uptime-kuma/ description"
+  },
+  {
+   "image": "nodered/node-red",
+   "desc": "Low-code programming for event-driven applications",
+   "official": false,
+   "deprecated": false,
+   "source": "hub.docker.com/v2/repositories/nodered/node-red/ description"
+  },
+  {
+   "image": "jenkins/jenkins",
+   "desc": "The leading open source automation server",
+   "official": false,
+   "deprecated": false,
+   "source": "hub.docker.com/v2/repositories/jenkins/jenkins/ description"
+  },
+  {
+   "image": "linuxserver/adguardhome-sync",
+   "desc": "adguardhome-sync is a tool to synchronize AdGuardHome config to replica instances.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-adguardhome-sync）"
+  },
+  {
+   "image": "linuxserver/airsonic-advanced",
+   "desc": "airsonic-advanced is a free, web-based media streamer, providing ubiquitious access to your music. Use it to share your music with friends, or to listen to your own music while at work. You can stream to multiple players simultaneously, for instance to one player in your kitchen and another in your ",
+   "official": false,
+   "deprecated": false,
+   "port": 4040,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-airsonic-advanced）"
+  },
+  {
+   "image": "linuxserver/altus",
+   "desc": "[Altus] is an Electron-based WhatsApp client with themes and multiple account support.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-altus）"
+  },
+  {
+   "image": "linuxserver/apprise-api",
+   "desc": "apprise-api Takes advantage of [Apprise](https://github.com/caronc/apprise) through your network with a user-friendly API.  * Send notifications to more than 100 services. * An incredibly lightweight gateway to Apprise. * A production ready micro-service at your disposal. * A Simple Website to verif",
+   "official": false,
+   "deprecated": false,
+   "port": 8000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-apprise-api）"
+  },
+  {
+   "image": "linuxserver/ardour",
+   "desc": "[Ardour] is an open source, collaborative effort of a worldwide team including musicians, programmers, and professional recording engineers.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-ardour）"
+  },
+  {
+   "image": "linuxserver/audacity",
+   "desc": "[Audacity] is an easy-to-use, multi-track audio editor and recorder. Developed by a group of volunteers as open source.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-audacity）"
+  },
+  {
+   "image": "linuxserver/audiosilo",
+   "desc": "[AudioSilo] is a self-hosted audiobook server. Point it at your audiobook folders and listen from the built-in web player or the AudioSilo apps for iOS and Android, with listening progress synced across devices.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-audiosilo）"
+  },
+  {
+   "image": "linuxserver/azahar",
+   "desc": "[Azahar] is an open-source 3DS emulator based on Citra.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-azahar）"
+  },
+  {
+   "image": "linuxserver/babybuddy",
+   "desc": "babybuddy is a buddy for babies! Helps caregivers track sleep, feedings, diaper changes, tummy time and more to learn about and predict baby's needs without (as much) guess work.",
+   "official": false,
+   "deprecated": false,
+   "port": 8000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-babybuddy）"
+  },
+  {
+   "image": "linuxserver/bambustudio",
+   "desc": "[Bambu Studio] is an open-source, cutting-edge, feature-rich slicing software. It contains project-based workflows, systematically optimized slicing algorithms, and an easy-to-use graphical interface, bringing users an incredibly smooth printing experience.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-bambustudio）"
+  },
+  {
+   "image": "linuxserver/bazarr",
+   "desc": "bazarr is a companion application to Sonarr and Radarr. It can manage and download subtitles based on your requirements. You define your preferences by TV show or movie and Bazarr takes care of everything for you.",
+   "official": false,
+   "deprecated": false,
+   "port": 6767,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-bazarr）"
+  },
+  {
+   "image": "linuxserver/beets",
+   "desc": "beets is a music library manager and not, for the most part, a music player. It does include a simple player plugin and an experimental Web-based player, but it generally leaves actual sound-reproduction to specialized tools.",
+   "official": false,
+   "deprecated": false,
+   "port": 8337,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-beets）"
+  },
+  {
+   "image": "linuxserver/bitcoin-knots",
+   "desc": "[Bitcoin Knots] can be used as a desktop client for regular payments or as a full node server utility for merchants and other payment services.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-bitcoin-knots）"
+  },
+  {
+   "image": "linuxserver/blade-of-agony",
+   "desc": "[Wolfenstein: Blade of Agony] is a story-driven WWII shooter inspired by Wolfenstein and Doom.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-blade-of-agony）"
+  },
+  {
+   "image": "linuxserver/blender",
+   "desc": "[Blender] is a free and open-source 3D computer graphics software toolset used for creating animated films, visual effects, art, 3D printed models, motion graphics, interactive 3D applications, virtual reality, and computer games. **This image does not support GPU rendering out of the box only accel",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-blender）"
+  },
+  {
+   "image": "linuxserver/boinc",
+   "desc": "[BOINC] is a platform for high-throughput computing on a large scale (thousands or millions of computers). It can be used for volunteer computing (using consumer devices) or grid computing (using organizational resources). It supports virtualized, parallel, and GPU-based applications.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-boinc）"
+  },
+  {
+   "image": "linuxserver/bookstack",
+   "desc": "bookstack is a free and open source Wiki designed for creating beautiful documentation. Featuring a simple, but powerful WYSIWYG editor it allows for teams to create detailed and useful documentation with ease.  Powered by SQL and including a Markdown editor for those who prefer it, BookStack is gea",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-bookstack）"
+  },
+  {
+   "image": "linuxserver/brave",
+   "desc": "[The Brave browser] is a fast, private and secure web browser for PC, Mac and mobile.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-brave）"
+  },
+  {
+   "image": "linuxserver/calibre",
+   "desc": "calibre is a powerful and easy to use e-book manager. Users say it's outstanding and a must-have. It'll allow you to do nearly everything and it takes things a step beyond normal e-book software. It's also completely free and open source and great for both casual users and computer experts.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-calibre）"
+  },
+  {
+   "image": "linuxserver/calibre-web",
+   "desc": "calibre-web is a web app providing a clean interface for browsing, reading and downloading eBooks using an existing Calibre database.   It is also possible to integrate google drive and edit metadata and your calibre library through the app itself.  This software is a fork of library and licensed un",
+   "official": false,
+   "deprecated": false,
+   "port": 8083,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-calibre-web）"
+  },
+  {
+   "image": "linuxserver/calligra",
+   "desc": "[Calligra] is an office and graphic art suite by KDE. It is available for desktop PCs, tablet computers, and smartphones. It contains applications for word processing, spreadsheets, presentation, vector graphics, and editing databases.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-calligra）"
+  },
+  {
+   "image": "linuxserver/changedetection.io",
+   "desc": "changedetection.io provides free, open-source web page monitoring, notification and change detection.",
+   "official": false,
+   "deprecated": false,
+   "port": 5000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-changedetection.io）"
+  },
+  {
+   "image": "linuxserver/chrome",
+   "desc": "[Chrome] is the official web browser from Google, built to be fast, secure, and customizable.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-chrome）"
+  },
+  {
+   "image": "linuxserver/chromium",
+   "desc": "[Chromium] is an open-source browser project that aims to build a safer, faster, and more stable way for all users to experience the web.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-chromium）"
+  },
+  {
+   "image": "linuxserver/code-server",
+   "desc": "code-server is VS Code running on a remote server, accessible through the browser. - Code on your Chromebook, tablet, and laptop with a consistent dev environment. - If you have a Windows or Mac workstation, more easily develop for Linux. - Take advantage of large cloud servers to speed up tests, co",
+   "official": false,
+   "deprecated": false,
+   "port": 8443,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-code-server）"
+  },
+  {
+   "image": "linuxserver/cops",
+   "desc": "cops by Sébastien Lucas, now maintained by MikesPub, stands for Calibre OPDS (and HTML) Php Server.  COPS links to your Calibre library database and allows downloading and emailing of books directly from a web browser and provides a OPDS feed to connect to your devices.  Changes in your Calibre libr",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-cops）"
+  },
+  {
+   "image": "linuxserver/craft-apps",
+   "desc": "[ArtCraft] is a suite of open source creative applications written in Rust. This image bundles PhotoCraft (image editor), VectorCraft (vector illustration), FilmCraft (video editor), LightCraft (photo library and raw developer), PdfCraft (PDF workbench), EffectCraft (motion graphics and VFX composit",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-craft-apps）"
+  },
+  {
+   "image": "linuxserver/cura",
+   "desc": "[UltiMaker Cura] is free, easy-to-use 3D printing software trusted by millions of users. Fine-tune your 3D model with 400+ settings for the best slicing and printing results.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-cura）"
+  },
+  {
+   "image": "linuxserver/darktable",
+   "desc": "[darktable] is an open source photography workflow application and raw developer. A virtual lighttable and darkroom for photographers. It manages your digital negatives in a database, lets you view them through a zoomable lighttable and enables you to develop raw images and enhance them.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-darktable）"
+  },
+  {
+   "image": "linuxserver/deluge",
+   "desc": "deluge is a lightweight, Free Software, cross-platform BitTorrent client.  * Full Encryption * WebUI * Plugin System * Much more...",
+   "official": false,
+   "deprecated": false,
+   "port": 8112,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-deluge）"
+  },
+  {
+   "image": "linuxserver/digikam",
+   "desc": "[digiKam]: Professional Photo Management with the Power of Open Source",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-digikam）"
+  },
+  {
+   "image": "linuxserver/diskover",
+   "desc": "diskover is an open source file system indexer that uses Elasticsearch to index and manage data across heterogeneous storage systems.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-diskover）"
+  },
+  {
+   "image": "linuxserver/dogwalk",
+   "desc": "[DOGWALK] is Blender Studio's long awaited second game project, focused on creating a bite-sized interactive storytelling playground. Play as a big adorable dog and explore the winter woods with a little kid.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-dogwalk）"
+  },
+  {
+   "image": "linuxserver/dokuwiki",
+   "desc": "dokuwiki is a simple to use and highly versatile Open Source wiki software that doesn't require a database. It is loved by users for its clean and readable syntax. The ease of maintenance, backup and integration makes it an administrator's favorite. Built in access controls and authentication connec",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-dokuwiki）"
+  },
+  {
+   "image": "linuxserver/dolphin",
+   "desc": "[Dolphin Emulator] lets you play GameCube and Wii games with various graphical enhancements and other features are available to improve your game experience.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-dolphin）"
+  },
+  {
+   "image": "linuxserver/dosbox-staging",
+   "desc": "[DOSBox Staging] is a modern continuation of DOSBox a free and open-source emulator that enables the execution of MS-DOS software, especially video games.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-dosbox-staging）"
+  },
+  {
+   "image": "linuxserver/doublecommander",
+   "desc": "[Double Commander] is a free cross platform open source file manager with two panels side by side. It is inspired by Total Commander and features some new ideas.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-doublecommander）"
+  },
+  {
+   "image": "linuxserver/duckstation",
+   "desc": "[DuckStation] is a PS1 Emulator aiming for the best accuracy and game support.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-duckstation）"
+  },
+  {
+   "image": "linuxserver/duplicati",
+   "desc": "duplicati is a backup client that securely stores encrypted, incremental, compressed backups on local storage, cloud storage services and remote file servers. It works with standard protocols like FTP, SSH, WebDAV as well as popular services like Microsoft OneDrive, Amazon S3, Google Drive, box.com,",
+   "official": false,
+   "deprecated": false,
+   "port": 8200,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-duplicati）"
+  },
+  {
+   "image": "linuxserver/eden",
+   "desc": "[Eden] is an experimental open-source emulator for the Nintendo Switch, built with performance and stability in mind.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-eden）"
+  },
+  {
+   "image": "linuxserver/emby",
+   "desc": "emby organizes video, music, live TV, and photos from personal media libraries and streams them to smart TVs, streaming boxes and mobile devices. This container is packaged as a standalone emby Media Server.",
+   "official": false,
+   "deprecated": false,
+   "port": 8096,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-emby）"
+  },
+  {
+   "image": "linuxserver/faster-whisper",
+   "desc": "faster-whisper is a reimplementation of OpenAI's Whisper model using CTranslate2, which is a fast inference engine for Transformer models. This container provides a Wyoming protocol server for faster-whisper.",
+   "official": false,
+   "deprecated": false,
+   "port": 10300,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-faster-whisper）"
+  },
+  {
+   "image": "linuxserver/ferdium",
+   "desc": "[Ferdium] is a desktop app that helps you organize how you use your favourite apps by combining them into one application.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-ferdium）"
+  },
+  {
+   "image": "linuxserver/filezilla",
+   "desc": "[FIleZilla] Client is a fast and reliable cross-platform FTP, FTPS and SFTP client with lots of useful features and an intuitive graphical user interface.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-filezilla）"
+  },
+  {
+   "image": "linuxserver/firefox",
+   "desc": "[Firefox] Browser, also known as Mozilla Firefox or simply Firefox, is a free and open-source web browser developed by the Mozilla Foundation and its subsidiary, the Mozilla Corporation. Firefox uses the Gecko layout engine to render web pages, which implements current and anticipated web standards.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-firefox）"
+  },
+  {
+   "image": "linuxserver/flexget",
+   "desc": "flexget is a multipurpose automation tool for all of your media.",
+   "official": false,
+   "deprecated": false,
+   "port": 5050,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-flexget）"
+  },
+  {
+   "image": "linuxserver/flycast",
+   "desc": "[Flycast] is a multi-platform Sega Dreamcast, Naomi, Naomi 2, and Atomiswave emulator derived from reicast.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-flycast）"
+  },
+  {
+   "image": "linuxserver/freecad",
+   "desc": "[FreeCAD] is a general-purpose parametric 3D computer-aided design (CAD) modeler and a building information modeling (BIM) software application with finite element method (FEM) support.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-freecad）"
+  },
+  {
+   "image": "linuxserver/freshrss",
+   "desc": "freshrss is a free, self-hostable aggregator for rss feeds.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-freshrss）"
+  },
+  {
+   "image": "linuxserver/gimp",
+   "desc": "[GIMP] is a free and open-source raster graphics editor used for image manipulation (retouching) and image editing, free-form drawing, transcoding between different image file formats, and more specialized tasks. It is extensible by means of plugins, and scriptable.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-gimp）"
+  },
+  {
+   "image": "linuxserver/github-desktop",
+   "desc": "[Github Desktop] is an open source Electron-based GitHub app. It is written in TypeScript and uses React.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-github-desktop）"
+  },
+  {
+   "image": "linuxserver/gitqlient",
+   "desc": "[GitQlient] is a multi-platform Git client originally forked from QGit. Nowadays it goes beyond of just a fork and adds a lot of new functionality.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-gitqlient）"
+  },
+  {
+   "image": "linuxserver/grav",
+   "desc": "grav is a Fast, Simple, and Flexible, file-based Web-platform.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-grav）"
+  },
+  {
+   "image": "linuxserver/grocy",
+   "desc": "grocy is an ERP system for your kitchen! Cut down on food waste, and manage your chores with this brilliant utility.  Keep track of your purchases, how much food you are wasting, what chores need doing and what batteries need charging with this proudly Open Source tool  For more information on grocy",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-grocy）"
+  },
+  {
+   "image": "linuxserver/gzdoom",
+   "desc": "[GZDoom] is a feature centric port for all Doom engine games, based on ZDoom, adding an OpenGL renderer and powerful scripting capabilities.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-gzdoom）"
+  },
+  {
+   "image": "linuxserver/habridge",
+   "desc": "habridge emulates Philips Hue API to other home automation gateways such as an Amazon Echo/Dot Gen 1 (gen 2 has issues discovering ha-bridge) or other systems that support Philips Hue. The Bridge handles basic commands such as On, Off and brightness commands of the hue protocol. This bridge can cont",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-habridge）"
+  },
+  {
+   "image": "linuxserver/handbrake",
+   "desc": "[HandBrake] is an open-source tool, built by volunteers, for converting video from nearly any format to a selection of modern, widely supported codecs.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-handbrake）"
+  },
+  {
+   "image": "linuxserver/healthchecks",
+   "desc": "healthchecks is a watchdog for your cron jobs. It's a web server that listens for pings from your cron jobs, plus a web interface.",
+   "official": false,
+   "deprecated": false,
+   "port": 8000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-healthchecks）"
+  },
+  {
+   "image": "linuxserver/hedgedoc",
+   "desc": "[HedgeDoc] gives you access to all your files wherever you are.  HedgeDoc is a real-time, multi-platform collaborative markdown note editor.  This means that you can write notes with other people on your desktop, tablet or even on the phone.  You can sign-in via multiple auth providers like Facebook",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-hedgedoc）"
+  },
+  {
+   "image": "linuxserver/heimdall",
+   "desc": "heimdall is a way to organise all those links to your most used web sites and web applications in a simple way.  Simplicity is the key to Heimdall.  Why not use it as your browser start page? It even has the ability to include a search bar using either Google, Bing or DuckDuckGo.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-heimdall）"
+  },
+  {
+   "image": "linuxserver/helium",
+   "desc": "[Helium] is a Chromium-based web browser made for people, with love. Privacy-first with unbiased ad-blocking.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-helium）"
+  },
+  {
+   "image": "linuxserver/hishtory-server",
+   "desc": "[hiSHtory] is a better shell history. It stores your shell history in context (what directory you ran the command in, whether it succeeded or failed, how long it took, etc). This is all stored locally and end-to-end encrypted for syncing to to all your other computers.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "data_path": null,
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-hishtory-server）"
+  },
+  {
+   "image": "linuxserver/htpcmanager",
+   "desc": "htpcmanager is a front end for many htpc related applications.",
+   "official": false,
+   "deprecated": false,
+   "port": 8085,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-htpcmanager）"
+  },
+  {
+   "image": "linuxserver/inkscape",
+   "desc": "[Inkscape] is professional quality vector graphics software which runs on Linux, Mac OS X and Windows desktop computers.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-inkscape）"
+  },
+  {
+   "image": "linuxserver/intellij-idea",
+   "desc": "[IntelliJ IDEA] helps you write code faster with tools that eliminate tedious tasks and let you focus on what matters – building great software.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-intellij-idea）"
+  },
+  {
+   "image": "linuxserver/jackett",
+   "desc": "jackett works as a proxy server: it translates queries from apps (Sonarr, SickRage, CouchPotato, Mylar, etc) into tracker-site-specific http queries, parses the html response, then sends results back to the requesting software. This allows for getting recent uploads (like RSS) and performing searche",
+   "official": false,
+   "deprecated": false,
+   "port": 9117,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-jackett）"
+  },
+  {
+   "image": "linuxserver/jellyfin",
+   "desc": "jellyfin is a Free Software Media System that puts you in control of managing and streaming your media. It is an alternative to the proprietary Emby and Plex, to provide media from a dedicated server to end-user devices via multiple apps. Jellyfin is descended from Emby's 3.5.2 release and ported to",
+   "official": false,
+   "deprecated": false,
+   "port": 8096,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-jellyfin）"
+  },
+  {
+   "image": "linuxserver/joplin",
+   "desc": "[Joplin] is a free, open source note taking and to-do application, which can handle a large number of notes organised into notebooks.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-joplin）"
+  },
+  {
+   "image": "linuxserver/kali-linux",
+   "desc": "kali-linux - is an Advanced Penetration Testing Linux distribution used for Penetration Testing, Ethical Hacking and network security assessments. KALI LINUX ™ is a trademark of OffSec.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-kali-linux）"
+  },
+  {
+   "image": "linuxserver/kasm",
+   "desc": "kasm Workspaces is a docker container streaming platform for delivering browser-based access to desktops, applications, and web services. Kasm uses devops-enabled Containerized Desktop Infrastructure (CDI) to create on-demand, disposable, docker containers that are accessible via web browser. Exampl",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/opt",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-kasm）"
+  },
+  {
+   "image": "linuxserver/kavita",
+   "desc": "kavita is a fast, feature rich, cross platform reading server. Built with a focus for being a full solution for all your reading needs. Setup your own server and share your reading collection with your friends and family!",
+   "official": false,
+   "deprecated": false,
+   "port": 5000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-kavita）"
+  },
+  {
+   "image": "linuxserver/kdenlive",
+   "desc": "[Kdenlive] is a powerful free and open source cross-platform video editing program made by the KDE community. Feature rich and production ready.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-kdenlive）"
+  },
+  {
+   "image": "linuxserver/keepassxc",
+   "desc": "[KeePassXC] is a free and open-source password manager. It started as a community fork of KeePassX (itself a cross-platform port of KeePass).",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-keepassxc）"
+  },
+  {
+   "image": "linuxserver/kicad",
+   "desc": "[KiCad] - A Cross Platform and Open Source Electronics Design Automation Suite.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-kicad）"
+  },
+  {
+   "image": "linuxserver/kimai",
+   "desc": "kimai is a professional grade time-tracking application, free and open-source. It handles use-cases of freelancers as well as companies with dozens or hundreds of users. Kimai was build to track your project times and ships with many advanced features, including but not limited to:  JSON API, invoic",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-kimai）"
+  },
+  {
+   "image": "linuxserver/krita",
+   "desc": "[Krita] is a professional FREE and open source painting program. It is made by artists that want to see affordable art tools for everyone.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-krita）"
+  },
+  {
+   "image": "linuxserver/lazylibrarian",
+   "desc": "lazylibrarian is a program to follow authors and grab metadata for all your digital reading needs. It uses a combination of HardCover, OpenLibrary, Librarything, GoodReads, and optionally GoogleBooks as sources for author info and book info.",
+   "official": false,
+   "deprecated": false,
+   "port": 5299,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-lazylibrarian）"
+  },
+  {
+   "image": "linuxserver/ldap-auth",
+   "desc": "ldap-auth software is for authenticating users who request protected resources from servers proxied by nginx. It includes a daemon (ldap-auth) that communicates with an authentication server, and a webserver daemon that generates an authentication cookie based on the user’s credentials. The daemons ",
+   "official": false,
+   "deprecated": false,
+   "port": 8888,
+   "data_path": null,
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-ldap-auth）"
+  },
+  {
+   "image": "linuxserver/libreoffice",
+   "desc": "[LibreOffice] is a free and powerful office suite, and a successor to OpenOffice.org (commonly known as OpenOffice). Its clean interface and feature-rich tools help you unleash your creativity and enhance your productivity.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-libreoffice）"
+  },
+  {
+   "image": "linuxserver/librespeed",
+   "desc": "librespeed is a very lightweight Speedtest implemented in Javascript, using XMLHttpRequest and Web Workers.  No Flash, No Java, No Websocket, No Bullshit.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-librespeed）"
+  },
+  {
+   "image": "linuxserver/librewolf",
+   "desc": "[LibreWolf] is a custom and independent version of Firefox, with the primary goals of privacy, security and user freedom. LibreWolf also aims to remove all the telemetry, data collection and annoyances, as well as disabling anti-freedom features like DRM.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-librewolf）"
+  },
+  {
+   "image": "linuxserver/lidarr",
+   "desc": "lidarr is a music collection manager for Usenet and BitTorrent users. It can monitor multiple RSS feeds for new tracks from your favorite artists and will grab, sort and rename them. It can also be configured to automatically upgrade the quality of files already downloaded when a better quality form",
+   "official": false,
+   "deprecated": false,
+   "port": 8686,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-lidarr）"
+  },
+  {
+   "image": "linuxserver/limnoria",
+   "desc": "limnoria A robust, full-featured, and user/programmer-friendly Python IRC bot, with many existing plugins. Successor of the well-known Supybot.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-limnoria）"
+  },
+  {
+   "image": "linuxserver/lm-studio",
+   "desc": "[LM Studio] can run local AI models like gpt-oss, Llama, Gemma, Qwen, and DeepSeek privately on your computer.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-lm-studio）"
+  },
+  {
+   "image": "linuxserver/lollypop",
+   "desc": "[Lollypop] is a lightweight modern music player designed to work excellently on the GNOME desktop environment.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-lollypop）"
+  },
+  {
+   "image": "linuxserver/lychee",
+   "desc": "lychee is a free photo-management tool, which runs on your server or web-space. Installing is a matter of seconds. Upload, manage and share photos like from a native application. Lychee comes with everything you need and all your photos are stored securely.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-lychee）"
+  },
+  {
+   "image": "linuxserver/mame",
+   "desc": "[MAME] is a free and open-source emulator designed to emulate the hardware of arcade games, video game consoles, old computers and other systems in software on modern personal computers.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-mame）"
+  },
+  {
+   "image": "linuxserver/manyfold",
+   "desc": "manyfold  is an open source, self-hosted web application for managing a collection of 3D models, particularly focused on 3D printing.",
+   "official": false,
+   "deprecated": false,
+   "port": 3214,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-manyfold）"
+  },
+  {
+   "image": "linuxserver/mariadb",
+   "desc": "mariadb is one of the most popular database servers. Made by the original developers of MySQL.",
+   "official": false,
+   "deprecated": false,
+   "port": 3306,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-mariadb）"
+  },
+  {
+   "image": "linuxserver/mastodon",
+   "desc": "mastodon is a free, open-source social network server based on ActivityPub where users can follow friends and discover new ones..",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-mastodon）"
+  },
+  {
+   "image": "linuxserver/mediaelch",
+   "desc": "[MediaElch] is a MediaManager for Kodi. Information about Movies, TV Shows, Concerts and Music are stored as nfo files. Fanarts are downloaded automatically from fanart.tv. Using the nfo generator, MediaElch can be used with other MediaCenters as well.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-mediaelch）"
+  },
+  {
+   "image": "linuxserver/medusa",
+   "desc": "medusa is an automatic Video Library Manager for TV Shows. It watches for new episodes of your favorite shows, and when they are posted it does its magic.",
+   "official": false,
+   "deprecated": false,
+   "port": 8081,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-medusa）"
+  },
+  {
+   "image": "linuxserver/melonds",
+   "desc": "[melonDS] aims at providing fast and accurate Nintendo DS emulation.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-melonds）"
+  },
+  {
+   "image": "linuxserver/minisatip",
+   "desc": "minisatip is a multi-threaded satip server version 1.2 that runs under Linux and it was tested with DVB-S, DVB-S2, DVB-T, DVB-T2, DVB-C, DVB-C2, ATSC and ISDB-T cards.",
+   "official": false,
+   "deprecated": false,
+   "port": 8875,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-minisatip）"
+  },
+  {
+   "image": "linuxserver/modrinth",
+   "desc": "[Modrinth App] is a unique, open source launcher that allows you to play your favorite mods, and keep them up to date, all in one neat little package.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-modrinth）"
+  },
+  {
+   "image": "linuxserver/msedge",
+   "desc": "[Microsoft Edge] is a cross-platform web browser developed by Microsoft and based on Chromium.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-msedge）"
+  },
+  {
+   "image": "linuxserver/mstream",
+   "desc": "mstream is a personal music streaming server. You can use mStream to stream your music from your home computer to any device, anywhere.  There are mobile apps available for both Android and iPhone.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-mstream）"
+  },
+  {
+   "image": "linuxserver/mullvad-browser",
+   "desc": "The [Mullvad Browser] is a privacy-focused web browser developed in a collaboration between Mullvad VPN and the Tor Project. It’s designed to minimize tracking and fingerprinting. You could say it’s a Tor Browser to use without the Tor Network. Instead, you can use it with a trustworthy VPN.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-mullvad-browser）"
+  },
+  {
+   "image": "linuxserver/mylar3",
+   "desc": "mylar3 is an automated Comic Book downloader (cbr/cbz) for use with NZB and torrents written in python. It supports SABnzbd, NZBGET, and many torrent clients in addition to DDL.",
+   "official": false,
+   "deprecated": false,
+   "port": 8090,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-mylar3）"
+  },
+  {
+   "image": "linuxserver/mysql-workbench",
+   "desc": "[MySQL Workbench] is a unified visual tool for database architects, developers, and DBAs. MySQL Workbench provides data modeling, SQL development, and comprehensive administration tools for server configuration, user administration, backup, and much more.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-mysql-workbench）"
+  },
+  {
+   "image": "linuxserver/netbox",
+   "desc": "netbox is an IP address management (IPAM) and data center infrastructure management (DCIM) tool. Initially conceived by the network engineering team at DigitalOcean, NetBox was developed specifically to address the needs of network and infrastructure engineers. It is intended to function as a domain",
+   "official": false,
+   "deprecated": false,
+   "port": 8000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-netbox）"
+  },
+  {
+   "image": "linuxserver/nextcloud",
+   "desc": "nextcloud gives you access to all your files wherever you are.  Where are your photos and documents? With Nextcloud you pick a server of your choice, at home, in a data center or at a provider. And that is where your files will be. Nextcloud runs on that server, protecting your data and giving you a",
+   "official": false,
+   "deprecated": false,
+   "port": 443,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-nextcloud）"
+  },
+  {
+   "image": "linuxserver/nginx",
+   "desc": "nginx is an HTTP web server, reverse proxy, content cache, load balancer, TCP/UDP proxy server, and mail proxy server.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-nginx）"
+  },
+  {
+   "image": "linuxserver/ngircd",
+   "desc": "ngircd is a free, portable and lightweight Internet Relay Chat server for small or private networks, developed under the GNU General Public License (GPL). It is easy to configure, can cope with dynamic IP addresses, and supports IPv6, SSL-protected connections as well as PAM for authentication. It i",
+   "official": false,
+   "deprecated": false,
+   "port": 6667,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-ngircd）"
+  },
+  {
+   "image": "linuxserver/nomacs",
+   "desc": "nomacs is a free, open source image viewer, which supports multiple platforms. You can use it for viewing all common image formats including RAW and psd images.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-nomacs）"
+  },
+  {
+   "image": "linuxserver/nzbget",
+   "desc": "nzbget is a usenet downloader, written in C++ and designed with performance in mind to achieve maximum download speed by using very little system resources.",
+   "official": false,
+   "deprecated": false,
+   "port": 6789,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-nzbget）"
+  },
+  {
+   "image": "linuxserver/nzbhydra2",
+   "desc": "nzbhydra2 is a meta search application for NZB indexers, the spiritual successor to NZBmegasearcH, and an evolution of the original application [NZBHydra](https://github.com/theotherp/nzbhydra).  It provides easy access to a number of raw and newznab based indexers.",
+   "official": false,
+   "deprecated": false,
+   "port": 5076,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-nzbhydra2）"
+  },
+  {
+   "image": "linuxserver/obsidian",
+   "desc": "[Obsidian] is a note-taking app that lets you create, link, and organize your notes on your device, with hundreds of plugins and themes to customize your workflow. You can also publish your notes online, access them offline, and sync them securely with end-to-end encryption.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-obsidian）"
+  },
+  {
+   "image": "linuxserver/ombi",
+   "desc": "ombi allows you to host your own Plex Request and user management system. If you are sharing your Plex server with other users, allow them to request new content using an easy to manage interface! Manage all your requests for Movies and TV with ease, leave notes for the user and get notification whe",
+   "official": false,
+   "deprecated": false,
+   "port": 3579,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-ombi）"
+  },
+  {
+   "image": "linuxserver/onlyoffice",
+   "desc": "[ONLYOFFICE] provides a full range of tools to create, edit and collaborate on text documents, spreadsheets, presentations, PDF forms and regular PDF files on web, desktop and mobile platforms.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-onlyoffice）"
+  },
+  {
+   "image": "linuxserver/openshot",
+   "desc": "[OpenShot] Video Editor is an award-winning free and open-source video editor for Linux, Mac, and Windows, and is dedicated to delivering high quality video editing and animation solutions to the world.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-openshot）"
+  },
+  {
+   "image": "linuxserver/openssh-server",
+   "desc": "openssh-server is a sandboxed environment that allows ssh access without giving keys to the entire server. Giving ssh access via private key often means giving full access to the server. This container creates a limited and sandboxed environment that others can ssh into. The users only have access t",
+   "official": false,
+   "deprecated": false,
+   "port": 2222,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-openssh-server）"
+  },
+  {
+   "image": "linuxserver/opera",
+   "desc": "[Opera] is a multi-platform web browser developed by its namesake company Opera. The browser is based on Chromium, but distinguishes itself from other Chromium-based browsers (Chrome, Edge, etc.) through its user interface and other features.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-opera）"
+  },
+  {
+   "image": "linuxserver/orcaslicer",
+   "desc": "[Orca Slicer] is an open source slicer for FDM printers. OrcaSlicer is fork of Bambu Studio, it was previously known as BambuStudio-SoftFever, Bambu Studio is forked from PrusaSlicer by Prusa Research, which is from Slic3r by Alessandro Ranellucci and the RepRap community",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-orcaslicer）"
+  },
+  {
+   "image": "linuxserver/oscam",
+   "desc": "oscam is an Open Source Conditional Access Module software used for descrambling DVB transmissions using smart cards. It's both a server and a client.",
+   "official": false,
+   "deprecated": false,
+   "port": 8888,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-oscam）"
+  },
+  {
+   "image": "linuxserver/pairdrop",
+   "desc": "[PairDrop] is a sublime alternative to AirDrop that works on all platforms. Send images, documents or text via peer to peer connection to devices in the same local network/Wi-Fi or to paired devices.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": null,
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-pairdrop）"
+  },
+  {
+   "image": "linuxserver/pcsx2",
+   "desc": "[PCSX2] is an open source PS2 Emulator.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-pcsx2）"
+  },
+  {
+   "image": "linuxserver/pelorus",
+   "desc": "[Pelorus] is an AI navigator for Selkies-powered Linux desktops. Pelorus runs a FastAPI server that gives an LLM agent (Ollama, OpenAI-compatible, or Gemini) control over mouse, keyboard, screenshot, and window management via the [Pixelflux computer-use backend](https://github.com/linuxserver/pixelf",
+   "official": false,
+   "deprecated": false,
+   "port": 3001,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-pelorus）"
+  },
+  {
+   "image": "linuxserver/phpmyadmin",
+   "desc": "phpmyadmin is a free software tool written in PHP, intended to handle the administration of MySQL over the Web. phpMyAdmin supports a wide range of operations on MySQL and MariaDB.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-phpmyadmin）"
+  },
+  {
+   "image": "linuxserver/pidgin",
+   "desc": "[Pidgin] is a chat program which lets you log into accounts on multiple chat networks simultaneously. This means that you can be chatting with friends on XMPP and sitting in an IRC channel at the same time.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-pidgin）"
+  },
+  {
+   "image": "linuxserver/piper",
+   "desc": "piper is a fast, local neural text to speech system that sounds great and is optimized for the Raspberry Pi 4. This container provides a Wyoming protocol server for Piper.",
+   "official": false,
+   "deprecated": false,
+   "port": 10200,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-piper）"
+  },
+  {
+   "image": "linuxserver/piwigo",
+   "desc": "piwigo is a photo gallery software for the web that comes with powerful features to publish and manage your collection of pictures.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-piwigo）"
+  },
+  {
+   "image": "linuxserver/planka",
+   "desc": "planka is an elegant open source project tracking tool.",
+   "official": false,
+   "deprecated": false,
+   "port": 1337,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-planka）"
+  },
+  {
+   "image": "linuxserver/ppsspp",
+   "desc": "[PPSSPP] is a free and open-source PSP emulator for Windows, macOS, Linux, iOS, Android, Nintendo Wii U, Nintendo Switch, BlackBerry 10, MeeGo, Pandora, Xbox Series and Symbian with a focus on speed and portability.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-ppsspp）"
+  },
+  {
+   "image": "linuxserver/projectsend",
+   "desc": "projectsend is a self-hosted application that lets you upload files and assign them to specific clients that you create yourself. Secure, private and easy. No more depending on external services or e-mail to send those files.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-projectsend）"
+  },
+  {
+   "image": "linuxserver/prowlarr",
+   "desc": "prowlarr is a indexer manager/proxy built on the popular arr .net/reactjs base stack to integrate with your various PVR apps. Prowlarr supports both Torrent Trackers and Usenet Indexers. It integrates seamlessly with Sonarr, Radarr, Lidarr, and Readarr offering complete management of your indexers w",
+   "official": false,
+   "deprecated": false,
+   "port": 9696,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-prowlarr）"
+  },
+  {
+   "image": "linuxserver/pwndrop",
+   "desc": "pwndrop is a self-deployable file hosting service for sending out red teaming payloads or securely sharing your private files over HTTP and WebDAV.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-pwndrop）"
+  },
+  {
+   "image": "linuxserver/pycharm",
+   "desc": "[PyCharm] offers out-of-the-box support for Python, databases, Jupyter, Git, Conda, PyTorch, TensorFlow, Hugging Face, Django, Flask, FastAPI, and more.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-pycharm）"
+  },
+  {
+   "image": "linuxserver/pydio-cells",
+   "desc": "pydio-cells is the nextgen file sharing platform for organizations. It is a full rewrite of the Pydio project using the Go language following a micro-service architecture.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-pydio-cells）"
+  },
+  {
+   "image": "linuxserver/pyload-ng",
+   "desc": "[pyLoad] is a Free and Open Source download manager written in Python and designed to be extremely lightweight, easily extensible and fully manageable via web.",
+   "official": false,
+   "deprecated": false,
+   "port": 8000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-pyload-ng）"
+  },
+  {
+   "image": "linuxserver/qbittorrent",
+   "desc": "The qbittorrent is a bittorrent client programmed in C++ / Qt that uses libtorrent (sometimes called libtorrent-rasterbar) by Arvid Norberg.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-qbittorrent）"
+  },
+  {
+   "image": "linuxserver/qdirstat",
+   "desc": "[QDirStat] Qt-based directory statistics: KDirStat without any KDE -- from the author of the original KDirStat.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-qdirstat）"
+  },
+  {
+   "image": "linuxserver/radarr",
+   "desc": "radarr - A fork of Sonarr to work with movies à la Couchpotato.",
+   "official": false,
+   "deprecated": false,
+   "port": 7878,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-radarr）"
+  },
+  {
+   "image": "linuxserver/raneto",
+   "desc": "raneto - is an open source Knowledgebase platform that uses static Markdown files to power your Knowledgebase.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-raneto）"
+  },
+  {
+   "image": "linuxserver/rawtherapee",
+   "desc": "[RawTherapee] is a free, cross-platform raw image processing program!",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-rawtherapee）"
+  },
+  {
+   "image": "linuxserver/remmina",
+   "desc": "[Remmina] is a remote desktop client written in GTK, aiming to be useful for system administrators and travellers, who need to work with lots of remote computers in front of either large or tiny screens. Remmina supports multiple network protocols, in an integrated and consistent user interface. Cur",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-remmina）"
+  },
+  {
+   "image": "linuxserver/resilio-sync",
+   "desc": "resilio-sync (formerly BitTorrent Sync) uses the BitTorrent protocol to sync files and folders between all of your devices. There are both free and paid versions, this container supports both. There is an official sync image but we created this one as it supports user mapping to simplify permissions",
+   "official": false,
+   "deprecated": false,
+   "port": 8888,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-resilio-sync）"
+  },
+  {
+   "image": "linuxserver/retroarch",
+   "desc": "[RetroArch] is a frontend for emulators, game engines and media players. It enables you to run classic games on a wide range of computers and consoles through its slick graphical interface.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-retroarch）"
+  },
+  {
+   "image": "linuxserver/rpcs3",
+   "desc": "[RPCS3] is a multi-platform open-source Sony PlayStation 3 emulator and debugger written in C++ for Windows, Linux, macOS and FreeBSD.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-rpcs3）"
+  },
+  {
+   "image": "linuxserver/rustdesk",
+   "desc": "[RustDesk] is a full-featured open source remote control alternative for self-hosting and security with minimal configuration.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-rustdesk）"
+  },
+  {
+   "image": "linuxserver/sabnzbd",
+   "desc": "sabnzbd makes Usenet as simple and streamlined as possible by automating everything we can. All you have to do is add an .nzb. SABnzbd takes over from there, where it will be automatically downloaded, verified, repaired, extracted and filed away with zero human interaction.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-sabnzbd）"
+  },
+  {
+   "image": "linuxserver/scummvm",
+   "desc": "[ScummVM] is a program which allows you to run certain classic graphical adventure and role-playing games, provided you already have their data files. The clever part about this: ScummVM just replaces the executables shipped with the games, allowing you to play them on systems for which they were ne",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-scummvm）"
+  },
+  {
+   "image": "linuxserver/sealskin",
+   "desc": "[Sealskin] is a self-hosted browser isolation and remote application streaming platform. It runs desktop applications in isolated containers on a server you control and streams them to any browser or phone. Clients include a browser extension, mobile apps, and a web app served by the server itself. ",
+   "official": false,
+   "deprecated": false,
+   "port": 8443,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-sealskin）"
+  },
+  {
+   "image": "linuxserver/shadps4",
+   "desc": "[shadPS4] is an early PlayStation 4 emulator for Windows, Linux and macOS written in C++.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-shadps4）"
+  },
+  {
+   "image": "linuxserver/shotcut",
+   "desc": "shotcut is a free, open source, cross-platform video editor.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-shotcut）"
+  },
+  {
+   "image": "linuxserver/sickgear",
+   "desc": "[SickGear] provides management of TV shows and/or Anime, it detects new episodes, links downloader apps, and more..  For more information on SickGear visit their website and check it out: https://github.com/SickGear/SickGear",
+   "official": false,
+   "deprecated": false,
+   "port": 8081,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-sickgear）"
+  },
+  {
+   "image": "linuxserver/signal",
+   "desc": "[Signal] is a messaging app with privacy at its core. It is free and easy to use, with strong end-to-end encryption that keeps your communication completely private.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-signal）"
+  },
+  {
+   "image": "linuxserver/smokeping",
+   "desc": "smokeping keeps track of your network latency. For a full example of what this application is capable of visit [UCDavis](http://smokeping.ucdavis.edu/cgi-bin/smokeping.fcgi).",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-smokeping）"
+  },
+  {
+   "image": "linuxserver/sonarr",
+   "desc": "sonarr (formerly NZBdrone) is a PVR for usenet and bittorrent users. It can monitor multiple RSS feeds for new episodes of your favorite shows and will grab, sort and rename them. It can also be configured to automatically upgrade the quality of files already downloaded when a better quality format ",
+   "official": false,
+   "deprecated": false,
+   "port": 8989,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-sonarr）"
+  },
+  {
+   "image": "linuxserver/speedtest-tracker",
+   "desc": "speedtest-tracker is a self-hosted internet performance tracking application that runs speedtest checks against Ookla's Speedtest service.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-speedtest-tracker）"
+  },
+  {
+   "image": "linuxserver/spotube",
+   "desc": "[Spotube] is an open source, cross-platform Spotify client compatible across multiple platforms utilizing Spotify's data API and YouTube, Piped.video or JioSaavn as an audio source, eliminating the need for Spotify Premium",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-spotube）"
+  },
+  {
+   "image": "linuxserver/sqlitebrowser",
+   "desc": "[DB Browser for SQLite] is a high quality, visual, open source tool to create, design, and edit database files compatible with SQLite.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-sqlitebrowser）"
+  },
+  {
+   "image": "linuxserver/steam",
+   "desc": "[Steam] is the ultimate destination for playing, discussing, and creating games.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-steam）"
+  },
+  {
+   "image": "linuxserver/swag",
+   "desc": "SWAG - Secure Web Application Gateway (formerly known as letsencrypt, no relation to Let's Encrypt™) sets up an Nginx webserver and reverse proxy with php support and a built-in certbot client that automates free SSL server certificate generation and renewal processes (Let's Encrypt and ZeroSSL). It",
+   "official": false,
+   "deprecated": false,
+   "port": 443,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-swag）"
+  },
+  {
+   "image": "linuxserver/synclounge",
+   "desc": "synclounge is a third party tool that allows you to watch Plex in sync with your friends/family, wherever you are.",
+   "official": false,
+   "deprecated": false,
+   "port": 8088,
+   "data_path": null,
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-synclounge）"
+  },
+  {
+   "image": "linuxserver/syncthing",
+   "desc": "syncthing replaces proprietary sync and cloud services with something open, trustworthy and decentralized. Your data is your data alone and you deserve to choose where it is stored, if it is shared with some third party and how it's transmitted over the Internet.",
+   "official": false,
+   "deprecated": false,
+   "port": 8384,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-syncthing）"
+  },
+  {
+   "image": "linuxserver/tautulli",
+   "desc": "tautulli is a python based web application for monitoring, analytics and notifications for Plex Media Server.",
+   "official": false,
+   "deprecated": false,
+   "port": 8181,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-tautulli）"
+  },
+  {
+   "image": "linuxserver/telegram",
+   "desc": "[Telegram] is a cloud-based mobile and desktop messaging app.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-telegram）"
+  },
+  {
+   "image": "linuxserver/thelounge",
+   "desc": "thelounge (a fork of shoutIRC) is a web IRC client that you host on your own server.",
+   "official": false,
+   "deprecated": false,
+   "port": 9000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-thelounge）"
+  },
+  {
+   "image": "linuxserver/thunderbird",
+   "desc": "[Thunderbird] is a free and open-source personal information manager primarily used as an e-mail client with a calendar and contactbook, as well as an RSS feed reader, chat client, and news client.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-thunderbird）"
+  },
+  {
+   "image": "linuxserver/transmission",
+   "desc": "transmission is designed for easy, powerful use. Transmission has the features you want from a BitTorrent client: encryption, a web interface, peer exchange, magnet links, DHT, µTP, UPnP and NAT-PMP port forwarding, webseed support, watch directories, tracker editing, global and per-torrent speed li",
+   "official": false,
+   "deprecated": false,
+   "port": 9091,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-transmission）"
+  },
+  {
+   "image": "linuxserver/tvheadend",
+   "desc": "tvheadend works as a proxy server: is a TV streaming server and recorder for Linux, FreeBSD and Android supporting DVB-S, DVB-S2, DVB-C, DVB-T, ATSC, ISDB-T, IPTV, SAT>IP and HDHomeRun as input sources. Tvheadend offers the HTTP (VLC, MPlayer), HTSP (Kodi, Movian) and SAT>IP streaming. Multiple EPG ",
+   "official": false,
+   "deprecated": false,
+   "port": 9981,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-tvheadend）"
+  },
+  {
+   "image": "linuxserver/ubooquity",
+   "desc": "ubooquity is a free, lightweight and easy-to-use home server for your comics and ebooks. Use it to access your files from anywhere, with a tablet, an e-reader, a phone or a computer.",
+   "official": false,
+   "deprecated": false,
+   "port": 2202,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-ubooquity）"
+  },
+  {
+   "image": "linuxserver/ungoogled-chromium",
+   "desc": "[Ungoogled Chromium] is Google Chromium, sans dependency on Google web services.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-ungoogled-chromium）"
+  },
+  {
+   "image": "linuxserver/unifi-network-application",
+   "desc": "The unifi-network-application software is a powerful, enterprise wireless software engine ideal for high-density client deployments requiring low latency and high uptime performance.",
+   "official": false,
+   "deprecated": false,
+   "port": 8443,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-unifi-network-application）"
+  },
+  {
+   "image": "linuxserver/vivaldi",
+   "desc": "[Vivaldi] is a Norwegian freeware, cross-platform web browser with a built-in email client developed by Vivaldi Technologies.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-vivaldi）"
+  },
+  {
+   "image": "linuxserver/vlc",
+   "desc": "[VLC Media Player] is a free and open source cross-platform multimedia player and framework that delivers dependable performance across multiple devices.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-vlc）"
+  },
+  {
+   "image": "linuxserver/vscode",
+   "desc": "[VS Code] is an integrated development environment developed by Microsoft. This container runs the full desktop application, for a web native version see [Code Server](https://github.com/linuxserver/docker-code-server).",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-vscode）"
+  },
+  {
+   "image": "linuxserver/vscodium",
+   "desc": "[VSCodium] is a community-driven, freely-licensed binary distribution of Microsoft’s editor VS Code.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-vscodium）"
+  },
+  {
+   "image": "linuxserver/vscodium-web",
+   "desc": "vscodium-web is a community-driven, freely-licensed binary distribution of the remote host web component of Microsoft's editor VS Code.",
+   "official": false,
+   "deprecated": false,
+   "port": 8000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-vscodium-web）"
+  },
+  {
+   "image": "linuxserver/webcord",
+   "desc": "[WebCord] can be summarized as a pack of security and privacy hardenings, Discord features reimplementations, Electron / Chromium / Discord bugs workarounds, stylesheets, internal pages and wrapped https://discord.com page, designed to conform with ToS as much as it is possible (or hide the changes ",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-webcord）"
+  },
+  {
+   "image": "linuxserver/webstation",
+   "desc": "[Webstation] is a web native emulation focused LXQt desktop based on Ubuntu.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-webstation）"
+  },
+  {
+   "image": "linuxserver/webtop",
+   "desc": "webtop - Alpine, Ubuntu, Fedora, and Arch based containers containing full desktop environments in officially supported flavors accessible via any modern web browser.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-webtop）"
+  },
+  {
+   "image": "linuxserver/weixin",
+   "desc": "[Weixin] (WeChat) is an instant messaging, social media, and mobile payment app developed by Tencent.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-weixin）"
+  },
+  {
+   "image": "linuxserver/wikijs",
+   "desc": "wikijs A modern, lightweight and powerful wiki app built on NodeJS.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-wikijs）"
+  },
+  {
+   "image": "linuxserver/winegui",
+   "desc": "[WineGUI] is a user-interface friendly Wine manager that provides a graphical frontend for creating and managing Wine bottles.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-winegui）"
+  },
+  {
+   "image": "linuxserver/wps-office",
+   "desc": "[WPS Office] is a lightweight, feature-rich comprehensive office suite with high compatibility. As a handy and professional office software, WPS Office allows you to edit files in Writer, Presentation, Spreadsheet, and PDF to improve your work efficiency.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-wps-office）"
+  },
+  {
+   "image": "linuxserver/xbackbone",
+   "desc": "xbackbone is a simple, self-hosted, lightweight PHP file manager that support the instant sharing tool ShareX and *NIX systems. It supports uploading and displaying images, GIF, video, code, formatted text, and file downloading and uploading. Also have a web UI with multi user management, past uploa",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-xbackbone）"
+  },
+  {
+   "image": "linuxserver/xemu",
+   "desc": "[xemu] is a free and open-source application that emulates the original Microsoft Xbox game console, enabling people to play their original Xbox games on Windows, macOS, and Linux systems.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-xemu）"
+  },
+  {
+   "image": "linuxserver/yaak",
+   "desc": "yaak is a desktop API client for organizing and executing REST, GraphQL, and gRPC requests. It's built using [Tauri](https://tauri.app/), [Rust](https://www.rust-lang.org/), and [ReactJS](https://react.dev/).",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-yaak）"
+  },
+  {
+   "image": "linuxserver/your_spotify",
+   "desc": "your_spotify is a self-hosted application that tracks what you listen and offers you a dashboard to explore statistics about it! It's composed of a web server which polls the Spotify API every now and then and a web application on which you can explore your statistics.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": null,
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-your_spotify）"
+  },
+  {
+   "image": "linuxserver/zen",
+   "desc": "[Zen Browser] is a free and open-source fork of Mozilla Firefox with a focus on privacy, customizability and design.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-zen）"
+  },
+  {
+   "image": "linuxserver/znc",
+   "desc": "znc is an IRC network bouncer or BNC. It can detach the client from the actual IRC server, and also from selected channels. Multiple clients from different locations can connect to a single ZNC account simultaneously and therefore appear under the same nickname on IRC.",
+   "official": false,
+   "deprecated": false,
+   "port": 6501,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-znc）"
+  },
+  {
+   "image": "linuxserver/zotero",
+   "desc": "[Zotero] is a free, easy-to-use tool to help you collect, organize, annotate, cite, and share research.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/config",
+   "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-zotero）"
+  }
+ ]
+}

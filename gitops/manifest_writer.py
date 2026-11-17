@@ -67,11 +67,16 @@ def write_manifest(
     if not dry_run:
         manifest_dir.mkdir(parents=True, exist_ok=True)
 
-    # 生成 YAML 文件
-    deploy_yaml  = _build_deployment_yaml(llm_result, namespace)
-    service_yaml = _build_service_yaml(llm_result, namespace)
+    # 生成 YAML 文件（定時執行：CronJob、沒有 Service，2026-11-17）
+    if is_cronjob(llm_result):
+        deploy_yaml  = "---\n" + yaml.dump(build_cronjob_doc(llm_result, namespace), allow_unicode=True, default_flow_style=False)
+        service_yaml = None
+        deploy_path  = manifest_dir / "cronjob.yaml"
+    else:
+        deploy_yaml  = _build_deployment_yaml(llm_result, namespace)
+        service_yaml = _build_service_yaml(llm_result, namespace)
+        deploy_path  = manifest_dir / "deployment.yaml"
 
-    deploy_path  = manifest_dir / "deployment.yaml"
     service_path = manifest_dir / "service.yaml"
     pvc_yaml     = build_pvc_yaml(llm_result, namespace)
     pvc_path     = manifest_dir / "pvc.yaml"
@@ -275,6 +280,66 @@ def _build_deployment_yaml(llm_result: dict, namespace: str) -> str:
     }
 
     return "---\n" + yaml.dump(doc, allow_unicode=True, default_flow_style=False)
+
+
+def is_cronjob(llm_result: dict) -> bool:
+    return (llm_result or {}).get("workload") == "cronjob" and bool((llm_result or {}).get("schedule"))
+
+
+def build_cronjob_doc(llm_result: dict, namespace: str) -> dict:
+    """定時執行（2026-11-17）：CronJob。寫進 Git、實際部署、部署前審查、dry-run 都用這一份，不會兩邊不一致。
+    容器的組裝跟 Deployment 一樣（資源上限、Secret、保存空間、allowPrivilegeEscalation: false），
+    但不帶健康檢查和 port（跑完就結束，沒有人連）。安全上限是使用者 11-17 決定的：
+    每次最多 1 小時、上一次沒跑完不開新的、失敗重試 2 次、時區台灣時間。"""
+    from agents.cost_agent import recommended_resources, recommended_env
+    from agents.pipeline.cron import MAX_RUN_SECONDS, TZ_NAME
+    app_name = _sanitize_name(llm_result.get("app_name", "app"))
+    image = llm_result.get("image", "busybox:latest")
+    _vols, _mounts = pod_volumes(app_name, llm_result.get("volumes"))
+    container = {
+        "name": app_name, "image": image,
+        "resources": recommended_resources(image, app_name, llm_result.get("memory"), llm_result.get("cpu")),
+        "securityContext": {"allowPrivilegeEscalation": False},
+        "env": env_entries(app_name, {**recommended_env(image), **(llm_result.get("env") or {})}, llm_result.get("secret_keys")),
+    }
+    if llm_result.get("command"):
+        container["command"] = list(llm_result["command"])
+    if llm_result.get("args"):
+        container["args"] = list(llm_result["args"])
+    if _mounts:
+        container["volumeMounts"] = _mounts
+    if not container["env"]:
+        del container["env"]
+    return {
+        "apiVersion": "batch/v1",
+        "kind": "CronJob",
+        "metadata": {
+            "name": app_name, "namespace": namespace, "labels": {"app": app_name},
+            "annotations": {"gitops.k8s-platform/generated-at": datetime.utcnow().isoformat(),
+                            "gitops.k8s-platform/source": "llm-generated"},
+        },
+        "spec": {
+            "schedule": str(llm_result["schedule"]),
+            "timeZone": TZ_NAME,
+            "concurrencyPolicy": "Forbid",
+            "startingDeadlineSeconds": 300,
+            "successfulJobsHistoryLimit": 3,
+            "failedJobsHistoryLimit": 3,
+            "jobTemplate": {
+                "metadata": {"labels": {"app": app_name}},
+                "spec": {
+                    "backoffLimit": 2,
+                    "activeDeadlineSeconds": MAX_RUN_SECONDS,
+                    "ttlSecondsAfterFinished": 86400,
+                    "template": {
+                        "metadata": {"labels": {"app": app_name}},
+                        "spec": {"restartPolicy": "OnFailure", "containers": [container],
+                                 **({"volumes": _vols} if _vols else {})},
+                    },
+                },
+            },
+        },
+    }
 
 
 def _build_service_yaml(llm_result: dict, namespace: str) -> Optional[str]:

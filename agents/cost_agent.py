@@ -12,6 +12,7 @@ agents/cost_agent.py
     「AI 驅動的 FinOps 與 GPU 優化：AI 驅動的成本優化變得至關重要。
      平台可利用 LLM 分析歷史利用率數據，建議資源配額（Quotas）的動態調整」
 """
+from agents.k8s_shape import pod_template_spec
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -336,7 +337,7 @@ def _estimate_monthly_cost(manifest: Dict) -> Dict:
     """
     spec          = manifest.get("spec", {})
     replicas      = spec.get("replicas", 1)
-    template_spec = spec.get("template", {}).get("spec", spec)
+    template_spec = pod_template_spec(manifest)
     containers    = template_spec.get("containers", [])
 
     total_cpu_mc  = 0
@@ -357,6 +358,23 @@ def _estimate_monthly_cost(manifest: Dict) -> Dict:
     cpu_cost = monthly_cpu_core  * CPU_USD_PER_HOUR * HOURS_PER_MONTH
     mem_cost = monthly_mem_gib   * MEM_USD_PER_GIB_HOUR * HOURS_PER_MONTH
     total    = round(cpu_cost + mem_cost, 2)
+
+    # 定時執行（2026-11-17）：只有執行時佔用資源。每次最多跑 1 小時（activeDeadlineSeconds），
+    # 用「每月次數 × 1 小時」估上限，最多不超過整個月一直跑
+    if manifest.get("kind") == "CronJob":
+        from agents.pipeline.cron import runs_per_month, MAX_RUN_SECONDS
+        runs = runs_per_month(spec.get("schedule", "")) or 0
+        hours = min(runs * MAX_RUN_SECONDS / 3600, HOURS_PER_MONTH)
+        total = round((cpu_cost + mem_cost) * hours / HOURS_PER_MONTH, 2)
+        return {
+            "replicas": 1,
+            "cpu_cores": round(monthly_cpu_core, 2),
+            "memory_gib": round(monthly_mem_gib, 2),
+            "estimated_usd": total,
+            "note": "定時執行的上限估算：每次最多跑 1 小時，實際通常更少（依公有雲隨需方案牌價，僅供參考）",
+            "how": (f"每月約執行 {round(runs)} 次 × 最多 1 小時 = 最多 {round(hours)} 小時；"
+                    f"CPU {_num(monthly_cpu_core)} 核、記憶體 {_num(monthly_mem_gib)} GiB 只在這段時間計費，約 {total} 美元（上限）。"),
+        }
 
     return {
         "replicas":       replicas,
@@ -426,7 +444,7 @@ def analyze(manifest: Any) -> Dict:
                     "cost_estimate": {}, "summary": f"YAML 解析失敗：{e}"}
 
     spec          = manifest.get("spec", {})
-    template_spec = spec.get("template", {}).get("spec", spec)
+    template_spec = pod_template_spec(manifest)
     containers    = (template_spec.get("containers", []) +
                      template_spec.get("initContainers", []))
 

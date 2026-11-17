@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="380" viewBox="0 0 1080 380" font-family="Microsoft JhengHei, Noto Sans TC, sans-serif">
+<rect width="1080" height="380" fill="#ffffff"/>
+<text x="20" y="28" font-size="15" fill="#1d2430" font-weight="bold">多代理人部署解析：組員 S01～S40（正規化用本地模型）</text>
+<text x="20" y="48" font-size="11.5" fill="#5b6472">v2 秒數為約略值；v5 映像檔判定為「名稱對且映像檔存在」；原始資料在 pipeline_local_v1～v5.jsonl</text>
+<text x="20" y="80" font-size="13" fill="#1d2430">全部檢查通過（滿分 40）</text>
+<line x1="20" y1="330" x2="360" y2="330" stroke="#9aa3ad"/>
+<rect x="30.8" y="186.2" width="35.1" height="143.8" fill="#8a8f98"/>
+<text x="48.3" y="181.2" font-size="11" text-anchor="middle" fill="#1d2430">25/40</text>
+<text x="48.3" y="346" font-size="11" text-anchor="middle" fill="#5b6472">單跑</text>
+<rect x="87.4" y="238.0" width="35.1" height="92.0" fill="#2f6db5"/>
+<text x="105.0" y="233.0" font-size="11" text-anchor="middle" fill="#1d2430">16/40</text>
+<text x="105.0" y="346" font-size="11" text-anchor="middle" fill="#5b6472">v1</text>
+<rect x="144.1" y="209.2" width="35.1" height="120.8" fill="#2f6db5"/>
+<text x="161.7" y="204.2" font-size="11" text-anchor="middle" fill="#1d2430">21/40</text>
+<text x="161.7" y="346" font-size="11" text-anchor="middle" fill="#5b6472">v2</text>
+<rect x="200.8" y="203.5" width="35.1" height="126.5" fill="#2f6db5"/>
+<text x="218.3" y="198.5" font-size="11" text-anchor="middle" fill="#1d2430">22/40</text>
+<text x="218.3" y="346" font-size="11" text-anchor="middle" fill="#5b6472">v3</text>
+<rect x="257.4" y="197.8" width="35.1" height="132.2" fill="#2f6db5"/>
+<text x="275.0" y="192.8" font-size="11" text-anchor="middle" fill="#1d2430">23/40</text>
+<text x="275.0" y="346" font-size="11" text-anchor="middle" fill="#5b6472">v4</text>
+<rect x="314.1" y="186.2" width="35.1" height="143.8" fill="#2f6db5"/>
+<text x="331.7" y="181.2" font-size="11" text-anchor="middle" fill="#1d2430">25/40</text>
+<text x="331.7" y="346" font-size="11" text-anchor="middle" fill="#5b6472">v5</text>
+<text x="375" y="80" font-size="13" fill="#1d2430">不該問卻問（越少越好）</text>
+<line x1="375" y1="330" x2="715" y2="330" stroke="#9aa3ad"/>
+<rect x="385.8" y="274.8" width="35.1" height="55.2" fill="#8a8f98"/>
+<text x="403.3" y="269.8" font-size="11" text-anchor="middle" fill="#1d2430">6</text>
+<text x="403.3" y="346" font-size="11" text-anchor="middle" fill="#5b6472">單跑</text>
+<rect x="442.4" y="127.6" width="35.1" height="202.4" fill="#2f6db5"/>
+<text x="460.0" y="122.6" font-size="11" text-anchor="middle" fill="#1d2430">22</text>
+<text x="460.0" y="346" font-size="11" text-anchor="middle" fill="#5b6472">v1</text>
+<rect x="499.1" y="238.0" width="35.1" height="92.0" fill="#2f6db5"/>
+<text x="516.7" y="233.0" font-size="11" text-anchor="middle" fill="#1d2430">10</text>
+<text x="516.7" y="346" font-size="11" text-anchor="middle" fill="#5b6472">v2</text>
+<rect x="555.8" y="238.0" width="35.1" height="92.0" fill="#2f6db5"/>
+<text x="573.3" y="233.0" font-size="11" text-anchor="middle" fill="#1d2430">10</text>
+<text x="573.3" y="346" font-size="11" text-anchor="middle" fill="#5b6472">v3</text>
+<rect x="612.4" y="192.0" width="35.1" height="138.0" fill="#2f6db5"/>
+<text x="630.0" y="187.0" font-size="11" text-anchor="middle" fill="#1d2430">15</text>
+<text x="630.0" y="346" font-size="11" text-anchor="middle" fill="#5b6472">v4</text>
+<rect x="669.1" y="192.0" width="35.1" height="138.0" fill="#2f6db5"/>
+<text x="686.7" y="187.0" font-size="11" text-anchor="middle" fill="#1d2430">15</text>
+<text x="686.7" y="346" font-size="11" text-anchor="middle" fill="#5b6472">v5</text>
+<text x="730" y="80" font-size="13" fill="#1d2430">p90 每句秒數（紅線＝30 秒目標）</text>
+<line x1="730" y1="330" x2="1070" y2="330" stroke="#9aa3ad"/>
+<rect x="740.8" y="273.1" width="35.1" height="56.9" fill="#8a8f98"/>
+<text x="758.3" y="268.1" font-size="11" text-anchor="middle" fill="#1d2430">9.9</text>
+<text x="758.3" y="346" font-size="11" text-anchor="middle" fill="#5b6472">單跑</text>
+<rect x="797.4" y="149.5" width="35.1" height="180.5" fill="#2f6db5"/>
+<text x="815.0" y="144.5" font-size="11" text-anchor="middle" fill="#1d2430">31.4</text>
+<text x="815.0" y="346" font-size="11" text-anchor="middle" fill="#5b6472">v1</text>
+<rect x="854.1" y="174.8" width="35.1" height="155.2" fill="#2f6db5"/>
+<text x="871.7" y="169.8" font-size="11" text-anchor="middle" fill="#1d2430">27.0</text>
+<text x="871.7" y="346" font-size="11" text-anchor="middle" fill="#5b6472">v2</text>
+<rect x="910.8" y="158.7" width="35.1" height="171.3" fill="#2f6db5"/>
+<text x="928.3" y="153.7" font-size="11" text-anchor="middle" fill="#1d2430">29.8</text>
+<text x="928.3" y="346" font-size="11" text-anchor="middle" fill="#5b6472">v3</text>
+<rect x="967.4" y="155.8" width="35.1" height="174.2" fill="#2f6db5"/>
+<text x="985.0" y="150.8" font-size="11" text-anchor="middle" fill="#1d2430">30.3</text>
+<text x="985.0" y="346" font-size="11" text-anchor="middle" fill="#5b6472">v4</text>
+<rect x="1024.1" y="121.8" width="35.1" height="208.2" fill="#2f6db5"/>
+<text x="1041.7" y="116.8" font-size="11" text-anchor="middle" fill="#1d2430">36.2</text>
+<text x="1041.7" y="346" font-size="11" text-anchor="middle" fill="#5b6472">v5</text>
+<line x1="730" y1="157.5" x2="1070" y2="157.5" stroke="#c0392b" stroke-dasharray="5 4"/>
+<text x="20" y="372" font-size="11" fill="#5b6472">灰色＝只跑推理代理一步（參考）；藍色＝整個流程各版本</text>
+</svg>

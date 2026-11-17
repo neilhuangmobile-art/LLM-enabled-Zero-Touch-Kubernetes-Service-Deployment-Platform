@@ -12,6 +12,7 @@ agents/perf_agent.py
     「效能代理（HPA 建議）：AI 驅動的 FinOps 包括預測性容量預熱，
      平台可利用 LLM 分析歷史利用率數據，建議資源配額的動態調整」
 """
+from agents.k8s_shape import pod_template_spec
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -307,12 +308,19 @@ def analyze(manifest: Any) -> Dict:
     spec          = manifest.get("spec", {})
     app_name      = manifest.get("metadata", {}).get("name", "app")
     namespace     = manifest.get("metadata", {}).get("namespace", "default")
-    template_spec = spec.get("template", {}).get("spec", spec)
+    template_spec = pod_template_spec(manifest)
     containers    = template_spec.get("containers", [])
 
     # 推測應用程式類型
     first_image = containers[0].get("image", "") if containers else ""
     app_type    = _detect_app_type(first_image, app_name)
+
+    if manifest.get("kind") == "CronJob":
+        # 2026-11-17 定時執行：跑完就結束，副本數、滾動更新、健康檢查、反親和、HPA 這些都不適用
+        return {
+            "agent": AGENT_NAME, "ok": True, "issues": [], "hpa_yaml": None, "app_type": "cronjob",
+            "summary": "定時執行：每次最多跑 1 小時、上一次沒跑完不會重疊執行，沒有效能上的問題",
+        }
 
     all_issues: List[Dict] = []
     all_issues.extend(_check_replicas(spec))

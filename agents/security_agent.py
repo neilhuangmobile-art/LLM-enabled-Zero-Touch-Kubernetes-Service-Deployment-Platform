@@ -12,6 +12,7 @@ agents/security_agent.py
      在這種架構下，專門的代理（如「安全代理」、「成本代理」、「效能代理」）
      協作管理集群」
 """
+from agents.k8s_shape import pod_template_spec
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -121,7 +122,7 @@ _EXTRA_RULES = [
 def _get_containers(manifest: Dict) -> List[Dict]:
     """從 manifest 取得所有 containers（含 initContainers）。"""
     spec = manifest.get("spec", {})
-    template_spec = spec.get("template", {}).get("spec", spec)
+    template_spec = pod_template_spec(manifest)
     containers = template_spec.get("containers", [])
     init_containers = template_spec.get("initContainers", [])
     return containers + init_containers
@@ -145,7 +146,7 @@ def _check_rule_against_manifest(rule: Dict, manifest: Dict) -> Optional[Dict]:
     """
     containers = _get_containers(manifest)
     spec       = manifest.get("spec", {})
-    template_spec = spec.get("template", {}).get("spec", spec)
+    template_spec = pod_template_spec(manifest)
 
     # 容器層級規則
     if "containers[]" in rule.get("path", ""):

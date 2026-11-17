@@ -227,6 +227,12 @@ def _build_k8s_manifests(llm_result: dict) -> list:
     將 ask_llama() 輸出組裝為 Deployment + Service 的 manifest 列表。
     這是目前 0_touch_generate_pods.py 的邏輯，集中在此供驗證層使用。
     """
+    # 定時執行（2026-11-17）：驗證的是實際會部署的 CronJob（跟寫進 Git、部署用同一份）
+    from gitops.manifest_writer import is_cronjob, build_cronjob_doc
+    if is_cronjob(llm_result):
+        doc = build_cronjob_doc(llm_result, "default")
+        doc["metadata"].pop("namespace", None)
+        return [doc]
     app_name = llm_result["app_name"]
     image    = llm_result["image"]
     pods     = int(llm_result["pods"])

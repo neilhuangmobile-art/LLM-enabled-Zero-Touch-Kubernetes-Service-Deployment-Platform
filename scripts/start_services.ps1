@@ -30,7 +30,7 @@ function Find-Proc($pattern) {
         Where-Object { $_.CommandLine -and $_.CommandLine -match $pattern -and $_.CommandLine -notmatch "zt-demo" }
 }
 
-function Start-One($name, $script, $pattern, $log) {
+function Start-One($name, $script, $pattern, $log, $py = "python") {
     $running = Find-Proc $pattern
     if ($running -and $Restart) {
         $running | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
@@ -41,7 +41,7 @@ function Start-One($name, $script, $pattern, $log) {
         Log "$name 已經在執行（PID $($running[0].ProcessId)），沒有重複啟動。要重新啟動請加 -Restart。"
         return
     }
-    Start-Process -FilePath python -ArgumentList (Join-Path $root $script) -WorkingDirectory $root -WindowStyle Hidden `
+    Start-Process -FilePath $py -ArgumentList (Join-Path $root $script) -WorkingDirectory $root -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $logs "$log.log") -RedirectStandardError (Join-Path $logs "$log.err")
     Log "$name 已啟動，輸出記在 logs\$log.log"
 }
@@ -63,6 +63,18 @@ Log "===== 開始啟動$(if ($AtBoot) { '（開機自動啟動）' }) ====="
 
 # 1. 模型伺服器只用顯卡，不用等 Docker，先開始載入（需要 1 到 2 分鐘）
 Start-One "Model Server" "core\model_server.py" "core[\\/]model_server\.py" "model_server"
+
+# 1b. 多代理人部署解析的本地模型（Qwen3.5-4B 4-bit，127.0.0.1:8766，2026-11-17）。
+#     要 transformers 5，用另一個 venv（路徑可用環境變數 PIPELINE_PYTHON 改）。沒有這個 venv 時網站照樣啟動，
+#     部署解析會退回原本的方式，部署單上會提示。
+$qwenPy = if ($env:PIPELINE_PYTHON) { $env:PIPELINE_PYTHON } else { "C:\zt-k8s\.venv-qwen35\Scripts\python.exe" }
+if (Test-Path $qwenPy) {
+    $env:HF_HUB_OFFLINE = "1"   # 模型已經下載好，啟動時不連網查新版
+    Start-One "多代理人模型（8766）" "core\pipeline_model_server.py" "pipeline_model_server\.py" "pipeline_model" $qwenPy
+    Remove-Item Env:HF_HUB_OFFLINE
+} else {
+    Log "找不到 $qwenPy，多代理人部署解析會退回原本的方式"
+}
 
 # 2. 網站啟動時只檢查一次 Kubernetes 有沒有連上，太早啟動會一直當成沒有叢集，所以先等叢集就緒
 if (-not (Test-Cluster)) {
@@ -101,6 +113,14 @@ for ($i = 0; $i -lt 60; $i++) {
         }
     } catch {}
     if ($i -eq 59) { Log "Model Server 5 分鐘內沒有就緒，請看 logs\model_server.err" }
+}
+for ($i = 0; $i -lt 36; $i++) {
+    try {
+        $p = Invoke-RestMethod "http://127.0.0.1:8766/health" -TimeoutSec 3
+        if ($p.loaded) { Log "多代理人模型就緒：$($p.model)，顯存 $($p.vram_gb) GB"; break }
+    } catch {}
+    Start-Sleep 5
+    if ($i -eq 35) { Log "多代理人模型 3 分鐘內沒有就緒，請看 logs\pipeline_model.err（部署解析會先退回原本的方式）" }
 }
 try {
     $code = (Invoke-WebRequest "http://127.0.0.1:5050/" -UseBasicParsing -TimeoutSec 10).StatusCode

@@ -11,6 +11,9 @@ core/config.py 匯入時會讀 .env，但只補「環境變數裡還沒有的」
 import os
 
 os.environ["CUSTOMER_CLUSTER_MODE"] = "0"
+# 2026-11-17：網站的 .env 開了多代理人部署解析，測試不能跟著去呼叫真的本地模型（8766）；
+# 預設關閉，要測新流程的測試自己用 monkeypatch.setenv 打開（tests/test_pipeline_web.py）
+os.environ["DEPLOY_PIPELINE"] = ""
 
 # 事件紀錄（core/event_store.py）寫到暫存檔，不要混進開發者 data/events.db 的真實紀錄
 import tempfile

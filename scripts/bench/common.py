@@ -252,6 +252,37 @@ class ZeroTouch:
         except Exception:  # noqa: BLE001
             d = {"error": r.text[:300]}
         rec["parse_status"] = r.status_code
+        # 2026-11-17 多代理人流程的問題卡：模擬新手「有推薦就按『幫我決定』，沒有就選第一個選項」（使用者 11-17 決定）。
+        # 只能自由輸入、沒有選項的題目，模擬不出真人會打什麼，記成「系統提問、未部署」。每一輪問了什麼、怎麼答都記下來。
+        rec["questions"] = []
+        for _ in range(3):
+            if not (r.status_code == 200 and d.get("needs_answers") and d.get("pipeline_id")):
+                break
+            answers, unanswerable = {}, []
+            for q in d.get("questions") or []:
+                opts = q.get("options") or []
+                if q.get("recommended") is not None:
+                    answers[q["id"]] = "__auto__"
+                elif opts:
+                    answers[q["id"]] = opts[0]["value"]
+                else:
+                    unanswerable.append(q["id"])
+                rec["questions"].append({"question": q.get("question"), "answer": answers.get(q["id"])})
+            if unanswerable:
+                rec.update(outcome="asked", message="系統提問（只能自由輸入，測試程式不代答）",
+                           total_s=round(time.time() - t0, 2))
+                return rec
+            r = self.s.post(ZT + "/api/deploy/parse", json={"input": text, "pipeline_id": d["pipeline_id"],
+                                                            "answers": answers}, timeout=600)
+            try:
+                d = r.json()
+            except Exception:  # noqa: BLE001
+                d = {"error": r.text[:300]}
+            rec["parse_status"] = r.status_code
+        rec["parse_s"] = round(time.time() - t0, 2)
+        if d.get("needs_answers"):
+            rec.update(outcome="asked", message="問了 3 輪還有問題", total_s=rec["parse_s"])
+            return rec
         if r.status_code != 200 or d.get("error"):
             rec.update(outcome="rejected" if r.status_code < 500 else "error", message=str(d.get("error") or d)[:400],
                        decision=(d.get("review") or {}).get("decision"), total_s=rec["parse_s"])

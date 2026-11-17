@@ -521,6 +521,130 @@ def k8s_deploy(app_name, image, replicas, port=80, memory=None, cpu=None, namesp
     except Exception as e:
         return False, str(e)
 
+def _k8s_batch_clients():
+    """定時執行用的 K8s client：跟 k8s_deploy 一樣 retries=0，不會因為封包被丟而卡 80 秒。"""
+    _cfg = k8s_client.Configuration.get_default_copy()
+    _cfg.retries = 0
+    _api_client = k8s_client.ApiClient(configuration=_cfg)
+    return k8s_client.BatchV1Api(_api_client), k8s_client.CoreV1Api(_api_client)
+
+
+def k8s_deploy_cronjob(parsed, namespace=None):
+    """定時執行（2026-11-17）：建立或更新 CronJob。內容跟寫進 Git、部署前審查的是同一份（manifest_writer.build_cronjob_doc）。
+    不建 Service（跑完就結束，沒有人連）；保存空間、Secret 的做法跟 k8s_deploy 一樣。"""
+    namespace = namespace or NS
+    if not K8S_ENABLED:
+        return False, "K8s 未連線（模擬模式）"
+    try:
+        batch, core = _k8s_batch_clients()
+        from gitops.manifest_writer import build_cronjob_doc, build_pvc_docs, split_secret_env, secret_name
+        from agents.pipeline.cron import describe_zh
+        app_name = parsed["app_name"]
+        doc = build_cronjob_doc(parsed, namespace)
+        for _pvc in build_pvc_docs({"app_name": app_name, "volumes": parsed.get("volumes")}, namespace):
+            try:
+                core.read_namespaced_persistent_volume_claim(_pvc["metadata"]["name"], namespace, _request_timeout=(5, 10))
+            except Exception:
+                core.create_namespaced_persistent_volume_claim(namespace, _pvc, _request_timeout=(5, 10))
+        _secret_vals = split_secret_env(parsed.get("env") or {}, parsed.get("secret_keys"))[1]
+        if _secret_vals:
+            sec = {"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
+                   "metadata": {"name": secret_name(app_name)}, "stringData": _secret_vals}
+            try:
+                core.replace_namespaced_secret(secret_name(app_name), namespace, sec, _request_timeout=(5, 10))
+            except Exception:
+                core.create_namespaced_secret(namespace, sec, _request_timeout=(5, 10))
+        try:
+            batch.replace_namespaced_cron_job(app_name, namespace, doc, _request_timeout=(5, 10))
+        except Exception:
+            batch.create_namespaced_cron_job(namespace, doc, _request_timeout=(5, 10))
+        os.makedirs(YAML_DIR, exist_ok=True)
+        with open(os.path.join(YAML_DIR, f"{app_name}.yaml"), "w", encoding="utf-8") as f:
+            f.write(yaml_lib.dump(doc, allow_unicode=True))
+        return True, f"已建立定時執行 {app_name}（{describe_zh(parsed['schedule'])}）"
+    except Exception as e:
+        return False, str(e)
+
+
+def _cronjob_info(cj, jobs) -> dict:
+    """CronJob 物件 → 畫面要的資料：排程中文說明、是否暫停、上次執行結果、下次執行時間（台灣時間）。"""
+    from agents.pipeline.cron import describe_zh, next_run
+    name = cj.metadata.name
+    mine = [j for j in jobs if any((o.kind == "CronJob" and o.name == name) for o in (j.metadata.owner_references or []))]
+    mine.sort(key=lambda j: j.metadata.creation_timestamp.timestamp() if j.metadata.creation_timestamp else 0, reverse=True)
+    last = None
+    if mine:
+        j = mine[0]
+        st = j.status
+        result = "running" if (st.active or 0) > 0 else "succeeded" if (st.succeeded or 0) > 0 else \
+                 "failed" if (st.failed or 0) > 0 else "pending"
+        last = {"job": j.metadata.name, "result": result,
+                "started_at": st.start_time.isoformat() if st.start_time else None,
+                "finished_at": st.completion_time.isoformat() if st.completion_time else None}
+    schedule = cj.spec.schedule
+    suspended = bool(cj.spec.suspend)
+    nxt = None if suspended else next_run(schedule)
+    return {"name": name, "schedule": schedule, "schedule_text": describe_zh(schedule), "suspended": suspended,
+            "image": ((cj.spec.job_template.spec.template.spec.containers or [None])[0].image
+                      if cj.spec.job_template and cj.spec.job_template.spec else None),
+            "last": last, "next_run": nxt.isoformat() if nxt else None,
+            "age": _fmt_k8s_time(cj.metadata.creation_timestamp)}
+
+
+def k8s_get_cronjobs(namespace=None):
+    """使用者 namespace 裡的定時執行。K8s 沒連上或查詢失敗回空清單。"""
+    namespace = namespace or NS
+    if not K8S_ENABLED:
+        return []
+    try:
+        batch = k8s_client.BatchV1Api()
+        cjs = batch.list_namespaced_cron_job(namespace, _request_timeout=(5, 10)).items
+        jobs = batch.list_namespaced_job(namespace, _request_timeout=(5, 10)).items if cjs else []
+        return [_cronjob_info(c, jobs) for c in sorted(cjs, key=lambda c: c.metadata.name)]
+    except Exception:
+        return []
+
+
+def k8s_cronjob_exists(name, namespace):
+    if not K8S_ENABLED:
+        return False
+    try:
+        k8s_client.BatchV1Api().read_namespaced_cron_job(name, namespace, _request_timeout=(5, 10))
+        return True
+    except Exception:
+        return False
+
+
+def k8s_delete_cronjob(name, namespace):
+    """刪除定時執行和它留下的 Job、Pod、Secret、保存空間（跟刪除一般服務一樣，資料一起刪）。"""
+    batch, core = _k8s_batch_clients()
+    # 先記下它掛了哪些保存空間（只刪自己用的，不用名稱前綴猜，避免刪到名字開頭一樣的別的服務）
+    claims = []
+    try:
+        cj = batch.read_namespaced_cron_job(name, namespace, _request_timeout=(5, 10))
+        for v in (cj.spec.job_template.spec.template.spec.volumes or []):
+            if v.persistent_volume_claim:
+                claims.append(v.persistent_volume_claim.claim_name)
+    except Exception:
+        pass
+    batch.delete_namespaced_cron_job(name, namespace, propagation_policy="Foreground", _request_timeout=(5, 10))
+    try:
+        for j in batch.list_namespaced_job(namespace, label_selector=f"app={name}", _request_timeout=(5, 10)).items:
+            batch.delete_namespaced_job(j.metadata.name, namespace, propagation_policy="Background", _request_timeout=(5, 10))
+    except Exception:
+        pass
+    from gitops.manifest_writer import secret_name
+    try:
+        core.delete_namespaced_secret(secret_name(name), namespace, _request_timeout=(5, 10))
+    except Exception:
+        pass
+    for c in claims:
+        try:
+            core.delete_namespaced_persistent_volume_claim(c, namespace, _request_timeout=(5, 10))
+        except Exception:
+            pass
+
+
 def _last_restart_iso(pod):
     times = [cs.last_state.terminated.finished_at for cs in ((pod.status.container_statuses or []) if pod.status else [])
              if cs.last_state and cs.last_state.terminated and cs.last_state.terminated.finished_at]
@@ -1143,9 +1267,12 @@ def _pod_detail(p):
         })
     phase = (p.status.phase if p.status else "") or "Unknown"
     all_ready = bool(containers) and all(x["ready"] for x in containers)
-    healthy = phase in ("Running", "Succeeded") and all_ready and unhealthy_reason is None
+    # 2026-11-17：跑完就結束的 Pod（定時執行）容器不會再是 ready，Succeeded 本身就代表正常
+    healthy = (phase == "Succeeded" or (phase == "Running" and all_ready)) and unhealthy_reason is None
     notes = [x["note"] for x in containers if x.get("note")]
-    if healthy:
+    if healthy and phase == "Succeeded":
+        summary = "已經跑完（正常結束）"
+    elif healthy:
         summary = f"Running，{len(containers)} 個容器都 ready"
         if notes:
             summary += "（" + "；".join(notes) + "）"
@@ -1291,6 +1418,10 @@ def k8s_delete_deployment(app_name, namespace=None):
 
 
 def _build_agent_manifest(parsed):
+    # 定時執行（2026-11-17）：審查的是實際會部署的 CronJob（跟寫進 Git、部署用同一份）
+    from gitops.manifest_writer import is_cronjob, build_cronjob_doc
+    if is_cronjob(parsed):
+        return build_cronjob_doc(parsed, "default")
     app_name = parsed.get("app_name", "auto-app")
     image = parsed.get("image", "nginx:latest")
     pods = int(parsed.get("pods", parsed.get("replicas", 1)))
@@ -1941,6 +2072,19 @@ tbody tr:hover td{background:var(--signal-soft)}
 .scn-notes li::before{content:"";position:absolute;left:11px;top:14px;width:6px;height:6px;border-radius:50%;background:var(--caution)}
 .fill-notices{margin:12px 0;padding:10px 14px;border-left:4px solid var(--caution);background:color-mix(in srgb,var(--caution) 12%,transparent);border-radius:6px;font-size:14px;line-height:1.6}
 .fill-notices ul{margin:6px 0 0;padding-left:18px}
+.pipe-extras{margin:12px 0;padding:10px 14px;border-left:4px solid var(--signal);background:color-mix(in srgb,var(--signal) 8%,transparent);border-radius:6px;font-size:14px;line-height:1.6}
+.pipe-extras ul{margin:6px 0 0;padding-left:18px}
+.pipe-unsup{margin:8px 0 12px;font-size:13.5px;color:var(--text-2)}
+.pipe-unsup summary{cursor:pointer}
+.pipe-unsup ul{margin:6px 0 0;padding-left:18px}
+.cron-tbl{width:100%;border-collapse:collapse;font-size:14px}
+.cron-tbl th,.cron-tbl td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--grid-2);vertical-align:top}
+.cron-tbl th{font-size:12.5px;color:var(--text-3);font-weight:500}
+.pq{border:1px solid var(--grid-2);border-radius:8px;margin:12px 0;padding:10px 14px}
+.pq legend{font-weight:600;padding:0 4px;font-size:14.5px}
+.pq-opt{display:flex;align-items:center;gap:6px;margin:6px 0;font-size:14px;cursor:pointer}
+.pq-opt small{color:var(--text-3)}
+.pq-free input[type=text]{flex:1;min-width:0}
 .sug-tag{display:inline-block;margin-left:6px;padding:0 6px;font-size:11.5px;border-radius:4px;background:color-mix(in srgb,var(--caution) 22%,transparent);color:var(--text)}
 .scn-save{margin-top:14px;padding-top:12px;border-top:1px dashed var(--grid-2)}
 .scn-save-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -2493,7 +2637,7 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
       <div class="page-head"><div><h1 class="page-title">我的服務</h1>
         <p class="page-sub">你部署的每個服務，以及它底下實際在跑的 Pod。點任一列可以看詳情，服務還可以擴縮、更新映像檔、回滾或刪除。</p></div>
         <div class="page-actions"><button type="button" class="btn primary" data-act="example" data-text="部署 2 個 nginx:1.27，開 80 port">部署新服務</button></div></div>
-      <div class="page-stack"><div id="svc-deps"></div><div id="svc-autoscale"></div><div id="svc-pods"></div></div>
+      <div class="page-stack"><div id="svc-deps"></div><div id="svc-cron"></div><div id="svc-autoscale"></div><div id="svc-pods"></div></div>
     </div>
 
     <!-- Chat Page -->
@@ -4120,7 +4264,7 @@ async function flowExecuteDeploy(id){
     } else {
       flow.step='done';
       flow.pendingSync = !!(d.k8s_deploy && d.k8s_deploy.pending_sync);
-      flow.rollout = {state:'syncing'};
+      flow.rollout = (d.k8s_deploy && d.k8s_deploy.cronjob) ? {state:'cron', message:d.k8s_deploy.message} : {state:'syncing'};
       if(d.parsed) flow.spec = Object.assign({}, flow.spec, {
         app_name:d.parsed.app_name, image:d.parsed.image, pods:d.parsed.pods, port:d.parsed.port});
       loadStats && loadStats();
@@ -4130,8 +4274,9 @@ async function flowExecuteDeploy(id){
     flow.step='error'; flow.errorMsg='連線失敗，請確認網路後再試一次。（'+e+'）'; flow.retryStep='review';
   }
   persistFlowCard(id);
-  if(flow.step === 'done') trackRollout(id);
-  if(flow.step === 'done') offerScheduleAfterDeploy(flow);
+  const _isCron = flow.rollout && flow.rollout.state === 'cron';
+  if(flow.step === 'done' && !_isCron) trackRollout(id);
+  if(flow.step === 'done' && !_isCron) offerScheduleAfterDeploy(flow);
 }
 
 // 2026-10-21：「平日 2 個、週末 1 個……幫我部署」這種句子，部署完成後提示可以接著設定分時擴縮
@@ -4211,10 +4356,19 @@ async function flowExecuteAction(id){
   persistFlowCard(id);
 }
 
-async function startDeployFlow(text, sched, originalText){
+// extra：多代理人流程回答問題卡時帶 {pipeline_id, answers}（2026-11-17）；沒帶時和原本一樣
+async function startDeployFlow(text, sched, originalText, extra){
   try{
-    const r = await fetch('/api/deploy/parse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({input:text})});
+    const r = await fetch('/api/deploy/parse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({input:text}, extra || {}))});
     const d = await r.json();
+    if(d.needs_answers && d.pipeline_id && Array.isArray(d.questions)){
+      // 多代理人流程（DEPLOY_PIPELINE=multiagent）有幾件事不能替使用者決定：全部列在一張卡上一次問完
+      const flow = newFlow('deploy', text, Object.assign({}, d.draft || {}));
+      flow.step = 'questions'; flow.pipelineId = d.pipeline_id; flow.questions = d.questions; flow.pipeline = d.pipeline || null;
+      flow.sched = sched || null; flow.fullText = originalText || text;
+      appendMsg('assistant', renderFlowCard(flow));
+      return;
+    }
     if(Array.isArray(d.missing) && d.missing.length && d.parsed && !d.rejected){
       // 2026-10-21：句子沒講到映像檔等必要欄位時，不再顯示英文錯誤，直接出部署單讓使用者補（審查流程不變）
       const p = d.parsed;
@@ -4222,13 +4376,15 @@ async function startDeployFlow(text, sched, originalText){
       appendMsg('assistant', '還差' + d.missing.map(k => what[k] || k).join('；') + '。請在下面的部署單補上，再按「下一步」。', null, 'text');
       const flow = newFlow('deploy', text, await applyPersonalSuggest(applyProjectDefaults(Object.assign(specExtras(p), {app_name:p.app_name || '', image:p.image || '', pods:p.pods || 1, port:p.port || 80,
                                              memory:p.memory, cpu:p.cpu})), originalText || text));
-      flow.notices = p._notices || [];
+      flow.notices = (p._notices || []).concat(d.fallback_notice ? [d.fallback_notice] : []);
+      flow.pipeline = d.pipeline || null;
       if(sched){ flow.schedOn = true; flow.when = sched.when || {ts:defaultSchedTs()}; flow.fullText = originalText || text; }   // 預約（2026-10-23 合併時補上）
       appendMsg('assistant', renderFlowCard(flow));
       return;
     }
+    if(d.cancelled){ appendMsg('assistant', d.error || '好，這次先不部署。', null, 'text'); return; }
     if(d.error || d.rejected){
-      appendMsg('assistant', '沒辦法部署：' + (d.error || d.reason || '審查沒有通過。'), null, 'text');
+      appendMsg('assistant', '沒辦法部署：' + (d.error || d.reason || '審查沒有通過。') + (d.fallback_notice ? ' ' + d.fallback_notice : ''), null, 'text');
       return;
     }
     const raw = d.raw || d.parsed || {};
@@ -4236,11 +4392,12 @@ async function startDeployFlow(text, sched, originalText){
       app_name: raw.app_name, image: raw.image, pods: raw.pods, port: raw.port,
       memory: raw.memory, cpu: raw.cpu,
     })), originalText || text));
-    flow.notices = raw._notices || (d.parsed && d.parsed._notices) || [];
+    flow.notices = (raw._notices || (d.parsed && d.parsed._notices) || []).concat(d.fallback_notice ? [d.fallback_notice] : []);
     flow.review = d.review || null;
     flow.resource = d.resource_summary || null;
     flow.scenario = d.scenario || null;
     flow.grounding = (d.parsed && d.parsed._grounding) || (d.raw && d.raw._grounding) || null;   // 參數查證改過的欄位（2026-10-25）
+    flow.pipeline = d.pipeline || null;   // 多代理人流程：欄位來源、額外設定（2026-11-17）
     if(sched){ flow.schedOn = true; flow.when = sched.when || {ts:defaultSchedTs()}; flow.fullText = originalText || text; }
     appendMsg('assistant', renderFlowCard(flow));
   }catch(e){
@@ -5339,7 +5496,8 @@ function flowStateAttrs(flow){
               resultMsg:flow.resultMsg || null, errorMsg:flow.errorMsg || null, blockers:flow.blockers || null,
               retryStep:flow.retryStep || null, pendingSync:!!flow.pendingSync, scenario:flow.scenario || null,
               compose:flow.compose || null, source:flow.source || null, projectId:flow.projectId || null,
-              when:flow.when || null, schedOn:!!flow.schedOn, task:flow.task || null};
+              when:flow.when || null, schedOn:!!flow.schedOn, task:flow.task || null,
+              answersText:flow.answersText || null};
   return `data-flow-id="${flow.id}" data-flow-seq="${flow.seq}" data-flow-step="${flow.step}" data-flow-state="${encodeURIComponent(JSON.stringify(st))}" data-summary="${esc(flowSummary(flow))}"`;
 }
 function flowSummary(flow){
@@ -5365,6 +5523,8 @@ function renderFlowCard(flow){
   if(flow.step === 'scheduled') return renderScheduledCard(flow);
   if(flow.kind === 'compose') return renderComposeCard(flow);
   if(flow.kind === 'deploy'){
+    if(flow.step === 'questions') return renderQuestionsCard(flow);
+    if(flow.step === 'answered') return renderAnsweredCard(flow);
     if(flow.step === 'spec') return renderSpecCard(flow);
     if(flow.step === 'review') return renderReviewCard(flow);
     if(flow.step === 'executing') return renderBusyCard(flow, 'Deploying');
@@ -5619,11 +5779,144 @@ function noticesHTML(flow){
   return ns.length ? `<section class="fill-notices" role="note" aria-label="系統補充說明"><b>請注意</b><ul>${ns.map(n => `<li>${esc(n)}</li>`).join('')}</ul></section>` : '';
 }
 // 部署單以外、但要一路帶到部署的欄位（資料庫密碼、背景程式的指令等）
-const SPEC_EXTRA_KEYS = ['env', 'secret_keys', 'command', 'args', 'expose', 'image_suggested'];
+// 2026-11-17：加 volumes、extra_ports（多代理人流程的「保存資料」「管理網頁」）；後端送審時一樣會重新檢查格式
+const SPEC_EXTRA_KEYS = ['env', 'secret_keys', 'command', 'args', 'expose', 'image_suggested', 'volumes', 'extra_ports', 'workload', 'schedule'];
 function specExtras(src){
   const o = {};
   SPEC_EXTRA_KEYS.forEach(k => { if(src && src[k] != null) o[k] = src[k]; });
   return o;
+}
+
+// ── 多代理人部署解析（DEPLOY_PIPELINE=multiagent，2026-11-17）──
+// 欄位旁的小標籤：系統依你的描述推出來的標「系統建議」，沒有線索時用的標「預設」；你自己講的不標
+function srcTag(flow, key){
+  const s = flow.pipeline && flow.pipeline.sources ? flow.pipeline.sources[key] : null;
+  if(s === 'inferred') return ' <span class="sug-tag">系統建議</span>';
+  if(s === 'default') return ' <span class="sug-tag">預設</span>';
+  return '';
+}
+// 已經套用的額外設定，和「注意到但沒處理」的部分（收合起來，不洗版也不默默丟掉）
+function pipelineExtrasHTML(flow){
+  const p = flow.pipeline;
+  if(!p) return '';
+  const s = flow.spec || {};
+  const items = [];
+  (s.volumes || []).forEach(v => items.push(`保存資料：${esc(v.size || '1Gi')}，掛在 <code>${esc(v.mount)}</code>，服務重啟資料還在`));
+  (s.extra_ports || []).forEach(e => items.push(`另外開 port ${esc(e.port)}（管理網頁）`));
+  if(s.command && !s.image_suggested) items.push(`啟動指令：<code>${esc((s.command || []).join(' '))}</code>`);
+  if(s.expose === false) items.push('不對外開放，只有叢集裡的其他服務連得到');
+  (p.applied || []).filter(a => a.label === '環境變數').forEach(a => items.push(`環境變數（依「${esc(a.evidence)}」設定）`));
+  const sug = (p.applied || []).some(a => a.suggested) ? '<div class="hint">標「系統建議」的是依你的描述推出來的，不需要可以回上一步改。</div>' : '';
+  const un = p.unsupported || [];
+  const ver = p.verified || [];   // 意圖符合檢查（11-17）：系統原本填的和你講的矛盾，檢查後改掉的
+  const verHTML = ver.length ? `<section class="pipe-extras" aria-label="檢查後改過的設定"><b>我檢查後改了這些</b><ul>${ver.map(v => `<li>${esc(v.field)}：${esc(v.from)} → ${esc(v.to)}（${esc(v.issue)}）</li>`).join('')}</ul></section>` : '';
+  return verHTML + (items.length ? `<section class="pipe-extras" aria-label="額外設定"><b>額外設定</b><ul>${items.map(x => `<li>${x}</li>`).join('')}</ul>${sug}</section>` : '')
+    + (un.length ? `<details class="pipe-unsup"><summary>我注意到但沒有處理的 ${un.length} 項</summary><ul>${un.map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>` : '');
+}
+// ── 定時執行（CronJob，2026-11-17）──
+// 排程的中文說明（跟後端 agents/pipeline/cron.describe_zh 同規則，常見寫法才翻，其他照原樣顯示）
+function cronText(c){
+  const p = String(c || '').trim().split(/\s+/);
+  if(p.length !== 5) return c ? `排程 ${c}` : '還沒設定排程';
+  const [m, h, d, mo, w] = p, num = x => /^\d+$/.test(x), pad = x => String(x).padStart(2, '0');
+  if(m.startsWith('*/') && h === '*' && d === '*' && mo === '*' && w === '*') return `每 ${m.slice(2)} 分鐘`;
+  if(num(m) && h === '*' && d === '*' && mo === '*' && w === '*') return `每小時的第 ${+m} 分`;
+  if(num(m) && h.startsWith('*/') && d === '*' && mo === '*' && w === '*') return `每 ${h.slice(2)} 小時（第 ${+m} 分）`;
+  if(num(m) && num(h)){
+    const t = `${pad(h)}:${pad(m)}`;
+    if(d === '*' && mo === '*' && w === '*') return `每天 ${t}（台灣時間）`;
+    if(d === '*' && mo === '*' && num(w)) return `每週${'日一二三四五六'[+w % 7]} ${t}（台灣時間）`;
+    if(num(d) && mo === '*' && w === '*') return `每月 ${+d} 號 ${t}（台灣時間）`;
+  }
+  return `排程 ${c}（台灣時間）`;
+}
+function fmtCronTime(iso){
+  if(!iso) return '—';
+  try{ return new Date(iso).toLocaleString('zh-TW', {timeZone:'Asia/Taipei', hour12:false, month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}); }
+  catch(e){ return iso; }
+}
+const CRON_RESULT = {succeeded:['ok', '成功'], failed:['stop', '失敗'], running:['run', '執行中'], pending:['caution', '等待中']};
+async function loadCronSection(quiet){
+  const host = document.getElementById('svc-cron');
+  if(!host) return;
+  let d;
+  try{ d = await getJSON('/api/cronjobs'); }
+  catch(e){ if(!quiet) host.innerHTML = `<div class="module">${emptyBlock('定時執行讀取失敗。', e.message || String(e))}</div>`; return; }
+  const list = d.cronjobs || [];
+  if(!list.length){ host.innerHTML = ''; return; }   // 沒有定時執行就不佔版面
+  host.innerHTML = `<div class="module"><div class="module-head"><h2>定時執行</h2><span class="meta">每次跑完就結束；時間都是台灣時間</span></div>
+    <div class="body" style="overflow-x:auto"><table class="cron-tbl"><thead><tr><th>名稱</th><th>執行時間</th><th>上次結果</th><th>下次執行</th><th></th></tr></thead><tbody>
+    ${list.map(c => {
+      const r = c.last ? (CRON_RESULT[c.last.result] || ['caution', c.last.result]) : null;
+      return `<tr><td><span class="id">${esc(c.name)}</span><div class="dim">${esc(c.image || '')}</div></td>
+        <td>${esc(c.schedule_text)}${c.suspended ? ' <span class="sug-tag">已暫停</span>' : ''}</td>
+        <td>${r ? `<b class="state s-${r[0]}"><i></i>${esc(r[1])}</b><div class="dim">${esc(fmtCronTime(c.last.started_at))}</div>` : '<span class="dim">還沒跑過</span>'}</td>
+        <td>${c.suspended ? '<span class="dim">暫停中</span>' : esc(fmtCronTime(c.next_run))}</td>
+        <td style="white-space:nowrap"><button type="button" class="btn" onclick="cronAction('${esc(c.name)}', 'run')">立刻跑一次</button>
+          <button type="button" class="btn" onclick="cronAction('${esc(c.name)}', '${c.suspended ? 'resume' : 'suspend'}')">${c.suspended ? '恢復' : '暫停'}</button>
+          <button type="button" class="btn danger" onclick="cronAction('${esc(c.name)}', 'delete')">刪除</button></td></tr>`;
+    }).join('')}</tbody></table><div class="err" data-role="cron-msg" role="status"></div></div></div>`;
+}
+async function cronAction(name, act){
+  if(act === 'delete'){
+    const ok = await askConfirm('刪除定時執行', `<p style="margin:0">確定要刪除「${esc(name)}」嗎？之後不會再定時執行，它保存的資料也會一起刪除，<b>沒辦法復原</b>。</p>`, '確定刪除', '先不要');
+    if(!ok) return;
+  }
+  let d;
+  try{
+    if(act === 'delete') d = await postJSON('/api/delete', {name});
+    else if(act === 'run') d = await postJSON(`/api/cronjobs/${encodeURIComponent(name)}/run`, {});
+    else d = await postJSON(`/api/cronjobs/${encodeURIComponent(name)}/suspend`, {suspend: act === 'suspend'});
+  }catch(e){ d = {success:false, error:'連線失敗，請再試一次。（' + e + '）'}; }
+  const msg = d.message || d.error || '';
+  const el = document.querySelector('[data-role="cron-msg"]');
+  if(el){ el.style.display = msg ? 'block' : 'none'; el.textContent = msg; }
+  else if(msg) setComposerHint(msg, d.success === false ? 'voice-err' : '');
+  if(currentPageName() === 'services') loadCronSection(true);
+}
+
+function renderQuestionsCard(flow){
+  const qs = flow.questions || [];
+  const block = qs.map((q, i) => {
+    const opts = (q.options || []);
+    const name = `${flow.id}-q${i}`;
+    // 推薦值先選好；沒有推薦值（例如不支援的功能、超過上限）就不預選，一定要使用者自己挑
+    const pre = q.recommended != null ? '__auto__' : null;
+    const radios = opts.map(o => `<label class="pq-opt"><input type="radio" name="${name}" value="${esc(o.value)}" ${o.value === pre ? 'checked' : ''}> ${esc(o.label || o.value)}${o.value === '__auto__' && q.recommended ? `<small>（${esc(q.recommended)}）</small>` : ''}</label>`).join('');
+    const free = `<label class="pq-opt pq-free"><input type="radio" name="${name}" value="__text__" ${!opts.length ? 'checked' : ''}> 我自己填：<input type="text" data-q-text="${i}" maxlength="200" placeholder="${esc(q.recommended || '')}" onfocus="this.closest('.pq').querySelector('input[value=__text__]').checked=true"></label>`;
+    const freeOk = !opts.some(o => o.value === 'cancel');   // 「先不部署／改成…」這種二選一不給自由填
+    return `<fieldset class="pq" data-q-id="${esc(q.id)}"><legend>${i + 1}. ${esc(q.question)}</legend>${radios}${freeOk ? free : ''}${q.reason ? `<div class="hint">${esc(q.reason)}</div>` : ''}</fieldset>`;
+  }).join('');
+  return flowShell(flow, flowHead('部署前想先問你', stepsHTML(1)) + `<div class="body">
+    <div class="lead">下面${qs.length > 1 ? '這幾件事' : '這件事'}我沒辦法替你決定。有推薦的已經先選好，看過沒問題直接按「送出」。</div>
+    ${block}
+    <div class="err" data-role="error" role="alert"></div></div>
+    <div class="foot"><button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button>
+      <button type="button" class="btn primary" onclick="flowAnswerQuestions('${flow.id}')">送出</button></div>`);
+}
+function renderAnsweredCard(flow){
+  return flowShell(flow, flowHead('已回答', '') + `<div class="body"><div class="lead">${esc(flow.answersText || '已送出你的回答。')}</div></div>`);
+}
+async function flowAnswerQuestions(id){
+  const flow = chatFlows[id];
+  if(!flowAlive(flow)) return;
+  const root = document.querySelector(`[data-flow-id="${id}"]`);
+  if(!root) return;
+  const answers = {}, lines = [];
+  for(const fs of root.querySelectorAll('.pq')){
+    const picked = fs.querySelector('input[type=radio]:checked');
+    let v = picked ? picked.value : '';
+    let label = picked ? picked.parentElement.textContent.trim() : '';
+    if(v === '__text__'){ v = (fs.querySelector('[data-q-text]')?.value || '').trim(); label = v; }
+    if(!v){ setFlowError(root, '還有問題沒回答：' + fs.querySelector('legend').textContent); return; }
+    answers[fs.dataset.qId] = v;
+    lines.push(fs.querySelector('legend').textContent + ' → ' + label);
+  }
+  flow.step = 'answered'; flow.answersText = lines.join('；');
+  persistFlowCard(id);
+  appendTyping('Understanding');
+  try{ await startDeployFlow(flow.originalText, flow.sched, flow.fullText, {pipeline_id:flow.pipelineId, answers}); }
+  finally{ removeTyping(); }
 }
 function renderSpecCard(flow){
   const s = flow.spec || {};
@@ -5634,14 +5927,17 @@ function renderSpecCard(flow){
     ${scenarioHTML(flow.scenario)}
     ${(flow.grounding || []).length ? `<ul class="scn-notes">${flow.grounding.map(n => `<li>${esc(n)}，請確認是不是你要的。</li>`).join('')}</ul>` : ''}
     ${noticesHTML(flow)}
+    ${pipelineExtrasHTML(flow)}
     <div class="fgrid">
-      <div><label for="${flow.id}-app">服務名稱</label><input id="${flow.id}-app" data-field="app_name" value="${g('app_name')}" placeholder="my-app"><div class="hint">小寫英文字母開頭，只能用小寫字母、數字和連字號，例如 web-frontend</div></div>
-      <div><label for="${flow.id}-img">映像檔${s.image_suggested ? ' <span class="sug-tag">建議</span>' : ''}</label><input id="${flow.id}-img" data-field="image" value="${g('image')}" placeholder="nginx:1.27">${s.image_suggested ? '<div class="hint">這是系統建議的，可以改成你自己的程式</div>' : ''}</div>
+      <div><label for="${flow.id}-app">服務名稱${srcTag(flow, 'app_name')}</label><input id="${flow.id}-app" data-field="app_name" value="${g('app_name')}" placeholder="my-app"><div class="hint">小寫英文字母開頭，只能用小寫字母、數字和連字號，例如 web-frontend</div></div>
+      <div><label for="${flow.id}-img">映像檔${s.image_suggested ? ' <span class="sug-tag">建議</span>' : srcTag(flow, 'image')}</label><input id="${flow.id}-img" data-field="image" value="${g('image')}" placeholder="nginx:1.27">${s.image_suggested ? '<div class="hint">這是系統建議的，可以改成你自己的程式</div>' : ''}</div>
       ${(s.secret_keys || []).filter(k => s.env && s.env[k] != null).map(k => `<div><label for="${flow.id}-sec-${esc(k)}">資料庫密碼（${esc(k)}）</label><input id="${flow.id}-sec-${esc(k)}" data-secret="${esc(k)}" value="${esc(s.env[k])}" autocomplete="off"><div class="hint">已自動產生，可以改成你自己的；存在 Secret，不會寫進 Git</div></div>`).join('')}
-      <div><label for="${flow.id}-pods">副本數</label><input id="${flow.id}-pods" data-field="pods" type="number" min="1" max="50" value="${g('pods') || 1}"></div>
-      <div><label for="${flow.id}-port">Port</label><input id="${flow.id}-port" data-field="port" type="number" min="1" max="65535" value="${g('port') || 80}"></div>
-      <div><label for="${flow.id}-mem">每個副本的記憶體（選填）</label><input id="${flow.id}-mem" data-field="memory" value="${g('memory')}" placeholder="例如 256Mi"></div>
-      <div><label for="${flow.id}-cpu">每個副本的 CPU（選填）</label><input id="${flow.id}-cpu" data-field="cpu" value="${g('cpu')}" placeholder="例如 100m"></div>
+      <div><label for="${flow.id}-pods">副本數${srcTag(flow, 'pods')}</label><input id="${flow.id}-pods" data-field="pods" type="number" min="1" max="50" value="${g('pods') || 1}" ${s.workload === 'cronjob' ? 'readonly' : ''}>${s.workload === 'cronjob' ? '<div class="hint">定時執行每次只跑一份</div>' : ''}</div>
+      ${s.workload === 'cronjob'
+        ? `<div><label for="${flow.id}-sched">執行時間（排程）</label><input id="${flow.id}-sched" data-field="schedule" value="${esc(s.schedule || '')}" placeholder="0 3 * * *"><div class="hint">${esc(cronText(s.schedule))}。寫法是「分 時 日 月 星期」，例如 0 3 * * * 是每天 03:00（台灣時間）；最短每 5 分鐘一次，每次最多跑 1 小時</div></div>`
+        : `<div><label for="${flow.id}-port">Port${srcTag(flow, 'port')}</label><input id="${flow.id}-port" data-field="port" type="number" min="1" max="65535" value="${g('port') || 80}"></div>`}
+      <div><label for="${flow.id}-mem">每個副本的記憶體（選填）${srcTag(flow, 'memory')}</label><input id="${flow.id}-mem" data-field="memory" value="${g('memory')}" placeholder="例如 256Mi"></div>
+      <div><label for="${flow.id}-cpu">每個副本的 CPU（選填）${srcTag(flow, 'cpu')}</label><input id="${flow.id}-cpu" data-field="cpu" value="${g('cpu')}" placeholder="例如 100m"></div>
     </div>
     <div class="err" data-role="error" role="alert"></div></div>
     <div class="foot"><button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button>
@@ -5653,8 +5949,9 @@ function readSpecCard(id){
   const get = f => (root.querySelector(`[data-field="${f}"]`)?.value || '').trim();
   const flow = chatFlows[id] || {};
   const spec = Object.assign(specExtras(flow.spec), {app_name:get('app_name'), image:get('image'), pods:parseInt(get('pods'), 10), port:parseInt(get('port'), 10)});
-  // 使用者改了映像檔，就不再是系統建議的，背景程式的空殼指令也不適用了
-  if(flow.spec && spec.image !== flow.spec.image){ delete spec.image_suggested; delete spec.command; delete spec.args; delete spec.expose; }
+  if(spec.workload === 'cronjob'){ spec.schedule = get('schedule'); spec.pods = 1; spec.port = 80; }   // 定時執行（2026-11-17）
+  // 使用者改了映像檔，就不再是系統建議的，背景程式的空殼指令也不適用了（定時執行的指令是使用者自己的，保留）
+  if(flow.spec && spec.image !== flow.spec.image && spec.workload !== 'cronjob'){ delete spec.image_suggested; delete spec.command; delete spec.args; delete spec.expose; }
   root.querySelectorAll('[data-secret]').forEach(el => {
     const v = el.value.trim();
     if(v){ spec.env = Object.assign({}, spec.env, {[el.dataset.secret]: v}); }
@@ -5739,7 +6036,7 @@ function renderReviewCard(flow){
     <dl class="spec">
       <div><dt>映像檔</dt><dd>${esc(imgName)}${imgTag ? `<small>${esc(imgTag)}</small>` : ''}</dd></div>
       <div><dt>副本</dt><dd>${esc(s.pods ?? '')}<small>個</small></dd></div>
-      <div><dt>Port</dt><dd>${esc(s.port ?? '')}</dd></div>
+      ${s.workload === 'cronjob' ? `<div><dt>執行時間</dt><dd><small>${esc(cronText(s.schedule))}</small></dd></div>` : `<div><dt>Port</dt><dd>${esc(s.port ?? '')}</dd></div>`}
       <div><dt>每個副本的記憶體</dt><dd>${s.memory ? esc(String(s.memory).replace(/(Mi|Gi)$/, '')) + `<small>${esc((String(s.memory).match(/(Mi|Gi)$/) || [''])[0])}</small>` : '<small>系統預設</small>'}</dd></div>
     </dl>
     <div class="review">
@@ -5829,6 +6126,16 @@ function legsHTML(flow){
 function renderDoneCard(flow){
   const s = flow.spec || {};
   const ro = flow.rollout || {};
+  if(ro.state === 'cron'){
+    // 定時執行（2026-11-17）：跑完就結束，沒有「副本就緒」可以等；告訴使用者什麼時候會跑、可以先試跑一次
+    return flowShell(flow, flowHead(`<span class="id">${esc(s.app_name || '')}</span>`, '<span class="meta"><b class="state s-run"><i></i>已建立定時執行</b></span>') + `
+    <div class="body"><div class="lead">${esc(ro.message || '')}</div><div class="dim">${esc(s.image || '')}，${esc(cronText(s.schedule))}</div></div>
+    <div class="foot" style="justify-content:flex-start">
+      <button type="button" class="btn primary" onclick="cronAction('${esc(s.app_name || '')}', 'run')">立刻跑一次</button>
+      <button type="button" class="btn" onclick="showPage('services')">到我的服務查看</button>
+      <button type="button" class="btn" onclick="showPage('gitops')">部署紀錄</button>
+    </div>`, 'done-card');
+  }
   let note = '';
   if(ro.state === 'timeout') note = `<div class="err" style="display:block">已經等了 5 分鐘，副本還沒全部就緒。可能是映像檔下載太慢或啟動失敗，點「查看服務」看原因，或說「${esc(s.app_name)} 有沒有壞」請 Healer 檢查。</div>`;
   return flowShell(flow, flowHead(`<span class="id">${esc(s.app_name || '')}</span>`, ro.state === 'running' ? '<span class="meta"><b class="state s-run"><i></i>部署完成</b></span>' : stepsHTML(3)) + legsHTML(flow) + `
@@ -5900,7 +6207,7 @@ function hydrateChatFlows(){
     const mm = String(m.content || '').match(/data-flow-state="([^"]*)"/);
     if(!mm) return;
     let st; try { st = JSON.parse(decodeURIComponent(mm[1])); } catch(e){ return; }
-    if(st.kind === 'deploy' && st.step === 'done' && (!st.rollout || st.rollout.state !== 'running') && st.rollout?.state !== 'timeout'){
+    if(st.kind === 'deploy' && st.step === 'done' && (!st.rollout || st.rollout.state !== 'running') && st.rollout?.state !== 'timeout' && st.rollout?.state !== 'cron'){
       chatFlows[st.id] = st; resume.push(st.id); return;
     }
     // 預約卡的按鈕操作的是伺服器上的預約（不靠記憶體），重新整理後照樣能用；狀態以伺服器為準重抓
@@ -5912,7 +6219,7 @@ function hydrateChatFlows(){
       }).catch(() => {});
       return;
     }
-    if(['done', 'error', 'cancelled', 'expired'].includes(st.step)) return;
+    if(['done', 'error', 'cancelled', 'expired', 'answered'].includes(st.step)) return;
     st.step = 'expired';
     chatFlows[st.id] = st;
     m.content = renderFlowCard(st);
@@ -6489,6 +6796,7 @@ async function mountWidget(hostId, kind, state, quiet){
 }
 function loadServicesPage(quiet){
   mountWidget('svc-deps', 'deployments', {p:1}, quiet);
+  loadCronSection(quiet);   // 2026-11-17 定時執行
   mountWidget('svc-autoscale', 'autoscale', {p:1}, quiet);   // 2026-10-21：分時擴縮與休眠，可以直接點按鈕設定
   mountWidget('svc-pods', 'pods', {f:'all', p:1}, quiet);
 }
@@ -7775,6 +8083,17 @@ def _sanitize_deploy_payload(raw: dict) -> dict:
         keys = [str(k) for k in sk[:50] if str(k) in clean["env"]]
         if keys:
             clean["secret_keys"] = keys
+    # 2026-11-17 定時執行（CronJob）：排程一定要合法、間隔至少 5 分鐘；不合格就回錯誤，不能默默變成一直執行的服務
+    if parsed.get("workload") == "cronjob":
+        from agents.pipeline.reasoner import valid_cron
+        from agents.pipeline.cron import too_frequent, MIN_INTERVAL_MINUTES
+        _c = valid_cron(parsed.get("schedule"))
+        if not _c or too_frequent(_c):
+            clean["error"] = (f"排程時間「{str(parsed.get('schedule') or '')[:60]}」的寫法不對，或比上限更頻繁"
+                              f"（定時執行最短每 {MIN_INTERVAL_MINUTES} 分鐘一次）。請改成像「0 3 * * *」（每天 03:00）這樣的寫法。")
+        else:
+            clean.update({"workload": "cronjob", "schedule": _c, "pods": 1, "expose": False})
+            clean.pop("extra_ports", None)
     return clean
 
 
@@ -7821,19 +8140,29 @@ def _apply_scenario(user_input: str, parsed: dict):
     return result
 
 
-def _prepare_deploy(user_input: str, parsed_override: dict = None):
-    parsed = _sanitize_deploy_payload(parsed_override) if parsed_override else ask_llama(user_input)
+def _prepare_deploy(user_input: str, parsed_override: dict = None, pre_parsed: dict = None):
+    # pre_parsed：多代理人流程（DEPLOY_PIPELINE=multiagent）已經解析好的規格，取代 ask_llama；沒傳時行為和原本一樣
+    if parsed_override:
+        parsed = _sanitize_deploy_payload(parsed_override)
+    else:
+        parsed = pre_parsed if pre_parsed is not None else ask_llama(user_input)
     if "error" in parsed:
         return None, None, None, ({"error": parsed["error"]}, 422)
-    notices = []   # 2026-11-07：要讓使用者看到的補全與提醒（部署單、審查卡都會顯示）
+    _is_cron = parsed.get("workload") == "cronjob"
+    if _is_cron and has_request_context() and "username" in session and _is_remote_ns(_session_ns()):
+        # 2026-11-17：客戶自帶叢集的權限、回報程式、repo 寫法都只認 Deployment，這次先不支援，明白告知
+        return None, None, None, ({"error": "定時執行目前只支援平台的叢集，你的帳號連的是自己的叢集，還不能部署定時執行的服務。"
+                                            "可以改成一直執行的服務，或請管理員協助。"}, 422)
+    notices = list(parsed.get("_notices") or [])   # 2026-11-07：要讓使用者看到的補全與提醒（部署單、審查卡都會顯示）
     from agents import deploy_fill
     if not parsed_override:
-        # 模型捏造的映像檔（對照實驗：英文需求被補成 website:latest）當作沒講
-        if parsed.get("image") and not deploy_fill.image_grounded(parsed["image"], user_input):
+        # 模型捏造的映像檔（對照實驗：英文需求被補成 website:latest）當作沒講。
+        # 多代理人流程的映像檔可以是推理代理依用途推出來的（部落格 → wordpress），來源另外標在部署單上，不在這裡丟掉
+        if pre_parsed is None and parsed.get("image") and not deploy_fill.image_grounded(parsed["image"], user_input):
             print(f"[映像檔查核] 原句找不到根據，捨棄：{parsed['image']}")
             parsed["image"] = None
         try:
-            scenario = _apply_scenario(user_input, parsed)
+            scenario = None if _is_cron else _apply_scenario(user_input, parsed)   # 定時執行固定 1 份，不推算副本數
         except Exception as e:
             print(f"[情境解析] 失敗，照原本的規格繼續：{e}")
             scenario = None
@@ -7848,7 +8177,7 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
                 notices.append(f"你沒有指定要跑的程式，先建議用 {_sug}（網頁伺服器，會先顯示預設頁面），"
                                "之後可以換成你自己的網站程式")
         # 背景程式沒給啟動指令：建一個保持運作的空殼，不對外開放
-        if parsed.get("image") and deploy_fill.needs_keepalive(parsed["image"], user_input, bool(parsed.get("command")),
+        if not _is_cron and parsed.get("image") and deploy_fill.needs_keepalive(parsed["image"], user_input, bool(parsed.get("command")),
                                                                bool(_PORT_MENTION_RE.search(user_input))):
             parsed["command"] = list(deploy_fill.KEEPALIVE_COMMAND)
             parsed["expose"] = False
@@ -7861,7 +8190,7 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
         # 2026-10-10：加上健康檢查後，port 錯了服務會一直停在未就緒；原本則是看起來正常、其實連不上。
         from agents.cost_agent import default_port
         _known = default_port(parsed.get("image"))
-        if _known and int(parsed.get("port") or 80) == 80 and not _PORT_MENTION_RE.search(user_input):
+        if _known and not _is_cron and int(parsed.get("port") or 80) == 80 and not _PORT_MENTION_RE.search(user_input):
             parsed["port"] = _known
     # 資料庫啟動一定要有密碼：自動產生並存進 Secret（部署單上可以改）
     if parsed.get("image"):
@@ -7985,6 +8314,15 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
                     agg_over_cpu = node_cpu_mc and agg_cpu_mc > node_cpu_mc
                     agg_over_mem = node_mem_b and agg_mem_b > node_mem_b
                     if agg_over_cpu or agg_over_mem:
+                        # 2026-11-17（多代理人計畫第 3 步「格式及負荷檢查」）：訊息加上目前還剩多少、照現在的每副本配置最多能開幾個。
+                        # 判斷規則不變，也不自動調低，由使用者決定
+                        _left_cpu, _left_mem = max(node_cpu_mc - existing_cpu_mc, 0), max(node_mem_b - existing_mem_b, 0)
+                        _fits = [x for x in (_left_cpu // pod_cpu_mc if pod_cpu_mc else None,
+                                             _left_mem // pod_mem_b if pod_mem_b else None) if x is not None]
+                        _max_pods = int(min(_fits)) if _fits else None
+                        _avail_msg = (f"目前叢集還剩約 {_left_cpu}m CPU / {_left_mem // (1024**2)}Mi 記憶體"
+                                      + (f"，照這次每個副本的配置最多可以開 {_max_pods} 個" if _max_pods else "，連一個副本都放不下")
+                                      + "。")
                         review["decision"] = "block"
                         review["reason"] = "疊加叢集現有其他部署後，總資源需求會超出節點容量"
                         review.setdefault("blockers", []).append(
@@ -7992,7 +8330,7 @@ def _prepare_deploy(user_input: str, parsed_override: dict = None):
                             f"其他部署已經用掉的資源，套用後總計約需要 {agg_cpu_mc}m CPU / "
                             f"{agg_mem_b // (1024**2)}Mi 記憶體，但叢集最大節點只有 {node_cpu_mc}m CPU / "
                             f"{node_mem_b // (1024**2)}Mi 可用。多出來排不進去的 Pod 會卡在 Pending 狀態，"
-                            f"畫面卻顯示部署成功，容易被忽略。請降低這次部署的副本數/資源需求，或先移除、"
+                            f"畫面卻顯示部署成功，容易被忽略。{_avail_msg}請降低這次部署的副本數/資源需求，或先移除、"
                             f"縮小其他部署。"
                         )
                 except Exception:
@@ -8191,6 +8529,118 @@ def api_compose_parse():
     return jsonify(result)
 
 
+# ── 2026-11-17 多代理人部署解析（agents/pipeline/，計畫 buzzing-discovering-rabbit 第 3 步）──────────
+# .env 設 DEPLOY_PIPELINE=multiagent 才開；沒設時 /api/deploy/parse 行為和原本完全一樣。
+# 有問題要問使用者時，中間 JSON 存在伺服器記憶體（不交給前端保管，回答時只送問題編號與答案，避免被竄改），
+# 一小時後失效；網站重啟也會清掉，使用者重新輸入一次即可。
+_PIPELINE_TTL = 3600
+_PIPELINE_MAX = 500
+_pipeline_states = {}
+_pipeline_lock = threading.Lock()
+_PIPELINE_FIELD_KEYS = {"image": "image", "app_name": "app_name", "replicas": "pods", "port": "port",
+                        "memory": "memory", "cpu": "cpu"}
+
+
+def _pipeline_enabled() -> bool:
+    return os.environ.get("DEPLOY_PIPELINE", "").strip().lower() == "multiagent"
+
+
+def _pipeline_put(username: str, text: str, spec: dict) -> str:
+    pid = secrets.token_urlsafe(16)
+    now = _time.time()
+    with _pipeline_lock:
+        for k in [k for k, v in _pipeline_states.items() if now - v["at"] > _PIPELINE_TTL]:
+            _pipeline_states.pop(k, None)
+        if len(_pipeline_states) >= _PIPELINE_MAX:
+            for k in sorted(_pipeline_states, key=lambda k: _pipeline_states[k]["at"])[:len(_pipeline_states) - _PIPELINE_MAX + 1]:
+                _pipeline_states.pop(k, None)
+        _pipeline_states[pid] = {"user": username, "text": text, "spec": spec, "at": now}
+    return pid
+
+
+def _pipeline_take(username: str, pid: str):
+    """取出（並移除）這個帳號的中間 JSON；別的帳號的、過期的都當作不存在。"""
+    with _pipeline_lock:
+        st = _pipeline_states.get(str(pid or ""))
+        if not st or st["user"] != username or _time.time() - st["at"] > _PIPELINE_TTL:
+            return None
+        return _pipeline_states.pop(pid)
+
+
+def _pipeline_summary(spec: dict) -> dict:
+    """部署單要顯示的部分：每個欄位的來源、已經套用的額外設定、收合起來的「注意到但沒處理」。"""
+    unsupported = [f"「{e['evidence'] or e['desc']}」：{e['note']}" for e in spec.get("extras", []) if e.get("status") == "unsupported"]
+    applied = []
+    for e in spec.get("extras", []):
+        if e.get("status") != "applied":
+            continue
+        label = {"secret": "資料庫密碼用你講的", "storage": "保存資料", "command": "啟動指令", "no_expose": "不對外開放",
+                 "extra_port": "管理網頁", "env": "環境變數"}.get(e["kind"], e["kind"])
+        applied.append({"label": label, "evidence": e.get("evidence") or "",
+                        "suggested": e.get("source") != "user"})
+    sources = {_PIPELINE_FIELD_KEYS[f]: spec["base"][f]["source"] for f in _PIPELINE_FIELD_KEYS if spec["base"][f]["value"] is not None}
+    return {"sources": sources, "applied": applied, "unsupported": unsupported,
+            "verified": [dict(v) for v in spec.get("verified", [])][:10],   # 意圖符合檢查改過的（11-17）
+            "workload": (spec.get("workload") or {}).get("value"),
+            "normalizer": (spec.get("backend") or {}).get("normalize"), "total_ms": spec.get("total_ms")}
+
+
+def _pipeline_questions(spec: dict) -> list:
+    return [{"id": q["id"], "question": q["question"], "options": q.get("options") or [],
+             "recommended": q.get("recommended"), "reason": q.get("reason", "")} for q in spec.get("questions", [])]
+
+
+def _pipeline_deploy_parse(data: dict, user_input: str):
+    """多代理人流程版的 /api/deploy/parse（沒有覆寫規格時）。回傳 (payload, status)；回 None 代表本地模型不在，照舊走 ask_llama。"""
+    from agents.pipeline import llm as pllm, runner
+    from llama_client import _predeploy_boundary_precheck, _parse_error_response
+    username = session["username"]
+    pid = str(data.get("pipeline_id") or "").strip()
+    if pid:
+        state = _pipeline_take(username, pid)
+        if not state:
+            return {"error": "這張問題卡已經失效（超過一小時或網站重新啟動過），請再說一次你想部署什麼。"}, 410
+        answers = data.get("answers") if isinstance(data.get("answers"), dict) else {}
+        answers = {str(k)[:20]: str(v)[:300] for k, v in list(answers.items())[:20]}
+        user_input = state["text"]
+        spec = runner.resume(state["spec"], answers, pllm.local_llm)
+    else:
+        pre = _parse_error_response(_predeploy_boundary_precheck(user_input))
+        if pre:
+            return {"error": pre["error"]}, 422
+        if not pllm.local_available():
+            print("[多代理人解析] 本地模型伺服器（8766）沒有回應，這次改走原本的 ask_llama")
+            return None
+        spec = runner.run(user_input, pllm.gemini_llm, pllm.local_llm)
+    print(f"[多代理人解析] 正規化={spec['backend'].get('normalize')} 耗時={spec.get('total_ms')}ms 問題={len(spec['questions'])}")
+    if spec.get("cancelled"):
+        return {"error": "好，這次先不部署。", "cancelled": True}, 200
+    summary = _pipeline_summary(spec)
+    if spec["questions"]:
+        b = spec["base"]
+        return {"needs_answers": True, "pipeline_id": _pipeline_put(username, user_input, spec),
+                "questions": _pipeline_questions(spec), "pipeline": summary,
+                "draft": {_PIPELINE_FIELD_KEYS[f]: b[f]["value"] for f in _PIPELINE_FIELD_KEYS}}, 200
+    payload = runner.to_payload(spec)
+    clean = _sanitize_deploy_payload(payload)   # 模型輸出一樣要經過格式檢查，跟部署單送回來的規格同一套
+    clean["_parser"] = "multiagent"
+    unsupported = set(summary["unsupported"])
+    pipe_notices = [n for n in spec.get("notices", []) if n not in unsupported]
+    if pipe_notices:
+        clean["_notices"] = pipe_notices
+    parsed, enriched, review, error = _prepare_deploy(user_input, None, pre_parsed=clean)
+    scenario = parsed.pop("_scenario", None) if isinstance(parsed, dict) else None
+    if isinstance(enriched, dict):
+        enriched.pop("_scenario", None)
+    if error:
+        body, status = error
+        if isinstance(body, dict):
+            body["pipeline"] = summary
+        return body, status
+    return {"parsed": enriched, "raw": parsed, "review": review, "k8s": K8S_ENABLED,
+            "resource_summary": _resource_summary(parsed, review), "scenario": scenario, "pipeline": summary}, 200
+
+
 @app.route("/api/deploy/parse", methods=["POST"])
 def api_deploy_parse():
     if "username" not in session:
@@ -8200,6 +8650,14 @@ def api_deploy_parse():
     parsed_override = data.get("parsed")
     if not user_input and parsed_override:
         user_input = _synth_input_from_spec(parsed_override)
+    fallback_notice = None
+    if _pipeline_enabled() and not parsed_override and (data.get("pipeline_id") or len(user_input) >= 3):
+        out = _pipeline_deploy_parse(data, user_input)
+        if out is not None:
+            return jsonify(out[0]), out[1]
+        # 不能靜默退回（AGENT_RULES）：部署單上告訴使用者這次用的是原本的解析方式，以及怎麼恢復
+        fallback_notice = ("新的部署解析（多代理人流程）目前沒有啟動，這次改用原本的解析方式，額外的設定（保存資料、密碼等）可能沒有帶到。"
+                           "請管理員啟動本地模型伺服器（core/pipeline_model_server.py）後再試一次。")
     if not user_input or len(user_input) < 3:
         return jsonify({"error": "輸入內容太短，請描述清楚要部署什麼"}), 400
     parsed, enriched, review, error = _prepare_deploy(user_input, parsed_override)
@@ -8208,12 +8666,17 @@ def api_deploy_parse():
         enriched.pop("_scenario", None)
     if error:
         payload, status = error
+        if fallback_notice and isinstance(payload, dict):
+            payload["fallback_notice"] = fallback_notice
         return jsonify(payload), status
-    return jsonify({
+    body = {
         "parsed": enriched, "raw": parsed, "review": review, "k8s": K8S_ENABLED,
         "resource_summary": _resource_summary(parsed, review),
         "scenario": scenario,
-    })
+    }
+    if fallback_notice:
+        body["fallback_notice"] = fallback_notice
+    return jsonify(body)
 
 
 # 2026-10-23：部署請求重送不重複（Idempotency-Key）。前端每一次部署帶一個請求編號；同一個編號、同一份規格
@@ -8329,7 +8792,15 @@ def _api_deploy_impl():
     # 同步呼叫（不是背景執行緒）：讓回應反映 K8s 是不是真的部署成功，而不是「沒報錯就當作成功」。
     # k8s_deploy() 內部四個 API 呼叫都已加上 _request_timeout=(5,10) 且 retries=0，不會無限期卡住這個 request。
     k8s_deploy_result = None
-    if K8S_ENABLED:
+    if K8S_ENABLED and parsed.get("workload") == "cronjob":
+        # 2026-11-17 定時執行：建立 CronJob（不建 Service）
+        ok, message = k8s_deploy_cronjob(parsed, namespace=user_ns)
+        k8s_deploy_result = {"ok": ok, "message": message, "cronjob": True}
+        if not ok:
+            review.setdefault("warnings", []).append(f"K8s 部署失敗：{message}")
+        else:
+            _ws_assign_after_deploy(data.get("project_id"), parsed.get("app_name"), user_ns)
+    elif K8S_ENABLED:
         ok, message = k8s_deploy(parsed["app_name"], parsed["image"], parsed["pods"], parsed.get("port", 80), parsed.get("memory"), parsed.get("cpu"), namespace=user_ns,
                                  env=parsed.get("env"), container_port_override=parsed.get("container_port"),
                                  expose=parsed.get("expose", True), dns_alias=parsed.get("dns_alias", False),
@@ -8453,6 +8924,88 @@ def api_deployment_detail(name):
     return jsonify({"deployment": d, "found": True})
 
 
+# 2026-11-17 定時執行：擴縮、換映像檔、回滾是給一直執行的服務用的，遇到定時執行要說明為什麼不能用、可以怎麼做
+_CRON_NA = {
+    "scale": "這是定時執行的服務，每次只跑一份、跑完就結束，不能調整副本數。要調整執行時間，請刪掉後重新建立。",
+    "update": "這是定時執行的服務，目前不能直接換映像檔。請刪掉後用新的映像檔重新建立（保存的資料會一起刪除）。",
+    "rollback": "這是定時執行的服務，沒有「上一版」可以回滾。要修改設定，請刪掉後重新建立。",
+}
+
+
+def _is_cronjob_only(name, ns) -> bool:
+    """這個名稱是定時執行、而且沒有同名的一般服務（有同名 Deployment 時照原本的流程）。"""
+    if not K8S_ENABLED or not name or _is_remote_ns(ns) or not k8s_cronjob_exists(name, ns):
+        return False
+    try:
+        k8s_client.AppsV1Api().read_namespaced_deployment(name, ns, _request_timeout=(5, 10))
+        return False
+    except Exception:
+        return True
+
+
+@app.route("/api/cronjobs")
+def api_cronjobs():
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    return jsonify({"cronjobs": k8s_get_cronjobs(_session_ns()), "k8s": K8S_ENABLED})
+
+
+def _cron_target(name):
+    """/api/cronjobs/<name>/... 共用：名稱格式、K8s 連線、是不是這個帳號自己的定時執行。"""
+    from gitops.rollback import is_valid_k8s_name
+    if not is_valid_k8s_name(name or ""):
+        return None, (jsonify({"success": False, "error": "服務名稱不合法。"}), 400)
+    if not K8S_ENABLED:
+        return None, (jsonify({"success": False, "error": "目前沒有連上 Kubernetes，請先開啟 Docker Desktop 並啟用 Kubernetes。"}), 503)
+    ns = _session_ns()
+    if _is_remote_ns(ns) or not k8s_cronjob_exists(name, ns):
+        return None, (jsonify({"success": False, "error": f"找不到定時執行「{name}」。"}), 404)
+    return ns, None
+
+
+@app.route("/api/cronjobs/<name>/run", methods=["POST"])
+def api_cronjob_run(name):
+    """立刻跑一次：照 CronJob 的 jobTemplate 建一個 Job（掛在 CronJob 底下，刪除時一起清掉）。"""
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    ns, err = _cron_target(name)
+    if err:
+        return err
+    try:
+        batch, _core = _k8s_batch_clients()
+        cj = batch.read_namespaced_cron_job(name, ns, _request_timeout=(5, 10))
+        job_name = f"{name}-manual-{int(_time.time())}"[:63]
+        tmpl = k8s_client.ApiClient().sanitize_for_serialization(cj.spec.job_template)
+        body = {"apiVersion": "batch/v1", "kind": "Job",
+                "metadata": {"name": job_name, "labels": {"app": name, "zerotouch/manual-run": "true"},
+                             "ownerReferences": [{"apiVersion": "batch/v1", "kind": "CronJob", "name": name,
+                                                  "uid": cj.metadata.uid, "controller": True}]},
+                "spec": tmpl.get("spec") or {}}
+        batch.create_namespaced_job(ns, body, _request_timeout=(5, 10))
+        _events.record(ns, "cron_run", name, "ok", {"job": job_name}, username=session.get("username"))
+        return jsonify({"success": True, "message": f"已經開始執行「{name}」，跑完之後可以在「我的服務」看到結果。", "job": job_name})
+    except Exception as e:
+        return jsonify({"success": False, "error": f"沒辦法開始執行：{e}"}), 500
+
+
+@app.route("/api/cronjobs/<name>/suspend", methods=["POST"])
+def api_cronjob_suspend(name):
+    """暫停／恢復定時執行（暫停時不會再按時間啟動，已經在跑的不受影響）。"""
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    ns, err = _cron_target(name)
+    if err:
+        return err
+    suspend = bool((request.get_json(silent=True) or {}).get("suspend", True))
+    try:
+        batch, _core = _k8s_batch_clients()
+        batch.patch_namespaced_cron_job(name, ns, {"spec": {"suspend": suspend}}, _request_timeout=(5, 10))
+        _events.record(ns, "cron_suspend" if suspend else "cron_resume", name, "ok", {}, username=session.get("username"))
+        return jsonify({"success": True, "message": f"已{'暫停' if suspend else '恢復'}「{name}」的定時執行。"})
+    except Exception as e:
+        return jsonify({"success": False, "error": f"沒辦法{'暫停' if suspend else '恢復'}：{e}"}), 500
+
+
 @app.route("/api/delete", methods=["POST"])
 def api_delete():
     if "username" not in session:
@@ -8460,6 +9013,13 @@ def api_delete():
     name = (request.get_json() or {}).get("name","").strip()
     if not name:
         return jsonify({"error": "請提供服務名稱。"}), 400
+    if _is_cronjob_only(name, _session_ns()):
+        # 2026-11-17 定時執行：刪 CronJob 和它的 Job、Secret、保存空間
+        try:
+            k8s_delete_cronjob(name, _session_ns())
+            return jsonify({"success": True, "message": f"已刪除定時執行「{name}」，它保存的資料也一起刪除了。", "error": None})
+        except Exception as e:
+            return jsonify({"success": False, "message": str(e), "error": str(e)})
     ok, msg = k8s_delete_deployment(name, _session_ns())
     return jsonify({"success": ok, "message": msg, "error": None if ok else msg})
 
@@ -8497,6 +9057,8 @@ def api_scale():
     if not name:
         return jsonify({"success": False, "error": "請提供服務名稱。"}), 400
     user_ns = _session_ns()
+    if _is_cronjob_only(name, user_ns):
+        return jsonify({"success": False, "error": _CRON_NA["scale"]}), 400
     ok, err, status = _scale_check(name, replicas, user_ns)
     if not ok:
         payload = {"success": False, "error": err}
@@ -8536,6 +9098,8 @@ def api_update():
         return jsonify({"success": False, "error": "K8s 未連線"}), 503
     if not name or not image:
         return jsonify({"success": False, "error": "name and image are required"}), 400
+    if _is_cronjob_only(name, user_ns):
+        return jsonify({"success": False, "error": _CRON_NA["update"]}), 400
     try:
         api = k8s_client.AppsV1Api()
         dep = api.read_namespaced_deployment(name, user_ns)
@@ -8570,6 +9134,8 @@ def api_rollback():
         return jsonify({"success": False,
                         "error": "應用程式名稱不合法，只能用小寫英數字與連字號"
                                  }), 400
+    if not _is_remote_ns(user_ns) and _is_cronjob_only(app_name, user_ns):
+        return jsonify({"success": False, "error": _CRON_NA["rollback"]}), 400
     if _is_remote_ns(user_ns):
         return _remote_git_op(user_ns, lambda r: r.revert_app(app_name),
                               lambda res: f"已把 {app_name} 回滾到上一版設定（{res.get('rolled_back_to')}）。")
@@ -8800,6 +9366,11 @@ def _real_heal_pod(pod_name: str, namespace: str = "default") -> dict:
     issue = _check_pod(pod)
     if not issue:
         return {"ok": True, "action": "none", "message": f"Pod {pod_name} 目前狀態正常，無需修復", "root_cause": None}
+    if any(o.kind == "Job" for o in (pod.metadata.owner_references or [])):
+        # 2026-11-17 定時執行：每次執行都是新的 Pod，Healer 的修復（改 Deployment、回滾）套不上去，只回報不動手
+        return {"ok": False, "action": "report_only", "root_cause": issue.get("reason"),
+                "message": (f"「{pod_name}」是定時執行跑出來的，這次執行失敗（{issue.get('reason')}）。定時執行不會自動修復："
+                            "請看這個 Pod 的 log 找原因，修正後在「我的服務」按「立刻跑一次」重試，或刪掉後重新建立。")}
     logs = _get_pod_logs(issue["pod_name"], issue["namespace"], issue["container"])
     events = _get_pod_events(issue["pod_name"], issue["namespace"])
     context = {**issue, "logs": logs, "events": events}

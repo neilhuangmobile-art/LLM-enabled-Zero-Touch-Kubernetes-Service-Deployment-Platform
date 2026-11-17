@@ -77,6 +77,29 @@
 6. 所有變更透過 GitOps 版本控管，可隨時回滾
 ```
 
+## 多代理人部署解析（2026-11-17，`DEPLOY_PIPELINE=multiagent`，預設關閉）
+
+```
+原句 ─ 邊界預檢（多服務、副本數範圍）
+     ─ ① 正規化：Gemini（失敗改用本地 Qwen3.5-4B）→ 中間 JSON（只寫使用者講過的，原句找不到根據的丟掉）
+     ─ ② 意圖檢查：本地模型比對原句和 JSON，找出「講了卻沒寫進去」的，最多 3 輪
+     ─ ③ 空缺檢查：推理代理補空的欄位（標 inferred，只送原句），最多 3 輪
+         └ 選軟體：映像檔要在知識表裡（不在＝捏造，改問）；再用原句查 RAG 候選（BGE-M3＋reranker），本地模型從候選挑最合適的
+         └ 查表補 port、資料路徑、資源（標 default；linuxserver/* 用它官方設定的 port 與資料夾）
+     ─ 意圖符合檢查：系統填的值有沒有和原句矛盾（目前只檢查「要不要定時執行」，verify.CHECK_FIELDS），最多 3 輪，修不好問使用者
+     ─ ④ 額外欄位對應：密碼→Secret、保存資料→PVC、指令、管理網頁 port、排程→定時執行（CronJob）；對應不到的標「不支援」
+     ─ ⑤ 最後整合的格式修正：格式不合格的值用規則／本地模型修正後重新檢查，最多 3 輪；排程間隔不足 5 分鐘問使用者
+     ─ 有問題 → 問題卡（全部一次問，推薦值預選，「幫我決定」）→ 回答後從同一份中間 JSON 接著跑
+     ─ 沒問題 → _sanitize_deploy_payload → _prepare_deploy 原本的補全、情境、負荷檢查、三個審查代理、dry-run
+```
+
+- 程式在 `agents/pipeline/`；本地模型伺服器 `core/pipeline_model_server.py`（127.0.0.1:8766，venv `.venv-qwen35`），和 8765 的 Model Server 分開。
+- 欄位來源等級：使用者講的 > 系統推的 > 預設，在 `agents/pipeline/schema.py` 統一執行。
+- YAML 仍由 `gitops/manifest_writer.py` 從規格產生，模型不寫 YAML。
+- 8766 沒有回應時，退回原本的 `ask_llama`。 部署單上會告知使用者。
+- 定時執行（CronJob）：`gitops/manifest_writer.build_cronjob_doc` 是唯一來源（Git、部署、審查、dry-run 共用）；網站 API 在 `/api/cronjobs`；台灣時區、間隔 ≥ 5 分鐘、每次 ≤ 1 小時、不重疊執行。
+- 選軟體知識表：`rag/software_catalog.json`（重抓：`scripts/build_software_catalog.py`），查詢在 `agents/pipeline/software_rag.py`。
+
 ## 客戶自帶叢集模式（2026-10-09，`CUSTOMER_CLUSTER_MODE=1`）
 
 ```

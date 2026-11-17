@@ -182,7 +182,7 @@ def _check_security(doc: dict, policy: dict) -> tuple:
     warnings = []
     kind     = doc.get("kind", "")
 
-    if kind not in ("Deployment", "DaemonSet", "StatefulSet", "Pod", "Job"):
+    if kind not in ("Deployment", "DaemonSet", "StatefulSet", "Pod", "Job", "CronJob"):   # CronJob：2026-11-17 定時執行
         return errors, warnings
 
     # 取得所有 container spec
@@ -394,6 +394,9 @@ def _get_pod_spec(doc: dict) -> dict:
     kind = doc.get("kind", "")
     if kind == "Pod":
         return doc.get("spec", {})
+    if kind == "CronJob":   # 2026-11-17：原本會取到空的，CronJob 的容器整個沒被檢查
+        from agents.k8s_shape import pod_template_spec
+        return pod_template_spec(doc)
     return doc.get("spec", {}).get("template", {}).get("spec", {})
 
 
