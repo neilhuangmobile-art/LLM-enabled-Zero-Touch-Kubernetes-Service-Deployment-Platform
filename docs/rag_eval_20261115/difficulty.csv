@@ -1,0 +1,19 @@
+method,label,difficulty,n,passed
+none,不用 RAG,簡單,50,0.0
+none,不用 RAG,中等,90,0.0
+none,不用 RAG,困難,60,71.7
+old_tfidf,舊索引 TF-IDF,簡單,50,0.0
+old_tfidf,舊索引 TF-IDF,中等,90,0.0
+old_tfidf,舊索引 TF-IDF,困難,60,71.7
+bm25,BM25,簡單,50,36.0
+bm25,BM25,中等,90,33.3
+bm25,BM25,困難,60,38.3
+dense,向量 BGE-M3,簡單,50,46.0
+dense,向量 BGE-M3,中等,90,38.9
+dense,向量 BGE-M3,困難,60,6.7
+hybrid,混合 RRF,簡單,50,56.0
+hybrid,混合 RRF,中等,90,47.8
+hybrid,混合 RRF,困難,60,8.3
+hybrid_rerank,混合＋重排序,簡單,12,33.3
+hybrid_rerank,混合＋重排序,中等,23,47.8
+hybrid_rerank,混合＋重排序,困難,15,0.0

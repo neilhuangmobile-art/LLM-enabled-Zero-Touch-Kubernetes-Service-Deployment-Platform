@@ -1,0 +1,9 @@
+{
+ "diagnose": {
+  "n": 12,
+  "same_action": 0.333,
+  "base_ms_p50": 1466,
+  "new_ms_p50": 1134,
+  "same_severity": 1.0
+ }
+}

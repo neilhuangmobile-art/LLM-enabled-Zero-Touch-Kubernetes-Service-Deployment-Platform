@@ -80,6 +80,35 @@ LLM 幻覈、可靠性、效能瓶頸、架構取捨等等——不是單一檔�
   一種——圖表是給人看结論，JSONL 是給之後重新分析用，文字報告是給人看細節脈絡，
   三者用途不同，不能互相取代。
 
+## 什麼時候用哪個工具（2026-11-18，使用者明確授權依下表使用子代理）
+
+原則：**依重要程度用，不是每次都叫**。會另外派代理的工具很花 token，只在下表寫的情況用；
+沒列到的情況照平常用搜尋、讀檔、跑測試處理。工具都是已安裝的現成外掛（Anthropic 官方或開源），不要自己另寫替代品。
+
+| 情況 | 用什麼 | 花費 |
+|---|---|---|
+| 改程式後 | 相關的 `pytest`；Python 型別錯誤看 pyright（外掛自動回報） | 低 |
+| 查第三方套件、框架的用法 | Context7（MCP） | 低 |
+| 遇到 bug、測試失敗、行為怪異 | `superpowers:systematic-debugging`，先找根因再修 | 低 |
+| 要說「完成」之前 | `superpowers:verification-before-completion`：拿出實際執行結果 | 低 |
+| 大改動要先出計畫時 | `superpowers:writing-plans`；新功能的方向還沒定時先用 `superpowers:brainstorming` | 低 |
+| **合併分支、改共用函式之前** | `graphify --update`（只建程式碼的圖）查呼叫者與影響範圍，和 grep 交叉比對 | 中 |
+| **重要改動完成後**：核心資料流、安全、模型伺服器（`core/`、`agents/`、`guardian/`、`gitops/`、`healer/`、`rag/`、`llama_client.py`、`web_demo.py` 的部署與聊天路由），或合併組員程式 | `/code-review high` ＋ `pr-review-toolkit:silent-failure-hunter` | 高 |
+| 有新增測試的重要改動 | 再加 `pr-review-toolkit:pr-test-analyzer` 看測試有沒有漏 | 中 |
+| 安全相關改動（登入、權限、多租戶、prompt injection、密鑰） | `/security-review`；套件有更動時跑 `pip-audit`，Python 安全掃描用 `bandit` | 中 |
+| 口試、正式發布前的全面安全檢查 | `claude-security`（完整掃描），**要先問使用者**，非常花 token | 很高 |
+| 前端畫面 | `impeccable` 或 `frontend-design`；網頁 API 先查 `modern-web-guidance`；實際操作畫面用 Playwright | 中 |
+| 圖表、儀表板 | `dataviz` | 低 |
+| 給人看的中文文件、報告 | `natural-writing`，寫完用 `humanizer-tw` 檢查 | 低 |
+| 需要查最新資訊、論文、做研究 | WebSearch；大型研究才用 `deep-research` | 中～高 |
+
+- `/code-review` 的 max、ultra 等級只在使用者要求時用。
+- 不會被工具抓到的錯（下指令打錯路徑、印出密鑰、沒量測就下判斷）靠習慣防：**先量測再建議**；碰 `.env` 這類檔案只看變數名稱、不印內容。
+
+**新增工具時**：使用者裝了新的外掛、技能或 MCP 之後，先確認它是做什麼的、花費多少，再在上表補一列
+（什麼情況用、花費），沒有適合的情況就寫「不主動使用」。更新工具用 `claude plugin marketplace update`
+＋ `claude plugin update <外掛>`；uv 安裝的工具用 `uv tool upgrade --all`。
+
 ## 其他約定
 
 - 文件與程式碼註解預設用繁體中文，符合現有專案慣例（見 [CLAUDE.md](CLAUDE.md)）。

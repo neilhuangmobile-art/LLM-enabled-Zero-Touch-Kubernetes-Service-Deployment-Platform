@@ -1,0 +1,108 @@
+{
+ "dev_set": "dev_scenario.jsonl",
+ "n_tasks": 200,
+ "thresholds": {
+  "dense": 0.45,
+  "bm25": 0.15,
+  "hybrid": 0.012,
+  "hybrid_rerank": 0.15
+ },
+ "methods": {
+  "none": {
+   "n": 200,
+   "passed": 21.5,
+   "image_hit1": 0.0,
+   "image_hit3": 0.0,
+   "abstain_ok": 100.0,
+   "wrong_answer": 0.0,
+   "need_recall": 0.0,
+   "port_ok": null,
+   "latency_p50_ms": 0.0,
+   "by_difficulty": {
+    "簡單": 0.0,
+    "中等": 0.0,
+    "困難": 71.7
+   }
+  },
+  "old_tfidf": {
+   "n": 200,
+   "passed": 21.5,
+   "image_hit1": 0.0,
+   "image_hit3": 0.0,
+   "abstain_ok": 100.0,
+   "wrong_answer": 0.0,
+   "need_recall": 0.0,
+   "port_ok": null,
+   "latency_p50_ms": 28.2,
+   "by_difficulty": {
+    "簡單": 0.0,
+    "中等": 0.0,
+    "困難": 71.7
+   }
+  },
+  "bm25": {
+   "n": 200,
+   "passed": 35.5,
+   "image_hit1": 34.4,
+   "image_hit3": 38.2,
+   "abstain_ok": 39.5,
+   "wrong_answer": 33.0,
+   "need_recall": 18.7,
+   "port_ok": 86.4,
+   "latency_p50_ms": 3.7,
+   "by_difficulty": {
+    "簡單": 36.0,
+    "中等": 33.3,
+    "困難": 38.3
+   }
+  },
+  "dense": {
+   "n": 200,
+   "passed": 31.0,
+   "image_hit1": 39.5,
+   "image_hit3": 56.1,
+   "abstain_ok": 0.0,
+   "wrong_answer": 69.0,
+   "need_recall": 73.8,
+   "port_ok": 93.1,
+   "latency_p50_ms": 74.7,
+   "by_difficulty": {
+    "簡單": 46.0,
+    "中等": 38.9,
+    "困難": 6.7
+   }
+  },
+  "hybrid": {
+   "n": 200,
+   "passed": 38.0,
+   "image_hit1": 48.4,
+   "image_hit3": 68.2,
+   "abstain_ok": 0.0,
+   "wrong_answer": 62.0,
+   "need_recall": 73.8,
+   "port_ok": 90.7,
+   "latency_p50_ms": 77.5,
+   "by_difficulty": {
+    "簡單": 56.0,
+    "中等": 47.8,
+    "困難": 8.3
+   }
+  },
+  "hybrid_rerank": {
+   "n": 50,
+   "passed": 30.0,
+   "image_hit1": 36.6,
+   "image_hit3": 46.3,
+   "abstain_ok": 0.0,
+   "wrong_answer": 70.0,
+   "need_recall": 76.2,
+   "port_ok": 66.7,
+   "latency_p50_ms": 8323.1,
+   "by_difficulty": {
+    "簡單": 33.3,
+    "中等": 47.8,
+    "困難": 0.0
+   }
+  }
+ }
+}

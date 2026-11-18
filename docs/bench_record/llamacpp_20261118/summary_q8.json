@@ -1,0 +1,16 @@
+{
+ "intent": {
+  "n": 60,
+  "same_action": 0.967,
+  "base_ms_p50": 1710,
+  "new_ms_p50": 1289,
+  "same_args": 0.967
+ },
+ "diagnose": {
+  "n": 12,
+  "same_action": 0.417,
+  "base_ms_p50": 1152,
+  "new_ms_p50": 421,
+  "same_severity": 1.0
+ }
+}

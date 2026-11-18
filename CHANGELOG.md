@@ -1797,6 +1797,47 @@ Pod 對應到服務、對話規則、建議 API）；乾淨環境 383 項通過�
 ### 19:30 — 整理：repo 結構與 README
 教授反映 repo 不像有在整理。新增 `README.md`；根目錄的訓練腳本移到 `training/`、測試評估腳本移到 `experiments/`（路徑計算與引用一併修正）；三個原始資料集改放 GitHub Release；`yamls/deployments/`、`parse_full.json` 移出版控；AI 開發工具的設定與紀錄移到 `docs/development/`，根目錄 `CLAUDE.md` 只留入口；`.claude/` 不再版控。打 tag `v0.4`（第四次進度報告版本）。
 
+## 2026-11-15
+
+### 15:10 — 新功能：RAG 欄位檢索資料庫與第一次基準評估（分支 `feat/rag-embedding`，未 commit）
+新增六個資料庫（軟體目錄 36 筆，連接埠與資料目錄從 Docker Hub 映像檔設定讀出；部署例句 144 筆；
+額外需求 13 種；失敗經驗 24 筆；疑難排解 13 筆；K8s 官方文件 8 篇）、`rag/field_retriever.py`
+（BM25／BGE-M3 向量／混合 RRF／重排序四種檢索）、`rag/router.py`，以及給組員的介面說明
+`docs/RAG_介面說明.md`。原因：舊的部署範例索引把整句中文當成一個詞，情境題完全查不到軟體建議。
+驗證：`tests/test_field_retriever.py` 12 項通過（含開發集、盲測集與知識庫的防汙染檢查）；
+開發集 200 題評估（`rag/eval_fields.py`，結果在 `docs/rag_eval_20261115/`）：舊索引 0 題有結果，
+混合檢索第 1 名命中 48.4%、前 3 名 68.2%（目錄有涵蓋的軟體前 3 名 81.7%），重排序沒有提升且
+每題慢約一百倍。已知問題：分數分不開該反問的題目，門檻沒有生效；目錄缺論壇、問卷等軟體。
+重排序預設跑 CPU，評估要設 `RAG_RERANK_DEVICE=cuda`，否則 50 題要兩小時以上。
+
+### 18:30 — 實驗：RAG 資料擴充與檢索改法對照（分支 `feat/rag-embedding`，未 commit）
+新增 `rag/expand_catalog.py`（awesome-selfhosted-data CC BY-SA 3.0＋Docker 官方映像檔清單，篩選後在
+Docker Hub 對照映像檔，Gemini 改寫中文情境）、`scripts/rag/fetch_k8s_docs.py`（K8s 官方文件 8→22 篇）、
+`rag/tune_fields.py`（開發集固定拆 140／60，一次改一處對照＋Optuna）、`rag/knowledge/SOURCES.md`（來源授權）；
+疑難排解 13→22 筆；`field_retriever.CFG` 加入每句描述各自建索引、BGE-M3 關鍵字權重、主流優先加權等可切換設定；
+新增依賴 FlagEmbedding 1.4.2、Optuna 5.0.0（只給離線評估用）。
+結果：目錄 36 種時各改法差距在誤差內；擴充到 278 種後第 1 名命中 47.6%→31.4%（冷門替代品與籠統描述搶走第 1 名），
+加主流優先回到 42.9%，仍低於原本，所以正式目錄維持 36 種（`RAG_CATALOG_EXT=1` 才合併擴充版）。
+未完成：Gemini 預付額度用完，127 筆情境描述未寫；Docker Hub 匿名次數上限擋下 4 個映像檔。
+另：5 句部署例句與開發集出現 8 字以上相同片段，已刪除（防汙染測試抓到）。
+
+### 21:30 — 實驗：擴充目錄的改進方法逐一驗證（全部不採用）
+`rag/tune_fields.py` 改為逐題配對 McNemar 檢定＋寫死的採用規則＋類別正確率；`field_retriever` 加入索引不一致時報錯
+（`RAG_STRICT_INDEX=1`）、可切換目錄／索引、先判斷類別、過濾籠統描述（`rag/filter_scenarios.py`，Doc2Query-- 做法）、
+獨立索引分層等實驗設定（預設全部關閉，正式行為不變）。13＋6 組對照沒有一組通過採用規則；根本原因是 Gemini 寫的
+擴充描述與 Gemini 出的開發集寫法相近，向量分數被墊高（105 題中 94 題擴充條目分數高於人工目錄最佳）。
+詳見 `docs/rag_tune_20261115/README.md`。正式版維持 36 種目錄。
+
+### 20:55 — 實驗：照 PROMPTx-PE（張賢宗教授團隊）做檢索策略學習（分支 `feat/rag-embedding`，未 commit；正式預設未改）
+新增 `scripts/rag/gen_claude_set.py`（Claude 另開程序出 300 題，並替 Gemini、Claude 兩組題目各寫 4 種改寫：錯字、極短、囉嗦、中英夾雜）、
+`rag/strategy_eval.py`（419 題 × 5 種句型 × 10 種檢索策略的離線結果表）、`rag/policy.py`（固定最佳、LinUCB、Thompson、DQN、
+自動調權重、自動退回；5 折 × 3 種子、Nadeau–Bengio 修正 t 檢定、跨出題者測試）、`scripts/rag/promptx_analyze.py`（配對檢定與 Holm 校正）；
+`rag/expand_catalog.py` 新增不經 LLM 的範本版擴充描述（409 種）。權重照使用者指定：準確 0.4、穩健 0.4、效率 0.2。
+結果：逐句挑策略的方法都沒有顯著贏過固定最佳（p > 0.07），不採用。固定最佳是「範本版擴充＋分開索引＋每句描述各自索引」，
+前 3 名命中 66.6%→68.7%、總分 +0.012（95% CI [0.002, 0.022]），兩個出題來源都提升，但逐項檢定校正後不顯著且是事後組合，
+需用盲測集確認後才改預設。範本版擴充不再變差，支持 11/15「寫法偏差」的診斷。查詢改寫最穩健但每句多 1.2 秒；重排序變差且每句 8 秒。
+驗證：防汙染測試 12 項通過；只查人工目錄的策略與正式版逐題相同（60/60）。報告：`docs/rag_promptx/README.md`。
+
 ## 2026-11-17
 
 ### 01:10 — 架構：多代理人部署解析接到網站（開關預設關閉）
