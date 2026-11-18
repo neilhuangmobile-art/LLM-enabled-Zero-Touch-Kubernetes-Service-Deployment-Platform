@@ -44,6 +44,7 @@ def test_retrieve_for_field_with_known_software():
 
 
 def test_bm25_retrieval_shapes():
+    pytest.importorskip("numpy")   # CI 只裝最少依賴，沒有 numpy
     r = fr.retrieve_for_field("想要一個寫文章發表的部落格", "image", method="bm25")
     assert isinstance(r, list)
     for x in r:
