@@ -52,6 +52,34 @@ MONITOR_DEVICE  = os.environ.get("MONITOR_DEVICE", "auto")
 # 之後若要在 Qwen2.5-3B 上重訓小 LoRA，把權重路徑填進 DEPLOY_ADAPTER_PATH 即可。
 DEPLOY_ADAPTER_PATH = os.environ.get("DEPLOY_ADAPTER_PATH", "")
 
+# ── 推理引擎（2026-11-18）────────────────────────────────────────
+# transformers：model_server 自己載入權重（原本做法，保留當備援）。
+# llamacpp：三顆模型各由一個 llama-server 常駐（scripts/start_services.ps1 啟動），model_server 只轉送請求，
+#   照樣做輸入淨化與輸出解析。AMD（Vulkan）與 NVIDIA（CUDA）用同一批 GGUF 檔，實驗見
+#   docs/bench_record/llamacpp_20261118/README.md。
+LLM_ENGINE = os.environ.get("LLM_ENGINE", "transformers").split("#")[0].strip().lower()
+LLM_ENGINE_ERROR = ""
+if LLM_ENGINE not in ("transformers", "llamacpp"):
+    # 打錯（例如 llama.cpp）不默默當成 transformers：記下來，model_server 的 /health 與啟動紀錄會顯示
+    LLM_ENGINE_ERROR = f".env 的 LLM_ENGINE={LLM_ENGINE!r} 看不懂，只能是 llamacpp 或 transformers；這次先用 transformers"
+    print(f"[config] {LLM_ENGINE_ERROR}")
+    LLM_ENGINE = "transformers"
+LLAMACPP_DIR = os.environ.get("LLAMACPP_DIR", r"D:\zt-venvs\llamacpp")
+GGUF_DIR = os.environ.get("GGUF_DIR", r"D:\zt-venvs\gguf")
+LLAMACPP_DEPLOY_URL = os.environ.get("LLAMACPP_DEPLOY_URL", "http://127.0.0.1:8771")
+LLAMACPP_MONITOR_URL = os.environ.get("LLAMACPP_MONITOR_URL", "http://127.0.0.1:8772")
+LLAMACPP_REASON_URL = os.environ.get("LLAMACPP_REASON_URL", "http://127.0.0.1:8773")
+# 量測後決定的檔案（11-18，見 docs/bench_record/llamacpp_20261118/README.md）：
+# Windows 上這張 16GB 顯卡實際只給約 12.8GB（含桌面程式約 3.5GB），超過的部分被放到共用記憶體、速度掉一半，
+# 所以：推理 4B 用 Q8（品質差距顯著）、部署 3B 用 Q4（意圖一致率 98.3%，比 Q8 的 96.7% 還高）、
+# 監控 1.5B 用 Q4 跑 CPU（診斷 8/12 與 GPU 同分、約 1.1 秒，只給背景 Healer 用）
+LLAMACPP_DEPLOY_GGUF = os.environ.get("LLAMACPP_DEPLOY_GGUF", "qwen2.5-3b-instruct-q4_k_m.gguf")
+LLAMACPP_MONITOR_GGUF = os.environ.get("LLAMACPP_MONITOR_GGUF", "qwen2.5-1.5b-instruct-q4_k_m.gguf")
+LLAMACPP_REASON_GGUF = os.environ.get("LLAMACPP_REASON_GGUF", "Qwen3.5-4B-Q8_0.gguf")
+LLAMACPP_TIMEOUT = float(os.environ.get("LLAMACPP_TIMEOUT", "120"))
+# 顯卡裝置（start_services.ps1 用）：空＝AMD 用 Vulkan0（內顯也會被列成 Vulkan 裝置）、NVIDIA 不指定
+LLAMACPP_DEVICE = os.environ.get("LLAMACPP_DEVICE", "").strip()
+
 # 舊名稱保留：仍有 eval_*.py 等離線工具引用 ADAPTER_PATH（那些工具還在跑 8B，不在主流程）。
 ADAPTER_PATH = os.path.join(ROOT, "llama3_k8s_lora_results")
 

@@ -1,0 +1,388 @@
+# C1 軟體目錄（人工部分）
+# 只寫人才知道的：用途情境、能否單一容器運作、建議資源、注意事項。
+# 連接埠、資料目錄由 rag/build_catalog.py 從 Docker Hub 映像檔設定讀出（依版本），
+# 環境變數名稱從 docker-library/docs 擷取，兩者合併成 catalog.json。
+# scenarios 是給向量檢索用的情境描述：一般化的說法，不放任何測試題原句。
+#
+# 欄位：
+#   id            目錄內唯一名稱
+#   repo          Docker Hub 倉庫（官方映像檔用 library/ 開頭）
+#   tag           建議版本（必須存在於 Docker Hub，建立時驗證）
+#   category      服務類型
+#   scenarios     使用情境（中文）
+#   standalone    true＝單一容器即可運作；false＝需要搭配其他服務（系統一次只部署一個服務）
+#   requires      standalone=false 時需要的服務
+#   standalone_env 能改成單一容器運作的環境變數設定（沒有就省略）
+#   env_required  不設定就無法啟動的環境變數（值由使用者提供或系統產生）
+#   env_common    常用設定
+#   resources     建議的記憶體與 CPU（小型使用）
+#   per_replica_users 每個副本大約能服務的同時在線人數（推估副本數用；靜態網站較高）
+#   notes         注意事項
+
+- id: nginx
+  repo: library/nginx
+  tag: "1.27"
+  category: 網站
+  scenarios: ["放活動資訊或公告的簡單網頁", "展示用的靜態網站", "店家介紹、菜單或作品集頁面", "社團或課程的介紹網站", "只有圖片和文字的官網"]
+  standalone: true
+  resources: {memory: 128Mi, cpu: 100m}
+  per_replica_users: 300
+  notes: "只放靜態內容；需要登入、表單、留言等功能的網站不適合"
+
+- id: httpd
+  repo: library/httpd
+  tag: "2.4"
+  category: 網站
+  scenarios: ["簡單的靜態網頁伺服器", "放幾個檔案讓別人下載的網頁"]
+  standalone: true
+  resources: {memory: 128Mi, cpu: 100m}
+  per_replica_users: 300
+
+- id: caddy
+  repo: library/caddy
+  tag: "2"
+  category: 網站
+  scenarios: ["簡單網站並自動處理加密連線", "反向代理把流量轉給其他服務"]
+  standalone: true
+  resources: {memory: 128Mi, cpu: 100m}
+  per_replica_users: 300
+
+- id: ghost
+  repo: library/ghost
+  tag: "5"
+  category: 部落格
+  scenarios: ["個人部落格或日記網站", "發表文章的網誌", "團隊或店家的官方網誌", "寫作分享平台"]
+  standalone: true
+  standalone_env: {database__client: sqlite3, database__connection__filename: /var/lib/ghost/content/data/ghost.db, NODE_ENV: development}
+  env_common: {url: "http://<對外網址>"}
+  resources: {memory: 256Mi, cpu: 250m}
+  per_replica_users: 150
+  notes: "正式模式預設需要 MySQL；單一容器使用 sqlite 時要設 standalone_env；文章與圖片要保存在資料目錄"
+
+- id: wordpress
+  repo: library/wordpress
+  tag: "6"
+  category: 部落格
+  scenarios: ["功能完整的網站或部落格", "有外掛和佈景主題的官網", "需要後台管理的內容網站"]
+  standalone: false
+  requires: [mysql]
+  env_required: [WORDPRESS_DB_HOST, WORDPRESS_DB_USER, WORDPRESS_DB_PASSWORD, WORDPRESS_DB_NAME]
+  resources: {memory: 256Mi, cpu: 250m}
+  per_replica_users: 100
+  notes: "一定要搭配 MySQL 或 MariaDB；容器監聽 80，使用者說的其他連接埠是對外連接埠"
+
+- id: wikijs
+  repo: requarks/wiki
+  tag: "2"
+  category: 維基或筆記
+  scenarios: ["團隊共同編寫的知識庫", "交接筆記或內部說明文件", "像維基百科一樣大家一起寫的網站", "實驗室或社團的資料整理平台"]
+  standalone: false
+  requires: [postgres]
+  standalone_env: {DB_TYPE: sqlite, DB_FILEPATH: /wiki/data/db.sqlite}
+  resources: {memory: 512Mi, cpu: 250m}
+  per_replica_users: 100
+  notes: "預設搭配 PostgreSQL；小規模可改用 sqlite 單一容器運作"
+
+- id: dokuwiki
+  repo: linuxserver/dokuwiki
+  tag: latest
+  category: 維基或筆記
+  scenarios: ["不需要資料庫的簡單維基", "少量人使用的筆記網站"]
+  standalone: true
+  resources: {memory: 128Mi, cpu: 100m}
+  per_replica_users: 100
+
+- id: gitea
+  repo: gitea/gitea
+  tag: "1.22"
+  category: 程式碼託管
+  scenarios: ["像 GitHub 一樣自己架的程式碼存放網站", "收作業程式碼、管理專案原始碼", "團隊內部的版本控制平台"]
+  standalone: true
+  resources: {memory: 512Mi, cpu: 250m}
+  per_replica_users: 100
+  notes: "預設使用 sqlite 可單一容器運作；網頁 3000、SSH 22"
+
+- id: filebrowser
+  repo: filebrowser/filebrowser
+  tag: "v2"
+  category: 檔案分享
+  scenarios: ["上傳下載檔案、分享連結的網頁", "像雲端硬碟的簡易檔案管理", "收集大家上傳的檔案"]
+  standalone: true
+  resources: {memory: 128Mi, cpu: 100m}
+  per_replica_users: 100
+  notes: "預設帳號密碼需在首次登入後修改"
+
+- id: nextcloud
+  repo: library/nextcloud
+  tag: "29"
+  category: 檔案分享
+  scenarios: ["功能完整的私人雲端硬碟", "團隊共用檔案、行事曆與聯絡人", "可以多人協作的檔案空間"]
+  standalone: true
+  resources: {memory: 512Mi, cpu: 500m}
+  per_replica_users: 50
+  notes: "小規模可用內建 sqlite；檔案要保存在資料目錄"
+
+- id: postgres
+  repo: library/postgres
+  tag: "16"
+  category: 資料庫
+  scenarios: ["存資料的關聯式資料庫", "存會員、訂單、成績等表格資料", "後端程式需要的資料庫"]
+  standalone: true
+  env_required: [POSTGRES_PASSWORD]
+  resources: {memory: 256Mi, cpu: 250m}
+  per_replica_users: 0
+  notes: "資料目錄依版本不同：16 是 /var/lib/postgresql/data，18 是 /var/lib/postgresql；資料庫通常 1 個副本"
+
+- id: mysql
+  repo: library/mysql
+  tag: "8.4"
+  category: 資料庫
+  scenarios: ["MySQL 資料庫", "網站或部落格的後端資料庫", "存表格資料的資料庫"]
+  standalone: true
+  env_required: [MYSQL_ROOT_PASSWORD]
+  resources: {memory: 512Mi, cpu: 250m}
+  per_replica_users: 0
+  notes: "資料庫通常 1 個副本"
+
+- id: mariadb
+  repo: library/mariadb
+  tag: "11"
+  category: 資料庫
+  scenarios: ["MariaDB 資料庫", "與 MySQL 相容的資料庫"]
+  standalone: true
+  env_required: [MARIADB_ROOT_PASSWORD]
+  resources: {memory: 256Mi, cpu: 250m}
+  per_replica_users: 0
+
+- id: mongo
+  repo: library/mongo
+  tag: "7"
+  category: 資料庫
+  scenarios: ["存文件或 JSON 格式資料的資料庫", "彈性欄位的資料儲存", "存紀錄或日誌資料"]
+  standalone: true
+  env_common: {MONGO_INITDB_ROOT_USERNAME: admin}
+  resources: {memory: 512Mi, cpu: 250m}
+  per_replica_users: 0
+  notes: "映像檔名稱是 mongo，不是 mongodb"
+
+- id: redis
+  repo: library/redis
+  tag: "7"
+  category: 快取
+  scenarios: ["加速網站的快取", "暫存資料、排行榜、計數器", "存登入狀態或暫時資料"]
+  standalone: true
+  resources: {memory: 128Mi, cpu: 100m}
+  per_replica_users: 0
+  notes: "要保存資料需掛載 /data"
+
+- id: memcached
+  repo: library/memcached
+  tag: "1.6"
+  category: 快取
+  scenarios: ["單純的記憶體快取", "不需要保存的暫存資料"]
+  standalone: true
+  resources: {memory: 128Mi, cpu: 100m}
+  per_replica_users: 0
+
+- id: rabbitmq
+  repo: library/rabbitmq
+  tag: "3-management"
+  category: 訊息佇列
+  scenarios: ["排隊處理工作的訊息佇列", "讓不同程式互相傳遞訊息", "背景工作排程的中介"]
+  standalone: true
+  resources: {memory: 512Mi, cpu: 250m}
+  per_replica_users: 0
+  notes: "management 版本另有管理網頁 15672"
+
+- id: elasticsearch
+  repo: library/elasticsearch
+  tag: "8.15.3"
+  category: 搜尋引擎
+  scenarios: ["全文搜尋功能", "大量文字或紀錄的搜尋與分析"]
+  standalone: true
+  env_common: {discovery.type: single-node, xpack.security.enabled: "false", ES_JAVA_OPTS: "-Xms512m -Xmx512m"}
+  resources: {memory: 1Gi, cpu: 500m}
+  per_replica_users: 0
+  notes: "單機需設 discovery.type=single-node；記憶體需求高"
+
+- id: grafana
+  repo: grafana/grafana
+  tag: "11.3.0"
+  category: 監控儀表板
+  scenarios: ["看數據圖表的儀表板", "監控服務狀態的畫面", "把資料畫成圖表給大家看"]
+  standalone: true
+  resources: {memory: 256Mi, cpu: 250m}
+  per_replica_users: 50
+  notes: "網頁 3000"
+
+- id: prometheus
+  repo: prom/prometheus
+  tag: "v2.55.0"
+  category: 監控
+  scenarios: ["收集與儲存監控數據", "記錄服務的效能指標"]
+  standalone: true
+  resources: {memory: 512Mi, cpu: 250m}
+  per_replica_users: 0
+
+- id: uptime-kuma
+  repo: louislam/uptime-kuma
+  tag: "1"
+  category: 監控
+  scenarios: ["定期檢查網站有沒有掛掉並通知", "監控服務是否在線"]
+  standalone: true
+  resources: {memory: 256Mi, cpu: 100m}
+  per_replica_users: 50
+
+- id: adminer
+  repo: library/adminer
+  tag: "4"
+  category: 資料庫管理
+  scenarios: ["用網頁管理資料庫內容", "查看和修改資料庫的表格"]
+  standalone: true
+  resources: {memory: 128Mi, cpu: 100m}
+  per_replica_users: 20
+
+- id: phpmyadmin
+  repo: library/phpmyadmin
+  tag: "5"
+  category: 資料庫管理
+  scenarios: ["用網頁管理 MySQL 資料庫"]
+  standalone: false
+  requires: [mysql]
+  resources: {memory: 128Mi, cpu: 100m}
+  per_replica_users: 20
+
+- id: minio
+  repo: minio/minio
+  tag: latest
+  category: 檔案儲存
+  scenarios: ["存放大量檔案或圖片的物件儲存", "給程式使用的檔案儲存空間"]
+  standalone: true
+  env_required: [MINIO_ROOT_USER, MINIO_ROOT_PASSWORD]
+  resources: {memory: 512Mi, cpu: 250m}
+  per_replica_users: 0
+  notes: "啟動指令需 server /data"
+
+- id: code-server
+  repo: codercom/code-server
+  tag: latest
+  category: 線上寫程式
+  scenarios: ["在瀏覽器裡寫程式的環境", "給學生用的線上程式編輯器", "不用安裝軟體就能寫程式"]
+  standalone: true
+  env_required: [PASSWORD]
+  resources: {memory: 1Gi, cpu: 500m}
+  per_replica_users: 1
+  notes: "每位使用者通常需要各自的環境；多人共用一個容器會互相干擾"
+
+- id: jupyter
+  repo: jupyter/base-notebook
+  tag: latest
+  category: 線上寫程式
+  scenarios: ["寫 Python 和做資料分析的筆記本", "課堂上的資料分析練習環境"]
+  standalone: true
+  resources: {memory: 1Gi, cpu: 500m}
+  per_replica_users: 1
+
+- id: n8n
+  repo: n8nio/n8n
+  tag: latest
+  category: 自動化流程
+  scenarios: ["把不同服務串起來的自動化流程", "定時自動處理資料或發通知"]
+  standalone: true
+  resources: {memory: 512Mi, cpu: 250m}
+  per_replica_users: 20
+
+- id: node-red
+  repo: nodered/node-red
+  tag: "4.0"
+  category: 自動化流程
+  scenarios: ["用拉積木的方式做自動化", "物聯網裝置的資料處理流程"]
+  standalone: true
+  resources: {memory: 256Mi, cpu: 250m}
+  per_replica_users: 20
+
+- id: vaultwarden
+  repo: vaultwarden/server
+  tag: latest
+  category: 密碼管理
+  scenarios: ["家人或團隊共用的密碼管理器"]
+  standalone: true
+  resources: {memory: 128Mi, cpu: 100m}
+  per_replica_users: 50
+
+- id: jellyfin
+  repo: jellyfin/jellyfin
+  tag: latest
+  category: 影音
+  scenarios: ["在家看影片和聽音樂的影音中心", "家庭照片和影片的播放平台"]
+  standalone: true
+  resources: {memory: 1Gi, cpu: 500m}
+  per_replica_users: 5
+
+- id: home-assistant
+  repo: homeassistant/home-assistant
+  tag: stable
+  category: 智慧家庭
+  scenarios: ["控制家裡電器的智慧家庭中心"]
+  standalone: true
+  resources: {memory: 512Mi, cpu: 250m}
+  per_replica_users: 5
+
+- id: mattermost
+  repo: mattermost/mattermost-team-edition
+  tag: latest
+  category: 聊天
+  scenarios: ["團隊內部的聊天室", "像 Slack 的討論群組"]
+  standalone: false
+  requires: [postgres]
+  resources: {memory: 1Gi, cpu: 500m}
+  per_replica_users: 100
+
+- id: registry
+  repo: library/registry
+  tag: "2"
+  category: 映像檔倉庫
+  scenarios: ["存放自己做的容器映像檔"]
+  standalone: true
+  resources: {memory: 128Mi, cpu: 100m}
+  per_replica_users: 0
+
+- id: busybox
+  repo: library/busybox
+  tag: "1.36"
+  category: 背景程式
+  scenarios: ["執行簡單的指令或腳本", "定時印出訊息的小程式", "跑完就結束的一次性工作"]
+  standalone: true
+  resources: {memory: 64Mi, cpu: 50m}
+  per_replica_users: 0
+  notes: "需要使用者提供要執行的指令；不需對外連接埠"
+
+- id: alpine
+  repo: library/alpine
+  tag: "3.20"
+  category: 背景程式
+  scenarios: ["輕量的背景小機器", "持續執行的簡單腳本"]
+  standalone: true
+  resources: {memory: 64Mi, cpu: 50m}
+  per_replica_users: 0
+  notes: "需要使用者提供要執行的指令；不需對外連接埠"
+
+- id: python
+  repo: library/python
+  tag: "3.12-slim"
+  category: 背景程式
+  scenarios: ["執行 Python 程式或腳本", "資料處理或計算工作", "爬蟲或定時抓資料"]
+  standalone: true
+  resources: {memory: 256Mi, cpu: 250m}
+  per_replica_users: 0
+  notes: "需要使用者提供程式或啟動指令"
+
+- id: node
+  repo: library/node
+  tag: "20-alpine"
+  category: 背景程式
+  scenarios: ["執行 JavaScript 或 Node.js 程式"]
+  standalone: true
+  resources: {memory: 256Mi, cpu: 250m}
+  per_replica_users: 0
+  notes: "需要使用者提供程式或啟動指令"

@@ -1,4 +1,8 @@
-"""多代理人流程的本地模型伺服器（2026-11-16）：Qwen3.5-4B 4-bit，只聽 127.0.0.1:8766。
+"""多代理人流程的本地模型伺服器（2026-11-16）：Qwen3.5-4B，只聽 127.0.0.1:8766。
+
+精度（2026-11-18 起兩種顯卡都能跑）：環境變數 PIPELINE_PRECISION=auto|4bit|bf16|fp16。
+auto＝NVIDIA 且裝了 bitsandbytes 用 4-bit（約 3GB 顯存），否則（AMD／ROCm、沒有 bitsandbytes）用 bf16（約 9GB）。
+載入前先看剩餘顯存，不夠就不載入，/health 回傳原因與解法，網站照原本規則退回舊解析並告知使用者。
 
 要用 C:\\zt-k8s\\.venv-qwen35 執行（需要 transformers 5.x；專案 venv 是 4.57.6，載不了 Qwen3.5）：
   set HF_HUB_OFFLINE=1
@@ -22,20 +26,60 @@ HOST, PORT = "127.0.0.1", int(os.environ.get("PIPELINE_MODEL_PORT", "8766"))
 MAX_BODY = 64 * 1024            # 請求上限：原句加 JSON 不會超過這個大小
 MAX_NEW_TOKENS = 1024
 
-_state = {"model": None, "tok": None, "error": None}
+_state = {"model": None, "tok": None, "error": None, "precision": None}
 _lock = threading.Lock()
+
+
+# Qwen3.5-4B 權重約 4.2B 參數：bf16 約 8.5GB、4-bit 約 3GB，另外留生成用的空間
+NEED_GB = {"4bit": 4.0, "bf16": 10.0, "fp16": 10.0}
+
+
+def plan_precision(want: str, backend, has_bnb: bool, bf16_ok: bool = True) -> tuple:
+    """回傳 (精度, 說明)。純函式，測試不需要 torch。"""
+    want = (want or "auto").strip().lower()
+    half = "bf16" if bf16_ok else "fp16"
+    can_4bit = backend == "cuda" and has_bnb
+    if want in ("bf16", "fp16"):
+        return (want if (want == "fp16" or bf16_ok) else "fp16"), "依 PIPELINE_PRECISION"
+    if want == "4bit" and not can_4bit:
+        return half, "要求 4bit，但這台不支援 bitsandbytes（AMD 或沒有安裝），改用 " + half
+    if want == "4bit" or (want == "auto" and can_4bit):
+        return "4bit", "NVIDIA 且有 bitsandbytes"
+    return half, ("AMD（ROCm）" if backend == "rocm" else "沒有 bitsandbytes") + "，用 " + half
 
 
 def _load():
     try:
         import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-        q = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16)
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        if not torch.cuda.is_available():
+            raise RuntimeError("沒有偵測到 GPU：多代理人流程的模型需要顯示卡（NVIDIA 或 AMD）")
+        backend = "rocm" if getattr(torch.version, "hip", None) else "cuda"
+        try:
+            import bitsandbytes  # noqa: F401
+            has_bnb = backend == "cuda"
+        except Exception:
+            has_bnb = False
+        prec, why = plan_precision(os.environ.get("PIPELINE_PRECISION", "auto"), backend, has_bnb,
+                                   bool(torch.cuda.is_bf16_supported()))
+        free = torch.cuda.mem_get_info()[0] / 1024 ** 3
+        print(f"[pipeline-model] {torch.cuda.get_device_name(0)}（{backend}），{why}；剩餘顯存 {free:.1f} GB", flush=True)
+        if free < NEED_GB[prec]:
+            raise RuntimeError(
+                f"顯存不夠：{prec} 需要約 {NEED_GB[prec]:.0f} GB，目前只剩 {free:.1f} GB。"
+                + ("AMD 顯卡不能用 4-bit，請先關掉主模型伺服器（8765），或在 .env 設 MONITOR_DEVICE=cpu 讓監控模型改用 CPU 後重開 8765，再啟動這個伺服器。"
+                   if prec != "4bit" else "請先關掉其他使用顯卡的程式。"))
         tok = AutoTokenizer.from_pretrained(MODEL_ID)
-        model = AutoModelForCausalLM.from_pretrained(MODEL_ID, device_map="cuda:0", quantization_config=q).eval()
-        _state.update(model=model, tok=tok)
+        if prec == "4bit":
+            from transformers import BitsAndBytesConfig
+            q = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16)
+            model = AutoModelForCausalLM.from_pretrained(MODEL_ID, device_map="cuda:0", quantization_config=q).eval()
+        else:
+            dtype = torch.bfloat16 if prec == "bf16" else torch.float16
+            model = AutoModelForCausalLM.from_pretrained(MODEL_ID, device_map="cuda:0", dtype=dtype).eval()
+        _state.update(model=model, tok=tok, precision=prec)
         _generate("You reply with JSON.", "{}", 8)        # 第一次呼叫要編譯 kernel（約 48 秒），啟動時先做掉
-        print(f"[pipeline-model] {MODEL_ID} 4-bit 載入完成，{torch.cuda.memory_allocated() / 1024 ** 3:.2f} GB", flush=True)
+        print(f"[pipeline-model] {MODEL_ID} {prec} 載入完成，{torch.cuda.memory_allocated() / 1024 ** 3:.2f} GB", flush=True)
     except Exception as e:
         _state["error"] = str(e)
         print(f"[pipeline-model] 載入失敗：{e}", file=sys.stderr, flush=True)
@@ -71,7 +115,8 @@ class Handler(BaseHTTPRequestHandler):
             vram = round(torch.cuda.memory_allocated() / 1024 ** 3, 2)
         except Exception:
             pass
-        self._send(200, {"loaded": _state["model"] is not None, "model": MODEL_ID, "error": _state["error"], "vram_gb": vram})
+        self._send(200, {"loaded": _state["model"] is not None, "model": MODEL_ID, "error": _state["error"], "vram_gb": vram,
+                          "precision": _state["precision"]})
 
     def do_POST(self):
         if self.path != "/generate":
@@ -99,6 +144,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    # 讀專案 .env（HF_HOME 等）；core/config 只 import os，要在 transformers 之前（見 CLAUDE.md 的 import 順序陷阱）
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import core.config  # noqa: F401,E402
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     threading.Thread(target=_load, daemon=True).start()
     print(f"[pipeline-model] 聽 http://{HOST}:{PORT}（載入中）", flush=True)

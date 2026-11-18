@@ -173,6 +173,41 @@ curl http://127.0.0.1:8765/health
 2026-10-09 RX 9060 XT 實測延遲：`/classify` 1.5s、`/diagnose` 1.5s、`/infer` 3.3s、`/chat` 2s（短答）～
 15s（512 token 長答）。
 
+### 6.1 llama.cpp 引擎（2026-11-18，建議）
+
+三顆模型（部署 3B、監控 1.5B、多代理人流程的 4B）各由一個 `llama-server` 常駐，AMD 與 NVIDIA 用同一批 GGUF 檔。
+`core/model_server.py` 只轉送請求，輸入淨化、意圖與診斷的輸出解析都不變。實驗與選型依據見
+`docs/bench_record/llamacpp_20261118/README.md`。
+
+1. 下載 llama.cpp（Windows 預先編好的版本，[GitHub Releases](https://github.com/ggml-org/llama.cpp/releases)，實驗用 b12477）：
+   - AMD：`llama-<版本>-bin-win-vulkan-x64.zip`，解壓到 `D:\zt-venvs\llamacpp\vulkan\`
+   - NVIDIA：`llama-<版本>-bin-win-cuda-12.8-x64.zip`（RTX 50 系列要 CUDA 12.8 以上）與同版本的 `cudart-...zip`，
+     一起解壓到 `D:\zt-venvs\llamacpp\cuda\`
+   - 兩種顯卡都要：`llama-<版本>-bin-win-cpu-x64.zip`，解壓到 `D:\zt-venvs\llamacpp\cpu\`（監控模型跑 CPU）
+2. 下載 GGUF 到 `D:\zt-venvs\gguf\`（共約 7.7GB）：
+
+   ```bash
+   python -c "from huggingface_hub import hf_hub_download as d; o=r'D:\zt-venvs\gguf'; \
+   d('Qwen/Qwen2.5-3B-Instruct-GGUF','qwen2.5-3b-instruct-q4_k_m.gguf',local_dir=o); \
+   d('Qwen/Qwen2.5-1.5B-Instruct-GGUF','qwen2.5-1.5b-instruct-q4_k_m.gguf',local_dir=o); \
+   d('ggml-org/Qwen3.5-4B-GGUF','Qwen3.5-4B-Q8_0.gguf',local_dir=o)"
+   ```
+
+3. `.env` 加上 `LLM_ENGINE=llamacpp`。資料夾不同時設 `LLAMACPP_DIR`、`GGUF_DIR`（其他可調的名稱見 `core/config.py`）。
+4. 執行 `scripts\start_services.ps1 -Restart`。腳本看有沒有 `nvidia-smi` 決定用 CUDA 或 Vulkan 版，
+   依序啟動三個 llama-server（port 8771～8773，紀錄在 `logs\llama_<port>.err`），多代理人流程不再啟動 8766。
+
+   配置（11-18 量測決定）：4B Q8 與 3B Q4 放顯卡（約 6.8GB），1.5B Q4 跑 CPU。這張 16GB 顯卡在 Windows 上實際只給約 12.8GB
+   （包含桌面程式），超過的部分會被放到共用記憶體，速度掉一半。所以腳本由大到小啟動，一個就緒後才啟動下一個。
+
+驗證：`curl http://127.0.0.1:8765/health` 應該看到 `"engine":"llamacpp"`、`deploy_loaded` 與 `monitor_loaded` 都是 true
+（即時查 llama-server，關掉其中一個會馬上變成 false，網站顯示紅色橫幅）。
+
+注意：
+- 不支援 LoRA（`DEPLOY_ADAPTER_PATH` 有值時 model_server 啟動會報錯）；要用得先把 LoRA 轉成 GGUF。
+- AMD 內顯也會被列成 Vulkan 裝置，腳本預設 `--device Vulkan0`（獨顯），可用 `LLAMACPP_DEVICE` 改。
+- 要改回原本做法：`.env` 改 `LLM_ENGINE=transformers` 後重新執行腳本。
+
 ---
 
 ## 7. 執行部署

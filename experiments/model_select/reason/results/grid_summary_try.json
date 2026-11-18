@@ -1,0 +1,102 @@
+{
+ "rule": "沒有當掉且 40 題都有結果、通過 ≥ 22、顯存 ≤ 6GB，取 p90 最低",
+ "best": null,
+ "configs": {
+  "q8_vulkan": {
+   "n": 2,
+   "json_ok_rate": 1.0,
+   "pass_rate": 1.0,
+   "pass_簡單": "2/2",
+   "checks": {
+    "image": "2/2",
+    "replicas": "2/2",
+    "port": "2/2",
+    "memory": "2/2",
+    "cpu": "2/2",
+    "not_cronjob": "2/2",
+    "expose": "2/2"
+   },
+   "false_ask": 0,
+   "latency_p50_s": 24.96,
+   "latency_p90_s": 24.96,
+   "latency_max_s": 24.96,
+   "engine": "llama.cpp",
+   "tag": "q8_vulkan_try",
+   "rag_backend": "field",
+   "llm_calls": 11,
+   "llm_ms_per_call": 2187,
+   "tok_per_s": 49.5,
+   "vram": {
+    "dedicated": 4.6,
+    "shared": 0.03
+   },
+   "vram_after": {
+    "dedicated": 4.63,
+    "shared": 0.11
+   },
+   "crashed": false
+  },
+  "q4_vulkan": {
+   "n": 2,
+   "json_ok_rate": 1.0,
+   "pass_rate": 0.5,
+   "pass_簡單": "1/2",
+   "checks": {
+    "image": "1/2",
+    "replicas": "2/2",
+    "port": "2/2",
+    "memory": "2/2",
+    "cpu": "2/2",
+    "not_cronjob": "2/2",
+    "expose": "2/2"
+   },
+   "false_ask": 1,
+   "latency_p50_s": 21.38,
+   "latency_p90_s": 21.38,
+   "latency_max_s": 21.38,
+   "engine": "llama.cpp",
+   "tag": "q4_vulkan_try",
+   "rag_backend": "field",
+   "llm_calls": 8,
+   "llm_ms_per_call": 1872,
+   "tok_per_s": 64.7,
+   "vram": {
+    "dedicated": 3.25,
+    "shared": 0.03
+   },
+   "vram_after": {
+    "dedicated": 3.29,
+    "shared": 0.11
+   },
+   "crashed": false
+  },
+  "q8_cpu": {
+   "n": 2,
+   "json_ok_rate": 1.0,
+   "pass_rate": 1.0,
+   "pass_簡單": "2/2",
+   "checks": {
+    "image": "2/2",
+    "replicas": "2/2",
+    "port": "2/2",
+    "memory": "2/2",
+    "cpu": "2/2",
+    "not_cronjob": "2/2",
+    "expose": "2/2"
+   },
+   "false_ask": 0,
+   "latency_p50_s": 85.77,
+   "latency_p90_s": 85.77,
+   "latency_max_s": 85.77,
+   "engine": "llama.cpp",
+   "tag": "q8_cpu_try",
+   "rag_backend": "field",
+   "llm_calls": 11,
+   "llm_ms_per_call": 12923,
+   "tok_per_s": 7.5,
+   "vram": {},
+   "vram_after": {},
+   "crashed": false
+  }
+ }
+}

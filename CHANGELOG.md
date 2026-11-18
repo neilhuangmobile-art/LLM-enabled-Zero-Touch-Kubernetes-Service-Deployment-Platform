@@ -1852,3 +1852,53 @@ Pod 對應到服務、對話規則、建議 API）；乾淨環境 383 項通過�
   - pytest 全部通過。
   - 在 Docker Desktop 實際部署一個每 5 分鐘的 CronJob：審查通過、dry-run 通過、手動執行成功、log 正確，暫停、刪除後 Job、PVC、Secret 都清掉了。
   - 還沒在網站上用瀏覽器實際操作，也還沒跑 r1～r3：需要測試帳號，建立帳號的動作被權限擋下，等使用者處理。
+
+## 2026-11-18
+
+### 01:30 — 整合：RAG 欄位檢索接進多代理人流程；流程模型兩種顯卡都能跑（分支 `feat/rag-into-multiagent`，未 commit）
+- 選軟體（`agents/pipeline/software_rag.candidates`）改用 `rag/field_retriever` 的混合檢索（中文情境描述＋BGE-M3＋BM25，不重排）。
+  原因：原本用 Docker Hub 英文說明＋向量＋CPU 重排，中文句子不容易對上。同一批題目前 3 名命中：419 題 22%→67%、
+  組員 S40 的 36 題 39%→75%（27/36），每句約 1.6 秒→16 ms。`RAG_BACKEND=legacy` 可切回原本做法，檢索出錯也會自動退回。
+- 知識表合併 `rag/knowledge/catalog.json` 裡沒有的軟體，候選不會被查證步驟誤判成捏造；同名以原本的知識表為準。
+- 一般的「一句話」流程在同一次解析裡會查兩次候選（選軟體、問題卡），加了快取。
+- `core/pipeline_model_server.py`：`PIPELINE_PRECISION=auto` 依顯卡選精度：NVIDIA＋bitsandbytes 用 4-bit，
+  AMD（ROCm）或沒有 bitsandbytes 用 bf16（約 7.9GB）。啟動前先看剩餘顯存並給出解法；讀專案 `.env`。
+  `scripts/start_services.ps1` 依序找學校（`C:\zt-k8s\.venv-qwen35`）與家裡 AMD（`D:\zt-venvs\qwen35`）的 venv。
+- 驗證：`pytest -m "not integration"` 817 項通過（新增 `tests/test_rag_multiagent_merge.py` 12 項、`test_field_retriever.py` 12 項）；
+  AMD RX 9060 XT 實際載入 Qwen3.5-4B bf16 成功。
+- 已知限制（AMD）：推理一次 11～16 秒（NVIDIA 約 6 秒）。原因是 Qwen3.5 的線性注意力層在 ROCm 沒有加速核心
+  （`causal_conv1d` 用 PyTorch 參考實作）。和主模型伺服器（3B＋1.5B，約 8.7GB）同時開會超過 16GB，溢出到系統記憶體後變成 30 秒以上；
+  另外 ROCm 在 Windows 回報的剩餘顯存不準（顯示 15.8GB 可用），啟動前的顯存檢查在 AMD 上擋不住。
+
+### 15:00 — 架構：推理引擎改用 llama.cpp（AMD、NVIDIA 共用 GGUF，`LLM_ENGINE=llamacpp`；分支 `feat/rag-into-multiagent`，未 commit）
+- **為什麼**：AMD 跑 transformers 沒有 4-bit、Qwen3.5 沒有加速核心，三顆模型加 BGE-M3 塞不進顯存，溢出後速度掉一半。
+- **做法**：
+  - 三顆模型各由一個 llama-server 常駐：多代理人 4B Q8 與部署 3B Q4 放顯卡，監控 1.5B Q4 跑 CPU。
+  - `core/model_server.py` 的 `_generate` 遇到 `_LlamaRemote` 就轉送請求，輸入淨化與輸出解析不變。
+  - `agents/pipeline/llm.py` 直接打 4B 的 llama-server，不再需要 8766 與另一個 venv。
+  - `scripts/start_services.ps1` 依顯卡選 Vulkan 或 CUDA 版，由大到小依序啟動，設定一律從 `core/config.py` 讀。
+  - `LLM_ENGINE=transformers` 保留原本做法。
+- **選型依據**：`docs/bench_record/llamacpp_20261118/README.md`。
+  - 4B：Q8 在 Claude 題組明顯優於 Q4（p = 0.002）。
+  - 3B：Q4 意圖判斷和 bf16 一致 98.3%。
+  - 1.5B：Q4 在 CPU 上診斷 8/12，和 GPU 同分。
+  - 選軟體改成 agree 規則：推理代理的選擇也在 RAG 候選裡就維持原本的選擇。
+- **一起修的**（code review 與 silent-failure-hunter 抓到的，詳見 `docs/security_review.md` 66 節）：
+  - `/classify`、`/infer` 與多代理人流程的特殊標記注入。
+  - `_clean_intent` 接受空白的 `name`。
+  - 單一模型掛掉時的靜默退化：畫面綠燈、`llama_client` 改在網站程序自己載入模型、矛盾檢查記成「沒有矛盾」。
+  - 錯誤訊息依原因區分（不叫人做沒用的重啟）。
+  - 網站提示不再叫人加 `-Restart`。
+  - `.env.example` 的行尾註解。
+- **驗證**：
+  - `pytest -m "not integration"` 837 個通過，新增 `tests/test_llamacpp_engine.py`。
+  - 經由正式路徑跑 S40：23/40（與組員 NVIDIA v8 相同），p50 11.85 秒。
+  - 意圖判斷與 bf16 一致 98.3%、診斷 8/12、`/infer` 送 5 次輸出完全相同、攻擊句 3 次都擋下、聊天 10 題內容合理。
+  - 關掉監控模型後，畫面與 `/diagnose` 都正確反映，重跑腳本能自動補回。
+  - 三顆模型加 BGE-M3 同時常駐，顯卡用 10.4GB，沒有溢出。
+- **沒過的一項**：`/infer` 和 bf16 的欄位一致率 45%（門檻 95%）。
+  - 兩種引擎在沒有 RAG 範例的難句上都在猜，正確率差不多：映像檔 4 比 3、副本數 5 比 8（18 題）。
+  - 改用 3B Q8 一致率 48%，改 repeat_penalty 範圍 58%，正確率都沒有變好，所以維持驗證過的設定。
+  - 分析見 `docs/bench_record/llamacpp_20261118/README.md`。
+- **還沒做**：NVIDIA（學校電腦）實機驗證；用瀏覽器走一次完整部署流程（worktree 沒有 `.env`，登入不了，要合併後才能測）。
+  `.env` 沒有改，主 repo 仍照原本的 transformers bf16 執行。

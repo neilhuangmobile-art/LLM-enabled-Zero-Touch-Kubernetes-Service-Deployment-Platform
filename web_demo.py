@@ -361,12 +361,19 @@ def _is_admin_user(username: str) -> bool:
 
 # ── Model status ────────────────────────────────────────────
 def _model_status():
+    """回傳（部署模型就緒, 部署模型載入中）。詳細狀態（監控模型、問題說明）見 _model_health()。"""
+    h = _model_health()
+    return bool(h.get("model_loaded")), bool(h.get("deploy_loading"))
+
+
+def _model_health() -> dict:
+    """Model Server 的 /health。2026-11-18：llama.cpp 模式下各模型是獨立程序，可能只有其中一個掛掉，
+    /health 會回 monitor_loaded、problems（給人看的說明）；timeout 3 秒（model_server 內部兩個探測同時跑、各 0.8 秒）。"""
     try:
-        with urllib.request.urlopen(f"{MODEL_SERVER_URL}/health", timeout=2) as resp:
-            data = json.loads(resp.read())
-            return data.get("model_loaded", False), False
+        with urllib.request.urlopen(f"{MODEL_SERVER_URL}/health", timeout=3) as resp:
+            return json.loads(resp.read())
     except Exception:
-        return False, False
+        return {}
 
 # ── K8s helpers ─────────────────────────────────────────────
 _TW_TZ = timezone(timedelta(hours=8))
@@ -3182,7 +3189,20 @@ async function pollStatus(){
     const ms  = document.getElementById('model-status');
     // 三種狀態分開講：就緒、正在載入、根本沒在執行（2026-10-09 之前沒在執行也顯示「載入中」，新手會一直等）
     const mWarn = document.getElementById('model-warning');
-    if(d.model_ready){
+    const probs = (d.model_problems || []).join('；');
+    if(d.model_ready && d.monitor_ready === false){
+      // 2026-11-18：部署模型正常、只有監控模型（Healer 自動診斷）沒在執行，不能顯示成全部正常
+      dot.className = 'dot yellow';
+      if(ms) ms.textContent = '部分就緒';
+      if(txt) txt.textContent = '部分就緒';
+      if(mWarn){
+        mWarn.className = 'alert-banner caution show';
+        document.getElementById('model-warning-title').textContent = '自動診斷用的 AI 模型沒有在執行，服務壞掉時只能用基本規則判斷原因。';
+        document.getElementById('model-warning-body').textContent = IS_ADMIN
+          ? ('部署與問答不受影響。請執行 scripts/start_services.ps1（只會補啟動沒在執行的部分）。' + (probs ? '詳細：' + probs : ''))
+          : '部署與問答不受影響。平台管理員重新啟動後，這則提示會自動消失。';
+      }
+    } else if(d.model_ready){
       dot.className = 'dot green';
       if(ms) ms.textContent = '就緒';
       if(txt) txt.textContent = '就緒';
@@ -3204,7 +3224,7 @@ async function pollStatus(){
         mWarn.className = 'alert-banner stop show';
         document.getElementById('model-warning-title').textContent = 'AI 模型伺服器沒有在執行。';
         document.getElementById('model-warning-body').innerHTML = IS_ADMIN
-          ? '一般問答會改用簡易回答，部署仍然可以用。請在專案資料夾開一個 PowerShell，執行 <code>python core/model_server.py</code>，大約一分鐘後這則提示會自動消失。'
+          ? '一般問答會改用簡易回答，部署仍然可以用。請在專案資料夾開一個 PowerShell，執行 <code>powershell -ExecutionPolicy Bypass -File scripts/start_services.ps1</code>（只會補啟動沒在執行的部分），大約一分鐘後這則提示會自動消失。' + (probs ? '<br>詳細：' + escHtml(probs) : '')
           : '一般問答會改用簡易回答，部署仍然可以用。平台管理員重新啟動模型後，這則提示會自動消失。';
       }
     }
@@ -7793,17 +7813,21 @@ def _fallback_chat_reply(message: str, history: list = None, namespace: str = No
     if rag_text:
         return "我先用本地 RAG 知識庫回答：\n\n" + rag_text, rag_docs
 
-    return "我可以回答一般問題與 Kubernetes 問題；目前本地模型 server 沒有啟動，所以先用快速規則/RAG 回覆。若要完整自然語言能力，請另外開一個終端執行 `python3 core/model_server.py`，再開網站。", []
+    return "我可以回答一般問題與 Kubernetes 問題；目前本地模型 server 沒有啟動，所以先用快速規則/RAG 回覆。若要完整自然語言能力，請管理員執行 `scripts/start_services.ps1`（只會補啟動沒在執行的部分）。", []
 
 @app.route("/api/status")
 def api_status():
     if "username" not in session:
         return jsonify({"error": "Not authenticated"}), 401
-    ready, loading = _model_status()
+    mh = _model_health()
+    ready, loading = bool(mh.get("model_loaded")), bool(mh.get("deploy_loading"))
+    # 監控模型（Healer 自動診斷）單獨掛掉時也要讓人看到；problems 含檔名與指令，只給管理員看
+    model_extra = {"monitor_ready": bool(mh.get("monitor_loaded")) if mh else False,
+                   "model_problems": (mh.get("problems") or []) if _is_admin_user(session.get("username", "")) else []}
     if _is_remote_ns(_session_ns()):
         st = CLUSTERS.status(session["username"])
         title, howto = status_text(st["code"], _session_ns())
-        return jsonify({"model_ready": ready, "model_loading": loading, "claude_api": claude_available(),
+        return jsonify({"model_ready": ready, "model_loading": loading, "claude_api": claude_available(), **model_extra,
                         # 客戶叢集模式：平台自己的 Docker/K8s 跟客戶無關，回報的是客戶叢集的連線
                         "k8s": st["ok"], "docker_running": True, "docker_message": "",
                         "customer_cluster": {"ok": st["ok"], "code": st["code"], "title": title, "howto": howto,
@@ -7811,7 +7835,7 @@ def api_status():
     docker_running, docker_message = _check_docker()
     k8s_live = _check_k8s_live()
     return jsonify({
-        "model_ready": ready, "model_loading": loading, "claude_api": claude_available(),
+        "model_ready": ready, "model_loading": loading, "claude_api": claude_available(), **model_extra,
         "k8s": k8s_live,                       # 即時探測，不是啟動時的舊值
         "docker_running": docker_running,
         "docker_message": docker_message,
@@ -8596,22 +8620,39 @@ def _pipeline_deploy_parse(data: dict, user_input: str):
     from llama_client import _predeploy_boundary_precheck, _parse_error_response
     username = session["username"]
     pid = str(data.get("pipeline_id") or "").strip()
+    # 2026-11-18：記下這次請求裡本地模型呼叫失敗幾次。失敗時 local_llm 回 None，各檢查步驟會當成「沒意見」繼續，
+    # 部署單看起來像全部檢查過；有失敗就在部署單上講清楚（AGENT_RULES：不能靜默失敗）
+    llm_fail = {"n": 0}
+
+    def local_llm(system, user, max_new_tokens=768):
+        out = pllm.local_llm(system, user, max_new_tokens)
+        if out is None:
+            llm_fail["n"] += 1
+        return out
     if pid:
+        if not pllm.local_available():
+            return {"error": "本地模型目前沒有回應，沒辦法接著處理這張問題卡。請管理員執行 scripts/start_services.ps1"
+                             "（只會補啟動沒在執行的部分），之後再回答一次。"}, 503
         state = _pipeline_take(username, pid)
         if not state:
             return {"error": "這張問題卡已經失效（超過一小時或網站重新啟動過），請再說一次你想部署什麼。"}, 410
         answers = data.get("answers") if isinstance(data.get("answers"), dict) else {}
         answers = {str(k)[:20]: str(v)[:300] for k, v in list(answers.items())[:20]}
         user_input = state["text"]
-        spec = runner.resume(state["spec"], answers, pllm.local_llm)
+        spec = runner.resume(state["spec"], answers, local_llm)
     else:
         pre = _parse_error_response(_predeploy_boundary_precheck(user_input))
         if pre:
             return {"error": pre["error"]}, 422
         if not pllm.local_available():
-            print("[多代理人解析] 本地模型伺服器（8766）沒有回應，這次改走原本的 ask_llama")
+            print(f"[多代理人解析] 本地模型（{pllm.LOCAL_URL}）沒有回應，這次改走原本的 ask_llama")
             return None
-        spec = runner.run(user_input, pllm.gemini_llm, pllm.local_llm)
+        spec = runner.run(user_input, pllm.gemini_llm, local_llm)
+    if llm_fail["n"]:
+        spec.setdefault("notices", []).append(
+            f"處理過程中本地模型有 {llm_fail['n']} 次沒有回應，部分自動檢查（理解需求、找矛盾）可能沒有完成，"
+            f"請仔細確認下面的規格再部署。")
+        print(f"[多代理人解析] 本地模型呼叫失敗 {llm_fail['n']} 次（{pllm.LOCAL_URL}）")
     print(f"[多代理人解析] 正規化={spec['backend'].get('normalize')} 耗時={spec.get('total_ms')}ms 問題={len(spec['questions'])}")
     if spec.get("cancelled"):
         return {"error": "好，這次先不部署。", "cancelled": True}, 200
@@ -8657,7 +8698,7 @@ def api_deploy_parse():
             return jsonify(out[0]), out[1]
         # 不能靜默退回（AGENT_RULES）：部署單上告訴使用者這次用的是原本的解析方式，以及怎麼恢復
         fallback_notice = ("新的部署解析（多代理人流程）目前沒有啟動，這次改用原本的解析方式，額外的設定（保存資料、密碼等）可能沒有帶到。"
-                           "請管理員啟動本地模型伺服器（core/pipeline_model_server.py）後再試一次。")
+                           "請管理員執行 scripts/start_services.ps1（只會補啟動沒在執行的部分）後再試一次。")
     if not user_input or len(user_input) < 3:
         return jsonify({"error": "輸入內容太短，請描述清楚要部署什麼"}), 400
     parsed, enriched, review, error = _prepare_deploy(user_input, parsed_override)

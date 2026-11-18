@@ -6,6 +6,7 @@
 port 一律以查表為準（映像檔名稱查得到時，蓋過推理代理猜的 port；使用者講的不蓋）。"""
 from __future__ import annotations
 
+import os
 import time
 from typing import Dict, Optional
 
@@ -139,6 +140,13 @@ def _select_software(spec: Dict, local: Optional[LLM]) -> None:
         return
     cands = software_rag.candidates(spec["text"])
     cur = software_rag.repo_of(b["value"])
+    # 2026-11-18：推理代理選的軟體也在 RAG 候選裡＝兩邊意見一致，維持原本選擇，不再請模型重選。
+    # 換成 RAG 欄位檢索後候選變得像樣，模型常被句子裡的「不中斷」「偵測故障」帶偏（S25 nginx→uptime-kuma、
+    # S17 nginx→httpd）。只有兩邊意見不同時才重選，也省一次模型呼叫。
+    # PIPELINE_SELECT_RULE=always 恢復原本「每次都重選」（對照實驗用）。
+    if os.environ.get("PIPELINE_SELECT_RULE", "agree") != "always" and any(c["image"] == cur for c in cands):
+        spec["trace"].append({"step": "select", "ms": 0, "detail": f"維持 {cur}（RAG 候選也有它）"})
+        return
     pool = [cur] + [c["image"] for c in cands if c["image"] != cur]
     if len(pool) < 2:
         return

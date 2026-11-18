@@ -1,0 +1,2 @@
+# 2026-11-18：Kubernetes 官方文件 secret.md 的教學範例（base64 的 tiger:pass1234、網域 my-registry.example），不是真的密鑰
+rag/knowledge/k8s_official/secret.md:generic-api-key:268

@@ -1,0 +1,21 @@
+{
+ "n": 300,
+ "n_answer": 262,
+ "n_must_ask": 38,
+ "pass_answer": 0.149,
+ "image_acc_always": 0.359,
+ "false_ask": 182,
+ "must_ask_recall": 0.947,
+ "select_steps": 113,
+ "select_always_ok": 61,
+ "select_agree_ok": 65,
+ "select_cur_ok": 55,
+ "select_changed_by_rule": 29,
+ "latency_p50_ms": 8398,
+ "latency_p90_ms": 11151,
+ "mcnemar_agree_vs_always": {
+  "agree_only": 12,
+  "always_only": 8,
+  "p": 0.5034
+ }
+}

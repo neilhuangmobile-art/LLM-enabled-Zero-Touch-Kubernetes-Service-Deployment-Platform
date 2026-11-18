@@ -1,0 +1,246 @@
+# 失敗經驗資料庫（Lessons）
+# 從實際失敗歸納的通則：遇到什麼情況 → 系統做錯什麼 → 正確做法。
+# 來源：11/06～08 對照實驗與 r3 驗證（docs/bench_record/題目與結果總表.md）、10/07 QA 掃描、
+#      第一次實驗交接說明第八節。題目原句一律不放，只寫歸納後的情況（trigger）。
+# 欄位：id、title、stage（發生在哪一段）、fields（影響的欄位）、trigger、wrong、correct、
+#      evidence（出處，題號或日期）、status（fixed＝已修、open＝未修，供推理代理參考）
+
+- id: L01
+  title: 部署需求被當成一般問答
+  stage: 意圖判斷
+  fields: []
+  trigger: "新手用口語描述想要的東西（幫我弄一個、架一個、想要一個網站），沒有出現「部署」二字"
+  wrong: "被判成問答，只回一段教學或 YAML 範例，沒有進入部署流程"
+  correct: "只要使用者想要某個東西被建立或執行，就是部署意圖；只有在詢問概念或方法時才是問答"
+  evidence: "r2 盲測 30 次失敗；11/08 改由 Gemini 判斷後 r3 0 次"
+  status: fixed
+
+- id: L02
+  title: 情境沒說軟體就直接退回
+  stage: 補欄位
+  fields: [image]
+  trigger: "只描述用途（活動網站、交接筆記、收作業、店家菜單），沒有指定軟體或映像檔"
+  wrong: "回覆「還缺少映像檔」並退回，或系統自己猜 nginx"
+  correct: "從軟體目錄依用途找最接近的軟體作為建議值，在確認卡標示「建議」；找不到或有多個同樣合適時，列出選項反問"
+  evidence: "r1 A06～A10、r2 情境類 0/8、r3 C01～C03"
+  status: open
+
+- id: L03
+  title: 合理的軟體推薦被防捏造檢查擋掉
+  stage: 補欄位
+  fields: [image]
+  trigger: "模型推薦了原句沒提到、但真實存在的軟體（例如 wiki 類、程式碼託管類）"
+  wrong: "防捏造檢查只認原句與小清單，把合理推薦也當捏造而退回"
+  correct: "推薦值若在軟體目錄內（已驗證存在），就可以當建議值；不在目錄內才視為捏造"
+  evidence: "r3 C02、C03"
+  status: open
+
+- id: L04
+  title: 一般名詞被當成映像檔名稱
+  stage: 補欄位
+  fields: [image]
+  trigger: "英文需求裡出現 website、app、server 等一般名詞"
+  wrong: "產生 website:latest 這種不存在的映像檔"
+  correct: "映像檔必須在原句以專有名稱出現，或在軟體目錄內；一般名詞不是映像檔"
+  evidence: "r1 A20"
+  status: fixed
+
+- id: L05
+  title: 映像檔名稱寫錯
+  stage: 補欄位
+  fields: [image]
+  trigger: "使用者或模型用俗稱，例如 mongodb、postgre"
+  wrong: "直接用 mongodb:6.0，映像檔拉不到（ImagePullBackOff）"
+  correct: "用軟體目錄的正式名稱：mongodb → mongo、postgre → postgres"
+  evidence: "r2 B16"
+  status: open
+
+- id: L06
+  title: 要保存資料卻沒有保存空間
+  stage: 額外欄位
+  fields: [extra.persistent_storage]
+  trigger: "使用者表示資料不能遺失、重開機要保留、或服務本身是資料庫或存檔案"
+  wrong: "只建 Deployment，沒有 PVC；Pod 重建後資料全部消失"
+  correct: "建立 PVC 並掛在該映像檔版本的資料目錄；容量照使用者說的，沒說用建議值並請確認"
+  evidence: "r2 B14～B16、r3 C04～C06、C12（共 13 次）"
+  status: open
+
+- id: L07
+  title: 使用者給的密碼被系統產生的密碼覆蓋
+  stage: 額外欄位
+  fields: [extra.credentials]
+  trigger: "使用者明確說了密碼或帳號"
+  wrong: "系統自動產生密碼，蓋掉使用者給的值"
+  correct: "使用者給的值優先；只有映像檔必要且使用者沒給時才產生"
+  evidence: "r2 B14、r3 C12"
+  status: open
+
+- id: L08
+  title: 使用者給的指令被丟掉或被空殼取代
+  stage: 額外欄位
+  fields: [extra.command]
+  trigger: "使用者指定要執行的指令、要印出的文字或要跑的程式"
+  wrong: "規格只有六個欄位，指令被丟掉；或被系統的待機空殼指令取代"
+  correct: "逐字放進 command／args；空殼只用在使用者完全沒給指令的背景程式，並明確告知"
+  evidence: "r3 C07、C09"
+  status: open
+
+- id: L09
+  title: 定時工作被做成常駐服務
+  stage: 額外欄位
+  fields: [extra.scheduled_job]
+  trigger: "使用者描述固定時間或週期執行、跑完就結束"
+  wrong: "建立 Deployment 一直執行"
+  correct: "建立 CronJob，排程依描述換算並注意時區"
+  evidence: "r2 B17、B18、r3 C08"
+  status: open
+
+- id: L10
+  title: 不認得的軟體連接埠一律設成 80
+  stage: 補欄位
+  fields: [port]
+  trigger: "部署的軟體不在早期的連接埠清單（例如部落格、儀表板類）"
+  wrong: "containerPort 預設 80，實際服務聽的是其他連接埠，健康檢查失敗、連不上"
+  correct: "連接埠以軟體目錄（Docker Hub 映像檔設定）為準"
+  evidence: "r3 C05（ghost 實際 2368）、C11（grafana 實際 3000）"
+  status: open
+
+- id: L11
+  title: 對外連接埠被當成程式監聽的連接埠
+  stage: 補欄位
+  fields: [port]
+  trigger: "使用者說「端口開 8080」之類"
+  wrong: "把 8080 寫成 containerPort，但程式實際聽 80"
+  correct: "使用者說的是對外 Service port；containerPort 與 targetPort 用映像檔實際監聽的連接埠"
+  evidence: "r2 B02（WordPress）"
+  status: open
+
+- id: L12
+  title: 背景程式被開了對外連接埠
+  stage: 額外欄位
+  fields: [port, extra.background_no_expose]
+  trigger: "使用者說不需要畫面、不用讓人連、在背景跑"
+  wrong: "照樣建立對外 Service 並開 80"
+  correct: "不建立對外 Service"
+  evidence: "r3 C07、C09"
+  status: open
+
+- id: L13
+  title: 資料庫缺必要密碼而無法啟動
+  stage: 額外欄位
+  fields: [extra.credentials]
+  trigger: "部署 postgres、mysql、mariadb 等，使用者沒提密碼"
+  wrong: "沒有設定必要環境變數，容器啟動即失敗"
+  correct: "依軟體目錄的 env_required 產生密碼存進 Secret，確認卡顯示並可修改"
+  evidence: "r1 A21、A22"
+  status: fixed
+
+- id: L14
+  title: 背景程式沒有指令，容器一啟動就結束
+  stage: 額外欄位
+  fields: [extra.command]
+  trigger: "部署 python、alpine、busybox 等執行環境映像檔，卻沒有給程式或指令"
+  wrong: "容器沒事可做立即結束，進入 CrashLoopBackOff"
+  correct: "反問要執行什麼；若使用者只想先建環境，用待機空殼並明確說明"
+  evidence: "r1 A05"
+  status: fixed
+
+- id: L15
+  title: 對既有服務的操作被當成新部署
+  stage: 意圖判斷
+  fields: []
+  trigger: "提到「剛剛那個網站」「現在跑的」並要求加大、改數量"
+  wrong: "被判成新部署，還捏造服務名稱"
+  correct: "是對既有服務的擴縮；從使用者的服務清單對到實際名稱"
+  evidence: "r2 B27"
+  status: fixed
+
+- id: L16
+  title: 操作沒說服務名稱就只會反問
+  stage: 意圖判斷
+  fields: []
+  trigger: "「把那個 redis 刪掉」「退回上一版」等，沒說確切名稱"
+  wrong: "不知道使用者有哪些服務，只能反問或給教學"
+  correct: "依服務清單比對描述（映像檔、用途）；只有一個符合時直接帶出確認卡，多個符合才反問"
+  evidence: "r2 B29、B30"
+  status: fixed
+
+- id: L17
+  title: 聽不懂換回上一版的說法
+  stage: 意圖判斷
+  fields: []
+  trigger: "換回、退回、恢復、改回上一版"
+  wrong: "沒有命中回滾規則，被判成換映像檔或問答"
+  correct: "判成回滾"
+  evidence: "r1 B3"
+  status: fixed
+
+- id: L18
+  title: 一句話要兩個服務只部署一個
+  stage: 補欄位
+  fields: [extra.multi_service]
+  trigger: "同時要網站和快取、網站和資料庫"
+  wrong: "只部署其中一個，另一個默默消失"
+  correct: "拆成多張確認卡；目前不支援時要明確告知使用者哪個沒有部署"
+  evidence: "r2 B20"
+  status: open
+
+- id: L19
+  title: 需要搭配資料庫的軟體被單獨部署
+  stage: 補欄位
+  fields: [image, extra.multi_service]
+  trigger: "推薦的軟體預設需要外部資料庫（wordpress、wiki 類、聊天平台）"
+  wrong: "只部署主程式，啟動後連不到資料庫"
+  correct: "優先推薦可單一容器運作的選項，或套用軟體目錄的 standalone_env；否則告知需要先部署資料庫"
+  evidence: "依軟體目錄 standalone 欄位歸納（11/15）"
+  status: open
+
+- id: L20
+  title: 把總人數當成同時在線人數
+  stage: 補欄位
+  fields: [replicas]
+  trigger: "使用者給總人數與活動天數（例如報名期間幾百人）"
+  wrong: "副本數開太多，或審查判定資源超量"
+  correct: "以總人數約 20% 估計尖峰同時在線，再除以每副本可服務人數；使用者明說同時在線時照用"
+  evidence: "情境換算規則（agents/scenario.py）與實驗觀察"
+  status: open
+
+- id: L21
+  title: 規則層的高信心掩蓋了錯誤
+  stage: 意圖判斷
+  fields: []
+  trigger: "規則或模型給出高信心，但參數其實沒有出現在原句"
+  wrong: "照高信心執行，捏造名稱或數字"
+  correct: "信心不可靠；名稱、數字、版本必須在原句或服務清單找得到，否則反問"
+  evidence: "10/07 QA 掃描（206 題）"
+  status: fixed
+
+- id: L22
+  title: 缺映像檔時自動補 nginx
+  stage: 補欄位
+  fields: [image]
+  trigger: "使用者沒說要部署什麼"
+  wrong: "系統自動補 nginx，部署出與需求無關的服務"
+  correct: "不得用固定預設值；查軟體目錄找建議值，找不到就反問"
+  evidence: "10/26 修正；第一次實驗前的版本"
+  status: fixed
+
+- id: L23
+  title: 健康檢查連接埠錯誤無法自動修復
+  stage: 部署後修復
+  fields: [port]
+  trigger: "探針連接埠與容器監聽連接埠不同，Pod 一直被重啟"
+  wrong: "修復只延長等待時間，問題持續"
+  correct: "比對容器實際監聽的連接埠並修正探針"
+  evidence: "r1 F3；11/07 修正後實測 52 秒修好"
+  status: fixed
+
+- id: L24
+  title: 危險要求的處理
+  stage: 審查
+  fields: []
+  trigger: "要求特權模式、掛主機目錄、超大資源、刪除系統元件、要求忽略規則"
+  wrong: "（通用 AI 代理曾實際部署 64Gi 與特權設定）"
+  correct: "部署前擋下並說明哪些要求不會照做與原因；能做的安全部分照常部署"
+  evidence: "r1 A16、A17、E4；r2 危險類 8/8"
+  status: fixed

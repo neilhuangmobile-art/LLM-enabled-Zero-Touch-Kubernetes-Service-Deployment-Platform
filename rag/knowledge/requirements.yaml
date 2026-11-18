@@ -1,0 +1,118 @@
+# C2 需求通則：使用者的口語暗示 → 需要的額外設定
+# 來源：Claude 依 Kubernetes 官方概念撰寫（source: claude），對應的 K8s 寫法見 k8s_official 文件。
+# cues 是給向量檢索用的一般化說法，不放任何測試題原句。
+# 欄位：need（代碼）、title、cues、setting（要加的設定）、k8s（對應物件）、
+#      values（數值怎麼決定）、confirm（是否要在確認卡請使用者確認）、notes
+
+- need: persistent_storage
+  title: 需要保存資料的空間
+  cues: ["資料不能不見", "重開機或當機後東西還要在", "要一直留著", "上傳的檔案要保存", "會員資料很重要", "存訂單或紀錄", "上次東西全沒了這次不要再這樣", "資料庫"]
+  setting: 建立 PersistentVolumeClaim，掛載到映像檔的資料目錄（catalog 的 volumes）
+  k8s: [PersistentVolumeClaim, volumeMounts]
+  values: "容量：使用者有說就照用；沒說時小型使用 1Gi、資料庫 5Gi，並在確認卡標示為建議值"
+  confirm: true
+  notes: "掛載路徑必須用該映像檔版本的資料目錄，例如 postgres 16 是 /var/lib/postgresql/data，18 是 /var/lib/postgresql；資料庫有 PVC 時副本數應為 1"
+
+- need: scheduled_job
+  title: 定時執行
+  cues: ["每天半夜自動跑", "每週日晚上執行一次", "每小時檢查一次", "固定時間自動備份", "定期清理", "跑完就結束不用一直開著"]
+  setting: 改用 CronJob（不是 Deployment），排程寫成 cron 格式
+  k8s: [CronJob]
+  values: "排程依使用者描述換算；時區要確認（預設台灣時間 Asia/Taipei，需設定 timeZone）"
+  confirm: true
+  notes: "「每 30 秒印一次」這種持續迴圈不是定時工作，而是背景程式（Deployment＋迴圈指令）"
+
+- need: background_no_expose
+  title: 不需要對外開放
+  cues: ["不用讓人連進來", "在背景默默跑", "沒有畫面", "不需要網頁", "內部使用就好"]
+  setting: 不建立對外 Service（或只建 ClusterIP），不需要 containerPort 也可以
+  k8s: [Deployment, "Service 省略或 ClusterIP"]
+  values: "無"
+  confirm: false
+  notes: "背景程式若沒有使用者給的指令，容器會一啟動就結束，必須請使用者提供或明確說明是空殼"
+
+- need: custom_command
+  title: 使用者指定要執行的指令或程式
+  cues: ["幫我執行這段指令", "讓它一直印出某段文字", "跑這個 python 程式", "啟動時執行某個腳本"]
+  setting: 設定容器的 command 或 args，照使用者給的內容，不可改寫或省略
+  k8s: [command, args]
+  values: "逐字採用使用者給的指令；只能補上必要的外殼（例如 sh -c）"
+  confirm: true
+  notes: "11/07 實驗中使用者給的指令被系統的空殼指令覆蓋，屬於嚴重錯誤"
+
+- need: credentials
+  title: 密碼或帳號設定
+  cues: ["密碼設成某個值", "帳號密碼先用 admin", "要有登入密碼", "資料庫要設密碼"]
+  setting: 環境變數；密碼類放進 Secret 再引用
+  k8s: [Secret, env.valueFrom.secretKeyRef]
+  values: "使用者有給就照用；沒給且映像檔必要（catalog 的 env_required）才由系統產生，並在確認卡顯示"
+  confirm: true
+  notes: "絕不能用系統產生的密碼覆蓋使用者給的密碼"
+
+- need: env_config
+  title: 一般環境設定
+  cues: ["設定語言或時區", "單機版就好", "開啟管理介面", "關掉安全功能先測試"]
+  setting: 對應映像檔的環境變數（catalog 的 env_common、doc_env）
+  k8s: [env]
+  values: "只用映像檔文件中存在的變數名稱"
+  confirm: true
+
+- need: external_port
+  title: 使用者指定對外連接埠
+  cues: ["端口開某個號碼", "用某個 port 讓我連", "網址後面要接某個數字"]
+  setting: 使用者說的是對外的 Service port；容器的 targetPort 必須用映像檔實際監聽的連接埠
+  k8s: [Service.port, Service.targetPort, containerPort]
+  values: "containerPort＝catalog 的 ports；Service.port＝使用者指定"
+  confirm: false
+  notes: "實驗中 WordPress 被設成容器監聽 8080，但它實際聽 80，健康檢查一直失敗"
+
+- need: extra_ports
+  title: 需要多個連接埠
+  cues: ["要有管理網頁", "後台介面也要能連", "同時要網頁和 SSH"]
+  setting: containerPort 與 Service 都列出多個連接埠
+  k8s: [containerPort, Service.ports]
+  values: "依 catalog 的 ports；例如 rabbitmq 管理網頁 15672、gitea SSH 22"
+  confirm: false
+
+- need: scale_by_users
+  title: 依使用人數決定副本數
+  cues: ["大概幾百人同時看", "活動當天人很多", "只有幾個人用", "全班幾十人", "報名期間人會爆量"]
+  setting: 副本數＝ceil(同時在線人數 ÷ 每副本可服務人數)，至少 1
+  k8s: [Deployment.replicas]
+  values: "同時在線人數：使用者有說就照用；只給總人數與天數時，以總人數的 20% 估計尖峰同時在線；每副本可服務人數見 catalog 的 per_replica_users；資料庫與有狀態服務一律 1"
+  confirm: true
+  notes: "不要把總人數直接當副本數依據；300 人報名不代表 300 人同時在線"
+
+- need: high_availability
+  title: 不能中斷
+  cues: ["不能掛掉", "要一直在線", "很重要不能停", "掛了會被罵"]
+  setting: 無狀態服務至少 2 個副本，並設定健康檢查
+  k8s: [replicas, readinessProbe, livenessProbe]
+  values: "至少 2；資料庫等有狀態服務仍為 1（多副本需要專門的叢集設定）"
+  confirm: true
+  notes: "單一節點叢集無法防止節點故障，只能防止單一 Pod 故障"
+
+- need: short_lived
+  title: 只用一段時間
+  cues: ["活動三天而已", "用一個禮拜就關", "比賽結束就不用了", "期末前用完"]
+  setting: 不改 K8s 設定；記錄預計結束時間，可提醒使用者到期刪除或用預約功能
+  k8s: []
+  values: "無"
+  confirm: false
+
+- need: resource_hint
+  title: 很吃效能或很輕量
+  cues: ["要跑很重的計算", "資料量很大", "只是小東西", "電腦不用太好"]
+  setting: 調整記憶體與 CPU 的 requests、limits
+  k8s: [resources]
+  values: "以 catalog 的 resources 為基準：重量級加倍、輕量級維持最小值；不得超過叢集容量"
+  confirm: true
+
+- need: multi_service
+  title: 一次要兩個以上的服務
+  cues: ["再加一個資料庫", "網站和快取都要", "旁邊再放一個", "需要搭配資料庫的軟體"]
+  setting: 拆成多個部署，各自一張確認卡；有相依關係時先部署被依賴的服務
+  k8s: [多個 Deployment, Service 名稱互相連線]
+  values: "依 catalog 的 requires"
+  confirm: true
+  notes: "目前平台一次只部署一個服務；在多服務功能完成前，應告知使用者並建議先部署哪一個"

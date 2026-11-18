@@ -1,0 +1,151 @@
+# C4 疑難排解：症狀 → 常見原因 → 修法
+# 來源：Claude 依 Kubernetes 官方行為撰寫（source: claude），並對照專案既有文件
+#      （rag/k8s_docs/common_errors.md、troubleshooting_advanced.md、pod_status_explained.md）
+#      與 Healer 的實際修復紀錄。新手看得懂的說法放在 plain，技術說明放在 causes／fix。
+
+- id: T01
+  symptom: CrashLoopBackOff
+  plain: "程式一啟動就結束或當掉，系統一直重啟它"
+  causes: ["程式本身錯誤或設定錯誤（看最近的日誌）", "缺少必要環境變數（例如資料庫密碼）", "背景程式沒有要執行的指令，跑完就結束", "記憶體上限太低被終止", "健康檢查設錯導致被重啟"]
+  fix: ["看前一次容器的日誌（kubectl logs --previous）找錯誤訊息", "補上必要環境變數", "背景程式補上指令或長時間執行的迴圈", "依實際用量調高記憶體上限", "確認探針的連接埠與路徑"]
+  healer: "依日誌證據判斷；記憶體不足會調高上限，健康檢查連接埠錯誤會改正"
+
+- id: T02
+  symptom: OOMKilled（Exit code 137）
+  plain: "程式用的記憶體超過上限，被系統強制停止"
+  causes: ["記憶體上限低於實際需求", "程式有記憶體洩漏", "資料量突然變大"]
+  fix: ["調高 resources.limits.memory", "確認 requests 不高於 limits", "長期觀察用量（Prometheus）再設合理上限"]
+  healer: "逐步調高記憶體上限，每步之間等待觀察"
+
+- id: T03
+  symptom: ImagePullBackOff／ErrImagePull
+  plain: "找不到或下載不了程式的映像檔"
+  causes: ["映像檔名稱或版本打錯（例如 mongodb 應為 mongo）", "版本不存在", "私有倉庫需要登入", "網路無法連到 Docker Hub"]
+  fix: ["用軟體目錄的正式名稱與存在的版本", "私有倉庫設定 imagePullSecrets", "檢查網路"]
+  healer: "若曾經成功過，退回上一個可用的映像檔"
+
+- id: T04
+  symptom: Pending
+  plain: "服務排不進任何機器，一直在等待"
+  causes: ["要求的 CPU 或記憶體超過叢集剩餘容量", "PVC 沒有可用的儲存空間", "節點選擇條件無法滿足"]
+  fix: ["降低 requests 或減少副本", "確認 StorageClass 與 PVC 狀態", "查看事件（kubectl describe pod）的原因"]
+
+- id: T05
+  symptom: Readiness probe failed／服務不就緒
+  plain: "程式活著，但健康檢查一直說它還沒準備好，流量不會進來"
+  causes: ["探針連接埠與程式監聽的連接埠不同", "探針路徑不存在", "程式啟動很慢，探針太早開始檢查"]
+  fix: ["探針連接埠改成容器實際監聽的連接埠（見軟體目錄）", "改用存在的路徑或 TCP 檢查", "加長 initialDelaySeconds 或改用 startupProbe"]
+  healer: "比對容器實際連接埠並修正探針（11/07 起）"
+
+- id: T06
+  symptom: Liveness probe failed，一直被重啟
+  plain: "健康檢查判定程式壞了，系統一直重啟它"
+  causes: ["探針設定錯誤（連接埠、路徑）", "程式啟動時間比探針容忍的長", "程式真的卡住"]
+  fix: ["修正探針設定", "加 startupProbe 或加長等待時間", "看日誌確認是否真的卡住"]
+
+- id: T07
+  symptom: Service 連不上
+  plain: "服務在跑，但從外面連不到"
+  causes: ["Service 的 targetPort 與容器監聽的連接埠不同", "selector 標籤對不上 Pod", "Service 類型是 ClusterIP，外部本來就連不到", "Pod 還沒就緒"]
+  fix: ["targetPort 用容器實際連接埠", "檢查 Endpoints 是否有 Pod", "需要外部連線時用 NodePort 或 LoadBalancer", "先處理就緒問題"]
+
+- id: T08
+  symptom: CreateContainerConfigError
+  plain: "容器設定有問題，根本建立不起來"
+  causes: ["引用的 Secret 或 ConfigMap 不存在", "Secret 裡沒有指定的 key"]
+  fix: ["先建立 Secret／ConfigMap，或修正名稱與 key"]
+
+- id: T09
+  symptom: 資料在重啟後消失
+  plain: "服務重開之後，之前存的資料都不見了"
+  causes: ["沒有掛載保存空間（PVC），資料只存在容器內", "掛載路徑不是該映像檔版本實際的資料目錄"]
+  fix: ["建立 PVC 並掛在軟體目錄記載的資料目錄", "注意版本差異（postgres 16 與 18 的路徑不同）"]
+
+- id: T10
+  symptom: CronJob 沒有在預期時間執行
+  plain: "設定的定時工作沒有照時間跑"
+  causes: ["排程用的是叢集時區（通常是 UTC），不是台灣時間", "cron 格式寫錯", "上一次還沒結束且設定不允許重疊"]
+  fix: ["設定 spec.timeZone: Asia/Taipei", "檢查 cron 五欄格式", "調整 concurrencyPolicy"]
+
+- id: T11
+  symptom: 資料庫連不上
+  plain: "網站說連不到資料庫"
+  causes: ["資料庫服務沒有部署或還沒就緒", "連線位址要用資料庫的 Service 名稱", "帳號密碼不一致"]
+  fix: ["先部署並確認資料庫就緒", "主機名稱填資料庫的 Service 名稱", "兩邊使用同一個 Secret 的密碼"]
+
+- id: T12
+  symptom: Evicted
+  plain: "機器資源不夠，系統把服務趕走了"
+  causes: ["節點記憶體或磁碟壓力", "沒有設定 requests，優先被驅逐"]
+  fix: ["設定合理的 requests", "清理磁碟或減少負載"]
+
+- id: T13
+  symptom: 權限不足（Forbidden）
+  plain: "沒有權限做這個操作"
+  causes: ["帳號只能操作自己的命名空間", "缺少 RBAC 權限"]
+  fix: ["在自己的命名空間操作", "請管理員授權"]
+
+# ── 2026-11-15 補充：依 rag/knowledge/k8s_official/ 新增的官方除錯文件撰寫（source 欄位列出對照的文件） ──
+
+- id: T14
+  symptom: 一直停在 ContainerCreating
+  plain: "服務卡在準備階段，程式還沒開始跑"
+  causes: ["映像檔很大，還在下載", "要掛載的儲存空間（PVC）還沒準備好或綁定失敗", "引用的 Secret 或 ConfigMap 不存在"]
+  fix: ["看事件（kubectl describe pod）最後幾行的原因", "確認 PVC 狀態是 Bound", "確認引用的 Secret、ConfigMap 名稱正確"]
+  source: [debug-pods.md, persistent-volumes.md]
+
+- id: T15
+  symptom: Init:CrashLoopBackOff／Init:Error
+  plain: "正式程式啟動前要先做的準備步驟一直失敗"
+  causes: ["初始化容器的指令錯誤", "初始化容器在等待的服務（例如資料庫）還沒好", "權限或設定錯誤"]
+  fix: ["看初始化容器的日誌（kubectl logs <pod> -c <初始化容器名稱>）", "確認它等待的服務已經啟動", "修正指令後重新部署"]
+  source: [debug-init-containers.md]
+
+- id: T16
+  symptom: 容器結束代碼（Exit code 1／126／127）
+  plain: "程式啟動後馬上結束，代碼代表不同原因"
+  causes: ["1：程式自己回報錯誤（看日誌）", "126：指令找得到但不能執行（權限不足）", "127：找不到指令（指令或路徑打錯、映像檔裡沒有這個程式）"]
+  fix: ["看 kubectl describe pod 的 Last State 與 Exit Code", "127 檢查 command 拼字與映像檔是否包含該程式", "126 檢查檔案權限"]
+  source: [determine-reason-pod-failure.md, pod-lifecycle.md]
+
+- id: T17
+  symptom: exec format error
+  plain: "映像檔是給其他種電腦（例如 ARM）用的，這台機器跑不了"
+  causes: ["映像檔只有 arm64 版本，叢集是 amd64（或相反）"]
+  fix: ["改用有對應架構的版本（多架構映像檔）", "軟體目錄只收有 linux/amd64 的版本"]
+  source: [images.md]
+
+- id: T18
+  symptom: 服務在跑，但從外面連不到（連線被拒）
+  plain: "程式明明在執行，網址卻打不開"
+  causes: ["程式只聽 127.0.0.1（本機），沒有聽 0.0.0.0，其他地方連不到", "Service 的 targetPort 跟程式實際的連接埠不同", "Service 的 selector 標籤對不上 Pod，沒有任何後端"]
+  fix: ["設定程式監聽 0.0.0.0", "確認 targetPort 等於容器連接埠", "kubectl get endpoints 確認有後端"]
+  source: [debug-service.md, service.md]
+
+- id: T19
+  symptom: 寫入資料時 Permission denied
+  plain: "程式沒有權限寫進存資料的空間"
+  causes: ["容器用非 root 使用者執行，掛載的資料夾屬於 root", "映像檔要求特定使用者 ID"]
+  fix: ["設定 securityContext.fsGroup 讓掛載空間可寫", "依映像檔文件設定 runAsUser"]
+  source: [persistent-volumes.md, debug-running-pod.md]
+
+- id: T20
+  symptom: 自動擴縮沒有作用（HPA 顯示 unknown）
+  plain: "設定了人多時自動加開，但數量一直沒變"
+  causes: ["叢集沒有安裝 metrics-server，拿不到用量", "容器沒有設定 resources.requests，無法算百分比", "目標值設太高，永遠達不到"]
+  fix: ["安裝 metrics-server", "替容器設定 CPU requests", "kubectl describe hpa 看原因"]
+  source: [horizontal-pod-autoscale.md, manage-resources.md]
+
+- id: T21
+  symptom: Job 失敗（BackoffLimitExceeded）
+  plain: "一次性或定時的工作重試好幾次都失敗，系統放棄了"
+  causes: ["工作的指令本身出錯", "需要的資料或服務連不到", "執行時間超過 activeDeadlineSeconds"]
+  fix: ["看失敗那次 Pod 的日誌", "修正指令或設定後重新建立 Job", "調整 backoffLimit 或期限"]
+  source: [job.md, cron-jobs.md]
+
+- id: T22
+  symptom: 網址打開是 404 或 502（Ingress）
+  plain: "用網域名稱連服務時出現錯誤頁面"
+  causes: ["Ingress 的路徑或主機名稱設錯（404）", "Ingress 指向的 Service 或連接埠不對、後端沒有就緒（502／503）", "叢集沒有安裝 Ingress 控制器"]
+  fix: ["確認 Ingress 規則的 host、path", "確認 backend 的 Service 名稱與連接埠", "確認有 Ingress 控制器在執行"]
+  source: [ingress.md, debug-service.md]

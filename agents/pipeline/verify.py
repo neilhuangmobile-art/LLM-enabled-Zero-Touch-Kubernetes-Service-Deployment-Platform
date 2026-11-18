@@ -191,7 +191,13 @@ def run(spec: Dict, local: Optional[LLM], refill=None) -> None:
             break
         t0 = time.time()
         user = f"User request: {spec['text']}\nValues chosen by the system: {json.dumps(checked, ensure_ascii=False)}"
-        probs = _parse(spec, extract_json(local(VERIFY_SYSTEM, user)), checked)
+        raw = local(VERIFY_SYSTEM, user)
+        if raw is None:
+            # 模型沒有回應：不能記成「沒有矛盾」（2026-11-18，web_demo 會在部署單上提示有檢查沒完成）
+            spec["trace"].append({"step": "verify", "ms": int((time.time() - t0) * 1000),
+                                  "detail": f"第 {rnd} 輪：本地模型沒有回應，這輪檢查略過"})
+            break
+        probs = _parse(spec, extract_json(raw), checked)
         spec["attempts"]["verify"] = rnd
         spec["trace"].append({"step": "verify", "ms": int((time.time() - t0) * 1000),
                               "detail": f"第 {rnd} 輪：{'；'.join(p['field'] + '：' + p['issue'] for p in probs) or '沒有矛盾'}"[:300]})

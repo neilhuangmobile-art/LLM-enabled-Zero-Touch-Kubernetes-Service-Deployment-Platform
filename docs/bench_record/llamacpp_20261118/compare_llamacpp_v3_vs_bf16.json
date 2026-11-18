@@ -1,0 +1,287 @@
+{
+ "infer_field_agreement": 0.583,
+ "infer_both_parsed": 20,
+ "infer_diffs": [
+  {
+   "input": "幫我把社團介紹的網頁放上去，新生點連結就看得到那種。",
+   "llamacpp_v3": {
+    "pods": 1,
+    "image": "socclub-intro:v1",
+    "app_name": "socclub-intro",
+    "port": 80,
+    "memory": "256Mi",
+    "cpu": "250m"
+   },
+   "bf16": {
+    "pods": 1,
+    "image": "nginx:latest",
+    "app_name": "club-intro"
+   }
+  },
+  {
+   "input": "我們系學會想開一個寫活動心得的部落格，可以讓幾個幹部輪流發文嗎？上傳的照片跟文章",
+   "llamacpp_v3": {
+    "pods": 3,
+    "image": "community_blog:v1",
+    "app_name": "activity-log",
+    "port": 8080
+   },
+   "bf16": {
+    "pods": 3,
+    "image": "activity_blog_backend:v1",
+    "app_name": "activity-blog-backend",
+    "port": 80,
+    "memory": "256Mi",
+    "cpu": "250m"
+   }
+  },
+  {
+   "input": "我們電玩社這週五晚上要辦麥塊聯機之夜，社員大概二三十個會上線，然後我想說開一個伺",
+   "llamacpp_v3": {
+    "pods": 30,
+    "image": "minecraft-server:latest",
+    "app_name": "mc-night",
+    "total_cpu": "1500m",
+    "total_memory": "15384Mi",
+    "cpu_bound_nodes": 7,
+    "memory_bound_nodes": 9,
+    "node_count": 9
+   },
+   "bf16": {
+    "pods": 3,
+    "image": "minecraft-server:1.17",
+    "app_name": "mc-servers",
+    "port": 25565,
+    "memory": "512Mi",
+    "cpu": "500m"
+   }
+  },
+  {
+   "input": "啊啊啊明天早上就要交了！！助教說我們作業網站太慢，要加一個專門暫存常用資料的東西",
+   "llamacpp_v3": {
+    "pods": 1,
+    "image": "memory-cache-service:latest",
+    "app_name": "fast-data-cache",
+    "total_memory": "512Mi",
+    "node_count": 1
+   },
+   "bf16": {
+    "pods": 1,
+    "image": "fast-memory-cache:latest",
+    "app_name": "cache-service",
+    "memory": "128Mi"
+   }
+  },
+  {
+   "input": "窩們社團網站常常掛掉ㄉ都沒人發現==，想要一個可以一直盯著它、掛掉會通知的東東，",
+   "llamacpp_v3": {
+    "pods": 1,
+    "image": "monitoring-web-app:v1",
+    "app_name": "website-monitor",
+    "total_cpu": "500m",
+    "total_memory": "512Mi",
+    "node_count": 1
+   },
+   "bf16": {
+    "pods": 1,
+    "image": "prometheus/prometheus",
+    "app_name": "monitoring-service",
+    "total_cpu": "500m",
+    "total_memory": "128Mi",
+    "node_count": 1
+   }
+  },
+  {
+   "input": "幫我開一台「表格伺服器」，就是資料庫課要用的，老師說要能用指令連進去打查詢語法建",
+   "llamacpp_v3": {
+    "pods": 3,
+    "image": "mysql:latest",
+    "app_name": "database-server",
+    "memory": "128Mi",
+    "cpu": "250m",
+    "total_memory": "768Mi",
+    "total_cpu": "500m",
+    "cpu_bound_nodes": 2,
+    "memory_bound_nodes": 3,
+    "node_count": 3
+   },
+   "bf16": {
+    "pods": 3,
+    "image": "postgres:13",
+    "app_name": "database-server",
+    "memory": "512Mi",
+    "cpu": "250m",
+    "total_cpu": "750m",
+    "total_memory": "1.5Gi",
+    "cpu_bound_nodes": 2,
+    "memory_bound_nodes": 2,
+    "node_count": 2
+   }
+  },
+  {
+   "input": "期末專題我們五個人要一起寫程式，想要一個我們自己放程式碼的地方，可以看到誰改了哪",
+   "llamacpp_v3": {
+    "error": "解析失敗",
+    "raw": "{}\nThe request does not provide specific details such as number of pods, image, application name, ports, CPU/memory requirements, etc., hence no valid JSON can be generated based on the given informat"
+   },
+   "bf16": {
+    "pods": 5,
+    "image": "golang:1.17",
+    "app_name": "code-review-chat-system",
+    "port": 8080,
+    "memory": "256Mi",
+    "cpu": "250m"
+   }
+  },
+  {
+   "input": "我們社團想做一個交接用的維基，大家都可以改……不對，其實只要幾個幹部能改，其他人",
+   "llamacpp_v3": {
+    "pods": 1,
+    "image": "wikipedia_server:v1",
+    "app_name": "club-wiki",
+    "total_cpu": "500m",
+    "total_memory": "512Mi",
+    "node_count": 1
+   },
+   "bf16": {
+    "pods": 1,
+    "image": "wikipedia-server:v1",
+    "app_name": "club-wiki",
+    "total_cpu": "500m",
+    "total_memory": "256Mi",
+    "node_count": 1
+   }
+  },
+  {
+   "input": "我們要辦全校資安解題比賽，要有題目、交答案、即時排行榜那種，報名快一千人了。比賽",
+   "llamacpp_v3": {
+    "pods": 1,
+    "image": "busybox:latest",
+    "app_name": "security-contest-server",
+    "total_cpu": "500m",
+    "total_memory": "256Mi"
+   },
+   "bf16": {
+    "error": "解析失敗",
+    "raw": "{\n  \"pods\": 1000,\n  \"image\": \"busybox\",\n  \"app_name\": \"security-challenge-solver\",\n  \"total_cpu\": \"5000m\",\n  \"total_memory\": \"10Gi\",\n  \"cpu_bound_nodes\": 1,\n  \"memory_bound_nodes\": 1,\n  \"node_count\": "
+   }
+  },
+  {
+   "input": "我們熱音社成果展要開放搶票，學長說同一秒湧進來系統會爆，要先讓大家的請求排隊再一",
+   "llamacpp_v3": {
+    "pods": 1,
+    "image": "queue_system_image:latest",
+    "app_name": "ticketing_queue_service"
+   },
+   "bf16": {
+    "pods": 1,
+    "image": "queue_software_image:latest",
+    "app_name": "ticketing_system"
+   }
+  },
+  {
+   "input": "氣死了，上次用別人的報名系統，人數一超過就要付錢才能看結果！這次系運動會我要自己",
+   "llamacpp_v3": {
+    "pods": 1,
+    "image": "python:3.7-slim",
+    "app_name": "survey-system",
+    "memory": "256Mi",
+    "cpu": "250m"
+   },
+   "bf16": {
+    "pods": 1,
+    "image": "python:3.7-slim",
+    "app_name": "registration-system",
+    "memory": "256Mi",
+    "cpu": "250m"
+   }
+  },
+  {
+   "input": "系上想要一個像討論區的東西，學長姐跟學弟妹可以發問、回覆、按讚（期中考爛掉之後真",
+   "llamacpp_v3": {
+    "pods": 1,
+    "image": "discussion_forum_image:latest",
+    "app_name": "CS_QA_System",
+    "total_cpu": "500m",
+    "total_memory": "125Mi"
+   },
+   "bf16": {
+    "pods": 1,
+    "image": "discussion_forum_image:latest",
+    "app_name": "cs_discussion_board",
+    "total_cpu": "500m",
+    "total_memory": "128Mi",
+    "cpu_bound_nodes": 1,
+    "memory_bound_nodes": 1,
+    "node_count": 1
+   }
+  },
+  {
+   "input": "幫我把我們的比賽系統弄上去。",
+   "llamacpp_v3": {
+    "pods": 3,
+    "image": "tournament-system:v1",
+    "app_name": "competition-platform"
+   },
+   "bf16": {
+    "pods": 3,
+    "image": "your-battle-system-image:v1",
+    "app_name": "battle-system"
+   }
+  },
+  {
+   "input": "學長畢業前留ㄌ一個程式給窩，說是社團活動有人報名就會自動寄確認信，好像要在背景一",
+   "llamacpp_v3": {
+    "pods": 1,
+    "image": "python:alpine",
+    "app_name": "mail-sender-service",
+    "memory": "512Mi",
+    "cpu": "250m",
+    "total_cpu": "250m",
+    "total_memory": "512Mi",
+    "cpu_bound_nodes": 1,
+    "memory_bound_nodes": 1,
+    "node_count": 1
+   },
+   "bf16": {
+    "error": "解析失敗",
+    "raw": "{\n  \"pods\": null,\n  \"image\": null,\n  \"app_name\": null,\n  \"port\": null,\n  \"memory\": null,\n  \"cpu\": null,\n  \"total_cpu\": null,\n  \"total_memory\": null,\n  \"cpu_bound_nodes\": null,\n  \"memory_bound_nodes\": "
+   }
+  },
+  {
+   "input": "這學期微積分共筆每次都有人把別人寫的蓋掉！！我要一個大家可以同時打字、即時看到別",
+   "llamacpp_v3": {
+    "pods": 10,
+    "image": "notepad-web:latest",
+    "app_name": "class-notes-app",
+    "memory": "256Mi",
+    "cpu": "500m"
+   },
+   "bf16": {
+    "error": "解析失敗",
+    "raw": "{}"
+   }
+  },
+  {
+   "input": "社團要辦程式設計比賽，需要一個參賽者可以把程式丟上去、系統自動跑測資評分的東西，",
+   "llamacpp_v3": {
+    "pods": 1,
+    "image": "python:3-slim",
+    "app_name": "code-submission-system",
+    "total_cpu": "500m",
+    "total_memory": "256Mi",
+    "cpu_bound_nodes": 1,
+    "memory_bound_nodes": 1,
+    "node_count": 1
+   },
+   "bf16": {
+    "pods": 1,
+    "image": "python:alpine",
+    "app_name": "code-submission-system",
+    "total_cpu": "500m",
+    "total_memory": "256Mi",
+    "node_count": 1
+   }
+  }
+ ]
+}

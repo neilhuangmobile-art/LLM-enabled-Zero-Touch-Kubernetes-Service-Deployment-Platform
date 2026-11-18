@@ -1,0 +1,271 @@
+{
+ "tag": "bf16",
+ "health": {
+  "status": "ok",
+  "deploy_loaded": true,
+  "monitor_loaded": true,
+  "model_loaded": true,
+  "gpu": "AMD Radeon RX 9060 XT",
+  "gpu_backend": "rocm",
+  "deploy_precision": "gpu-bf16",
+  "monitor_precision": "gpu-bf16",
+  "vram_allocated_gb": 8.62,
+  "vram_reserved_gb": 8.81,
+  "gen_stats": {
+   "calls": 0,
+   "gen_ms": 0.0,
+   "new_tokens": 0
+  }
+ },
+ "infer": [
+  {
+   "input": "幫我把社團介紹的網頁放上去，新生點連結就看得到那種。",
+   "code": 200,
+   "result": {
+    "pods": 1,
+    "image": "nginx:latest",
+    "app_name": "club-intro"
+   },
+   "ms": 2958
+  },
+  {
+   "input": "我們系學會想開一個寫活動心得的部落格，可以讓幾個幹部輪流發文嗎？上傳的照片跟文章應該不會突然不見吧？",
+   "code": 200,
+   "result": {
+    "pods": 3,
+    "image": "activity_blog_backend:v1",
+    "app_name": "activity-blog-backend",
+    "port": 80,
+    "memory": "256Mi",
+    "cpu": "250m"
+   },
+   "ms": 2394
+  },
+  {
+   "input": "我們電玩社這週五晚上要辦麥塊聯機之夜，社員大概二三十個會上線，然後我想說開一個伺服器讓大家一起蓋城堡，然後蓋完的東西希望之後還留著可以繼續蓋，對了要讓大家在宿舍也連得進來。",
+   "code": 200,
+   "result": {
+    "pods": 3,
+    "image": "minecraft-server:1.17",
+    "app_name": "mc-servers",
+    "port": 25565,
+    "memory": "512Mi",
+    "cpu": "500m"
+   },
+   "ms": 2587
+  },
+  {
+   "input": "啊啊啊明天早上就要交了！！助教說我們作業網站太慢，要加一個專門暫存常用資料的東西，放在記憶裡讀很快那種，不用存檔沒關係，拜託快幫我弄好",
+   "code": 200,
+   "result": {
+    "pods": 1,
+    "image": "fast-memory-cache:latest",
+    "app_name": "cache-service",
+    "memory": "128Mi"
+   },
+   "ms": 1566
+  },
+  {
+   "input": "窩們社團網站常常掛掉ㄉ都沒人發現==，想要一個可以一直盯著它、掛掉會通知的東東，然後用網頁就可以看狀態ㄇ？之前的紀錄也要留著喔",
+   "code": 200,
+   "result": {
+    "pods": 1,
+    "image": "prometheus/prometheus",
+    "app_name": "monitoring-service",
+    "total_cpu": "500m",
+    "total_memory": "128Mi",
+    "node_count": 1
+   },
+   "ms": 2322
+  },
+  {
+   "input": "社長又把成果發表的影片丟在他自己的雲端，權限也沒開，大家一直來問我，真的很煩。我想要我們社團自己的地方放檔案，四五十個社員都能上傳下載，然後東西要一直在，不能哪天重開就全部沒了。",
+   "code": 200,
+   "result": {
+    "error": "解析失敗",
+    "raw": "{}"
+   },
+   "ms": 132
+  },
+  {
+   "input": "幫我開一台「表格伺服器」，就是資料庫課要用的，老師說要能用指令連進去打查詢語法建表格。密碼先設成二零二四一一二三就好，然後我們組員三個人在各自宿舍也要能連。",
+   "code": 200,
+   "result": {
+    "pods": 3,
+    "image": "postgres:13",
+    "app_name": "database-server",
+    "memory": "512Mi",
+    "cpu": "250m",
+    "total_cpu": "750m",
+    "total_memory": "1.5Gi",
+    "cpu_bound_nodes": 2,
+    "memory_bound_nodes": 2,
+    "node_count": 2
+   },
+   "ms": 3701
+  },
+  {
+   "input": "期末專題我們五個人要一起寫程式，想要一個我們自己放程式碼的地方，可以看到誰改了哪裡、什麼時候改的那種；另外順便幫我弄一個可以分頻道聊天討論的地方，不想再用私人群組了。",
+   "code": 200,
+   "result": {
+    "pods": 5,
+    "image": "golang:1.17",
+    "app_name": "code-review-chat-system",
+    "port": 8080,
+    "memory": "256Mi",
+    "cpu": "250m"
+   },
+   "ms": 2459
+  },
+  {
+   "input": "我們社團想做一個交接用的維基，大家都可以改……不對，其實只要幾個幹部能改，其他人只能看就好。資料一定要留著，每一屆都要用。喔其實也不用一直開著啦，但學弟妹隨時都可能要查，那還是一直開好了。",
+   "code": 200,
+   "result": {
+    "pods": 1,
+    "image": "wikipedia-server:v1",
+    "app_name": "club-wiki",
+    "total_cpu": "500m",
+    "total_memory": "256Mi",
+    "node_count": 1
+   },
+   "ms": 2078
+  },
+  {
+   "input": "我們要辦全校資安解題比賽，要有題目、交答案、即時排行榜那種，報名快一千人了。比賽那天要保證絕對不會當機、一點點延遲都不能有，而且最好完全不要用到什麼資源，因為社費很少。",
+   "code": 200,
+   "result": {
+    "error": "解析失敗",
+    "raw": "{\n  \"pods\": 1000,\n  \"image\": \"busybox\",\n  \"app_name\": \"security-challenge-solver\",\n  \"total_cpu\": \"5000m\",\n  \"total_memory\": \"10Gi\",\n  \"cpu_bound_nodes\": 1,\n  \"memory_bound_nodes\": 1,\n  \"node_count\": "
+   },
+   "ms": 3115
+  },
+  {
+   "input": "我是籃球社器材長，然後每天晚上十二點都要去把借用紀錄整理一下，就是其實只要去叫我們系統的那個重算網址一下，它就會自己算好，然後大概一分鐘就跑完了，我每天都要熬夜按很累，可以讓它自己按嗎。",
+   "code": 200,
+   "result": {
+    "error": "解析失敗",
+    "raw": "This request does not provide enough information to create a valid Kubernetes deployment request as described. It seems you're asking about automating some process related to basketball equipment trac"
+   },
+   "ms": 5681
+  },
+  {
+   "input": "我們熱音社成果展要開放搶票，學長說同一秒湧進來系統會爆，要先讓大家的請求排隊再一個一個處理，而且排隊中的不能掉。是不是有那種專門負責排隊的軟體？可以幫我裝嗎？",
+   "code": 200,
+   "result": {
+    "pods": 1,
+    "image": "queue_software_image:latest",
+    "app_name": "ticketing_system"
+   },
+   "ms": 1225
+  },
+  {
+   "input": "氣死了，上次用別人的報名系統，人數一超過就要付錢才能看結果！這次系運動會我要自己架一個填問卷報名的，大概兩三百人會填，填完的資料要能一直留著，之後還要匯出來排賽程。",
+   "code": 200,
+   "result": {
+    "pods": 1,
+    "image": "python:3.7-slim",
+    "app_name": "registration-system",
+    "memory": "256Mi",
+    "cpu": "250m"
+   },
+   "ms": 2027
+  },
+  {
+   "input": "系上想要一個像討論區的東西，學長姐跟學弟妹可以發問、回覆、按讚（期中考爛掉之後真的很需要這種地方哈哈），要自己註冊帳號，文章當然要留著，全系加起來大概三四百人會用。",
+   "code": 200,
+   "result": {
+    "pods": 1,
+    "image": "discussion_forum_image:latest",
+    "app_name": "cs_discussion_board",
+    "total_cpu": "500m",
+    "total_memory": "128Mi",
+    "cpu_bound_nodes": 1,
+    "memory_bound_nodes": 1,
+    "node_count": 1
+   },
+   "ms": 3006
+  },
+  {
+   "input": "幫我把我們的比賽系統弄上去。",
+   "code": 200,
+   "result": {
+    "pods": 3,
+    "image": "your-battle-system-image:v1",
+    "app_name": "battle-system"
+   },
+   "ms": 1262
+  },
+  {
+   "input": "學長畢業前留ㄌ一個程式給窩，說是社團活動有人報名就會自動寄確認信，好像要在背景一直跑著，可是我不知道它是用什麼寫ㄉ，資料夾裡一堆檔案看不懂，可以直接幫我放上去跑嗎",
+   "code": 200,
+   "result": {
+    "error": "解析失敗",
+    "raw": "{\n  \"pods\": null,\n  \"image\": null,\n  \"app_name\": null,\n  \"port\": null,\n  \"memory\": null,\n  \"cpu\": null,\n  \"total_cpu\": null,\n  \"total_memory\": null,\n  \"cpu_bound_nodes\": null,\n  \"memory_bound_nodes\": "
+   },
+   "ms": 2956
+  },
+  {
+   "input": "黑客松要用一個存成績的資料庫，三十隊每隊都有評審打分數，評審登入的密碼我之後再給你。然後每天凌晨三點要自動備份一份，備份留七天就好，比賽結束兩天後整個都可以刪掉。",
+   "code": 200,
+   "result": {
+    "pods": 30,
+    "image": "mysql:latest",
+    "app_name": "score-database",
+    "total_cpu": "1.5",
+    "total_memory": "750Mi",
+    "cpu_bound_nodes": 1,
+    "memory_bound_nodes": 1,
+    "node_count": 1,
+    "schedule_job": {
+     "cron": "0 3 * * *",
+     "command": [
+      "bash",
+      "-c",
+      "mysqldump score-database > backup.sql && mv backup.sql backups/"
+     ],
+     "cleanup_job": {
+      "cron": "0 3 * * *\" + \",0 3 * * *\" * 7 + \",0 3 * * *",
+      "command": [
+       "bash",
+       "-c",
+       "rm -rf backups/*"
+      ]
+     }
+    }
+   },
+   "ms": 7009
+  },
+  {
+   "input": "社辦那幾台電腦一直有人偷跑東西害其他人卡到爆，社長又說我們沒證據。我想要那種很帥的儀表板，畫圖顯示每台電腦用了多少，要能往回看一個月的紀錄，最好手機打開也能看，抓到是誰就好笑了。",
+   "code": 200,
+   "result": {
+    "error": "解析失敗",
+    "raw": "{}"
+   },
+   "ms": 143
+  },
+  {
+   "input": "這學期微積分共筆每次都有人把別人寫的蓋掉！！我要一個大家可以同時打字、即時看到別人在寫什麼的共筆網頁，全班快一百人，不過同時在打的大概十幾個而已。寫完的筆記要永遠留著，可是學期結束就把它整個關掉。",
+   "code": 200,
+   "result": {
+    "error": "解析失敗",
+    "raw": "{}"
+   },
+   "ms": 161
+  },
+  {
+   "input": "社團要辦程式設計比賽，需要一個參賽者可以把程式丟上去、系統自動跑測資評分的東西，還要有密碼保護不能讓外人亂進來。人數現在還沒確定，可能幾十個也可能好幾百個吧，你覺得要開幾台比較好？",
+   "code": 200,
+   "result": {
+    "pods": 1,
+    "image": "python:alpine",
+    "app_name": "code-submission-system",
+    "total_cpu": "500m",
+    "total_memory": "256Mi",
+    "node_count": 1
+   },
+   "ms": 2075
+  }
+ ],
+ "infer_deterministic_5": true
+}

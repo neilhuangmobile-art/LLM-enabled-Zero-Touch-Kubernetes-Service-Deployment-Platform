@@ -25,11 +25,24 @@ from datetime import datetime, timezone
 # 從 config 引用，不再硬編碼路徑
 from core.config import (
     BASE_MODEL, DEPLOY_ADAPTER_PATH, DATASET_PATH,
-    SYSTEM_PROMPT, MODEL_SERVER_URL, HF_TOKEN,
+    SYSTEM_PROMPT, MODEL_SERVER_URL, HF_TOKEN, LLM_ENGINE,
 )
 
 _model, _tokenizer = None, None
 _server_launch_attempted = False  # 避免重複嘗試啟動
+
+_last_server_error = ""   # 最近一次 Model Server 回錯誤時的說明（含怎麼處理），給呼叫端顯示
+
+
+def _http_error_detail(e) -> str:
+    """Model Server 回 4xx/5xx 時，取出它在 detail 裡寫的說明（含下一步）；不是 HTTP 錯誤就回例外文字。"""
+    try:
+        import urllib.error
+        if isinstance(e, urllib.error.HTTPError):
+            return str(json.loads(e.read().decode("utf-8", "replace")).get("detail") or e)
+    except Exception:
+        pass
+    return str(e)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -155,8 +168,12 @@ def _try_server(prompt_text: str, examples: list = None) -> Optional[dict]:
         with urllib.request.urlopen(req, timeout=300) as resp:
             data = json.loads(resp.read())
             return data.get("result")
-    except Exception:
-        return None  # server 未啟動，靜默 fallback
+    except Exception as e:
+        # 2026-11-18：記下原因（llama.cpp 模式下多半是某個 llama-server 沒開），不再完全靜默
+        global _last_server_error
+        _last_server_error = _http_error_detail(e)
+        print(f"[llama_client] /infer 失敗：{_last_server_error}")
+        return None
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -898,6 +915,11 @@ def ask_llama(prompt_text: str) -> dict:
             return _ground_deploy_fields(_overlay_stated_fields(server_result, gemini_partial), prompt_text)
 
         # ── 5. Fallback：本地直接載入 ──
+        # llama.cpp 模式不走這條：在網站程序裡另外載入 3B，AMD 上 bitsandbytes 不能用、NVIDIA 上顯存已被
+        # llama-server 占走（11-18 code review）。直接回報原因，部署單會顯示。
+        if LLM_ENGINE == "llamacpp":
+            return {"error": "本地模型沒有回應，這次沒辦法解析部署需求",
+                    "raw": _last_server_error or "請執行 scripts/start_services.ps1（不用加 -Restart）後再試一次"}
         return _ground_deploy_fields(_overlay_stated_fields(_local_infer(model_input), gemini_partial), prompt_text)
 
     except Exception as e:
@@ -947,7 +969,7 @@ def chat_llama(message: str, history: list = None) -> tuple:
             if reply:
                 return reply, sources
     except Exception as e:
-        return f"[Local Model unavailable] {e}", []
+        return f"[Local Model unavailable] {_http_error_detail(e)}", []
     return "[Local Model unavailable] empty response", []
 
 
@@ -977,8 +999,8 @@ def classify_intent(message: str) -> dict:
                 result.setdefault("confidence", 0.0)
                 result["source"] = "llm"
                 return result
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[llama_client] /classify 失敗，這則訊息當成一般問答：{_http_error_detail(e)}")
     return fallback
 
 
@@ -1002,7 +1024,9 @@ def diagnose_with_llm(context: dict) -> Optional[dict]:
         with urllib.request.urlopen(req, timeout=120) as resp:
             data = json.loads(resp.read())
             return data.get("diagnosis")
-    except Exception:
+    except Exception as e:
+        # Healer 會改用規則層判斷；原因記下來（llama.cpp 模式下監控模型是獨立程序，可能單獨掛掉）
+        print(f"[llama_client] /diagnose 失敗，改用規則層判斷：{_http_error_detail(e)}")
         return None
 
 

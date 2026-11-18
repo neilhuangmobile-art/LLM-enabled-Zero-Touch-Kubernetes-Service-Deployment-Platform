@@ -1,0 +1,88 @@
+{
+ "rule": "沒有當掉且 40 題都有結果、通過 ≥ 22、顯存 ≤ 6GB，取 p90 最低",
+ "best": null,
+ "configs": {
+  "q8_vulkan": {
+   "n": 40,
+   "json_ok_rate": 1.0,
+   "pass_rate": 0.525,
+   "pass_簡單": "7/10",
+   "pass_中等": "7/18",
+   "pass_困難": "7/12",
+   "checks": {
+    "image": "25/36",
+    "replicas": "36/36",
+    "port": "31/36",
+    "memory": "35/36",
+    "cpu": "36/36",
+    "not_cronjob": "30/32",
+    "expose": "27/34",
+    "secret": "2/3",
+    "storage": "20/21",
+    "cronjob": "2/4",
+    "ask": "4/4"
+   },
+   "false_ask": 19,
+   "latency_p50_s": 12.27,
+   "latency_p90_s": 16.92,
+   "latency_max_s": 24.18,
+   "engine": "llama.cpp",
+   "tag": "q8_vulkan",
+   "rag_backend": "field",
+   "select_rule": "always",
+   "llm_calls": 201,
+   "llm_ms_per_call": 2415,
+   "tok_per_s": 49.7,
+   "vram": {
+    "dedicated": 4.6,
+    "shared": 0.03
+   },
+   "vram_after": {
+    "dedicated": 4.64,
+    "shared": 0.12
+   },
+   "crashed": false
+  },
+  "q4_vulkan": {
+   "n": 40,
+   "json_ok_rate": 1.0,
+   "pass_rate": 0.525,
+   "pass_簡單": "6/10",
+   "pass_中等": "8/18",
+   "pass_困難": "7/12",
+   "checks": {
+    "image": "23/36",
+    "replicas": "36/36",
+    "port": "32/36",
+    "memory": "35/36",
+    "cpu": "36/36",
+    "not_cronjob": "31/32",
+    "expose": "27/34",
+    "secret": "3/3",
+    "storage": "20/21",
+    "cronjob": "2/4",
+    "ask": "4/4"
+   },
+   "false_ask": 17,
+   "latency_p50_s": 8.44,
+   "latency_p90_s": 11.03,
+   "latency_max_s": 21.24,
+   "engine": "llama.cpp",
+   "tag": "q4_vulkan",
+   "rag_backend": "field",
+   "select_rule": "always",
+   "llm_calls": 182,
+   "llm_ms_per_call": 1887,
+   "tok_per_s": 65.7,
+   "vram": {
+    "dedicated": 3.25,
+    "shared": 0.03
+   },
+   "vram_after": {
+    "dedicated": 3.29,
+    "shared": 0.12
+   },
+   "crashed": false
+  }
+ }
+}

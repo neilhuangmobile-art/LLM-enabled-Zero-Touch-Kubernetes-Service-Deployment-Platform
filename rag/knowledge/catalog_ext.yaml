@@ -1,0 +1,6128 @@
+# 自動擴充的軟體目錄（rag/expand_catalog.py 產生，請勿手動修改；要修正請寫進 catalog_seed.yaml，人工條目優先）
+# 軟體清單與英文簡介來源：awesome-selfhosted-data（CC BY-SA 3.0，https://github.com/awesome-selfhosted/awesome-selfhosted-data）
+#   與 docker-library/official-images（Apache 2.0）、docker-library/docs（MIT）。本檔為改編作品，以 CC BY-SA 3.0 釋出。
+# scenarios、category、standalone 由 Gemini 依英文簡介改寫（generated: true），尚未逐筆人工確認。
+- id: 2fauth
+  repo: 2fauth/2fauth
+  tag: latest
+  category: 密碼管理
+  scenarios:
+  - 想把所有帳號的兩步驟驗證碼集中管理。
+  - 需要一個地方產生登入用的安全驗證碼。
+  - 想自己架設服務來保存雙重認證的資料。
+  - 想要隨時隨地都能查看帳號的動態密碼。
+  standalone: null
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 建議設定強密碼來保護你的驗證碼資料。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: 2FAuth
+    description: Manage your Two-Factor Authentication (2FA) accounts and generate their security codes.
+    url: https://github.com/Bubka/2FAuth
+    stars: 4217
+- id: activepieces
+  repo: activepieces/activepieces
+  tag: 0.93.0
+  category: 自動化流程
+  scenarios:
+  - 想把不同軟體串接起來自動完成日常工作。
+  - 需要一個工具幫我自動發送通知或處理資料。
+  - 希望不用寫程式就能建立工作上的自動化流程。
+  - 想讓系統在收到信件時自動幫我建立任務。
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時需要設定管理員帳號與密碼。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Activepieces
+    description: No-code business automation tool like Zapier or Tray. For example, you can send a Slack notification for each new Trello card.
+    url: https://github.com/activepieces/activepieces
+    stars: 25455
+- id: algernon
+  repo: xyproto/algernon
+  tag: latest
+  category: 網站
+  scenarios:
+  - 想找個輕量級的工具來架設自己的個人網站。
+  - 需要一個簡單的伺服器來測試我寫的網頁。
+  - 想快速把寫好的文件轉換成網頁展示出來。
+  - 希望有個內建多種功能的網站伺服器可用。
+  standalone: true
+  requires: []
+  resources:
+    memory: 128Mi
+    cpu: 100m
+  per_replica_users: 300
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Algernon
+    description: Small self-contained pure-Go web server with Lua, Markdown, HTTP/2, QUIC, Redis and PostgreSQL support.
+    url: https://github.com/xyproto/algernon
+    stars: 3032
+- id: aliasvault
+  repo: aliasvault/aliasvault
+  tag: latest
+  category: 密碼管理
+  scenarios:
+  - 想找個安全的地方加密儲存我所有的密碼。
+  - 註冊網站時想用隨機產生的信箱來保護隱私。
+  - 需要一個能幫我記住密碼又能隱藏真實信箱的工具。
+  - 想自己架設一個端到端加密的密碼管理系統。
+  standalone: null
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 請務必記住你的主密碼，遺失將無法還原資料。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: AliasVault
+    description: End-to-end encrypted password manager with a built-in email alias generator and server.
+    url: https://github.com/aliasvault/aliasvault
+    stars: 3503
+- id: anonaddy
+  repo: anonaddy/anonaddy
+  tag: latest
+  category: 電子郵件
+  scenarios:
+  - 想建立很多分身信箱來避免收到垃圾信。
+  - 需要把不同信箱收到的信自動轉寄到主信箱。
+  - 註冊不重要的網站時不想留下真實的電子郵件。
+  - 想自己架設一個信件轉寄與分身管理服務。
+  standalone: false
+  requires:
+  - mariadb
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要正確設定網域的郵件紀錄才能正常收發信。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: AnonAddy
+    description: Email forwarding service for creating aliases.
+    url: https://github.com/anonaddy/anonaddy
+    stars: 4944
+- id: answer
+  repo: apache/answer
+  tag: latest
+  category: 論壇
+  scenarios:
+  - 想幫公司的產品建立一個讓客戶發問的討論區。
+  - 需要一個能讓大家互相解答問題的知識社群。
+  - 想架設一個類似問答網站的平台來收集常見問題。
+  - 希望有個地方能讓社團成員互相交流與技術支援。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時會進入網頁設定精靈來建立管理員。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Answer
+    description: Knowledge-based community software. You can use it to quickly build your Q&A community for product technical support, customer support, user communication, and more.
+    url: https://github.com/apache/answer
+    stars: 15713
+- id: apache-airflow
+  repo: apache/airflow
+  tag: latest
+  category: 自動化流程
+  scenarios:
+  - 想找個系統來定時執行我寫好的資料處理任務。
+  - 需要一個平台來監控所有自動化工作的執行狀況。
+  - 想要有系統地安排並排程複雜的工作流程。
+  - 希望能用視覺化的介面管理各種定時執行的程式。
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 適合有程式基礎的使用者來撰寫工作流程。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Apache Airflow
+    description: Platform to programmatically author, schedule, and monitor workflows.
+    url: https://github.com/apache/airflow/
+    stars: 47430
+- id: apprise
+  repo: caronc/apprise
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想要一個能同時發送通知到各種通訊軟體的工具。
+  - 需要把系統的警告訊息自動傳到我的聊天群組裡。
+  - 想透過單一介面管理所有發送推播通知的管道。
+  - 希望能輕鬆串接各種不同的訊息發送服務。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要事先取得各個通訊軟體的連線金鑰才能發送通知。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Apprise
+    description: 'Apprise allows you to send a notification to almost all of the most popular notification services available to us today such as: Telegram, Discord, Slack, Amazon SNS, Gotify, etc.'
+    url: https://github.com/caronc/apprise
+    stars: 17740
+- id: appwrite
+  repo: appwrite/appwrite
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想找個現成的後端系統來搭配我開發的手機應用程式。
+  - 需要一個包含會員管理與資料庫的完整後端服務。
+  - 想要快速架設網站後端來節省開發時間。
+  - 希望有個平台能幫我處理檔案上傳與使用者認證。
+  standalone: false
+  requires:
+  - mariadb
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: 系統較為龐大，啟動時可能需要較多系統資源。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Appwrite
+    description: End to end backend server for web, native, and mobile developers 🚀.
+    url: https://github.com/appwrite/appwrite
+    stars: 57922
+- id: archivebox
+  repo: archivebox/archivebox
+  tag: sha-37831fe17c42
+  category: 書籤
+  scenarios:
+  - 想把喜歡的網頁完整備份下來以免未來網址失效。
+  - 需要一個工具幫我把看過的新聞網頁截圖存檔。
+  - 想建立自己的網頁時光機來保存重要的網路資料。
+  - 希望能把瀏覽紀錄裡的網頁通通抓下來離線閱讀。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 備份大量網頁會佔用較多的硬碟儲存空間。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: ArchiveBox
+    description: Create HTML & screenshot archives of sites from your bookmarks, browsing history, RSS feeds, or other sources (alternative to Wayback Machine).
+    url: https://github.com/ArchiveBox/ArchiveBox
+    stars: 28993
+- id: audiobookshelf
+  repo: advplyr/audiobookshelf
+  tag: latest
+  category: 影音
+  scenarios:
+  - 想架設一個專門用來聽有聲書的私人伺服器。
+  - 需要一個能記錄我聽到哪裡的廣播節目播放平台。
+  - 想把手機和電腦裡的聲音檔案同步進度並串流播放。
+  - 希望有個介面能整理並播放我收藏的所有有聲讀物。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 可以下載專屬的手機應用程式來搭配使用。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Audiobookshelf
+    description: Audiobook and podcast server. It streams all audio formats, keeps and syncs progress across devices. Comes with apps for Android and iOS.
+    url: https://github.com/advplyr/audiobookshelf
+    stars: 14963
+- id: azuracast
+  repo: azuracast/azuracast
+  tag: latest
+  category: 影音
+  scenarios:
+  - 想建立一個屬於自己的網路廣播電台來播放音樂。
+  - 需要一個系統來管理並排程我的廣播節目內容。
+  - 想讓朋友透過網頁就能收聽我挑選的音樂清單。
+  - 希望有個專業的介面來經營我的線上音樂電台。
+  standalone: false
+  requires:
+  - mariadb
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要準備足夠的音樂檔案才能開始廣播。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: AzuraCast
+    description: Modern and accessible web radio management suite.
+    url: https://github.com/AzuraCast/AzuraCast
+    stars: 4091
+- id: baserow
+  repo: baserow/baserow
+  tag: latest
+  category: 資料庫管理
+  scenarios:
+  - 想找個像試算表一樣好用的工具來管理客戶資料。
+  - 需要一個不用寫程式就能建立資料庫的線上平台。
+  - 想和團隊成員一起在網頁上編輯和整理專案表格。
+  - 希望能自己架設一個類似雲端資料表的管理系統。
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時需要設定管理員帳號與密碼。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Baserow
+    description: Create your own database without technical experience (alternative to Airtable).
+    url: https://gitlab.com/baserow/baserow
+    stars: 2262
+- id: bentopdf
+  repo: bentopdf/bentopdf
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想在瀏覽器裡直接合併或分割我的文件檔案。
+  - 需要一個不會把檔案上傳到外部伺服器的文件編輯器。
+  - 想找個能保護隱私的工具來處理工作上的電子文件。
+  - 希望有個簡單的介面能幫我快速編輯和轉換文件格式。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 所有檔案處理都在你的瀏覽器內完成，不會外流。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: BentoPDF
+    description: Powerful, privacy-first, client-side PDF toolkit that allows you to manipulate, edit, merge, and process PDF files directly in your browser.
+    url: https://github.com/alam00000/bentopdf
+    stars: 16325
+- id: bichon
+  repo: rustmailer/bichon
+  tag: latest
+  category: 電子郵件
+  scenarios:
+  - 想把多個信箱的信件全部備份到同一個地方。
+  - 需要一個能快速搜尋所有歷史信件內容的系統。
+  - 想找個不需要複雜設定就能保存重要信件的工具。
+  - 希望有個網頁介面可以方便我瀏覽過去的電子郵件。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要提供信箱的登入資訊才能進行同步備份。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Bichon
+    description: Email archiving server that syncs from IMAP accounts, indexes emails for full-text search, and provides a REST API. No external database required, includes WebUI with multi-account support.
+    url: https://github.com/rustmailer/bichon
+    stars: 2078
+- id: black-candy
+  repo: blackcandy/blackcandy
+  tag: latest
+  category: 影音
+  scenarios:
+  - 想把電腦裡的音樂收藏變成可以隨時聽的串流服務。
+  - 需要一個私人的線上音樂播放器來聽自己的歌。
+  - 想在外面也能透過網頁播放家裡伺服器的音樂。
+  - 希望有個簡單好看的介面來管理我的音樂專輯。
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時需要設定管理員帳號與密碼。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Black Candy
+    description: Music streaming server.
+    url: https://github.com/blackcandy-org/blackcandy
+    stars: 4431
+- id: blinko
+  repo: blinkospace/blinko
+  tag: latest
+  category: 維基或筆記
+  scenarios:
+  - 想找個有智慧輔助功能的工具來記錄生活瑣事。
+  - 需要一個能幫我整理個人筆記和想法的數位空間。
+  - 想要一個可以快速寫下靈感並自動分類的筆記軟體。
+  - 希望有個私人的線上筆記本來管理日常學習心得。
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 部分智慧功能可能需要設定外部的連線金鑰。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Blinko
+    description: Personal note tool with AI features.
+    url: https://github.com/blinkospace/blinko
+    stars: 11186
+- id: budibase
+  repo: budibase/budibase
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想快速幫公司做一個管理內部資料的網頁後台。
+  - 需要一個不用寫太多程式就能建立業務系統的工具。
+  - 想自己動手做一個能新增修改資料的專屬應用程式。
+  - 希望能把日常的行政工作變成自動化的線上系統。
+  standalone: false
+  requires:
+  - couchdb
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: 第一次啟動時會進入網頁設定精靈來建立管理員。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Budibase
+    description: Build and automate internal tools, admin panels, dashboards, CRUD apps, and more, in minutes (alternative to Outsystems, Retool, Mendix).
+    url: https://github.com/Budibase/budibase
+    stars: 28396
+- id: bugsink
+  repo: bugsink/bugsink
+  tag: latest
+  category: 監控
+  scenarios:
+  - 想集中收集並查看我開發的軟體發生了什麼錯誤。
+  - 需要一個系統在程式當機時馬上通知我並提供細節。
+  - 想要一個能記錄應用程式異常狀況的追蹤平台。
+  - 希望有個簡單的介面幫我找出系統出錯的原因。
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要在你的應用程式中加入追蹤程式碼才能收集錯誤。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Bugsink
+    description: Real-time error tracking for your applications with all the details in one place. Easy setup with clear instructions included.
+    url: https://github.com/bugsink/bugsink/
+    stars: 2181
+- id: bunkerweb
+  repo: bunkerity/bunkerweb
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想幫我的網站加一層防護罩來阻擋惡意攻擊。
+  - 需要一個系統來過濾並阻擋可疑的網路連線請求。
+  - 想要保護自己架設的服務不被駭客輕易入侵。
+  - 希望有個工具能自動幫我管理網站的安全設定。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 設定錯誤可能會導致正常的網站連線被阻擋。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: BunkerWeb
+    description: Next-gen Web Application Firewall (WAF) that will protect your web services.
+    url: https://github.com/bunkerity/bunkerweb
+    stars: 11241
+- id: bytebase
+  repo: bytebase/bytebase
+  tag: latest
+  category: 資料庫管理
+  scenarios:
+  - 想找個工具來幫團隊安全地修改資料庫的結構。
+  - 需要一個系統來記錄資料庫每次變更的歷史紀錄。
+  - 想要在更新資料庫前先經過團隊成員的審核同意。
+  - 希望有個統一的介面來管理不同種類的資料庫。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時會進入網頁設定精靈來建立管理員。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Bytebase
+    description: Safe database schema change and version control for DevOps teams, supports MySQL, PostgreSQL, TiDB, ClickHouse, and Snowflake.
+    url: https://github.com/bytebase/bytebase
+    stars: 14691
+- id: calibre-web-automated
+  repo: crocodilestick/calibre-web-automated
+  tag: latest
+  category: 檔案分享
+  scenarios:
+  - 想架設一個線上圖書館來管理我收集的電子書。
+  - 需要一個能讓我在網頁上直接閱讀小說的系統。
+  - 想把電腦裡的文件轉換格式並分享給家人看。
+  - 希望有個漂亮的介面來整理和搜尋我的數位書籍。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要將你的電子書檔案放入指定的資料夾才能讀取。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Calibre Web Automated
+    description: All-in-one solution, combining the modern lightweight web UI from Calibre-Web with the robust, versatile feature set of Calibre (fork of Calibre Web).
+    url: https://github.com/crocodilestick/Calibre-Web-Automated
+    stars: 6585
+- id: canary-tokens
+  repo: thinkst/opencanary
+  tag: latest
+  category: 監控
+  scenarios:
+  - 想在系統裡放一些誘餌來偵測有沒有人偷偷潛入。
+  - 需要一個工具在機密檔案被打開時馬上發送警告。
+  - 想要產生一些追蹤連結來測試網路環境的安全性。
+  - 希望能提早發現是否有未經授權的存取行為發生。
+  standalone: false
+  requires:
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要正確設定網域才能讓追蹤連結正常運作。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Canary Tokens
+    description: Generates lightweight, embedded honeypot triggers called canary tokens for detecting unauthorized access.
+    url: https://github.com/thinkst/opencanary
+    stars: 3099
+- id: centrifugo
+  repo: centrifugo/centrifugo
+  tag: latest
+  category: 訊息佇列
+  scenarios:
+  - 想為我的網站加入即時更新資料的推播功能。
+  - 需要一個伺服器來處理大量使用者的即時連線。
+  - 想要架設一個能快速傳遞訊息的底層通訊系統。
+  - 希望有個工具能幫我把後端的資料馬上送到網頁上。
+  standalone: true
+  requires: []
+  resources:
+    memory: 512Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: 需要具備程式開發經驗才能將它與現有系統串接。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Centrifugo
+    description: Language-agnostic real-time messaging (Websocket or SockJS) server.
+    url: https://github.com/centrifugal/centrifugo
+    stars: 10958
+- id: changedetection-io
+  repo: dgtlmoon/changedetection.io
+  tag: latest
+  category: 監控
+  scenarios:
+  - 想找個工具幫我盯著購物網站看商品什麼時候降價。
+  - 需要一個系統在特定網頁內容更新時馬上通知我。
+  - 想要自動追蹤競爭對手網站上的最新消息和變化。
+  - 希望能定時檢查政府公告網頁有沒有發布新資訊。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 監控太多網頁可能會消耗較多的系統資源。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: changedetection.io
+    description: Stay up-to-date with web-site content changes.
+    url: https://github.com/dgtlmoon/changedetection.io
+    stars: 35690
+- id: chatwoot
+  repo: chatwoot/chatwoot
+  tag: latest
+  category: 聊天
+  scenarios:
+  - 想在網站上放客服對話框
+  - 需要一個系統來管理客戶的問題
+  - 希望能集中處理不同管道的客訴
+  - 想讓團隊一起回覆顧客的訊息
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動需要設定管理員帳號與密碼。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Chatwoot
+    description: Customer communication platform (alternative to Intercom and Zendesk).
+    url: https://github.com/chatwoot/chatwoot
+    stars: 39527
+- id: chibisafe
+  repo: chibisafe/chibisafe
+  tag: latest
+  category: 檔案分享
+  scenarios:
+  - 想把檔案傳給朋友但檔案太大
+  - 需要一個地方暫存並分享照片
+  - 希望能快速產生檔案下載連結
+  - 想建立自己的私人檔案分享空間
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 建議設定儲存空間上限以免硬碟爆滿。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Chibisafe
+    description: File uploader service that aims to to be easy to use and set up. It accepts files, photos, documents, anything you imagine and gives you back a shareable link for you to send to others.
+    url: https://github.com/chibisafe/chibisafe
+    stars: 2810
+- id: cloudbeaver
+  repo: dbeaver/cloudbeaver
+  tag: latest
+  category: 資料庫管理
+  scenarios:
+  - 想透過網頁直接查看資料庫內容
+  - 需要一個工具來管理各種資料庫
+  - 希望能讓團隊在瀏覽器上寫查詢
+  - 想找個方便的介面來修改資料表
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 預設登入帳號密碼需在首次啟動時設定。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: CloudBeaver
+    description: Manage databases, supports PostgreSQL, MySQL, SQLite and more. A web/hosted version of DBeaver.
+    url: https://github.com/dbeaver/cloudbeaver
+    stars: 5224
+- id: cloudreve
+  repo: cloudreve/cloudreve
+  tag: latest
+  category: 檔案分享
+  scenarios:
+  - 想架設自己的雲端硬碟來放檔案
+  - 需要一個能分享檔案給客戶的空間
+  - 希望能整合不同空間來管理檔案
+  - 想讓團隊成員有各自的儲存空間
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 首次啟動會在終端機顯示預設管理員帳號密碼。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Cloudreve
+    description: File management and sharing system, supports multiple storage providers.
+    url: https://github.com/cloudreve/cloudreve
+    stars: 28952
+- id: commafeed
+  repo: athou/commafeed
+  tag: 7.5.0-mariadb-jvm
+  category: RSS 閱讀
+  scenarios:
+  - 想把常看的部落格文章集中閱讀
+  - 需要一個乾淨的介面來訂閱新聞
+  - 希望能隨時掌握多個網站的最新動態
+  - 想找個工具取代以前的閱讀器
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: CommaFeed
+    description: Google Reader inspired RSS reader.
+    url: https://github.com/Athou/commafeed
+    stars: 3650
+- id: convertx
+  repo: c4illin/convertx
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想把影片轉成不同的格式來播放
+  - 需要一個能轉檔各式文件的工具
+  - 希望能自己架設線上轉檔服務
+  - 想把圖片轉成其他格式來使用
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: ConvertX
+    description: Online file converter which supports over a thousand different formats.
+    url: https://github.com/C4illin/ConvertX
+    stars: 19659
+- id: coral
+  repo: coralproject/talk
+  tag: 9.11.9
+  category: 論壇
+  scenarios:
+  - 想在自己的文章底下加入留言板
+  - 需要一個能管理讀者留言的系統
+  - 希望能讓網站訪客互相討論交流
+  - 想提供一個乾淨的留言互動空間
+  standalone: false
+  requires:
+  - mongodb
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要設定管理員帳號來審核留言。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Coral
+    description: Better commenting experience from Vox Media.
+    url: https://github.com/coralproject/talk
+    stars: 2005
+- id: cosmos
+  repo: azukaar/cosmos-server
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想找個安全的入口來管理所有服務
+  - 需要一個能保護隱私的伺服器後台
+  - 希望能輕鬆管理自己架設的各種應用
+  - 想建立一個有安全防護的應用中心
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: 需要掛載系統的容器管理權限才能正常運作。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Cosmos
+    description: Run server applications securely and with built-in privacy features. It acts as a secure gateway to your application, as well as a server manager.
+    url: https://github.com/azukaar/cosmos-Server
+    stars: 6200
+- id: countly-community-edition
+  repo: countly/countly-server
+  tag: latest
+  category: 資料分析
+  scenarios:
+  - 想知道網站每天有多少人來瀏覽
+  - 需要追蹤手機應用程式的當機狀況
+  - 希望能發送推播通知給應用使用者
+  - 想分析訪客在網站上的行為模式
+  standalone: false
+  requires:
+  - mongodb
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動需要設定管理員帳號與密碼。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Countly Community Edition
+    description: Real time mobile and web analytics, crash reporting and push notifications platform.
+    url: https://github.com/Countly/countly-server
+    stars: 5927
+- id: cryptpad
+  repo: cryptpad/cryptpad
+  tag: latest
+  category: 維基或筆記
+  scenarios:
+  - 想和同事一起即時編輯同一份文件
+  - 需要一個能保護隱私的線上共筆工具
+  - 希望能建立團隊專屬的協作空間
+  - 想找個安全的平台來討論專案內容
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: CryptPad
+    description: Collaboration suite built to enable collaboration, synchronizing changes to documents in real time.
+    url: https://github.com/cryptpad/cryptpad
+    stars: 8062
+- id: dashy
+  repo: lissy93/dashy
+  tag: latest
+  category: 書籤
+  scenarios:
+  - 想幫家裡的各種服務做個導覽首頁
+  - 需要一個能自訂外觀的個人儀表板
+  - 希望能把常用的網頁連結集中管理
+  - 想建立一個專屬的服務捷徑入口
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Dashy
+    description: Feature-rich homepage for your homelab, with easy YAML configuration.
+    url: https://github.com/lissy93/dashy
+    stars: 26958
+- id: directory-lister
+  repo: directorylister/directorylister
+  tag: latest
+  category: 檔案分享
+  scenarios:
+  - 想把資料夾裡的檔案列出來給大家看
+  - 需要一個簡單的網頁來瀏覽目錄內容
+  - 希望能讓訪客直接下載目錄中的檔案
+  - 想快速建立一個純瀏覽的檔案清單
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Directory Lister
+    description: Simple PHP based directory lister that lists a directory and all its sub-directories and allows you to navigate there within.
+    url: https://github.com/DirectoryLister/DirectoryLister
+    stars: 2542
+- id: directus
+  repo: directus/directus
+  tag: latest
+  category: 資料庫管理
+  scenarios:
+  - 想幫現有的資料庫加上好用的後台
+  - 需要一個能快速產生應用程式的工具
+  - 希望能讓不懂技術的人也能管理資料
+  - 想替專案快速建立資料存取介面
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要準備一個關聯式資料庫才能開始使用。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Directus
+    description: Instant App & API for your SQL Database. Directus wraps your new or existing SQL database with a realtime GraphQL+REST API for developers, and an intuitive admin app for non-technical users.
+    url: https://github.com/directus/directus
+    stars: 38673
+- id: discourse
+  repo: discourse/discourse
+  tag: latest
+  category: 論壇
+  scenarios:
+  - 想幫社團建立一個專屬的討論區
+  - 需要一個功能完整的線上社群平台
+  - 希望能讓成員在網路上發文交流
+  - 想架設一個現代化的網路論壇
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動需要設定管理員帳號與電子郵件。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Discourse
+    description: Advanced forum / community solution based on Ruby and JS.
+    url: https://github.com/discourse/discourse
+    stars: 48066
+- id: docmost-community-edition
+  repo: docmost/docmost
+  tag: latest
+  category: 維基或筆記
+  scenarios:
+  - 想幫公司建立專屬的知識庫
+  - 需要一個能讓團隊共同編輯文件的平台
+  - 希望能把專案的說明文件集中管理
+  - 想找個好用的工具來整理會議紀錄
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: docmost Community Edition
+    description: Collaborative wiki and documentation software (alternative to Confluence, Notion).
+    url: https://github.com/docmost/docmost
+    stars: 22276
+- id: documenso
+  repo: documenso/documenso
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想在網路上直接簽署電子合約
+  - 需要一個能讓客戶線上簽名的系統
+  - 希望能將紙本簽呈改成數位化流程
+  - 想找個安全的平台來管理簽署文件
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Documenso
+    description: Digital document signing platform (alternative to DocuSign).
+    url: https://github.com/documenso/documenso
+    stars: 15707
+- id: docuseal
+  repo: docuseal/docuseal
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想建立可以讓客戶線上填寫的表單
+  - 需要一個能快速產生電子簽名文件的工具
+  - 希望能讓員工在網路上簽署同意書
+  - 想把紙本合約轉換成數位填寫格式
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Docuseal
+    description: Create, fill, and sign digital documents (alternative to DocuSign).
+    url: https://github.com/docusealco/docuseal
+    stars: 19031
+- id: domoticz
+  repo: domoticz/domoticz
+  tag: latest
+  category: 智慧家庭
+  scenarios:
+  - 想在手機上控制家裡的電燈開關
+  - 需要一個系統來監控室內的溫濕度
+  - 希望能自動化管理家中的各種電器
+  - 想把各種感測器的數據集中查看
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Domoticz
+    description: 'Home Automation System that lets you monitor and configure various devices like: Lights, Switches, various sensors/meters like Temperature, Rain, Wind, UV, Electra, Gas, Water and much
+      more.'
+    url: https://github.com/domoticz/domoticz
+    stars: 3835
+- id: donetick
+  repo: donetick/donetick
+  tag: latest
+  category: 專案管理
+  scenarios:
+  - 想安排家人每天要做的家事清單
+  - 需要一個能分配任務給不同人的工具
+  - 希望能記錄自己每天完成的待辦事項
+  - 想找個簡單的系統來追蹤家庭計畫
+  standalone: null
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Donetick
+    description: Task and chore management tool for personal and family use, with advanced scheduling, flexible assignment, and group sharing capabilities, detailed history, automation via API, simple and
+      modern design.
+    url: https://github.com/donetick/donetick
+    stars: 2727
+- id: draw-io
+  repo: jgraph/drawio
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想在網頁上直接畫流程圖
+  - 需要一個能繪製組織架構圖的工具
+  - 希望能和同事一起畫系統架構圖
+  - 想找個好用的線上繪圖軟體來畫圖
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: draw.io
+    description: Diagram software for making flowcharts, process diagrams, org charts, UML, ER and network diagrams.
+    url: https://github.com/jgraph/drawio
+    stars: 9277
+- id: druid
+  repo: apache/druid
+  tag: 38.0.0
+  category: 資料庫
+  scenarios:
+  - 想儲存並分析大量的即時數據
+  - 需要一個能快速查詢資料的儲存系統
+  - 希望能處理網站產生的大量日誌紀錄
+  - 想建立一個高效能的資料分析中心
+  standalone: false
+  requires:
+  - zookeeper
+  - postgres
+  resources:
+    memory: 512Mi
+    cpu: 500m
+  per_replica_users: 0
+  notes: 架構較複雜，需要配置多個節點才能發揮效能。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Druid
+    description: Distributed, column-oriented, real-time analytics data store.
+    url: https://github.com/apache/druid
+    stars: 14096
+- id: emqx
+  repo: library/emqx
+  tag: latest
+  category: 訊息佇列
+  scenarios:
+  - 想讓大量的物聯網設備互相連線
+  - 需要一個能處理設備訊息傳遞的中心
+  - 希望能即時接收各種感測器傳來的數據
+  - 想建立一個高吞吐量的訊息轉發平台
+  standalone: true
+  requires: []
+  resources:
+    memory: 512Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: true
+  upstream:
+    name: EMQX
+    description: Scalable MQTT broker. Connect 100M+ IoT devices in one single cluster, move and process real-time IoT data with 1M msg/s throughput at 1ms latency.
+    url: https://github.com/emqx/emqx
+    stars: 16895
+- id: erpnext
+  repo: frappe/erpnext
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想找個系統來管理公司的進銷存
+  - 需要一個能處理財務與人事的管理平台
+  - 希望能把企業的各種流程數位化
+  - 想建立一個完整的企業資源管理中心
+  standalone: false
+  requires:
+  - mariadb
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 系統功能龐大，初次使用需要花時間進行基礎設定。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: ERPNext
+    description: ERP system to help you run your business.
+    url: https://github.com/frappe/erpnext
+    stars: 41132
+- id: erxes
+  repo: erxes/erxes
+  tag: 2.17.54
+  category: 其他
+  scenarios:
+  - 想把行銷與客服功能整合在一起
+  - 需要一個能管理客戶關係的系統
+  - 希望能追蹤潛在客戶的互動狀況
+  - 想找個平台來提升團隊的銷售效率
+  standalone: false
+  requires:
+  - mongodb
+  - redis
+  - rabbitmq
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動需要設定管理員帳號與密碼。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Erxes
+    description: Marketing, sales, and customer service platform designed to help businesses attract more engaged customers.
+    url: https://github.com/erxes/erxes
+    stars: 4111
+- id: etherpad
+  repo: etherpad/etherpad
+  tag: latest
+  category: 維基或筆記
+  scenarios:
+  - 想和朋友在網路上一起寫文章
+  - 需要一個能即時看到別人打字的編輯器
+  - 希望能快速開一個網頁來共同記錄事情
+  - 想找個簡單的線上文字協作空間
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Etherpad
+    description: Highly customizable online editor providing collaborative editing in real-time.
+    url: https://github.com/ether/etherpad
+    stars: 18624
+- id: evcc
+  repo: evcc/evcc
+  tag: latest
+  category: 智慧家庭
+  scenarios:
+  - 想管理家裡的電動車充電狀況
+  - 想整合家中的能源使用情況
+  - 需要一個系統來控制充電樁
+  - 想要監控家裡的用電與充電進度
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 可能需要設定充電樁或車輛的連線資訊。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: evcc
+    description: Extensible Electric Vehicle Charge Controller and home energy management system.
+    url: https://github.com/evcc-io/evcc
+    stars: 7560
+- id: evershop
+  repo: evershop/evershop
+  tag: latest
+  category: 電子商務
+  scenarios:
+  - 想在網路上賣自己手工做的小東西
+  - 需要一個可以讓客人下單買東西的網站
+  - 想建立一個有購物車功能的線上商店
+  - 想要一個可以自訂外觀的網路賣場
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動需要設定管理員帳號與商店基本資訊。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: EverShop
+    description: E-commerce platform with essential commerce features. Modular architecture and fully customizable.
+    url: https://github.com/evershopcommerce/evershop
+    stars: 10540
+- id: fider
+  repo: getfider/fider
+  tag: main
+  category: 表單或問卷
+  scenarios:
+  - 想收集客戶對產品的建議與回饋
+  - 需要一個讓大家投票決定新功能的地方
+  - 想讓使用者許願並排定優先順序
+  - 想要一個收集意見並讓大家討論的平台
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要設定電子郵件服務才能發送通知與驗證信。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Fider
+    description: Open platform to collect and prioritize feedback (alternative to UserVoice).
+    url: https://github.com/getfider/fider
+    stars: 4619
+- id: filegator
+  repo: filegator/filegator
+  tag: latest
+  category: 檔案分享
+  scenarios:
+  - 想透過瀏覽器管理伺服器上的檔案
+  - 需要一個可以讓多人上傳下載檔案的網頁
+  - 想建立一個簡單的線上檔案分享空間
+  - 想要在網頁上直接預覽或整理文件
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 預設管理員帳號密碼通常需要登入後立即修改。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: FileGator
+    description: Powerful multi-user file manager with a single page front-end.
+    url: https://github.com/filegator/filegator
+    stars: 3088
+- id: flagsmith
+  repo: flagsmith/flagsmith
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想在不重新發布的情況下開關應用程式功能
+  - 需要一個控制新功能是否對外開放的後台
+  - 想要針對特定使用者測試新上線的功能
+  - 想集中管理所有專案的功能開關設定
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要在應用程式中埋入對應的追蹤程式碼才能生效。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Flagsmith
+    description: Dashboard, API and SDKs for adding Feature Flags to your applications (alternative to LaunchDarkly).
+    url: https://github.com/flagsmith/flagsmith
+    stars: 6969
+- id: flatnotes
+  repo: dullage/flatnotes
+  tag: latest
+  category: 維基或筆記
+  scenarios:
+  - 想用最簡單的方式在網頁上寫筆記
+  - 需要一個不需要資料庫的輕量筆記本
+  - 想要把純文字檔案變成好用的線上筆記
+  - 想隨時隨地打開瀏覽器記錄靈感與想法
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 筆記會直接以純文字檔案格式儲存在指定的資料夾中。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: flatnotes
+    description: Database-less note-taking web app that utilises a flat folder of markdown files for storage.
+    url: https://github.com/dullage/flatnotes
+    stars: 3277
+- id: flipt
+  repo: flipt/flipt
+  tag: v1.62.0
+  category: 其他
+  scenarios:
+  - 想隨時切換應用程式裡面的特定功能
+  - 需要一個系統來管理不同環境的功能開關
+  - 想讓非技術人員也能控制網頁功能的顯示
+  - 想要逐步開放新功能給部分使用者測試
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 預設使用本機資料庫，若需高可用性可另接外部資料庫。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Flipt
+    description: Feature flag solution with support for multiple data backends (alternative to LaunchDarkly).
+    url: https://github.com/flipt-io/flipt
+    stars: 4943
+- id: formbricks
+  repo: formbricks/formbricks
+  tag: latest
+  category: 表單或問卷
+  scenarios:
+  - 想在網站裡跳出問卷收集使用者的想法
+  - 需要一個工具來了解客戶在每個步驟的體驗
+  - 想要製作精美的線上表單來做市場調查
+  - 想收集大家對新推出服務的滿意度評價
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次使用需註冊管理員帳號並設定網站網域。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Formbricks
+    description: Experience Management Suite built on the largest survey stack worldwide. Gracefully gather feedback at every step of the customer journey to know what your customers need.
+    url: https://github.com/formbricks/formbricks
+    stars: 13228
+- id: freshrss
+  repo: linuxserver/freshrss
+  tag: latest
+  category: RSS 閱讀
+  scenarios:
+  - 想把常看的部落格文章集中在一個地方看
+  - 需要一個工具來訂閱並追蹤各大新聞網站
+  - 想要一個沒有廣告干擾的純淨閱讀空間
+  - 想隨時掌握喜歡的網站有沒有發布新內容
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時會進入網頁設定精靈引導完成安裝。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: FreshRSS
+    description: Self-hostable RSS feed aggregator.
+    url: https://github.com/FreshRSS/FreshRSS
+    stars: 16543
+- id: fusio
+  repo: fusio/fusio
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想建立一個可以讓別人串接資料的介面
+  - 需要一個後台來管理對外開放的資料通道
+  - 想限制別人存取我網站資料的頻率與權限
+  - 想要快速把現有的資料庫變成可串接的服務
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動需要設定管理員帳號與資料庫連線。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Fusio
+    description: API management platform which helps to build and manage REST APIs.
+    url: https://github.com/apioo/fusio
+    stars: 2129
+- id: ghostfolio
+  repo: ghostfolio/ghostfolio
+  tag: latest
+  category: 記帳
+  scenarios:
+  - 想記錄自己買了哪些股票和虛擬貨幣
+  - 需要一個工具來追蹤個人投資組合的績效
+  - 想要一目了然地看到總資產的變化趨勢
+  - 想集中管理散落在不同帳戶的投資紀錄
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次使用需要建立帳號並設定基礎貨幣單位。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Ghostfolio
+    description: Wealth management software to keep track of stocks, ETFs and cryptocurrencies.
+    url: https://github.com/ghostfolio/ghostfolio
+    stars: 9680
+- id: gladys
+  repo: gladysassistant/gladys
+  tag: latest
+  category: 智慧家庭
+  scenarios:
+  - 想把家裡的智慧家電全部連在一起控制
+  - 需要一個重視隱私的家庭自動化中心
+  - 想要用語音或手機遠端遙控家裡的電燈
+  - 想設定出門時自動關閉所有家電的規則
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動需透過網頁介面建立管理員帳號。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Gladys
+    description: Privacy-first home assistant.
+    url: https://github.com/GladysAssistant/Gladys
+    stars: 3272
+- id: glance
+  repo: glanceapp/glance
+  tag: latest
+  category: 監控儀表板
+  scenarios:
+  - 想把常用的網站和資訊集中在一個畫面
+  - 需要一個可以自訂版面的個人專屬首頁
+  - 想要一打開瀏覽器就能看到天氣和新聞
+  - 想在同一個地方追蹤各種不同的資訊來源
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要透過編輯設定檔來新增或修改儀表板上的小工具。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Glance
+    description: Highly customizable dashboard that puts all your feeds in one place.
+    url: https://github.com/glanceapp/glance
+    stars: 38117
+- id: gonic
+  repo: sentriz/gonic
+  tag: latest
+  category: 影音
+  scenarios:
+  - 想把自己收集的音樂變成專屬的串流平台
+  - 需要一個可以在手機上聽家裡音樂的伺服器
+  - 想要一個輕量且不佔資源的音樂播放中心
+  - 想出門在外也能隨時播放電腦裡的音樂庫
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要將音樂檔案放入指定的資料夾中才能被系統掃描到。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: gonic
+    description: Lightweight music streaming server. Subsonic compatible.
+    url: https://github.com/sentriz/gonic
+    stars: 2654
+- id: gotenberg
+  repo: gotenberg/gotenberg
+  tag: latest
+  category: 背景程式
+  scenarios:
+  - 想把網頁畫面自動轉換成電子文件儲存
+  - 需要一個能把各種辦公室文件轉檔的工具
+  - 想要在系統背景自動處理文件格式轉換
+  - 想讓程式可以自動產生報表並轉成唯讀檔
+  standalone: true
+  requires: []
+  resources:
+    memory: 128Mi
+    cpu: 100m
+  per_replica_users: 0
+  notes: 這是一個純背景服務，沒有提供給一般使用者操作的網頁介面。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Gotenberg
+    description: Developer-friendly API to interact with powerful tools like Chromium and LibreOffice for converting numerous document formats (HTML, Markdown, Word, Excel, etc.) into PDF files, and more.
+    url: https://github.com/gotenberg/gotenberg
+    stars: 13549
+- id: gotify
+  repo: gotify/server
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想自己架設一個可以發送手機推播通知的系統
+  - 需要一個能接收各種系統警告訊息的集中站
+  - 想要把重要提醒直接傳送到自己的手機裡
+  - 想讓不同設備之間可以互相傳送文字通知
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 預設的管理員帳號密碼皆為 admin，登入後請務必修改。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Gotify
+    description: Notification server with Android and CLI clients (alternative to PushBullet).
+    url: https://github.com/gotify/server
+    stars: 16195
+- id: grocy
+  repo: linuxserver/grocy
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想記錄家裡冰箱還有哪些食材跟保存期限
+  - 需要一個管理日常用品庫存與採買清單的工具
+  - 想要追蹤家事分工和每個人的完成進度
+  - 想把家裡的各種物品和消耗品有條理地建檔
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次登入預設帳號密碼通常為 admin，請記得修改。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: grocy
+    description: ERP beyond your fridge. Groceries & household management solution for your home.
+    url: https://github.com/grocy/grocy
+    stars: 9671
+- id: hasura
+  repo: hasura/graphql-engine
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想把現有的資料庫快速轉換成好用的串接介面
+  - 需要一個能即時查詢資料並設定權限的後台
+  - 想要在資料庫有變動時自動觸發其他動作
+  - 想讓前端網頁可以更有效率地獲取所需資料
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 必須連接到一個現有的資料庫才能正常運作。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Hasura
+    description: Fast, instant realtime GraphQL APIs on Postgres with fine grained access control, also trigger webhooks on database events.
+    url: https://github.com/hasura/graphql-engine
+    stars: 32125
+- id: healthchecks
+  repo: linuxserver/healthchecks
+  tag: latest
+  category: 監控
+  scenarios:
+  - 想確認家裡的伺服器或排程任務有沒有正常運作
+  - 需要在系統沒有按時回報時收到警告通知
+  - 想要一個簡單的工具來監控背景程式的健康度
+  - 想確保重要的自動化流程都有被確實執行
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 預設使用本機資料庫，第一次啟動需建立超級管理員帳號。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Healthchecks
+    description: Listen for pings and sends alerts when pings are late.
+    url: https://github.com/healthchecks/healthchecks
+    stars: 10516
+- id: hedgedoc
+  repo: linuxserver/hedgedoc
+  tag: latest
+  category: 維基或筆記
+  scenarios:
+  - 想和同事同時在同一個網頁上編輯會議記錄
+  - 需要一個可以即時預覽排版的共同筆記本
+  - 想要一個能讓多人一起寫企劃案的協作空間
+  - 想快速建立並分享圖文並茂的技術文件
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次使用可能需要設定環境變數來決定網址與資料庫連線。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: HedgeDoc
+    description: Realtime collaborative markdown notes on all platforms, formerly known as CodiMD and HackMD CE.
+    url: https://github.com/hedgedoc/hedgedoc
+    stars: 7506
+- id: homebox-sysadminsmedia
+  repo: sysadminsmedia/homebox
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想把家裡所有的雜物分門別類記錄下來
+  - 需要一個系統來記住換季衣物收在哪個箱子裡
+  - 想要為家裡的電器建立保固與購買紀錄
+  - 想清楚掌握個人收藏品的數量與存放位置
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時需要註冊一個管理員帳號才能開始使用。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: HomeBox (SysAdminsMedia)
+    description: Inventory and organization system built for the home user.
+    url: https://github.com/sysadminsmedia/homebox
+    stars: 7816
+- id: homepage-by-gethomepage
+  repo: gethomepage/homepage
+  tag: latest
+  category: 監控儀表板
+  scenarios:
+  - 想把所有常用的自架服務網址整理在同一個畫面
+  - 需要一個漂亮且能自訂背景的瀏覽器起始頁
+  - 想要在首頁直接看到各個伺服器的運作狀態
+  - 想建立一個方便家人點擊使用的服務導覽頁
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要透過編輯設定檔來新增服務圖示與網址。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Homepage by gethomepage
+    description: Highly customizable homepage (or startpage / application dashboard) with Docker and service API integrations.
+    url: https://github.com/gethomepage/homepage
+    stars: 33584
+- id: hoppscotch-community-edition
+  repo: hoppscotch/hoppscotch
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想測試自己寫的網頁介面有沒有正常回傳資料
+  - 需要一個在瀏覽器上就能發送網路請求的工具
+  - 想要一個介面美觀且操作直覺的介面測試平台
+  - 想把常用的測試參數儲存起來方便下次使用
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動需要設定資料庫連線與登入驗證方式。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Hoppscotch Community Edition
+    description: Fast and beautiful API request builder.
+    url: https://github.com/hoppscotch/hoppscotch
+    stars: 80769
+- id: infisical-community-edition
+  repo: infisical/infisical
+  tag: latest
+  category: 密碼管理
+  scenarios:
+  - 想把專案裡重要的密碼和金鑰集中保護起來
+  - 需要一個安全的地方來管理團隊的存取憑證
+  - 想要防止機密資訊不小心被洩漏到程式碼裡
+  - 想讓不同環境的系統自動取得對應的密碼設定
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 系統啟動後需要進行初始設定並妥善保存復原金鑰。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Infisical Community Edition
+    description: Platform for secrets, certificates, and privileged access management.
+    url: https://github.com/Infisical/infisical
+    stars: 30394
+- id: invoice-ninja
+  repo: invoiceninja/invoiceninja
+  tag: latest
+  category: 記帳
+  scenarios:
+  - 想開立專業的線上請款單給合作的客戶
+  - 需要一個系統來追蹤客戶有沒有按時付款
+  - 想要自動產生報價單並轉換成正式發票
+  - 想管理自由接案的收入與各項專案花費
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動會進入設定精靈，需完成資料庫與基本資料填寫。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Invoice Ninja
+    description: Powerful tool to invoice clients online.
+    url: https://github.com/invoiceninja/invoiceninja
+    stars: 10549
+- id: isponsorblocktv
+  repo: dmunozv04/isponsorblocktv
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想在看影片時自動跳過業配片段。
+  - 希望看線上影片時不要被廣告打擾。
+  - 想讓電視播影片時自動靜音廣告。
+  - 想要一個能幫忙略過贊助畫面的工具。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要與電視或播放裝置進行配對設定。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: iSponsorBlockTV
+    description: Block and skip sponsors, while also muting and skipping ads on YouTube.
+    url: https://github.com/dmunozv04/iSponsorBlockTV
+    stars: 6995
+- id: jotty
+  repo: fccview/jotty
+  tag: latest
+  category: 維基或筆記
+  scenarios:
+  - 想找個地方記錄日常生活的待辦事項。
+  - 需要一個簡單的工具來寫個人筆記。
+  - 想要整理手邊的各種清單和備忘錄。
+  - 希望能輕鬆管理每天要完成的任務。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Jotty
+    description: Lightweight but powerful alternative for managing your personal, file based, notes and checklists.
+    url: https://github.com/fccview/jotty
+    stars: 2036
+- id: kavita
+  repo: linuxserver/kavita
+  tag: latest
+  category: 檔案分享
+  scenarios:
+  - 想在網頁上直接看自己收藏的漫畫。
+  - 需要一個系統來管理我的電子書庫。
+  - 希望能和朋友分享並評分看過的小說。
+  - 想找個方便的地方集中存放數位讀物。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要設定電子書檔案的存放路徑。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Kavita
+    description: Cross-platform e-book/manga/comic/pdf server and web reader with user management, ratings and reviews, and metadata support.
+    url: https://github.com/Kareadita/Kavita
+    stars: 12085
+- id: keila
+  repo: pentacent/keila
+  tag: latest
+  category: 電子郵件
+  scenarios:
+  - 想定期發送電子報給訂閱的粉絲。
+  - 需要一個工具來管理會員的信箱名單。
+  - 想要輕鬆設計並寄送活動宣傳信件。
+  - 希望能追蹤大家有沒有打開我寄的信。
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要設定寄信用的郵件伺服器資訊。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Keila
+    description: Reliable and easy-to-use newsletter tool (alternative to Mailchimp and Sendinblue).
+    url: https://github.com/pentacent/keila
+    stars: 2261
+- id: kestra
+  repo: kestra/kestra
+  tag: latest
+  category: 自動化流程
+  scenarios:
+  - 想讓系統在特定時間自動執行任務。
+  - 需要一個工具來串接不同的資料處理步驟。
+  - 希望能監控每天自動跑的報表有沒有出錯。
+  - 想要把繁瑣的例行公事變成自動化流程。
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 初次使用需要熟悉其專屬的設定語法。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Kestra
+    description: Event-driven, language-agnostic platform to create, schedule, and monitor workflows. In code. Coordinate data pipelines and tasks such as ETL and ELT.
+    url: https://github.com/kestra-io/kestra
+    stars: 30184
+- id: kill-bill
+  repo: killbill/killbill
+  tag: latest
+  category: 電子商務
+  scenarios:
+  - 想幫我的服務建立訂閱收費機制。
+  - 需要一個系統來管理客戶的定期付款。
+  - 想要隨時查看產品的即時營收報表。
+  - 希望能自動處理每個月的帳單扣款。
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 牽涉金流處理，需謹慎設定安全機制。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Kill Bill
+    description: Subscription billing & payments platform. Have access to real-time analytics and financial reports.
+    url: https://github.com/killbill/killbill
+    stars: 5851
+- id: komga
+  repo: gotson/komga
+  tag: latest
+  category: 檔案分享
+  scenarios:
+  - 想在手機或平板上順暢閱讀收藏的漫畫。
+  - 需要一個專門管理數位漫畫的系統。
+  - 希望能透過網頁輕鬆瀏覽所有的圖文檔案。
+  - 想要建立一個屬於自己的線上漫畫圖書館。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要將漫畫檔案整理到指定的資料夾中。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Komga
+    description: Media server for comics/mangas/BDs with API and OPDS support, a modern web interface for exploring your libraries, as well as a web reader.
+    url: https://github.com/gotson/komga
+    stars: 6835
+- id: kong
+  repo: library/kong
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想統一管理系統對外開放的各種介面。
+  - 需要一個工具來控制網路流量與權限。
+  - 希望能保護後端服務不被惡意大量呼叫。
+  - 想要集中處理所有進出系統的網路請求。
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 適合進階使用者管理複雜的網路架構。
+  generated: true
+  origin: awesome-selfhosted
+  official: true
+  upstream:
+    name: Kong
+    description: Microservice API Gateway and Platform.
+    url: https://github.com/Kong/kong
+    stars: 44370
+- id: kutt
+  repo: kutt/kutt
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想把很長的網址縮短方便分享給朋友。
+  - 需要追蹤大家點擊連結的次數和來源。
+  - 希望能用自己的專屬網域來建立短網址。
+  - 想要自訂好記的網址名稱來做行銷推廣。
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要準備一個網域來作為短網址使用。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Kutt
+    description: Modern URL shortener with support for custom domains and custom URLs.
+    url: https://github.com/thedevs-network/kutt
+    stars: 11197
+- id: lago
+  repo: getlago/lago
+  tag: latest
+  category: 電子商務
+  scenarios:
+  - 想根據客戶的使用量來計算每個月的費用。
+  - 需要一個系統來記錄大家用了多少資源。
+  - 想要建立用多少付多少的彈性計費模式。
+  - 希望能自動產生精確的用量帳單給客戶。
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要串接外部金流服務才能實際收款。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Lago
+    description: Metering and usage-based billing.
+    url: https://github.com/getlago/lago
+    stars: 10787
+- id: langfuse
+  repo: langfuse/langfuse
+  tag: latest
+  category: 監控
+  scenarios:
+  - 想追蹤人工智慧聊天機器人的回答品質。
+  - 需要一個工具來管理各種給人工智慧的提示詞。
+  - 想要分析使用者和智慧助手的互動狀況。
+  - 希望能找出人工智慧回答不準確的原因。
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 適合有開發人工智慧應用的團隊使用。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Langfuse
+    description: LLM engineering platform for model tracing, prompt management, and application evaluation. Langfuse helps teams collaboratively debug, analyze, and iterate on their LLM applications such
+      as chatbots or AI agents.
+    url: https://github.com/langfuse/langfuse
+    stars: 37223
+- id: leantime
+  repo: leantime/leantime
+  tag: latest
+  category: 專案管理
+  scenarios:
+  - 想和團隊一起規劃新產品的開發進度。
+  - 需要一個地方記錄大家負責的工作項目。
+  - 希望能追蹤任務從發想到完成的每個階段。
+  - 想要一個適合小團隊的簡單任務管理工具。
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時需要設定管理員帳號。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Leantime
+    description: Lean project management system for small teams and startups helping to manage projects from ideation through delivery.
+    url: https://github.com/leantime/leantime
+    stars: 12048
+- id: libre-translate
+  repo: libretranslate/libretranslate
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想在自己的系統裡加入多國語言翻譯功能。
+  - 需要一個工具幫忙把外文自動翻成中文。
+  - 希望能有一個不依賴外部廠商的翻譯服務。
+  - 想要快速將大量文字轉換成其他語言。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 啟動時會下載語言模型，需要較長的時間。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Libre Translate
+    description: Machine Translation API.
+    url: https://github.com/LibreTranslate/LibreTranslate
+    stars: 17418
+- id: librechat
+  repo: librechat/librechat
+  tag: latest
+  category: 聊天
+  scenarios:
+  - 想建立一個團隊專屬的智慧聊天機器人。
+  - 需要一個介面來整合不同的人工智慧服務。
+  - 希望能搜尋過去和智慧助手對話的紀錄。
+  - 想要讓多個使用者登入並使用人工智慧對話。
+  standalone: false
+  requires:
+  - mongodb
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要自行準備人工智慧服務的應用程式介面金鑰。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: LibreChat
+    description: Enhanced ChatGPT-compatible AI chat interface supporting multiple AI providers, with multi-user auth, message search, and plugin support.
+    url: https://github.com/LibreChat-AI/LibreChat
+    stars: 46916
+- id: libredesk
+  repo: libredesk/libredesk
+  tag: latest
+  category: 專案管理
+  scenarios:
+  - 想集中處理客戶透過信件或訊息發問的問題。
+  - 需要一個系統來管理客服人員的處理進度。
+  - 希望能在網站上加入即時客服聊天的功能。
+  - 想要一個工具來追蹤所有使用者的求助紀錄。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Libredesk
+    description: Modern omnichannel customer support desk. Live chat, email, and more in a single binary.
+    url: https://github.com/abhinavxd/libredesk
+    stars: 3139
+- id: lidarr
+  repo: linuxserver/lidarr
+  tag: latest
+  category: 影音
+  scenarios:
+  - 想自動追蹤並下載喜歡的歌手的新專輯。
+  - 需要一個系統來整理我龐大的音樂收藏。
+  - 希望能自動補齊音樂檔案缺少的封面和資訊。
+  - 想要輕鬆管理並搜尋硬碟裡的各種音樂。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要設定音樂檔案的儲存路徑與下載工具。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Lidarr
+    description: Music collection manager for Usenet and BitTorrent users.
+    url: https://github.com/Lidarr/Lidarr
+    stars: 5819
+- id: linkace
+  repo: linkace/linkace
+  tag: latest
+  category: 書籤
+  scenarios:
+  - 想把網路上看到的好文章網址存起來。
+  - 需要一個工具幫我自動備份收藏的網頁。
+  - 希望系統能定期檢查我存的連結有沒有失效。
+  - 想要建立一個個人專屬的網址資料庫。
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時需要執行資料庫設定。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: LinkAce
+    description: Bookmark archive with automatic backups to the Internet Archive, link monitoring, and a full REST API. Installation is done via Docker, or as a simple PHP application.
+    url: https://github.com/Kovah/LinkAce/
+    stars: 3354
+- id: linkding
+  repo: sissbruecker/linkding
+  tag: latest
+  category: 書籤
+  scenarios:
+  - 想找個簡單乾淨的地方存放常用的網站連結。
+  - 需要一個介面清爽的個人書籤管理工具。
+  - 希望能快速把手機上看到的網頁存到電腦裡。
+  - 想要用標籤來分類整理我收藏的各種網址。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次登入需要設定管理員帳號密碼。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: linkding
+    description: Minimal bookmark management with a fast and clean UI. Simple installation through Docker and can run on your Raspberry Pi.
+    url: https://github.com/sissbruecker/linkding
+    stars: 11404
+- id: linkstack
+  repo: linkstackorg/linkstack
+  tag: latest
+  category: 網站
+  scenarios:
+  - 想做一個專屬網頁把我的所有社群連結放在一起。
+  - 需要一個個人首頁來展示我的各種聯絡方式。
+  - 希望粉絲能透過一個網址找到我所有的作品。
+  - 想要輕鬆設計一個有個人風格的連結整合頁面。
+  standalone: true
+  requires: []
+  resources:
+    memory: 128Mi
+    cpu: 100m
+  per_replica_users: 300
+  notes: 第一次啟動要跑設定精靈來建立帳號。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: LinkStack
+    description: Link all your social media platforms easily accessible on one page, customizable through an intuitive, easy to use user/admin interface (alternative to Linktree and Manylink).
+    url: https://github.com/LinkStackOrg/LinkStack
+    stars: 3946
+- id: listmonk
+  repo: listmonk/listmonk
+  tag: latest
+  category: 電子郵件
+  scenarios:
+  - 想大量寄送電子報給訂閱網站的會員。
+  - 需要一個系統來管理不同主題的收件人名單。
+  - 希望能看到寄出的信件有多少人點開來看。
+  - 想要一個介面現代化的郵件行銷管理工具。
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要設定外部的郵件發送伺服器。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Listmonk
+    description: High performance newsletter and mailing list manager with a modern dashboard.
+    url: https://github.com/knadh/listmonk
+    stars: 24230
+- id: lobehub
+  repo: lobehub/lobehub
+  tag: latest
+  category: 聊天
+  scenarios:
+  - 想用一個漂亮的介面來和人工智慧聊天。
+  - 需要一個能切換不同人工智慧模型的對話平台。
+  - 希望能安裝各種擴充功能讓智慧助手更聰明。
+  - 想要建立一個有現代設計感的智慧對話網站。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要自行準備人工智慧服務的應用程式介面金鑰。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: LobeHub
+    description: Modern design AI chat framework supporting multiple AI providers, one click install MCP Marketplace and Artifacts / Thinking.
+    url: https://github.com/lobehub/lobehub
+    stars: 84626
+- id: localai
+  repo: localai/localai
+  tag: sha-08580e8-gpu-nvidia-cuda-13
+  category: 背景程式
+  scenarios:
+  - 想在自己的電腦上執行人工智慧模型。
+  - 需要一個工具來自動產生圖片或語音檔案。
+  - 希望能有一個不需要連上網路的智慧助手。
+  - 想要建立一個私密且安全的智慧運算環境。
+  standalone: true
+  requires: []
+  resources:
+    memory: 128Mi
+    cpu: 100m
+  per_replica_users: 0
+  notes: 執行人工智慧模型需要較高的硬體資源。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: LocalAI
+    description: Run your AI models locally and generate images and audio (alternative to OpenAI and Claude).
+    url: https://github.com/mudler/LocalAI
+    stars: 50280
+- id: loomio
+  repo: loomio/loomio
+  tag: latest
+  category: 論壇
+  scenarios:
+  - 想讓社團成員一起討論並投票決定活動辦在哪。
+  - 需要一個平台讓團隊能有效率地達成共識。
+  - 希望大家能針對不同的提案發表意見並表決。
+  - 想要一個工具幫助組織進行民主式的決策。
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時需要設定管理員帳號。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Loomio
+    description: Collaborative decision-making tool that makes it easy for anyone to participate in decisions which affect them.
+    url: https://github.com/loomio/loomio
+    stars: 2627
+- id: lychee
+  repo: linuxserver/lychee
+  tag: latest
+  category: 相片
+  scenarios:
+  - 想建立一個私人的線上相簿來存放家庭照片。
+  - 需要一個系統幫我把旅遊拍的照片分類整理。
+  - 希望能用漂亮的網格介面展示我的攝影作品。
+  - 想要輕鬆地把相簿網址分享給親朋好友看。
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時需要設定資料庫連線與管理員帳號。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Lychee
+    description: Grid and album based photo-management-system.
+    url: https://github.com/LycheeOrg/Lychee
+    stars: 4329
+- id: manyfold
+  repo: manyfold3d/manyfold
+  tag: sha-b4baa367c2675785ab9af3341de63d6e668bbed0
+  category: 檔案分享
+  scenarios:
+  - 想找個地方集中管理我收集的立體列印模型。
+  - 需要一個系統來預覽各種立體圖檔的樣貌。
+  - 希望能把設計好的立體檔案分類整理好。
+  - 想要建立一個專屬的立體列印檔案資料庫。
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要設定儲存立體模型檔案的空間。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Manyfold
+    description: Digital asset manager for 3d print files; STL, OBJ, 3MF and more.
+    url: https://github.com/manyfold3d/manyfold
+    stars: 2241
+- id: mathesar
+  repo: mathesar/mathesar
+  tag: latest
+  category: 資料庫管理
+  scenarios:
+  - 想用簡單的介面管理資料
+  - 希望能和團隊一起編輯資料表
+  - 想要不用寫程式就能操作資料庫
+  - 需要一個好上手的資料管理工具
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要連接現有的 PostgreSQL 資料庫才能使用。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Mathesar
+    description: Intuitive UI to manage data collaboratively, for users of all technical skill levels. Built on Postgres – connect an existing DB or set up a new one.
+    url: https://github.com/mathesar-foundation/mathesar
+    stars: 5170
+- id: mediacms
+  repo: mediacms/mediacms
+  tag: latest
+  category: 影音
+  scenarios:
+  - 想架設自己的影片分享網站
+  - 需要一個管理和播放影片的平台
+  - 希望能建立類似影音串流的服務
+  - 想要整理並分享團隊的影片紀錄
+  standalone: null
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動可能需要設定管理員帳號。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: MediaCMS
+    description: Modern, fully featured video and media CMS, written in Python/Django/React, featuring a REST API.
+    url: https://github.com/mediacms-io/mediacms
+    stars: 5185
+- id: mediamtx
+  repo: bluenviron/mediamtx
+  tag: latest
+  category: 影音
+  scenarios:
+  - 想要架設一個即時影音串流伺服器
+  - 需要轉發或錄製攝影機的即時畫面
+  - 希望能將直播畫面分享給其他人看
+  - 想建立低延遲的影音廣播系統
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: MediaMTX
+    description: Ready-to-use, zero-dependency real-time media server and proxy to publish, read, record, playback and route video/audio streams over SRT, WebRTC, RTSP, RTMP, HLS, MPEG-TS, RTP.
+    url: https://github.com/bluenviron/mediamtx
+    stars: 20653
+- id: metabase
+  repo: metabase/metabase
+  tag: latest
+  category: 資料分析
+  scenarios:
+  - 想把公司資料變成好懂的圖表
+  - 需要一個工具讓大家自己查詢數據
+  - 希望能快速建立資料視覺化儀表板
+  - 想要不用寫複雜語法就能分析資料
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要連接你的資料庫才能進行資料分析。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Metabase
+    description: Easy way for everyone in your company to ask questions and learn from data.
+    url: https://github.com/metabase/metabase
+    stars: 50253
+- id: metube
+  repo: alexta69/metube
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想要一個網頁介面來下載網路影片
+  - 需要把線上影片存到自己的電腦裡
+  - 希望能貼上網址就自動下載影片
+  - 想備份喜歡的線上影音播放清單
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: MeTube
+    description: Web GUI for youtube-dl, with playlist support. Allows downloading videos from dozens of websites.
+    url: https://github.com/alexta69/metube
+    stars: 15231
+- id: mindsdb
+  repo: mindsdb/mindsdb
+  tag: latest
+  category: 資料庫管理
+  scenarios:
+  - 想在現有的資料庫裡加入人工智慧
+  - 希望能用簡單的查詢語法訓練預測模型
+  - 想要讓資料庫具備機器學習的能力
+  - 需要一個能自動分析資料趨勢的工具
+  standalone: null
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要連接現有的資料庫才能發揮機器學習功能。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: MindsDB
+    description: AI layer for existing databases that allows you to effortlessly develop, train and deploy state-of-the-art machine learning models using standard queries.
+    url: https://github.com/mindsdb/mindshub
+    stars: 39852
+- id: miniflux
+  repo: miniflux/miniflux
+  tag: latest
+  category: RSS 閱讀
+  scenarios:
+  - 想要一個極簡風格的新聞閱讀器
+  - 希望能集中訂閱並閱讀喜歡的網站文章
+  - 需要一個沒有廣告干擾的閱讀環境
+  - 想隨時追蹤各個部落格的最新發文
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Miniflux
+    description: Minimalist news reader.
+    url: https://github.com/miniflux/v2
+    stars: 9909
+- id: misskey
+  repo: misskey/misskey
+  tag: latest
+  category: 論壇
+  scenarios:
+  - 想架設一個專屬的微部落格社群
+  - 希望能建立類似推特的社交平台
+  - 想要和去中心化網路上的其他人互動
+  - 需要一個讓朋友互相分享日常的空間
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動需要建立管理員帳號並進行基本設定。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Misskey
+    description: Decentralized app-like microblogging server/SNS for the Fediverse, using the ActivityPub protocol like GNU social and Mastodon.
+    url: https://github.com/misskey-dev/misskey
+    stars: 11362
+- id: myip
+  repo: jason5ng32/myip
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想知道自己目前的上網位址在哪裡
+  - 需要測試目前的網路連線速度
+  - 希望能檢查網路設定有沒有漏水問題
+  - 想要一個工具箱來檢測網站能不能連上
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: MyIP
+    description: All in one IP Toolbox. Easy to check what's your IPs, IP geolocation, check for DNS leaks, examine WebRTC connections, speed test, ping test, MTR test, check website availability and more.
+    url: https://github.com/jason5ng32/MyIP
+    stars: 12338
+- id: navidrome-music-server
+  repo: navidrome/navidrome
+  tag: pr-6465
+  category: 影音
+  scenarios:
+  - 想架設自己的專屬線上音樂電台
+  - 希望能隨時隨地聽家裡電腦的音樂
+  - 需要一個可以管理大量音樂收藏的工具
+  - 想要用手機直接串流播放自己的歌單
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Navidrome Music Server
+    description: Modern Music Server and Streamer, compatible with Subsonic/Airsonic.
+    url: https://github.com/navidrome/navidrome
+    stars: 24617
+- id: neko
+  repo: m1k1o/neko
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想和朋友在網路上一起看影片
+  - 需要一個可以多人共用的雲端瀏覽器
+  - 希望能遠端操作同一個網頁畫面
+  - 想要在隔離的環境裡安全地上網
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Neko
+    description: Virtual browser that runs in docker and uses WebRTC.
+    url: https://github.com/m1k1o/neko
+    stars: 22635
+- id: nocodb
+  repo: nocodb/nocodb
+  tag: latest
+  category: 資料庫管理
+  scenarios:
+  - 想把資料庫變成像試算表一樣好用
+  - 希望能不用寫程式就建立資料管理系統
+  - 需要一個可以和團隊協作編輯資料的工具
+  - 想要快速搭建專屬的資料庫應用程式
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: NocoDB
+    description: No-code platform that turns any database into a smart spreadsheet (alternative to Airtable and Smartsheet).
+    url: https://github.com/nocodb/nocodb
+    stars: 65465
+- id: ntfy
+  repo: binwiederhier/ntfy
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想讓系統自動發送通知到手機裡
+  - 需要一個簡單的方法接收自訂的推播訊息
+  - 希望能隨時掌握伺服器的重要警告
+  - 想要在電腦和手機之間傳送即時提醒
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: ntfy
+    description: Push notifications to phone or desktop using HTTP PUT/POST, with Android app, CLI and web app, similar to Pushover and Gotify.
+    url: https://github.com/binwiederhier/ntfy
+    stars: 35433
+- id: octoprint
+  repo: octoprint/octoprint
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想用網頁遠端控制家裡的立體印表機
+  - 希望能隨時監控列印進度和即時畫面
+  - 需要一個方便管理列印檔案的介面
+  - 想要在列印完成時自動收到通知
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要將系統連接到你的立體印表機才能使用。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Octoprint
+    description: Snappy web interface for controlling consumer 3D printers.
+    url: https://github.com/OctoPrint/OctoPrint
+    stars: 9190
+- id: odoo
+  repo: library/odoo
+  tag: latest
+  category: 專案管理
+  scenarios:
+  - 想幫公司建立一套完整的進銷存系統
+  - 需要一個整合人事和財務的管理平台
+  - 希望能輕鬆管理客戶關係和銷售訂單
+  - 想要一個能包辦企業日常營運的工具
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動需要設定資料庫並建立管理員帳號。
+  generated: true
+  origin: awesome-selfhosted
+  official: true
+  upstream:
+    name: Odoo
+    description: Suite of web based business apps for ERP.
+    url: https://github.com/odoo/odoo
+    stars: 55678
+- id: ollama
+  repo: ollama/ollama
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想在自己的電腦上跑大型語言模型
+  - 希望能建立專屬的人工智慧對話機器人
+  - 需要一個可以離線使用的智慧助理
+  - 想要測試各種不同的開源語言模型
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: 下載語言模型需要較大的儲存空間與良好的硬體效能。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Ollama
+    description: Get up and running with Llama 3.3, DeepSeek-R1, Phi-4, Gemma 3, and other large language models.
+    url: https://github.com/ollama/ollama
+    stars: 186471
+- id: omnitools
+  repo: iib0011/omni-tools
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想要一個包含各種日常小工具的網頁
+  - 需要快速轉換圖片或影片的檔案格式
+  - 希望能輕鬆編輯或合併文件檔案
+  - 想找一個能處理各種資料轉換的百寶箱
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: OmniTools
+    description: Collection of powerful web-based tools for everyday tasks (coding, manipulating images/videos, PDFs or crunching numbers...).
+    url: https://github.com/iib0011/omni-tools
+    stars: 10677
+- id: one-time-secret
+  repo: onetimesecret/onetimesecret
+  tag: latest
+  category: 密碼管理
+  scenarios:
+  - 想把重要密碼安全地傳送給別人
+  - 希望能產生看過一次就會自動銷毀的網址
+  - 需要一個分享機密資訊的加密管道
+  - 想要確保傳送的訊息不會被第三方偷看
+  standalone: false
+  requires:
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: One Time Secret
+    description: Share sensitive information securely with self-destructing links that are only viewable once.
+    url: https://github.com/onetimesecret/onetimesecret
+    stars: 2988
+- id: onlyoffice
+  repo: onlyoffice/documentserver
+  tag: latest
+  category: 專案管理
+  scenarios:
+  - 想和團隊在網頁上一起編輯文件
+  - 需要一個能管理專案和客戶關係的平台
+  - 希望能建立公司內部的線上辦公室
+  - 想要一個可以取代傳統文書軟體的雲端工具
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  - rabbitmq
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 啟動時間較長，第一次使用需進行系統初始化設定。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: ONLYOFFICE
+    description: Office suite that enables you to manage documents, projects, team and customer relations in one place.
+    url: https://github.com/ONLYOFFICE/DocumentServer
+    stars: 7104
+- id: openemr
+  repo: openemr/openemr
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想幫診所建立電子病歷管理系統
+  - 需要一個能安排病患看診時間的工具
+  - 希望能妥善記錄和追蹤病人的健康狀況
+  - 想要一套完整的醫療實務管理平台
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動需要進行資料庫與診所基本資料設定。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: OpenEMR
+    description: Electronic health records and medical practice management solution.
+    url: https://github.com/openemr/openemr
+    stars: 5589
+- id: opengist
+  repo: thomiceli/opengist
+  tag: latest
+  category: 程式碼託管
+  scenarios:
+  - 想找個地方快速分享一段程式碼
+  - 希望能把常用的文字片段儲存起來
+  - 需要一個可以記錄程式碼修改歷史的工具
+  - 想要建立自己專屬的文字分享平台
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Opengist
+    description: Pastebin powered by Git.
+    url: https://github.com/thomiceli/opengist
+    stars: 3411
+- id: openproject
+  repo: openproject/openproject
+  tag: '17'
+  category: 專案管理
+  scenarios:
+  - 想和團隊一起追蹤專案的進度
+  - 需要一個能分配任務和設定目標的平台
+  - 希望能清楚看到每個人的工作負載
+  - 想要一個可以整合程式碼修改紀錄的管理工具
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動需要設定管理員帳號與密碼。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: OpenProject
+    description: Manage your projects, tasks and goals. Collaborate via work packages and link them to your pull requests on Github.
+    url: https://github.com/opf/openproject
+    stars: 17206
+- id: opensign
+  repo: opensign/opensign
+  tag: main
+  category: 其他
+  scenarios:
+  - 想讓客戶在網路上直接簽署合約
+  - 需要一個可以管理電子簽名的平台
+  - 希望能追蹤文件有沒有被對方簽名
+  - 想要一個安全可靠的數位簽署工具
+  standalone: false
+  requires:
+  - mongodb
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: OpenSign
+    description: Document signing software (alternative to DocuSign).
+    url: https://github.com/opensignlabs/opensign
+    stars: 7243
+- id: openwa
+  repo: rmyndharis/openwa
+  tag: latest
+  category: 聊天
+  scenarios:
+  - 想透過程式自動發送通訊軟體的訊息
+  - 需要一個能管理多個聊天帳號的控制台
+  - 希望能將收到的訊息轉發到其他系統
+  - 想要建立專屬的自動回覆客服機器人
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要掃描條碼登入你的通訊軟體帳號才能使用。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: OpenWA
+    description: WhatsApp API gateway exposing messaging as REST endpoints, with a web dashboard, multi-account sessions, and webhook events (alternative to WhatsApp Business API providers).
+    url: https://github.com/rmyndharis/OpenWA
+    stars: 16704
+- id: ovenmediaengine
+  repo: ovenmedialabs/ovenmediaengine
+  tag: latest
+  category: 影音
+  scenarios:
+  - 想架設一個超低延遲的直播伺服器
+  - 希望能讓觀眾看到最即時的轉播畫面
+  - 需要一個能處理大量影音串流的系統
+  - 想要建立自己的高畫質線上轉播平台
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: OvenMediaEngine
+    description: Streaming Server with Sub-Second Latency.
+    url: https://github.com/OvenMediaLabs/OvenMediaEngine
+    stars: 3302
+- id: pangolin
+  repo: fosrl/pangolin
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想在外連回家的網路
+  - 需要安全的遠端連線工具
+  - 想讓外部安全存取內部服務
+  - 需要管理網路連線的控制面板
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要設定相關的網路路由與存取權限。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Pangolin
+    description: Identity-aware tunneled reverse proxy with dashboard UI, access control, and WireGuard-based tunnels (alternative to Cloudflare Tunnel, Tailscale).
+    url: https://github.com/fosrl/pangolin
+    stars: 23517
+- id: passbolt
+  repo: passbolt/passbolt
+  tag: latest
+  category: 密碼管理
+  scenarios:
+  - 想和團隊一起管理共用密碼
+  - 需要安全存放各種登入資訊
+  - 想找個地方統一記錄帳號密碼
+  - 需要和同事安全分享系統密碼
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動需要建立管理員帳號與密碼。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Passbolt
+    description: Collaborative password manager.
+    url: https://github.com/passbolt/passbolt_api
+    stars: 6227
+- id: photoprism
+  repo: photoprism/photoprism
+  tag: latest
+  category: 相片
+  scenarios:
+  - 想自動分類和標記生活照片
+  - 需要一個地方備份手機裡的相片
+  - 想建立自己的家庭相簿
+  - 需要能智慧搜尋照片的工具
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 初次使用需建立管理員帳號並掃描相片。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: PhotoPrism
+    description: Personal photo management powered by Go and Google TensorFlow. Browse, organize, and share your personal photo collection, using the latest technologies to automatically tag and find pictures.
+    url: https://github.com/photoprism/photoprism
+    stars: 40424
+- id: photoview
+  repo: photoview/photoview
+  tag: latest
+  category: 相片
+  scenarios:
+  - 想快速瀏覽大量的高畫質照片
+  - 需要簡單好用的個人相簿
+  - 想把資料夾裡的照片變成網頁相簿
+  - 需要一個專為攝影愛好者設計的相簿
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要設定資料庫連線與掃描路徑。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Photoview
+    description: Simple and user-friendly photo gallery for personal servers. It is made for photographers and aims to provide an easy and fast way to navigate directories, with thousands of high resolution
+      photos.
+    url: https://github.com/photoview/photoview
+    stars: 6570
+- id: pi-hole
+  repo: pihole/pihole
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想在整個家庭網路阻擋廣告
+  - 需要管理家裡的網域名稱解析
+  - 想監控家裡網路的連線狀況
+  - 需要一個阻擋惡意網站的工具
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要設定路由器的網域名稱伺服器指向此服務。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Pi-hole
+    description: Blackhole for Internet advertisements with a GUI for management and monitoring.
+    url: https://github.com/pi-hole/pi-hole
+    stars: 61739
+- id: picoshare
+  repo: mtlynch/picoshare
+  tag: latest
+  category: 檔案分享
+  scenarios:
+  - 想快速產生檔案的分享連結
+  - 需要一個極簡的檔案上傳空間
+  - 想讓朋友輕鬆下載我分享的照片
+  - 需要拖曳就能上傳檔案的工具
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: PicoShare
+    description: Minimalist, easy-to-host service for sharing images and other files.
+    url: https://github.com/mtlynch/picoshare
+    stars: 3069
+- id: pigallery-2
+  repo: bpatrik/pigallery2
+  tag: latest
+  category: 相片
+  scenarios:
+  - 想在效能較差的機器上架設相簿
+  - 需要直接讀取資料夾結構的相簿
+  - 想找個輕量級的照片展示網站
+  - 需要介面豐富的個人相片庫
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: PiGallery 2
+    description: Directory-first photo gallery website, with a rich UI, optimised for running on low resource servers.
+    url: https://github.com/bpatrik/pigallery2
+    stars: 2316
+- id: pimcore
+  repo: pimcore/pimcore
+  tag: php8.5.12-supervisord-v5.2
+  category: 網站
+  scenarios:
+  - 想建立並管理多管道的數位內容
+  - 需要一個企業級的內容管理系統
+  - 想整合商品資訊與網站內容
+  - 需要管理豐富的數位資產與體驗
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 128Mi
+    cpu: 100m
+  per_replica_users: 300
+  notes: 第一次啟動需要進行系統初始化設定。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Pimcore
+    description: Multi-channel experience and engagement management platform.
+    url: https://github.com/pimcore/pimcore
+    stars: 3891
+- id: plane
+  repo: plane/plane
+  tag: latest
+  category: 專案管理
+  scenarios:
+  - 想追蹤團隊的工作進度與任務
+  - 需要規劃產品的未來發展路線
+  - 想找個簡單好用的問題追蹤工具
+  - 需要管理大型專案的各個階段
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動要跑設定精靈。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Plane
+    description: Track issues, epics, and product roadmaps in the simplest way possible (alternative to JIRA, Linear and Height).
+    url: https://github.com/makeplane/plane
+    stars: 62224
+- id: planka
+  repo: linuxserver/planka
+  tag: latest
+  category: 專案管理
+  scenarios:
+  - 想用看板來管理團隊的待辦事項
+  - 需要即時更新的工作進度表
+  - 想找個類似便利貼的任務管理工具
+  - 需要和同事一起追蹤專案細節
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Planka
+    description: Realtime kanban board for workgroups (alternative to Trello).
+    url: https://github.com/plankanban/planka
+    stars: 12672
+- id: polaris
+  repo: agersant/polaris
+  tag: latest
+  category: 影音
+  scenarios:
+  - 想在外面也能聽家裡的音樂收藏
+  - 需要一個效能很好的音樂串流服務
+  - 想建立自己的線上音樂播放器
+  - 需要輕鬆瀏覽大量的音樂檔案
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要設定音樂檔案的存放路徑。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Polaris
+    description: Music browsing and streaming application optimized for large music collections, ease of use and high performance.
+    url: https://github.com/agersant/polaris
+    stars: 2739
+- id: pomerium
+  repo: pomerium/pomerium
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想幫內部網站加上登入驗證機制
+  - 需要安全地把服務開放到網際網路
+  - 想讓員工透過帳號密碼存取公司系統
+  - 需要一個具備身分驗證的代理伺服器
+  standalone: null
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要設定外部的身分驗證提供者。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Pomerium
+    description: Identity-aware reverse proxy, successor to now obsolete oauth_proxy. It inserts an OAuth step before proxying your request to the backend, so that you can safely expose your own websites
+      to public Internet.
+    url: https://github.com/pomerium/pomerium
+    stars: 5100
+- id: puter
+  repo: heyputer/puter
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想在瀏覽器裡使用完整的作業系統
+  - 需要一個雲端的個人工作環境
+  - 想找個速度極快的網頁版桌面
+  - 需要在網頁上執行各種應用程式
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Puter
+    description: Web-based operating system designed to be feature-rich, exceptionally fast, and highly extensible.
+    url: https://github.com/heyputer/puter
+    stars: 44120
+- id: radarr
+  repo: linuxserver/radarr
+  tag: latest
+  category: 背景程式
+  scenarios:
+  - 想自動追蹤並下載喜歡的電影
+  - 需要一個管理電影收藏的工具
+  - 想整合下載軟體自動處理影片
+  - 需要自動搜尋高畫質的電影檔案
+  standalone: true
+  requires: []
+  resources:
+    memory: 128Mi
+    cpu: 100m
+  per_replica_users: 0
+  notes: 需要搭配下載軟體一起使用。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Radarr
+    description: Automatically download movies via Usenet and BitTorrent (fork of Sonarr).
+    url: https://github.com/Radarr/Radarr
+    stars: 14742
+- id: rallly
+  repo: lukevella/rallly
+  tag: latest
+  category: 表單或問卷
+  scenarios:
+  - 想讓大家投票決定聚餐的時間
+  - 需要一個簡單的日期票選工具
+  - 想調查團隊成員有空開會的時段
+  - 需要快速建立活動時間表單
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Rallly
+    description: Create polls to vote on dates and times (alternative to Doodle).
+    url: https://github.com/lukevella/rallly
+    stars: 5359
+- id: redash
+  repo: redash/redash
+  tag: latest
+  category: 資料分析
+  scenarios:
+  - 想把公司的資料變成視覺化圖表
+  - 需要連接各種資料庫來查詢數據
+  - 想建立專屬的數據監控儀表板
+  - 需要和團隊分享資料分析結果
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要設定資料庫連線才能查詢資料。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Redash
+    description: Connect and query your data sources, build dashboards to visualize data and share them with your company.
+    url: https://github.com/getredash/redash
+    stars: 28877
+- id: remark42
+  repo: umputun/remark42
+  tag: latest
+  category: 論壇
+  scenarios:
+  - 想在自己的部落格加上留言板
+  - 需要一個保護隱私的留言系統
+  - 想讓讀者在文章底下發表評論
+  - 需要輕量級的網頁留言外掛
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: remark42
+    description: Lightweight and simple comment engine, which doesn't spy on users. It can be embedded into blogs, articles or any other place where readers add comments.
+    url: https://github.com/umputun/remark42
+    stars: 5647
+- id: restreamer
+  repo: datarhei/restreamer
+  tag: latest
+  category: 影音
+  scenarios:
+  - 想在自己的網站上進行即時直播
+  - 需要一個免付費的影音串流伺服器
+  - 想把攝影機的畫面轉播到網路上
+  - 需要建立專屬的線上影音頻道
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Restreamer
+    description: Access H.264 real-time video streaming on your website without a streaming provider.
+    url: https://github.com/datarhei/restreamer
+    stars: 5235
+- id: rocket-chat
+  repo: rocketchat/rocket.chat
+  tag: sha-b096d6a-fips
+  category: 聊天
+  scenarios:
+  - 想建立團隊專屬的即時通訊軟體
+  - 需要一個注重隱私的企業聊天室
+  - 想找個可以取代付費通訊軟體的工具
+  - 需要和同事進行安全的線上討論
+  standalone: false
+  requires:
+  - mongodb
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動要跑設定精靈。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Rocket.Chat
+    description: Communications platform that puts data protection first (alternative to Gitter.im and Slack).
+    url: https://github.com/RocketChat/Rocket.Chat
+    stars: 46384
+- id: romm
+  repo: rommapp/romm
+  tag: latest
+  category: 遊戲伺服器
+  scenarios:
+  - 想在網頁上管理懷舊遊戲檔案
+  - 需要一個能直接玩復古遊戲的平台
+  - 想幫自己的遊戲收藏加上封面和介紹
+  - 需要整理各種不同主機的遊戲檔案
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要自行準備遊戲檔案。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: RomM
+    description: ROM manager for organizing, enriching, and playing retro games, with support for 400+ platforms.
+    url: https://github.com/rommapp/romm
+    stars: 14293
+- id: rsshub
+  repo: diygod/rsshub
+  tag: latest
+  category: RSS 閱讀
+  scenarios:
+  - 想把沒有提供訂閱的網站變成訂閱源
+  - 需要追蹤社群媒體的最新動態
+  - 想統一接收各個網站的更新通知
+  - 需要一個能產生各種訂閱連結的工具
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: RSSHub
+    description: Easy to use, and extensible RSS feed aggregator capable of generating RSS feeds from pretty much everything ranging from social media to university departments.
+    url: https://github.com/DIYgod/RSSHub
+    stars: 46894
+- id: rudderstack
+  repo: rudderlabs/rudder-server
+  tag: latest
+  category: 資料分析
+  scenarios:
+  - 想收集並整合使用者的行為數據
+  - 需要把客戶資料送到不同的行銷工具
+  - 想建立統一的顧客資料處理中心
+  - 需要轉換並儲存網站的追蹤數據
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: RudderStack
+    description: Collect, unify, transform, and store your customer data, and route it to a wide range of common, popular marketing, sales, and product tools (alternative to Segment).
+    url: https://github.com/rudderlabs/rudder-server/
+    stars: 4516
+- id: ryot
+  repo: ignisda/ryot
+  tag: latest
+  category: 監控儀表板
+  scenarios:
+  - 想記錄自己看過的電影和書籍
+  - 需要追蹤每天的運動健身進度
+  - 想用一個工具管理生活各個面向
+  - 需要一個專屬的個人生活紀錄板
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: ryot
+    description: Track various facets of your life - media, fitness, etc.
+    url: https://github.com/ignisda/ryot
+    stars: 3661
+- id: saltcorn
+  repo: saltcorn/saltcorn
+  tag: latest
+  category: 網站
+  scenarios:
+  - 想不用寫程式就做出資料庫應用
+  - 需要快速建立網頁或手機應用程式
+  - 想自己設計有資料後台的系統
+  - 需要一個能自動產生報表的平台
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 128Mi
+    cpu: 100m
+  per_replica_users: 300
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Saltcorn
+    description: No-code database application builder for web and mobile applications. One platform for user interface, data backend, durable workflows, email, PDF generation, and AI applications.
+    url: https://github.com/saltcorn/saltcorn
+    stars: 2093
+- id: screego
+  repo: screego/server
+  tag: '1'
+  category: 網路工具
+  scenarios:
+  - 想透過瀏覽器快速分享螢幕畫面
+  - 需要和多人同時觀看同一個畫面
+  - 想找個免安裝的螢幕分享工具
+  - 需要在線上會議展示自己的電腦畫面
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Screego
+    description: Simple tool to quickly share your screen to one or multiple people via web browser.
+    url: https://github.com/screego/server
+    stars: 10749
+- id: searxng
+  repo: searxng/searxng
+  tag: latest
+  category: 搜尋引擎
+  scenarios:
+  - 我想架設一個私人的網頁搜尋工具。
+  - 希望搜尋網路資料時不會被追蹤隱私。
+  - 想要一次整合多個搜尋網站的結果。
+  - 需要一個乾淨沒有廣告的搜尋畫面。
+  standalone: true
+  requires: []
+  resources:
+    memory: 1Gi
+    cpu: 500m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: SearXNG
+    description: Internet metasearch engine which aggregates results from various search services and databases (fork of Searx).
+    url: https://github.com/searxng/searxng/
+    stars: 39401
+- id: seerr
+  repo: seerr/seerr
+  tag: latest
+  category: 影音
+  scenarios:
+  - 想讓家人朋友許願想看的電影或影集。
+  - 需要一個管理大家點播影片的平台。
+  - 希望自動處理親友的看片需求與通知。
+  - 想建立一個專屬的家庭劇院點播系統。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要先有現成的影音伺服器才能連動使用。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Seerr
+    description: Manage requests for your media library, supports Plex, Jellyfin and Emby media servers (fork of Overseerr).
+    url: https://github.com/seerr-team/seerr
+    stars: 13162
+- id: sftpgo-community-edition
+  repo: drakkan/sftpgo
+  tag: latest
+  category: 檔案分享
+  scenarios:
+  - 想要架設一個安全的遠端檔案傳輸站。
+  - 需要讓客戶上傳檔案到我的伺服器。
+  - 想建立一個可以精細控管權限的檔案庫。
+  - 希望透過網頁介面管理檔案與使用者。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時需要設定管理員帳號與密碼。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: sftpgo Community Edition
+    description: Flexible, fully featured and highly configurable SFTP server with optional FTP/S and WebDAV support.
+    url: https://github.com/drakkan/sftpgo
+    stars: 12787
+- id: shlink
+  repo: shlinkio/shlink
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 我想把很長的網址縮短方便分享給別人。
+  - 需要追蹤自己分享出去的連結點擊次數。
+  - 希望建立一個專屬自己網域的縮網址站。
+  - 想要透過介面管理所有產生過的短網址。
+  standalone: null
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Shlink
+    description: URL shortener with REST API and command line interface. Includes official progressive web application and docker images.
+    url: https://github.com/shlinkio/shlink
+    stars: 5417
+- id: sish
+  repo: antoniomika/sish
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想把本機開發的網站臨時開放給外網看。
+  - 需要一個安全的通道連回內網的電腦。
+  - 希望建立類似內網穿透的遠端連線服務。
+  - 想要透過加密連線存取家裡的網路設備。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要具備基本的安全連線金鑰設定知識。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: sish
+    description: HTTP(S)/WS(S)/TCP tunnels to localhost using only SSH (serveo/ngrok alternative).
+    url: https://github.com/antoniomika/sish
+    stars: 4810
+- id: slash
+  repo: yourselfhosted/slash
+  tag: latest
+  category: 書籤
+  scenarios:
+  - 想把網路上看到的好文章通通收藏起來。
+  - 需要一個可以和團隊分享實用連結的工具。
+  - 希望建立自己的網頁書籤庫並加上標籤。
+  - 想要一個乾淨簡單的網址整理與分享平台。
+  standalone: null
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Slash
+    description: Bookmarks and link sharing platform.
+    url: https://github.com/yourselfhosted/slash
+    stars: 3191
+- id: slskd
+  repo: slskd/slskd
+  tag: latest
+  category: 檔案分享
+  scenarios:
+  - 想在特定的點對點網路上分享與下載檔案。
+  - 需要一個可以常駐在伺服器的檔案交換工具。
+  - 希望透過網頁介面管理我的點對點下載任務。
+  - 想要尋找並下載網路上其他人分享的罕見資源。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: slskd
+    description: Modern client-server application for the Soulseek file sharing network.
+    url: https://github.com/slskd/slskd
+    stars: 4270
+- id: snapotter
+  repo: snapotter/snapotter
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 需要一個能線上轉檔與編輯文件的工具箱。
+  - 想在瀏覽器裡直接去背圖片或剪輯影片。
+  - 希望有個能把圖片轉成文字的線上小幫手。
+  - 想要一個可以批次處理大量檔案的網頁服務。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 處理大型影音檔案時會消耗較多伺服器資源。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: SnapOtter
+    description: Suite of 200+ web tools for converting and editing images, videos, audio and PDFs, including a layer-based image editor, OCR, transcription, background removal and batch processing pipelines
+      (alternative to SmallPDF, iLovePDF, CloudConvert).
+    url: https://github.com/snapotter-hq/SnapOtter
+    stars: 2964
+- id: solidtime
+  repo: solidtime/solidtime
+  tag: latest
+  category: 專案管理
+  scenarios:
+  - 我是自由工作者想記錄每個案子花費的時間。
+  - 需要追蹤團隊成員在不同任務上的工時。
+  - 希望有個工具能幫我統計每天的工作效率。
+  - 想要一個現代化的網頁版工時打卡與管理系統。
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: solidtime
+    description: Modern time tracking application for freelancers and agencies.
+    url: https://github.com/solidtime-io/solidtime
+    stars: 9124
+- id: sonarr
+  repo: linuxserver/sonarr
+  tag: latest
+  category: 影音
+  scenarios:
+  - 想要自動追蹤並下載我喜歡的歐美影集。
+  - 需要一個能幫我整理與重新命名影片的工具。
+  - 希望能自動把畫質較差的影片替換成高畫質。
+  - 想建立一個全自動的電視節目收藏與管理站。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要配合其他下載軟體才能完成檔案下載。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Sonarr
+    description: Automatic TV Shows downloader and manager for Usenet and BitTorrent. It can grab, sort and rename new episodes and automatically upgrade the quality of files already downloaded when a better
+      quality format becomes available.
+    url: https://github.com/Sonarr/Sonarr
+    stars: 17630
+- id: sparkyfitness
+  repo: codewithcj/sparkyfitness
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想要記錄自己每天吃了什麼與攝取的熱量。
+  - 需要一個追蹤運動進度與身體數據的工具。
+  - 希望有個私人的健康管理平台來記錄體重。
+  - 想把自己的健身菜單與營養攝取通通數位化。
+  standalone: null
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: SparkyFitness
+    description: Fitness-Tracker which tracks nutrition, exercise, body metrics, and health data (alternative to MyFitnessPal).
+    url: https://github.com/CodeWithCJ/SparkyFitness
+    stars: 6747
+- id: speedtest-tracker
+  repo: linuxserver/speedtest-tracker
+  tag: latest
+  category: 監控
+  scenarios:
+  - 想知道家裡的網路速度是不是常常不穩定。
+  - 需要自動定時測試並記錄網路的上下傳速度。
+  - 希望能有一個圖表顯示過去幾天的網路狀況。
+  - 想要監控網路連線品質並在斷線時留下紀錄。
+  standalone: null
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Speedtest Tracker
+    description: Monitor the performance and uptime of your internet connection.
+    url: https://github.com/alexjustesen/speedtest-tracker
+    stars: 6079
+- id: sqlpage
+  repo: sqlpage/sqlpage
+  tag: latest
+  category: 網站
+  scenarios:
+  - 想只用資料庫語法就快速建立出動態網頁。
+  - 需要一個能把資料庫內容變成視覺化網站的工具。
+  - 希望不用寫複雜的程式碼就能架設資料儀表板。
+  - 想要輕鬆把手邊的數據轉換成網頁應用程式。
+  standalone: true
+  requires: []
+  resources:
+    memory: 128Mi
+    cpu: 100m
+  per_replica_users: 300
+  notes: 需要具備基本的資料庫查詢語法知識才能使用。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: SQLPage
+    description: SQL-only dynamic website builder.
+    url: https://github.com/sqlpage/SQLPage
+    stars: 2584
+- id: srs
+  repo: ossrs/srs
+  tag: latest
+  category: 影音
+  scenarios:
+  - 想要架設一個可以讓多人同時觀看的直播伺服器。
+  - 需要一個低延遲的影音串流平台來轉播活動。
+  - 希望建立自己的即時影像傳輸與接收系統。
+  - 想把攝影機的畫面即時推送到網頁上播放。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: SRS
+    description: Simple, high efficiency and real-time video server, supports RTMP, WebRTC, HLS, HTTP-FLV and SRT.
+    url: https://github.com/ossrs/srs
+    stars: 29436
+- id: stalwart-mail-server
+  repo: stalwartlabs/stalwart
+  tag: latest
+  category: 電子郵件
+  scenarios:
+  - 想要擁有一個專屬自己網域的電子郵件信箱。
+  - 需要架設一個安全且功能完整的企業收發信系統。
+  - 希望建立一個能阻擋垃圾信件的私人郵件伺服器。
+  - 想讓團隊成員都能有自己專屬的電子郵件帳號。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要設定網域的相關紀錄才能正常收發信件。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Stalwart Mail Server
+    description: All-in-one mail server with JMAP, IMAP4, and SMTP support and a wide range of modern features.
+    url: https://github.com/stalwartlabs/stalwart
+    stars: 15827
+- id: stash
+  repo: stashapp/stash
+  tag: latest
+  category: 影音
+  scenarios:
+  - 想建立一個私人的成人影音收藏與播放平台。
+  - 需要一個能自動幫影片抓取封面與標籤的工具。
+  - 希望能透過網頁介面整理與觀看私密影片庫。
+  - 想要一個可以詳細分類與搜尋特定演員的影音站。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Stash
+    description: Web-based library organizer and player for your adult media stash, with auto-tagging and metadata scraping support.
+    url: https://github.com/stashapp/stash
+    stars: 13379
+- id: sunshine
+  repo: lizardbyte/sunshine
+  tag: v2026.1115.54751-ubuntu-24.04
+  category: 遊戲伺服器
+  scenarios:
+  - 想把電腦遊戲畫面串流到客廳的電視上玩。
+  - 需要一個能遠端連線玩高畫質遊戲的伺服器。
+  - 希望能用手機或平板順暢遊玩電腦裡的大作。
+  - 想要建立一個低延遲的私人雲端遊戲平台。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 伺服器端需要配備獨立顯示卡才能獲得最佳體驗。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Sunshine
+    description: Remote game stream host for Moonlight with support up to 120 frames per second and 4K resolution.
+    url: https://github.com/LizardByte/Sunshine
+    stars: 43212
+- id: syncthing
+  repo: linuxserver/syncthing
+  tag: latest
+  category: 檔案分享
+  scenarios:
+  - 想讓手機和電腦裡的資料夾隨時保持同步。
+  - 需要一個不用經過第三方伺服器的檔案傳輸工具。
+  - 希望能自動把工作檔案備份到家裡的電腦中。
+  - 想要在多台裝置間安全且私密地共享重要文件。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Syncthing
+    description: Peer-to-peer file synchronisation tool.
+    url: https://github.com/syncthing/syncthing
+    stars: 90295
+- id: tasks-md
+  repo: baldissaramatheus/tasks.md
+  tag: latest
+  category: 專案管理
+  scenarios:
+  - 想用簡單的純文字檔案來管理每天的待辦事項。
+  - 需要一個輕量級的看板工具來追蹤工作進度。
+  - 希望能用熟悉的標記語法來撰寫任務詳細內容。
+  - 想要一個介面乾淨且資料好備份的任務管理系統。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Tasks.md
+    description: File based task management board that and that supports Markdown syntax.
+    url: https://github.com/BaldissaraMatheus/Tasks.md
+    stars: 2218
+- id: teslamate
+  repo: teslamate/teslamate
+  tag: latest
+  category: 監控
+  scenarios:
+  - 想要詳細記錄我的電動車每次充電與行駛數據。
+  - 需要一個能追蹤愛車停放位置與電量消耗的工具。
+  - 希望能把車輛的各項歷史數據變成漂亮的圖表。
+  - 想建立一個專屬的私有車輛行車紀錄資料庫。
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要提供車輛的連線授權權杖才能抓取資料。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: TeslaMate
+    description: Powerful data logger for Tesla vehicles.
+    url: https://github.com/teslamate-org/teslamate
+    stars: 9249
+- id: the-lounge
+  repo: thelounge/thelounge
+  tag: latest
+  category: 聊天
+  scenarios:
+  - 想透過瀏覽器連上傳統的文字聊天頻道。
+  - 需要一個能常駐在線上接收聊天訊息的工具。
+  - 希望能隨時隨地用手機網頁參與社群文字討論。
+  - 想要一個支援多重帳號與頻道的網頁版聊天室。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: The Lounge
+    description: Web IRC client.
+    url: https://github.com/thelounge/thelounge
+    stars: 6370
+- id: tileserver-gl
+  repo: maptiler/tileserver-gl
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想要架設一個私人的電子地圖圖磚伺服器。
+  - 需要為自己的應用程式提供離線地圖顯示功能。
+  - 希望能把地理圖資轉換成網頁可以載入的格式。
+  - 想建立一個不依賴外部服務的客製化地圖平台。
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要自行準備地圖資料檔才能正常顯示地圖。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: TileServer GL
+    description: Vector and raster maps with GL styles. Server side rendering by Mapbox GL Native. Map tile server for Mapbox GL JS, Android, iOS, Leaflet, OpenLayers, GIS via WMTS, etc.
+    url: https://github.com/maptiler/tileserver-gl
+    stars: 2919
+- id: tolgee
+  repo: tolgee/tolgee
+  tag: latest
+  category: 專案管理
+  scenarios:
+  - 想和翻譯團隊一起協作把軟體翻譯成多國語言。
+  - 需要一個能直接在網頁上修改應用程式文字的工具。
+  - 希望能集中管理所有專案的多國語言翻譯字串。
+  - 想要一個方便開發者與翻譯人員溝通的協作平台。
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Tolgee
+    description: Developer & translator friendly web-based localization platform enabling users to translate directly in the app they develop.
+    url: https://github.com/tolgee/tolgee-platform
+    stars: 4157
+- id: tooljet
+  repo: tooljet/tooljet
+  tag: v3.21.96-lts
+  category: 網站
+  scenarios:
+  - 想用拖拉元件的方式快速打造公司內部管理系統。
+  - 需要一個能串接各種資料庫並產生操作介面的工具。
+  - 希望不用寫太多程式碼就能做出實用的網頁應用。
+  - 想要為團隊建立一個專屬的資料視覺化與操作後台。
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 128Mi
+    cpu: 100m
+  per_replica_users: 300
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: ToolJet
+    description: Low-code framework to build & deploy internal tools with minimal engineering effort (alternative to Retool and Mendix).
+    url: https://github.com/ToolJet/ToolJet
+    stars: 41212
+- id: traduora
+  repo: traduora/traduora
+  tag: latest
+  category: 專案管理
+  scenarios:
+  - 想要一個專門用來管理團隊翻譯進度的平台。
+  - 需要和多位成員一起合作完成軟體的多語系翻譯。
+  - 希望能把應用程式的各國語言字串集中在雲端管理。
+  - 想建立一個方便匯入與匯出翻譯檔案的工作站。
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Traduora
+    description: Translation management platform for teams.
+    url: https://github.com/ever-co/ever-traduora
+    stars: 2140
+- id: traefik
+  repo: library/traefik
+  tag: v3.7.19
+  category: 網路工具
+  scenarios:
+  - 想讓多個網站共用同一個網址入口
+  - 需要自動幫網站申請安全憑證
+  - 想把使用者的連線分流到不同主機
+  - 想統一管理所有網路服務的連線
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 通常需要設定網路埠與憑證相關參數。
+  generated: true
+  origin: awesome-selfhosted
+  official: true
+  upstream:
+    name: Traefik
+    description: HTTP reverse proxy and load balancer that makes deploying microservices easy.
+    url: https://github.com/traefik/traefik
+    stars: 65503
+- id: trailbase
+  repo: trailbase/trailbase
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想快速建立應用程式的後端服務
+  - 需要一個能管理使用者帳號的系統
+  - 想讓網頁能即時更新最新資料
+  - 想找個能執行自訂邏輯的後端平台
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: 內建管理介面，第一次使用需設定管理員帳號。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: TrailBase
+    description: Open, sub-millisecond, single-executable FireBase alternative with type-safe REST & realtime APIs, built-in JS/TS runtime, auth & admin UI.
+    url: https://github.com/trailbaseio/trailbase
+    stars: 5753
+- id: triliumnext-notes
+  repo: triliumnext/trilium
+  tag: latest
+  category: 維基或筆記
+  scenarios:
+  - 想建立個人的龐大知識庫
+  - 需要把筆記用樹狀結構整理起來
+  - 想找個能跨平台同步的筆記工具
+  - 想把學習心得有系統地記錄下來
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時需要設定管理員密碼。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: TriliumNext Notes
+    description: Cross-platform hierarchical note taking application with focus on building large personal knowledge bases (fork of Trilium Notes).
+    url: https://github.com/TriliumNext/Trilium
+    stars: 38789
+- id: tududi
+  repo: chrisvel/tududi
+  tag: latest
+  category: 專案管理
+  scenarios:
+  - 想把複雜的任務拆解成多個小步驟
+  - 需要系統自動提醒我每週的例行公事
+  - 想透過通訊軟體直接新增待辦事項
+  - 想找個好用的個人任務管理工具
+  standalone: null
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 若要使用通訊軟體整合功能需額外設定機器人。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: tududi
+    description: Task management tool with hierarchical structure, smart recurring tasks, and seamless Telegram integration.
+    url: https://github.com/chrisvel/tududi
+    stars: 3542
+- id: upsnap
+  repo: seriousm4x/upsnap
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想從外面遠端把家裡的電腦開機
+  - 需要一個網頁來查看設備有沒有開機
+  - 想一鍵喚醒區域網路內的各種設備
+  - 想集中管理所有機器的電源狀態
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 設備的網路卡必須支援並開啟網路喚醒功能。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Upsnap
+    description: Simple Wake on LAN (WOL) dashboard app. Wake up devices on your network and see current status.
+    url: https://github.com/seriousm4x/UpSnap
+    stars: 6429
+- id: usertour
+  repo: usertour/usertour
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想幫自己的網站加上新手教學導覽
+  - 需要製作讓使用者填寫的問卷調查
+  - 想建立引導使用者完成設定的清單
+  - 想讓新用戶更快熟悉系統的操作方式
+  standalone: null
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Usertour
+    description: User onboarding platform allowing you to create in-app product tours, checklists, and surveys in minutes effortlessly.
+    url: https://github.com/usertour/usertour/
+    stars: 2335
+- id: weblate
+  repo: weblate/weblate
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想邀請社群志工一起幫軟體翻譯
+  - 需要一個網頁介面來管理多國語言
+  - 想把翻譯進度跟程式碼變更同步
+  - 想讓非技術人員也能輕鬆參與翻譯
+  standalone: false
+  requires:
+  - postgres
+  - redis
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時需要設定管理員帳號與密碼。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Weblate
+    description: Web-based translation tool with tight version control integration.
+    url: https://github.com/WeblateOrg/weblate
+    stars: 6165
+- id: weechat
+  repo: weechat/weechat
+  tag: latest
+  category: 聊天
+  scenarios:
+  - 想找個輕量快速的文字聊天工具
+  - 需要連上傳統的網路聊天室頻道
+  - 想透過終端機介面跟朋友傳送訊息
+  - 想掛在聊天頻道裡隨時接收最新消息
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 主要是文字介面，可能需要熟悉指令操作。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Weechat
+    description: Fast, light and extensible chat client.
+    url: https://github.com/weechat/weechat
+    stars: 3421
+- id: wiki-js
+  repo: requarks/wiki
+  tag: '3.3'
+  category: 維基或筆記
+  scenarios:
+  - 想幫團隊建立專屬的知識百科
+  - 需要一個能漂亮呈現文件的網頁
+  - 想把公司的操作手冊集中管理
+  - 想讓大家共同編輯和維護教學文件
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時需要透過網頁進行初始設定。
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Wiki.js
+    description: Modern, lightweight and powerful wiki app using Git and Markdown.
+    url: https://github.com/Requarks/wiki
+    stars: 29229
+- id: yacy
+  repo: yacy/yacy_search_server
+  tag: latest
+  category: 搜尋引擎
+  scenarios:
+  - 想建立一個不受企業控制的搜尋工具
+  - 需要幫自己的網站建立專屬搜尋功能
+  - 想跟其他人一起打造去中心化的搜尋網
+  - 想架設一個能自己爬取網頁的搜尋系統
+  standalone: true
+  requires: []
+  resources:
+    memory: 1Gi
+    cpu: 500m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Yacy
+    description: Peer based, decentralized search engine server.
+    url: https://github.com/yacy/yacy_search_server
+    stars: 4106
+- id: yopass
+  repo: jhaals/yopass
+  tag: latest
+  category: 密碼管理
+  scenarios:
+  - 想把機密密碼安全地傳送給同事
+  - 需要分享看完就會自動銷毀的機密訊息
+  - 想找個安全的方式傳遞重要檔案
+  - 想確保傳送的內容經過加密保護
+  standalone: false
+  requires:
+  - memcached
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Yopass
+    description: Secure sharing of secrets, passwords and files.
+    url: https://github.com/jhaals/yopass
+    stars: 3236
+- id: zipline
+  repo: diced/zipline
+  tag: latest
+  category: 檔案分享
+  scenarios:
+  - 想快速把電腦裡的截圖分享給朋友
+  - 需要一個能上傳檔案並產生網址的工具
+  - 想自己架設一個簡單好用的圖床
+  - 想找個能管理所有上傳檔案的網頁介面
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: false
+  upstream:
+    name: Zipline
+    description: Lightweight, fast and reliable file sharing server that is commonly used with ShareX, offering a react-based Web UI and fast API.
+    url: https://github.com/diced/zipline
+    stars: 3493
+- id: aerospike
+  repo: library/aerospike
+  tag: ee-8.2.0.1_1
+  category: 資料庫
+  scenarios:
+  - 需要一個能處理大量資料的儲存系統
+  - 想找個讀寫速度極快的資料庫
+  - 想建立一個不會因為單機故障就停擺的系統
+  - 需要把資料放在記憶體裡加速讀取
+  standalone: true
+  requires: []
+  resources:
+    memory: 512Mi
+    cpu: 500m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: aerospike
+    description: Aerospike – the reliable, high performance, distributed database optimized for flash and RAM.
+    url: ''
+    stars: 0
+- id: almalinux
+  repo: library/almalinux
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想找個穩定可靠的作業系統環境
+  - 需要一個能取代企業版系統的免費選擇
+  - 想在乾淨的系統上測試自己寫的程式
+  - 想架設一個標準的伺服器運作環境
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: 這只是一個基礎作業系統環境，需要自行安裝所需軟體。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: almalinux
+    description: The official build of AlmaLinux OS.
+    url: ''
+    stars: 0
+- id: alt
+  repo: library/alt
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 需要一個獨立的作業系統來跑特定程式
+  - 想測試軟體在不同系統下的相容性
+  - 想找個輕量乾淨的基礎環境來開發
+  - 想體驗看看不同的系統發行版本
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: 這只是一個基礎作業系統環境，需要自行安裝所需軟體。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: alt
+    description: The official build of ALT Linux.
+    url: ''
+    stars: 0
+- id: amazoncorretto
+  repo: library/amazoncorretto
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 需要一個能執行特定程式語言的環境
+  - 想找個免費且適合正式上線的執行平台
+  - 想在伺服器上跑別人寫好的應用程式
+  - 想確保程式能在穩定的環境中運作
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: 僅提供程式執行環境，不包含任何應用軟體。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: amazoncorretto
+    description: Corretto is a no-cost, production-ready distribution of the Open Java Development Kit (OpenJDK).
+    url: ''
+    stars: 0
+- id: amazonlinux
+  repo: library/amazonlinux
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想使用雲端大廠提供的穩定系統環境
+  - 需要一個安全且高效能的基礎平台
+  - 想在本地端模擬雲端伺服器的運作
+  - 想找個適合部署應用程式的作業系統
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: 這只是一個基礎作業系統環境，需要自行安裝所需軟體。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: amazonlinux
+    description: Amazon Linux provides a stable, secure, and high-performance execution environment for applications.
+    url: ''
+    stars: 0
+- id: api-firewall
+  repo: library/api-firewall
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想保護網站的資料介面不被惡意攻擊
+  - 需要檢查傳入系統的資料格式是否正確
+  - 想幫後端服務加上一層安全防護網
+  - 想阻擋不符合規定的異常網路請求
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要事先準備好資料格式的定義檔才能發揮作用。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: api-firewall
+    description: A light-weighted API Firewall to protect your API endpoints with API Schema validation.
+    url: ''
+    stars: 0
+- id: arangodb
+  repo: library/arangodb
+  tag: latest
+  category: 資料庫
+  scenarios:
+  - 想儲存並分析人與人之間的複雜關聯
+  - 需要一個能同時處理多種資料格式的系統
+  - 想找個能隨資料量彈性擴充的儲存庫
+  - 想快速找出資料之間隱藏的關聯性
+  standalone: true
+  requires: []
+  resources:
+    memory: 512Mi
+    cpu: 500m
+  per_replica_users: 0
+  notes: 第一次啟動時需要設定資料庫管理員密碼。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: arangodb
+    description: ArangoDB - a scalable graph database system to drive value from connected data, faster.
+    url: ''
+    stars: 0
+- id: archlinux
+  repo: library/archlinux
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想從零開始打造專屬的作業系統環境
+  - 需要一個極度輕量且沒有多餘軟體的系統
+  - 想隨時使用最新版本的各種系統套件
+  - 想找個高度彈性的基礎環境來做實驗
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: 這只是一個基礎作業系統環境，需要自行安裝所需軟體。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: archlinux
+    description: Arch Linux is a simple, lightweight Linux distribution aimed for flexibility.
+    url: ''
+    stars: 0
+- id: azul-zulu
+  repo: library/azul-zulu
+  tag: 8.98-8.0.512-jre-headless-debian13
+  category: 執行環境
+  scenarios:
+  - 需要一個經過完整測試的程式執行環境
+  - 想確保應用程式能百分之百相容運作
+  - 想找個值得信賴的基礎平台來跑服務
+  - 想在伺服器上執行特定的應用軟體
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: 僅提供程式執行環境，不包含任何應用軟體。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: azul-zulu
+    description: Azul Zulu is a fully tested, compatibility verified, and trusted binary distribution of OpenJDK.
+    url: ''
+    stars: 0
+- id: backdrop
+  repo: library/backdrop
+  tag: latest
+  category: 網站
+  scenarios:
+  - 想幫非營利組織架設一個官方網站
+  - 需要一個功能完整的內容管理系統
+  - 想讓不懂程式的員工也能輕鬆更新網頁
+  - 想為中小型企業建立專屬的入口網站
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 128Mi
+    cpu: 100m
+  per_replica_users: 300
+  notes: 第一次啟動時需要透過網頁進行初始設定。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: backdrop
+    description: The comprehensive CMS for small to medium sized businesses and non-profits.
+    url: ''
+    stars: 0
+- id: bash
+  repo: library/bash
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想寫一些自動化腳本來處理日常瑣事
+  - 需要在伺服器上執行簡單的指令碼
+  - 想找個標準的文字指令環境來操作系統
+  - 想測試自己寫的自動化執行步驟
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: 適合進階使用者進行指令操作與腳本測試。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: bash
+    description: Bash is the GNU Project's Bourne Again SHell
+    url: ''
+    stars: 0
+- id: bonita
+  repo: library/bonita
+  tag: latest
+  category: 自動化流程
+  scenarios:
+  - 想把公司繁雜的簽核流程數位化
+  - 需要一個系統來管理跨部門的合作進度
+  - 想畫出流程圖並讓系統自動推進任務
+  - 想追蹤每件工作目前卡在哪個環節
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時需要設定管理員帳號與密碼。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: bonita
+    description: Bonita is an open-source business process management and workflow suite
+    url: ''
+    stars: 0
+- id: cassandra
+  repo: library/cassandra
+  tag: latest
+  category: 資料庫
+  scenarios:
+  - 需要儲存每天產生的大量日誌紀錄
+  - 想建立一個絕不會因為當機而停擺的系統
+  - 想找個能跨越多台主機分散儲存的資料庫
+  - 需要處理來自四面八方的海量資料
+  standalone: true
+  requires: []
+  resources:
+    memory: 512Mi
+    cpu: 500m
+  per_replica_users: 0
+  notes: 適合處理大規模資料，需注意記憶體與儲存空間設定。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: cassandra
+    description: Apache Cassandra is an open-source distributed storage system.
+    url: ''
+    stars: 0
+- id: chronograf
+  repo: library/chronograf
+  tag: latest
+  category: 監控儀表板
+  scenarios:
+  - 想把收集到的數據變成圖表
+  - 需要一個介面來查看系統運作狀況
+  - 想建立一個數據監控的儀表板
+  - 希望用圖表呈現時間相關的資料
+  standalone: false
+  requires:
+  - influxdb
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要連接到時間序列資料庫才能顯示資料。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: chronograf
+    description: Chronograf is a visualization tool for time series data in InfluxDB.
+    url: ''
+    stars: 0
+- id: clickhouse
+  repo: library/clickhouse
+  tag: latest
+  category: 資料庫
+  scenarios:
+  - 需要一個能快速處理大量數據的系統
+  - 想建立一個可以即時分析資料的環境
+  - 需要儲存並快速查詢大量的業務數據
+  - 希望有一個高效能的資料儲存空間
+  standalone: true
+  requires: []
+  resources:
+    memory: 512Mi
+    cpu: 500m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: clickhouse
+    description: ClickHouse is the fastest and most resource efficient OSS database for real-time apps and analytics.
+    url: ''
+    stars: 0
+- id: clojure
+  repo: library/clojure
+  tag: tools-deps-trixie-slim
+  category: 執行環境
+  scenarios:
+  - 想執行用這款程式語言寫的應用程式
+  - 需要一個能跑特定程式碼的環境
+  - 想在伺服器上執行開發好的軟體
+  - 需要一個穩定的程式執行基礎
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: clojure
+    description: Clojure is a dialect of Lisp that runs on the JVM.
+    url: ''
+    stars: 0
+- id: composer
+  repo: library/composer
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 需要管理網站程式的套件
+  - 想自動下載網站需要的擴充功能
+  - 需要一個工具來安裝程式依賴項目
+  - 希望簡化網站程式的安裝過程
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: composer
+    description: Composer is a dependency manager written in and for PHP.
+    url: ''
+    stars: 0
+- id: convertigo
+  repo: library/convertigo
+  tag: latest
+  category: 網站
+  scenarios:
+  - 想不用寫程式就建立一個應用程式
+  - 需要一個工具來快速開發手機或網頁應用
+  - 希望透過視覺化介面設計系統
+  - 想利用人工智慧輔助建立專案
+  standalone: null
+  requires: []
+  resources:
+    memory: 128Mi
+    cpu: 100m
+  per_replica_users: 300
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: convertigo
+    description: Enterprise-grade full-stack open-source AI-driven Low Code & No Code platform for web & mobile apps
+    url: ''
+    stars: 0
+- id: couchbase
+  repo: library/couchbase
+  tag: latest
+  category: 資料庫
+  scenarios:
+  - 需要一個彈性的資料儲存空間
+  - 想建立一個可以擴充的資料庫系統
+  - 需要儲存非結構化的文件資料
+  - 希望有一個高效能的資料管理系統
+  standalone: true
+  requires: []
+  resources:
+    memory: 512Mi
+    cpu: 500m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: couchbase
+    description: Couchbase Server is a NoSQL document database with a distributed architecture.
+    url: ''
+    stars: 0
+- id: couchdb
+  repo: library/couchdb
+  tag: latest
+  category: 資料庫
+  scenarios:
+  - 需要一個可以透過網頁介面存取的資料庫
+  - 想用簡單的格式儲存應用程式的資料
+  - 需要一個支援離線同步的資料儲存空間
+  - 希望有一個容易使用的資料管理系統
+  standalone: true
+  requires: []
+  resources:
+    memory: 512Mi
+    cpu: 500m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: couchdb
+    description: CouchDB is a database that uses JSON for documents, an HTTP API, & JavaScript/declarative indexing.
+    url: ''
+    stars: 0
+- id: crate
+  repo: library/crate
+  tag: latest
+  category: 資料庫
+  scenarios:
+  - 需要一個可以處理大量查詢的資料庫
+  - 想建立一個分散式的資料儲存系統
+  - 需要儲存並分析商業數據
+  - 希望有一個高效能的關聯式資料庫
+  standalone: true
+  requires: []
+  resources:
+    memory: 512Mi
+    cpu: 500m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: crate
+    description: CrateDB is an open-source, distributed SQL database empowering you to turn data into business value.
+    url: ''
+    stars: 0
+- id: dart
+  repo: library/dart
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想執行專為客戶端最佳化的程式
+  - 需要一個環境來跑跨平台的應用
+  - 想在伺服器上執行開發好的軟體
+  - 需要一個穩定的程式執行基礎
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: dart
+    description: Dart is a client-optimized language for fast apps on any platform.
+    url: ''
+    stars: 0
+- id: debian
+  repo: library/debian
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 需要一個乾淨的作業系統環境
+  - 想在伺服器上跑一個基本的系統
+  - 需要一個穩定的基礎環境來安裝其他軟體
+  - 希望有一個可靠的系統底層
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: debian
+    description: Debian is a Linux distribution that's composed entirely of free and open-source software.
+    url: ''
+    stars: 0
+- id: drupal
+  repo: library/drupal
+  tag: latest
+  category: 網站
+  scenarios:
+  - 想建立一個功能豐富的官方網站
+  - 需要一個系統來管理大量的網頁內容
+  - 想架設一個可以自訂功能的入口網站
+  - 希望有一個專業的網站管理後台
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 128Mi
+    cpu: 100m
+  per_replica_users: 300
+  notes: 第一次啟動需要透過網頁進行安裝設定。
+  generated: true
+  origin: awesome-selfhosted
+  official: true
+  upstream:
+    name: Drupal
+    description: Advanced content management platform.
+    url: https://git.drupalcode.org/project/drupal
+    stars: 0
+- id: eclipse-mosquitto
+  repo: library/eclipse-mosquitto
+  tag: latest
+  category: 訊息佇列
+  scenarios:
+  - 需要讓不同的設備互相傳遞訊息
+  - 想建立物聯網設備的通訊中心
+  - 需要一個輕量級的訊息傳遞系統
+  - 希望讓應用程式之間可以即時交換資料
+  standalone: true
+  requires: []
+  resources:
+    memory: 512Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: eclipse-mosquitto
+    description: Eclipse Mosquitto is an open source message broker which implements MQTT version 5, 3.1.1 and 3.1
+    url: ''
+    stars: 0
+- id: eclipse-temurin
+  repo: library/eclipse-temurin
+  tag: 8u512-b09-jre-ubi9-minimal
+  category: 執行環境
+  scenarios:
+  - 想執行用這款熱門語言寫的應用程式
+  - 需要一個能跑特定程式碼的環境
+  - 想在伺服器上執行開發好的軟體
+  - 需要一個穩定的程式執行基礎
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: eclipse-temurin
+    description: Official Images for OpenJDK binaries built by Eclipse Temurin.
+    url: ''
+    stars: 0
+- id: eggdrop
+  repo: library/eggdrop
+  tag: latest
+  category: 聊天
+  scenarios:
+  - 想在聊天室裡放一個自動回覆的機器人
+  - 需要一個工具來管理聊天頻道的秩序
+  - 希望有一個可以自訂功能的聊天小幫手
+  - 想在頻道中提供自動化的服務
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要設定設定檔才能連線到聊天伺服器。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: eggdrop
+    description: The official Docker image of Eggdrop- IRC's oldest actively-developed bot!
+    url: ''
+    stars: 0
+- id: elixir
+  repo: library/elixir
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想執行這款動態函數式語言寫的程式
+  - 需要一個能跑特定程式碼的環境
+  - 想在伺服器上執行開發好的軟體
+  - 需要一個穩定的程式執行基礎
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: elixir
+    description: Elixir is a dynamic, functional language for building scalable and maintainable applications.
+    url: ''
+    stars: 0
+- id: erlang
+  repo: library/erlang
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想執行這款高可用性語言寫的程式
+  - 需要一個能跑特定程式碼的環境
+  - 想在伺服器上執行開發好的軟體
+  - 需要一個穩定的程式執行基礎
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: erlang
+    description: Erlang is a programming language used to build massively scalable systems with high availability.
+    url: ''
+    stars: 0
+- id: espocrm
+  repo: library/espocrm
+  tag: latest
+  category: 網站
+  scenarios:
+  - 需要一個系統來管理客戶資料和聯絡紀錄
+  - 想建立一個追蹤銷售進度的平台
+  - 希望有一個工具來維護客戶關係
+  - 想集中管理公司的業務聯絡資訊
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 128Mi
+    cpu: 100m
+  per_replica_users: 300
+  notes: 第一次啟動需要透過網頁進行安裝設定。
+  generated: true
+  origin: awesome-selfhosted
+  official: true
+  upstream:
+    name: EspoCRM
+    description: CRM with a frontend designed as a single page application, and a REST API.
+    url: https://github.com/espocrm/espocrm
+    stars: 3564
+- id: fedora
+  repo: library/fedora
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 需要一個乾淨的作業系統環境
+  - 想在伺服器上跑一個基本的系統
+  - 需要一個穩定的基礎環境來安裝其他軟體
+  - 希望有一個可靠的系統底層
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: fedora
+    description: Official Docker builds of Fedora
+    url: ''
+    stars: 0
+- id: flink
+  repo: library/flink
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想把很長的網址縮短方便分享
+  - 需要一個工具來產生網址的條碼
+  - 希望分享連結時能顯示漂亮的預覽圖
+  - 想建立一個專屬的短網址服務
+  standalone: null
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: awesome-selfhosted
+  official: true
+  upstream:
+    name: Flink
+    description: Create QR Codes, embeddable link previews for your website and crawls/scrapes metadata.
+    url: https://gitlab.com/rtraceio/web/flink
+    stars: 0
+- id: fluentd
+  repo: library/fluentd
+  tag: latest
+  category: 監控
+  scenarios:
+  - 需要收集系統各處產生的紀錄檔
+  - 想把不同來源的日誌集中管理
+  - 希望有一個工具能自動整理系統紀錄
+  - 想建立一個統一的資料收集中心
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要編寫設定檔來決定資料的來源與去向。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: fluentd
+    description: Fluentd is an open source data collector for unified logging layer
+    url: ''
+    stars: 0
+- id: friendica
+  repo: library/friendica
+  tag: latest
+  category: 網站
+  scenarios:
+  - 想建立一個專屬的社群交友網站
+  - 需要一個讓朋友互相交流分享的平台
+  - 希望有一個不受商業控制的社交空間
+  - 想架設一個可以發文和互動的社群系統
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 128Mi
+    cpu: 100m
+  per_replica_users: 300
+  notes: 第一次啟動需要透過網頁進行安裝設定。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: friendica
+    description: Welcome to the free social web.
+    url: ''
+    stars: 0
+- id: gazebo
+  repo: library/gazebo
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想在電腦上模擬機器人的動作
+  - 需要一個測試物理碰撞的虛擬環境
+  - 希望有一個工具來預演機器的運作狀況
+  - 想建立一個三維的模擬測試空間
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: gazebo
+    description: Gazebo is an open source project for simulating robots, offering robust physics and rendering.
+    url: ''
+    stars: 0
+- id: gcc
+  repo: library/gcc
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 需要把寫好的程式碼轉換成可以執行的軟體
+  - 想在伺服器上編譯開發好的專案
+  - 希望有一個工具能處理程式碼的轉換
+  - 需要一個標準的程式建置環境
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: gcc
+    description: The GNU Compiler Collection is a compiling system that supports several languages.
+    url: ''
+    stars: 0
+- id: geonetwork
+  repo: library/geonetwork
+  tag: latest
+  category: 網站
+  scenarios:
+  - 想建立一個管理地理資訊的目錄系統
+  - 需要一個平台來分享地圖相關的資料
+  - 希望有一個系統能搜尋和整理空間數據
+  - 想架設一個地理圖資的入口網站
+  standalone: false
+  requires:
+  - postgres
+  resources:
+    memory: 128Mi
+    cpu: 100m
+  per_replica_users: 300
+  notes: 第一次啟動可能需要較長時間初始化資料庫。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: geonetwork
+    description: GeoNetwork is a FOSS catalog for spatially referenced resources.
+    url: ''
+    stars: 0
+- id: golang
+  repo: library/golang
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想執行這款通用高階語言寫的程式
+  - 需要一個能跑特定程式碼的環境
+  - 想在伺服器上執行開發好的軟體
+  - 需要一個穩定的程式執行基礎
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: golang
+    description: Go (golang) is a general purpose, higher-level, imperative programming language.
+    url: ''
+    stars: 0
+- id: gradle
+  repo: library/gradle
+  tag: ubi9
+  category: 執行環境
+  scenarios:
+  - 想自動編譯並打包我的專案
+  - 需要一個工具來建置我的軟體
+  - 想要自動化處理程式碼的編譯過程
+  - 想讓團隊有統一的軟體建置環境
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: gradle
+    description: Gradle is a fast, reliable, and flexible open-source build tool with an elegant, extensible DSL.
+    url: ''
+    stars: 0
+- id: groovy
+  repo: library/groovy
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 需要一個環境來執行我的腳本程式
+  - 想在伺服器上跑特定的動態語言程式
+  - 需要一個相容於現有系統的程式執行環境
+  - 想讓開發的腳本可以順利在雲端運作
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: groovy
+    description: Apache Groovy is a multi-faceted language for the Java platform.
+    url: ''
+    stars: 0
+- id: haproxy
+  repo: library/haproxy
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想把網站流量平均分配給多台伺服器
+  - 需要一個穩定的反向代理來保護網站
+  - 想要提升網站的高可用性與連線速度
+  - 想讓多個應用程式共用同一個網路入口
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要提供設定檔才能正確轉發流量。
+  generated: true
+  origin: awesome-selfhosted
+  official: true
+  upstream:
+    name: HAProxy
+    description: Very fast and reliable reverse-proxy offering high availability, load balancing, and proxying for TCP and HTTP-based applications.
+    url: https://git.haproxy.org/?p=haproxy.git;a=tree
+    stars: 0
+- id: haskell
+  repo: library/haskell
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 需要一個環境來執行函數式程式碼
+  - 想要在伺服器上編譯並執行特定語言
+  - 想為我的數學運算程式提供執行環境
+  - 需要一個純函數式語言的運作空間
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: haskell
+    description: Haskell is an advanced purely-functional programming language.
+    url: ''
+    stars: 0
+- id: haxe
+  repo: library/haxe
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 需要一個能編譯成多種目標語言的環境
+  - 想在雲端編譯我的跨平台應用程式
+  - 需要一個靜態型別語言的開發與執行環境
+  - 想讓我的遊戲程式碼能在伺服器上編譯
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: haxe
+    description: Haxe is a modern, high level, static typed programming language with multiple compilation targets.
+    url: ''
+    stars: 0
+- id: hitch
+  repo: library/hitch
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想為我的網站加上安全的加密連線
+  - 需要一個高效能的代理伺服器來處理憑證
+  - 想要保護使用者與伺服器之間的通訊安全
+  - 想把加密流量轉發到後端的應用程式
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要提供有效的加密憑證才能運作。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: hitch
+    description: Hitch is a libev-based high performance SSL/TLS proxy by Varnish Software.
+    url: ''
+    stars: 0
+- id: hylang
+  repo: library/hylang
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想執行能轉換成常見腳本語言的程式碼
+  - 需要在伺服器上跑特定的方言程式
+  - 想要一個結合兩種語言特性的執行環境
+  - 想讓我的特殊語法程式碼順利運作
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: hylang
+    description: Hy is a Lisp dialect that translates expressions into Python's abstract syntax tree.
+    url: ''
+    stars: 0
+- id: ibm-semeru-runtimes
+  repo: library/ibm-semeru-runtimes
+  tag: open-11.0.33.0-jre-noble
+  category: 執行環境
+  scenarios:
+  - 需要一個高效能的環境來跑企業級應用
+  - 想讓我的企業軟體在雲端順利執行
+  - 需要一個穩定的開源程式執行環境
+  - 想為我的系統提供可靠的底層運作支援
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: ibm-semeru-runtimes
+    description: IBM Semeru Runtimes Official Images for OpenJDK and Eclipse OpenJ9 binaries.
+    url: ''
+    stars: 0
+- id: ibmjava
+  repo: library/ibmjava
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想在伺服器上執行企業級的應用程式
+  - 需要一個官方認證的程式執行環境
+  - 想讓我的商業軟體有穩定的底層支援
+  - 需要一個相容性高的環境來跑現有系統
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: ibmjava
+    description: Official IBM® SDK, Java™ Technology Edition Docker Image.
+    url: ''
+    stars: 0
+- id: influxdb
+  repo: library/influxdb
+  tag: latest
+  category: 資料庫
+  scenarios:
+  - 想儲存並分析設備回傳的即時數據
+  - 需要一個專門記錄時間序列資料的系統
+  - 想收集伺服器的效能指標並長期保存
+  - 需要一個能快速寫入大量感測器資料的空間
+  standalone: true
+  requires: []
+  resources:
+    memory: 512Mi
+    cpu: 500m
+  per_replica_users: 0
+  notes: 建議設定管理員帳號與密碼以保護資料安全。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: influxdb
+    description: InfluxDB is the open source time series database built for real-time analytic workloads.
+    url: ''
+    stars: 0
+- id: irssi
+  repo: library/irssi
+  tag: latest
+  category: 聊天
+  scenarios:
+  - 想在伺服器上掛著一個文字聊天客戶端
+  - 需要一個能隨時連線的傳統聊天工具
+  - 想透過終端機介面參與網路聊天室
+  - 需要一個不中斷的聊天頻道連線程式
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 這是一個文字介面的客戶端程式。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: irssi
+    description: irssi - The IRC client of the future
+    url: ''
+    stars: 0
+- id: jetty
+  repo: library/jetty
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 需要一個輕量級的伺服器來跑網頁程式
+  - 想讓我的動態網頁應用程式上線運作
+  - 需要一個環境來執行特定的網頁元件
+  - 想快速部署一個小型的網路應用服務
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: jetty
+    description: Jetty provides a Web server and javax.servlet container.
+    url: ''
+    stars: 0
+- id: joomla
+  repo: library/joomla
+  tag: latest
+  category: 網站
+  scenarios:
+  - 想架設一個功能豐富的企業官方網站
+  - 需要一個系統來管理網站上的各種內容
+  - 想要建立一個可以安裝多種擴充套件的網站
+  - 想為公司打造一個專業的內容發布平台
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 128Mi
+    cpu: 100m
+  per_replica_users: 300
+  notes: 第一次啟動時需要透過網頁進行安裝設定。
+  generated: true
+  origin: awesome-selfhosted
+  official: true
+  upstream:
+    name: Joomla!
+    description: Advanced Content Management System (CMS).
+    url: https://github.com/joomla/joomla-cms
+    stars: 5168
+- id: jruby
+  repo: library/jruby
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想在特定的虛擬機上執行我的腳本程式
+  - 需要一個結合兩種技術優勢的執行環境
+  - 想讓我的網站程式能利用企業級的底層效能
+  - 需要一個相容性高的動態語言運作空間
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: jruby
+    description: JRuby (http://www.jruby.org) is an implementation of Ruby (http://www.ruby-lang.org) on the JVM.
+    url: ''
+    stars: 0
+- id: julia
+  repo: library/julia
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 需要一個環境來跑高效能的科學運算程式
+  - 想在伺服器上執行複雜的數據分析模型
+  - 想要一個專為技術計算設計的運作空間
+  - 想讓我的數學運算程式能快速得出結果
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: julia
+    description: Julia is a high-level, high-performance dynamic programming language for technical computing.
+    url: ''
+    stars: 0
+- id: kapacitor
+  repo: library/kapacitor
+  tag: latest
+  category: 監控
+  scenarios:
+  - 想在數據出現異常時自動發送警告通知
+  - 需要一個系統來處理並監控即時的數據流
+  - 想對收集到的時間序列資料進行自動分析
+  - 想要建立一個能即時反應數據變化的監控機制
+  standalone: false
+  requires:
+  - influxdb
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要與時間序列資料庫搭配使用才能發揮功能。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: kapacitor
+    description: Kapacitor is an open source framework for processing, monitoring, and alerting on time series data.
+    url: ''
+    stars: 0
+- id: kibana
+  repo: library/kibana
+  tag: 9.5.5
+  category: 監控儀表板
+  scenarios:
+  - 想把收集到的龐大日誌資料變成視覺化圖表
+  - 需要一個儀表板來分析系統的運作狀況
+  - 想透過圖形介面搜尋並探索複雜的數據
+  - 想要建立一個能即時顯示數據趨勢的看板
+  standalone: false
+  requires:
+  - elasticsearch
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 必須搭配特定的搜尋引擎資料庫才能運作。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: kibana
+    description: Kibana gives shape to any kind of data — structured and unstructured — indexed in Elasticsearch.
+    url: ''
+    stars: 0
+- id: krakend
+  repo: library/krakend
+  tag: latest
+  category: 網路工具
+  scenarios:
+  - 想把多個後端服務整合到同一個網路入口
+  - 需要一個閘道器來管理應用程式的連線請求
+  - 想要提升微服務架構的連線效能與安全性
+  - 想為我的應用程式建立一個統一的對外介面
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要提供設定檔來定義路由與端點規則。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: krakend
+    description: KrakenD is a stateless, high-performance, enterprise-ready, open source API gateway written in Go.
+    url: ''
+    stars: 0
+- id: lightstreamer
+  repo: library/lightstreamer
+  tag: latest
+  category: 訊息佇列
+  scenarios:
+  - 想把即時的數據變化推送到使用者的網頁上
+  - 需要一個伺服器來處理高頻率的即時訊息傳遞
+  - 想讓我的應用程式具備即時更新資料的能力
+  - 想要建立一個能應付大量連線的訊息廣播系統
+  standalone: true
+  requires: []
+  resources:
+    memory: 512Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: lightstreamer
+    description: Lightstreamer is a real-time messaging server optimized for the Internet.
+    url: ''
+    stars: 0
+- id: logstash
+  repo: library/logstash
+  tag: 9.5.5
+  category: 自動化流程
+  scenarios:
+  - 想自動收集並過濾來自各個伺服器的日誌
+  - 需要一個工具把不同格式的日誌轉換成統一標準
+  - 想把系統產生的事件紀錄轉發到資料庫儲存
+  - 想要建立一個自動化的日誌處理與分析管線
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要撰寫設定檔來定義資料的來源與輸出目的地。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: logstash
+    description: Logstash is a tool for managing events and logs.
+    url: ''
+    stars: 0
+- id: mageia
+  repo: library/mageia
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 需要一個乾淨的作業系統環境來測試軟體
+  - 想在雲端建立一個基礎的系統運作空間
+  - 想要一個特定的發行版環境來編譯程式
+  - 想為我的應用程式提供一個穩定的底層系統
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: 這是一個基礎的系統環境，沒有預裝任何應用程式。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: mageia
+    description: Official Mageia base image
+    url: ''
+    stars: 0
+- id: matomo
+  repo: library/matomo
+  tag: latest
+  category: 資料分析
+  scenarios:
+  - 想追蹤網站的訪客流量並保護他們的隱私
+  - 需要一個自己掌控資料的網站分析工具
+  - 想了解使用者在我的網站上都看了哪些內容
+  - 想要建立一個不會把數據分享給第三方的流量統計系統
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 第一次啟動時需要透過網頁完成安裝與資料庫連線設定。
+  generated: true
+  origin: awesome-selfhosted
+  official: true
+  upstream:
+    name: Matomo
+    description: Web analytics that protects your data and your customers' privacy (alternative to Google Analytics).
+    url: https://github.com/matomo-org/matomo
+    stars: 22018
+- id: maven
+  repo: library/maven
+  tag: latest
+  category: 執行環境
+  scenarios:
+  - 想自動下載專案需要的各種依賴套件
+  - 需要一個工具來標準化軟體的建置流程
+  - 想要自動化處理程式碼的編譯與測試工作
+  - 想讓團隊的軟體專案有統一的管理方式
+  standalone: true
+  requires: []
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 0
+  notes: ''
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: maven
+    description: Apache Maven is a software project management and comprehension tool.
+    url: ''
+    stars: 0
+- id: mediawiki
+  repo: library/mediawiki
+  tag: latest
+  category: 維基或筆記
+  scenarios:
+  - 想為公司建立一個內部知識庫與文件中心
+  - 需要一個讓團隊共同編輯與整理資料的平台
+  - 想架設一個類似百科全書的公開資訊網站
+  - 想要一個能記錄並追蹤文件修改歷史的系統
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 安裝完成後需要下載設定檔並放置到指定目錄才能正常運作。
+  generated: true
+  origin: awesome-selfhosted
+  official: true
+  upstream:
+    name: Mediawiki
+    description: Wiki software package that powers Wikipedia and all other Wikimedia projects, serving hundreds of millions of users each month.
+    url: https://phabricator.wikimedia.org/source/mediawiki/
+    stars: 0
+- id: monica
+  repo: library/monica
+  tag: latest
+  category: 其他
+  scenarios:
+  - 想記錄親友的生日與重要紀念日以免忘記
+  - 需要一個系統來管理我的人際關係與互動紀錄
+  - 想把跟客戶或朋友的聊天細節好好保存下來
+  - 想要一個私人的聯絡人管理工具來追蹤交友狀況
+  standalone: false
+  requires:
+  - mysql
+  resources:
+    memory: 256Mi
+    cpu: 250m
+  per_replica_users: 150
+  notes: 需要設定資料庫連線與應用程式金鑰才能啟動。
+  generated: true
+  origin: docker-official
+  official: true
+  upstream:
+    name: monica
+    description: Monica – the Personal Relationship Manager.
+    url: ''
+    stars: 0
