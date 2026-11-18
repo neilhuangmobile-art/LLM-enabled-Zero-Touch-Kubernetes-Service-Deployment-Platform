@@ -1943,3 +1943,14 @@ Docker Hub 對照映像檔，Gemini 改寫中文情境）、`scripts/rag/fetch_k
   - 分析見 `docs/bench_record/llamacpp_20261118/README.md`。
 - **還沒做**：NVIDIA（學校電腦）實機驗證；用瀏覽器走一次完整部署流程（worktree 沒有 `.env`，登入不了，要合併後才能測）。
   `.env` 沒有改，主 repo 仍照原本的 transformers bf16 執行。
+
+### 17:35 — 整合：主系統改用合併後的分支，情境部署走多代理人流程、模型改由 llama.cpp 執行（本機分支 `integrate/multiagent-llamacpp`）
+- 主 repo 從 `feat/rag-embedding` 切到 `origin/feat/rag-into-multiagent`，再併入原本未提交的 PROMPTx 實驗與工具規則。
+- 組員分支把 `users.json`、`manifests/`、資料集檔案移出版控，切換時 git 會刪掉這些檔案；切換前已備份到 `D:\backup\main-before-merge-20261118`，切換後放回原位，現在由 `.gitignore` 排除。
+- `.env` 加上 `LLM_ENGINE=llamacpp`、`DEPLOY_PIPELINE=multiagent`（原檔備份在同一個資料夾）。
+- 驗證：
+  - `pytest -m "not integration"` 837 個通過。
+  - 全部服務重新啟動，24 秒內就緒。
+  - 三個模型加 BGE-M3 同時常駐，顯卡用 11.15GB，沒有溢出。
+  - 情境部署 5 句，第一句 23.5 秒（載入 BGE-M3），其餘每句 4.6～8.1 秒。
+- 已知待調整：選軟體（討論區選成 mattermost、網站監控選成 prometheus）；組員流程「不該問卻問」偏多。
