@@ -52,6 +52,35 @@ def local_llm(system: str, user: str, max_new_tokens: int = 768) -> Optional[str
         return None
 
 
+def local_yes_prob(system: str, user: str) -> Optional[float]:
+    """模型回答 Yes 的機率（信心度，2026-11-18）：只生成 1 個 token，讀 llama.cpp 回傳的 logprob，
+    算 P(Yes) / (P(Yes) + P(No))。只支援 llama.cpp；其他引擎、連不上或回應看不懂回 None（呼叫端改用一般判斷）。"""
+    import math
+    import requests
+    if ENGINE != "llamacpp":
+        return None
+    try:
+        r = requests.post(f"{LOCAL_URL}/v1/chat/completions", timeout=LOCAL_TIMEOUT, json={
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": sanitize_special(user)}],
+            "max_tokens": 1, "temperature": 0, "cache_prompt": False, "logprobs": True, "top_logprobs": 10,
+            "chat_template_kwargs": {"enable_thinking": False}})
+        if r.status_code != 200:
+            print(f"[pipeline] 信心度查詢回應 {r.status_code}：{r.text[:200]}")
+            return None
+        top = r.json()["choices"][0]["logprobs"]["content"][0]["top_logprobs"]
+    except Exception as e:
+        print(f"[pipeline] 信心度查詢失敗（{LOCAL_URL}）：{e}")
+        return None
+    yes = sum(math.exp(t["logprob"]) for t in top if t["token"].strip().lower() == "yes")
+    no = sum(math.exp(t["logprob"]) for t in top if t["token"].strip().lower() == "no")
+    # 第一個 token 根本不是 Yes／No（換了模板、模型先輸出別的字）時，兩者的相對比例沒有意義，不能當信心度
+    if yes + no < 0.5:
+        print(f"[pipeline] 信心度查詢：Yes/No 機率合計只有 {yes + no:.3f}，前幾名是 "
+              f"{[t['token'] for t in top[:5]]}，這次不採用（改用一般判斷）")
+        return None
+    return yes / (yes + no)
+
+
 def local_available() -> bool:
     import requests
     try:

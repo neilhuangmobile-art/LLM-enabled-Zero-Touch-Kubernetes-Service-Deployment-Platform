@@ -124,6 +124,13 @@ def add_question(spec: Dict, field: str, question: str, options: Optional[List[D
                               "options": opts, "recommended": recommended, "reason": reason})
 
 
+def ask_policy() -> str:
+    """essential（預設，2026-11-18）：只問不問就做不出來的（軟體、排程指令、保存空間、前後矛盾）；
+    all：原本做法，推理代理的追問與意圖檢查的片段也會變成問題卡（對照實驗用）。"""
+    import os
+    return "all" if os.environ.get("PIPELINE_ASK_POLICY", "essential").strip().lower() == "all" else "essential"
+
+
 def add_notice(spec: Dict, text: str) -> None:
     if text and text not in spec["notices"]:
         spec["notices"].append(text)

@@ -1,0 +1,23 @@
+{
+ "n": 5,
+ "n_answer": 5,
+ "n_must_ask": 0,
+ "pass_answer": 1,
+ "pass_rate_answer": 0.2,
+ "image_ok": 1,
+ "false_ask": 3,
+ "false_ask_sources": {
+  "image": 3
+ },
+ "must_ask_recall": 0.0,
+ "latency_p50_ms": 8535,
+ "latency_p90_ms": 9333,
+ "set": "scenario",
+ "tag": "smoke_choose",
+ "ask_policy": "essential",
+ "select_rule": "agree",
+ "rag_backend": "field",
+ "llm_calls": 30,
+ "llm_failures": 0,
+ "gemini": false
+}

@@ -59,16 +59,21 @@ def _field_items() -> List[Dict]:
         return []
     out = []
     for e in entries:
+        if not isinstance(e, dict):
+            continue
         image = repo_of(e.get("repo") or e.get("image") or "")
         if not image:
             continue
+        res = e.get("resources") if isinstance(e.get("resources"), dict) else {}
         desc = f"{e.get('category', '')}：" + "、".join((e.get("scenarios") or [])[:3])
         if e.get("notes"):
             desc += f"（{e['notes']}）"
         out.append({"image": image, "desc": desc[:300], "official": str(e.get("repo", "")).startswith("library/"),
                     "deprecated": False, "port": (e.get("ports") or [None])[0],
                     "data_path": (e.get("volumes") or [None])[0], "source": "rag/knowledge/catalog.json",
-                    "_field_id": e.get("id")})
+                    "_field_id": e.get("id"), "category": e.get("category", ""),
+                    "memory": res.get("memory"),
+                    "has_scenarios": bool(e.get("scenarios"))})
     return out
 
 
@@ -84,6 +89,59 @@ def items() -> List[Dict]:
         have = {it["image"] for it in base}
         _items = base + [it for it in _field_items() if it["image"] not in have]
     return _items
+
+
+_field_cache: Optional[List[Dict]] = None
+
+
+def _field_cached() -> List[Dict]:
+    """讀取失敗（空清單）不快取，下次再讀，避免一次暫時的讀檔錯誤讓副本數／記憶體調整整個程序都失效。"""
+    global _field_cache
+    if _field_cache is None:
+        got = _field_items()
+        if not got:
+            return []
+        _field_cache = got
+    return _field_cache
+
+
+def field_catalog_ok() -> bool:
+    """RAG 軟體目錄讀得到（gap_check 用來在 trace 說明為什麼沒有調整）。"""
+    return bool(_field_cached())
+
+
+def _field_entry(image: str) -> Dict:
+    repo = repo_of(image)
+    return next((it for it in _field_cached() if it["image"] == repo), {})
+
+
+def recommended_memory(image: str) -> str:
+    """知識庫對這套軟體建議的記憶體（例如 512Mi）；不在知識庫回空字串。"""
+    return _field_entry(image).get("memory") or ""
+
+
+def category(image: str) -> str:
+    """知識庫裡這個軟體的類別（資料庫、快取、維基或筆記…）；不在知識庫回空字串。"""
+    return _field_entry(image).get("category") or ""
+
+
+
+
+def choose_desc() -> Dict[str, str]:
+    """選軟體判斷（confidence／pointwise／list）給模型看的說明。
+
+    2026-11-19：同一個映像檔在 rag/knowledge/catalog.json 有中文類別＋情境描述時，優先用它。
+    原本重疊的 34 套用的是 Docker Hub 的一句話簡介（nginx＝「Official build of Nginx.」、
+    nextcloud＝「Nextcloud manual docker image」），模型看不出 nginx 可以放菜單、公告這種靜態網頁，
+    dev_claude 有 15 題靜態網頁被選成 wordpress／dokuwiki 或因分數太低而反問。
+    只換說明文字；port、資料夾、是否官方仍以 items()（舊知識表優先）為準。
+    PIPELINE_CHOOSE_DESC=legacy 恢復原本的說明（對照實驗用）。"""
+    legacy = os.environ.get("PIPELINE_CHOOSE_DESC", "field").strip().lower() == "legacy"
+    d = {it["image"]: it["desc"] for it in items()}
+    if legacy:
+        return d
+    d.update({it["image"]: it["desc"] for it in _field_cached() if it["image"] in d and it.get("has_scenarios")})
+    return d
 
 
 def repo_of(image: str) -> str:

@@ -79,6 +79,38 @@ def _is_quota_error(err: Exception) -> bool:
     return "429" in s or "RESOURCE_EXHAUSTED" in s or "QUOTA" in s or "RATE LIMIT" in s
 
 
+# 2026-11-18 測試用的花費上限：評估腳本設 GEMINI_MAX_CALLS／GEMINI_MAX_TOKENS（程序內累計），
+# 超過就不再呼叫、回 None（呼叫端照原本的「Gemini 沒回應」處理）。正式網站不設＝不限制。
+# 之前一次測試把預付額度用光、整個平台的翻譯層跟著停擺，所以測試一定要設上限。
+_usage = {"calls": 0, "prompt_tokens": 0, "output_tokens": 0, "thought_tokens": 0, "blocked": 0}
+
+
+def usage() -> dict:
+    """這個程序到目前為止的 Gemini 用量（評估腳本寫進結果檔、換算費用用）。"""
+    return dict(_usage)
+
+
+def _budget_exceeded() -> Optional[str]:
+    try:
+        max_calls = int(os.environ.get("GEMINI_MAX_CALLS") or 0)
+        max_tokens = int(os.environ.get("GEMINI_MAX_TOKENS") or 0)
+    except ValueError:
+        return "GEMINI_MAX_CALLS／GEMINI_MAX_TOKENS 不是整數，為了安全不呼叫"
+    if max_calls and _usage["calls"] >= max_calls:
+        return f"已達呼叫上限 {max_calls} 次"
+    total = _usage["prompt_tokens"] + _usage["output_tokens"] + _usage["thought_tokens"]
+    if max_tokens and total >= max_tokens:
+        return f"已達 token 上限 {max_tokens}（目前 {total}）"
+    return None
+
+
+def _count_usage(resp) -> None:
+    um = getattr(resp, "usage_metadata", None)
+    for key, attr in (("prompt_tokens", "prompt_token_count"), ("output_tokens", "candidates_token_count"),
+                      ("thought_tokens", "thoughts_token_count")):
+        _usage[key] += int(getattr(um, attr, 0) or 0) if um is not None else 0
+
+
 def _generate(system_instruction: str, contents: str, label: str) -> Optional[str]:
     """帶 key 輪換的單次生成；被截斷或全部 key 用盡時回 None。"""
     keys = _load_keys()
@@ -100,8 +132,18 @@ def _generate(system_instruction: str, contents: str, label: str) -> Optional[st
             client = _current_client()
             if client is None:
                 return None
+            # 花費上限：每次真的送出前都檢查（換 key 重試也算一次），在 _lock 裡計數，多執行緒也不會超過
+            stop = _budget_exceeded()
+            if stop:
+                _usage["blocked"] += 1
+                if _usage["blocked"] == 1 or _usage["blocked"] % 50 == 0:
+                    print(f"[Gemini 翻譯層] {label}：{stop}（GEMINI_MAX_CALLS／GEMINI_MAX_TOKENS 是測試用的花費上限），"
+                          f"這個程序到重啟前都不再呼叫 Gemini，已擋下 {_usage['blocked']} 次。正式網站不要設這兩個變數")
+                return None
             try:
+                _usage["calls"] += 1
                 resp = client.models.generate_content(model=model, contents=contents, config=config)
+                _count_usage(resp)
                 return _extract_text(resp, label)
             except Exception as e:
                 if _is_quota_error(e) and len(keys) > 1:

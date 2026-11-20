@@ -1,0 +1,27 @@
+{
+ "n": 300,
+ "n_answer": 262,
+ "n_must_ask": 38,
+ "pass_answer": 175,
+ "pass_rate_answer": 0.668,
+ "image_ok": 198,
+ "false_ask": 37,
+ "false_ask_sources": {
+  "image": 27,
+  "cron_command": 11
+ },
+ "must_ask_recall": 0.474,
+ "latency_p50_ms": 12067,
+ "latency_p90_ms": 16225,
+ "set": "claude",
+ "tag": "combo",
+ "ask_policy": "essential",
+ "select_rule": "agree",
+ "rag_backend": "field",
+ "select_mode": "choose",
+ "choose_style": "confidence",
+ "choose_threshold": "0.8",
+ "llm_calls": 1304,
+ "llm_failures": 0,
+ "gemini": false
+}

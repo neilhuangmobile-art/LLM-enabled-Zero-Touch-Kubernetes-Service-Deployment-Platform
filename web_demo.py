@@ -2093,6 +2093,12 @@ tbody tr:hover td{background:var(--signal-soft)}
 .pq-opt small{color:var(--text-3)}
 .pq-free input[type=text]{flex:1;min-width:0}
 .sug-tag{display:inline-block;margin-left:6px;padding:0 6px;font-size:11.5px;border-radius:4px;background:color-mix(in srgb,var(--caution) 22%,transparent);color:var(--text)}
+.conf{display:inline-block;margin-left:6px;padding:0 6px;font-size:11.5px;font-weight:700;border-radius:4px}
+.conf-hi{color:var(--pass);background:color-mix(in srgb,var(--pass) 16%,transparent)}
+.conf-mid{color:var(--caution);background:color-mix(in srgb,var(--caution) 18%,transparent)}
+.conf-lo{color:var(--stop);background:color-mix(in srgb,var(--stop) 16%,transparent)}
+.conf-legend{font-size:12.5px;color:var(--text-2,var(--text));margin:6px 0 10px}
+.conf-legend .conf{margin:0 2px}
 .scn-save{margin-top:14px;padding-top:12px;border-top:1px dashed var(--grid-2)}
 .scn-save-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .scn-save-top span{font-size:13.5px;color:var(--text-2)}
@@ -5811,9 +5817,22 @@ function specExtras(src){
 // 欄位旁的小標籤：系統依你的描述推出來的標「系統建議」，沒有線索時用的標「預設」；你自己講的不標
 function srcTag(flow, key){
   const s = flow.pipeline && flow.pipeline.sources ? flow.pipeline.sources[key] : null;
+  const c = confOf(flow, key);
+  if(c) return ` <span class="conf conf-${esc(c.level)}" title="信心度：系統判斷這個欄位可靠的程度">${Number(c.pct) | 0}%</span>`;
   if(s === 'inferred') return ' <span class="sug-tag">系統建議</span>';
   if(s === 'default') return ' <span class="sug-tag">預設</span>';
   return '';
+}
+// 系統推薦的可靠度（2026-11-18）：後端給的是校準後的實測正確率，不是模型原始機率
+function confOf(flow, key){
+  const c = flow.pipeline && flow.pipeline.confidence;
+  return c && c[key] ? c[key] : null;
+}
+// 部署單上方的一行說明：有任何欄位顯示信心度才出現
+function confLegend(flow){
+  const c = flow.pipeline && flow.pipeline.confidence;
+  if(!c || !Object.keys(c).length) return '';
+  return `<div class="conf-legend">欄位旁的數字是<b>信心度</b>（系統判斷可靠的程度）：<span class="conf conf-hi">綠</span>可靠、<span class="conf conf-mid">黃</span>建議確認、<span class="conf conf-lo">紅</span>請確認。你自己講的欄位是 100%。</div>`;
 }
 // 已經套用的額外設定，和「注意到但沒處理」的部分（收合起來，不洗版也不默默丟掉）
 function pipelineExtrasHTML(flow){
@@ -5948,6 +5967,7 @@ function renderSpecCard(flow){
     ${(flow.grounding || []).length ? `<ul class="scn-notes">${flow.grounding.map(n => `<li>${esc(n)}，請確認是不是你要的。</li>`).join('')}</ul>` : ''}
     ${noticesHTML(flow)}
     ${pipelineExtrasHTML(flow)}
+    ${confLegend(flow)}
     <div class="fgrid">
       <div><label for="${flow.id}-app">服務名稱${srcTag(flow, 'app_name')}</label><input id="${flow.id}-app" data-field="app_name" value="${g('app_name')}" placeholder="my-app"><div class="hint">小寫英文字母開頭，只能用小寫字母、數字和連字號，例如 web-frontend</div></div>
       <div><label for="${flow.id}-img">映像檔${s.image_suggested ? ' <span class="sug-tag">建議</span>' : srcTag(flow, 'image')}</label><input id="${flow.id}-img" data-field="image" value="${g('image')}" placeholder="nginx:1.27">${s.image_suggested ? '<div class="hint">這是系統建議的，可以改成你自己的程式</div>' : ''}</div>
@@ -8591,6 +8611,33 @@ def _pipeline_take(username: str, pid: str):
         return _pipeline_states.pop(pid)
 
 
+def _pipeline_confidence(spec: dict) -> dict:
+    """部署單每個欄位的信心度（2026-11-18）：使用者講的 100%，系統填的用開發題組統計出來的實測正確率
+    （agents/pipeline/calibration.py），不是模型自己說的機率。算不出來的欄位不放（前端就不顯示數字）。"""
+    from agents.pipeline import software_rag
+    from agents.pipeline.calibration import field_confidence
+    out = {}
+    scores = spec.get("choose_scores") or []
+    for f, key in _PIPELINE_FIELD_KEYS.items():
+        b = spec["base"][f]
+        if f == "app_name" or b.get("value") is None:
+            continue
+        # port 的 default 有兩種：查表得到的（有實測）和查不到時的備用值 80（只是佔位），後者不顯示數字
+        src = b.get("source")
+        if f == "port" and src == "default":
+            if not str(b.get("evidence") or "").startswith("查表"):
+                continue
+            src = "default_table"
+        p = None
+        if f == "image" and b.get("source") == "inferred":
+            repo = software_rag.repo_of(b["value"])
+            p = next((sc for img, sc in scores if img == repo), None)
+        c = field_confidence(f, src if f == "port" else b.get("source"), p)
+        if c:
+            out[key] = c
+    return out
+
+
 def _pipeline_summary(spec: dict) -> dict:
     """部署單要顯示的部分：每個欄位的來源、已經套用的額外設定、收合起來的「注意到但沒處理」。"""
     unsupported = [f"「{e['evidence'] or e['desc']}」：{e['note']}" for e in spec.get("extras", []) if e.get("status") == "unsupported"]
@@ -8603,7 +8650,7 @@ def _pipeline_summary(spec: dict) -> dict:
         applied.append({"label": label, "evidence": e.get("evidence") or "",
                         "suggested": e.get("source") != "user"})
     sources = {_PIPELINE_FIELD_KEYS[f]: spec["base"][f]["source"] for f in _PIPELINE_FIELD_KEYS if spec["base"][f]["value"] is not None}
-    return {"sources": sources, "applied": applied, "unsupported": unsupported,
+    return {"sources": sources, "confidence": _pipeline_confidence(spec), "applied": applied, "unsupported": unsupported,
             "verified": [dict(v) for v in spec.get("verified", [])][:10],   # 意圖符合檢查改過的（11-17）
             "workload": (spec.get("workload") or {}).get("value"),
             "normalizer": (spec.get("backend") or {}).get("normalize"), "total_ms": spec.get("total_ms")}

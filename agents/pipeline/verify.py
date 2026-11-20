@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import time
 from typing import Dict, List, Optional
 
@@ -141,6 +142,20 @@ def _apply(spec: Dict, p: Dict, value, source: str = "inferred") -> None:
             spec["workload"] = {"value": "service", "source": "inferred"}
 
 
+def _schedule_text(spec: Dict) -> str:
+    """排程的白話說明（例如「每天 02:00」），看不懂的 cron 原樣顯示。"""
+    from agents.pipeline import cron as cron_util
+    sched = _live(spec, "schedule")
+    v = sched[0]["value"] if sched else None
+    c = v.get("cron") if isinstance(v, dict) else v
+    if not c:
+        return "（沒有時間）"
+    try:
+        return cron_util.describe_zh(str(c)) or str(c)
+    except Exception:  # noqa: BLE001
+        return str(c)
+
+
 def _show(v) -> str:
     if v is True:
         return "要"
@@ -225,6 +240,12 @@ def run(spec: Dict, local: Optional[LLM], refill=None) -> None:
             elif p["field"] in schema.BASE_FIELDS:
                 spec["base"][p["field"]] = {"value": None, "source": None, "evidence": None}
                 cleared.append((p, before))
+            elif p["field"] == "schedule" and schema.ask_policy() == "essential" and os.environ.get("PIPELINE_VERIFY_SCHED_NOTICE", "1") != "0":
+                # 2026-11-19：模型對排程「時間」有疑慮（建議值是另一個時間，不是取消排程）時，原本會在第一輪就變成
+                # 「系統原本設定的 schedule 是 要」的問題卡（核對步驟只看有沒有排程，看不懂也改不了時間）。
+                # dev_claude 有 9 題因此多問。改成部署單提醒，寫出實際的時間請使用者確認
+                schema.add_notice(spec, f"你說「{p['evidence'][:60]}」，目前的排程是「{_schedule_text(spec)}」，請確認時間是否正確")
+                spec.setdefault("verify_skip", []).append("schedule")
             else:
                 _ask(spec, p, None)
         if cleared and refill is not None:
@@ -244,11 +265,14 @@ def run(spec: Dict, local: Optional[LLM], refill=None) -> None:
             break   # 有問題要問、或這一輪什麼都沒改（再問模型也一樣）
 
 
-def resume_answer(spec: Dict, field: str, ans: str) -> None:
-    """問題卡回答：keep＝維持並當成使用者確認過（以後不再檢查）；其他＝採用該值（來源 user）。"""
+def resume_answer(spec: Dict, field: str, ans: str, auto: bool = False) -> None:
+    """問題卡回答：keep＝維持並當成使用者確認過（以後不再檢查）；其他＝採用該值（來源 user）。
+    auto＝使用者按「幫我決定」：採用推薦值，但來源記成 inferred（不是使用者講的，部署單不顯示 100%）。"""
     f = field[len("verify:"):]
     spec.setdefault("verify_skip", []).append(f)
     if ans == "keep":
+        if auto:
+            return     # 維持系統原本的值，來源不變
         if f in schema.BASE_FIELDS and spec["base"][f]["value"] is not None:
             spec["base"][f]["source"] = "user"
         elif f in ("workload", "expose") and spec[f]["value"] is not None:
@@ -261,4 +285,6 @@ def resume_answer(spec: Dict, field: str, ans: str) -> None:
     sug = _clean_suggest(f, val)
     if sug is None:
         return
-    _apply(spec, {"field": f, "evidence": "使用者回答"}, sug, source="user" if f in schema.BASE_FIELDS + ("workload", "expose") else "inferred")
+    user_src = (f in schema.BASE_FIELDS + ("workload", "expose")) and not auto
+    _apply(spec, {"field": f, "evidence": "幫我決定（系統推薦）" if auto else "使用者回答"}, sug,
+           source="user" if user_src else "inferred")

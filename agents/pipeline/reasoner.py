@@ -3,6 +3,7 @@
 2. apply_extras：把額外欄位對應到部署設定（固定規則，不靠模型）。對應不到的明白標成不支援或變成問題，不默默丟掉。"""
 from __future__ import annotations
 
+import os
 import re
 import time
 from typing import Dict, Optional
@@ -10,7 +11,7 @@ from typing import Dict, Optional
 from agents.pipeline import cron as cron_util
 from agents.pipeline import defaults, schema
 from agents.pipeline.llm import LLM, extract_json
-from agents.pipeline.prompts import REASON_SYSTEM
+from agents.pipeline.prompts import REASON_SYSTEM, REPLICAS_RULE
 
 _ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,100}$")
 
@@ -23,7 +24,7 @@ def fill_gaps(spec: Dict, local: Optional[LLM]) -> Dict:
     t0 = time.time()
     # 2026-11-17：只送原句（和選型實測時的輸入一樣）。原本附上「已決定的欄位」，實測 S38、S39 附上後模型就不提問、
     # 直接猜軟體（不附時兩題都會問）。使用者講過的欄位由來源等級保護（set_field 不讓 inferred 蓋 user），不需要靠 prompt。
-    out = extract_json(local(REASON_SYSTEM, spec["text"]))
+    out = extract_json(local(reason_system(), _reason_input(spec)))
     ms = int((time.time() - t0) * 1000)
     if not isinstance(out, dict):
         spec["trace"].append({"step": "reason", "ms": ms, "detail": "輸出解析失敗"})
@@ -35,11 +36,37 @@ def fill_gaps(spec: Dict, local: Optional[LLM]) -> Dict:
     for q in out.get("questions") or []:
         if isinstance(q, dict) and str(q.get("question") or "").strip():
             field = "image" if schema.value(spec, "image") is None and not out.get("image") else f"model:{len(spec['questions'])}"
+            # 2026-11-18：只有「用哪個軟體」這種不問就做不出來的才問。其餘推理代理自己加的追問（網頁還是 App、
+            # 通知方式、舊電腦型號……）改成部署單上的提示，先用預設值，使用者看得到也能改。
+            # Claude 題組實測：262 題裡 159 題不該問卻問，其中 145 個是這種追問（CLAM／Clarify When Necessary：
+            # 只在歧義會改變結果時才問）。PIPELINE_ASK_POLICY=all 恢復原本做法（對照用）。
+            if field != "image" and schema.ask_policy() != "all":
+                schema.add_notice(spec, f"系統先用預設值處理，部署前請確認：{str(q['question'])[:200]}")
+                continue
             schema.add_question(spec, field, str(q["question"])[:300],
                                 recommended=str(q.get("recommended") or "")[:200] or None,
                                 reason="推理代理認為這一項不能替你決定")
     spec["trace"].append({"step": "reason", "ms": ms, "detail": f"補了 {', '.join(filled) or '無'}；{out.get('reason', '')}"[:300]})
     return out
+
+
+def _reason_input(spec: Dict) -> str:
+    """推理代理的輸入：原句；PIPELINE_REASON_CANDS=1 時再附上用原句查到的軟體候選（2026-11-18）。
+    原本推理代理決定軟體時看不到 RAG，RAG 只在它決定之後才參與（Claude 題組小樣本：RAG 找到正確軟體、
+    流程卻沒採用的佔選錯的三成）。做法參考 Gorilla 的檢索感知：候選標明可能不對，不合適就照原本方式決定或反問。
+    使用者自己講了軟體時不附（不需要選）。"""
+    text = spec["text"]
+    import os
+    if os.environ.get("PIPELINE_REASON_CANDS", "0").strip() not in ("1", "true", "on") or schema.value(spec, "image"):
+        return text
+    from agents.pipeline import software_rag
+    cands = software_rag.candidates(text, k=5)
+    if not cands:
+        return text
+    lines = "\n".join(f"- {c['image']}: {str(c.get('desc', ''))[:140]}" for c in cands)
+    return (f"{text}\n\n[Software found in the platform catalog for this request - may be wrong; use one only if it really "
+            f"fits what the user wants. If none fits, choose as you normally would. If it is the user's own program "
+            f"or the purpose is unclear, keep image null and ask.]\n{lines}")
 
 
 def _has_extra(spec: Dict, kind: str) -> bool:
@@ -198,3 +225,11 @@ def _apply_storage(spec: Dict, e: Dict, image: str) -> None:
     if defaults.name(image) in defaults.RUNTIME_IMAGES:
         schema.add_notice(spec, f"保存空間掛在 {path}，你的程式要把資料寫在這個資料夾才會保留")
     e["status"] = "applied"
+
+
+def reason_system() -> str:
+    """推理代理的系統提示詞；PIPELINE_REPLICAS_RULE=0 時不加副本數補充規則（對照實驗用）。"""
+    if os.environ.get("PIPELINE_REPLICAS_RULE", "1") == "0":
+        return REASON_SYSTEM
+    return REASON_SYSTEM + REPLICAS_RULE
+

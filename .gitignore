@@ -62,3 +62,7 @@ parse_full.json
 
 # 2026-11-11 repo 整理：Claude Code 的本機設定不進版控；專案規則與 skill 的版控副本在 docs/development/
 .claude/
+
+# 盲測題組與含題目原文的盲測逐題結果不上傳（2026-11-20）
+docs/bench_blind/blind_scenario.jsonl
+experiments/model_select/reason/results/dev_blind_*.jsonl

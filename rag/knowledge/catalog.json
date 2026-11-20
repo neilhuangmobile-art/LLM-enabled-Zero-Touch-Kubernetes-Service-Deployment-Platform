@@ -1,5 +1,5 @@
 {
- "built_at": "2026-11-15 12:11",
+ "built_at": "2026-11-19 14:27",
  "entries": [
   {
    "id": "nginx",
@@ -132,7 +132,9 @@
    "scenarios": [
     "功能完整的網站或部落格",
     "有外掛和佈景主題的官網",
-    "需要後台管理的內容網站"
+    "需要後台管理的內容網站",
+    "自己可以在後台改文字、換照片、發消息的網站",
+    "形象官網或作品集網站，要有管理後台"
    ],
    "standalone": false,
    "requires": [
@@ -208,7 +210,9 @@
    "category": "維基或筆記",
    "scenarios": [
     "不需要資料庫的簡單維基",
-    "少量人使用的筆記網站"
+    "少量人使用的筆記網站",
+    "團隊知識庫、操作步驟文件",
+    "共同整理的筆記與說明文件"
    ],
    "standalone": true,
    "resources": {
@@ -481,7 +485,9 @@
    "scenarios": [
     "加速網站的快取",
     "暫存資料、排行榜、計數器",
-    "存登入狀態或暫時資料"
+    "存登入狀態或暫時資料",
+    "減少資料庫查詢、讓網頁回應變快",
+    "流量尖峰時把常用資料先記起來"
    ],
    "standalone": true,
    "resources": {
@@ -537,7 +543,9 @@
    "scenarios": [
     "排隊處理工作的訊息佇列",
     "讓不同程式互相傳遞訊息",
-    "背景工作排程的中介"
+    "背景工作排程的中介",
+    "大量請求同時湧入時讓工作排隊依序處理",
+    "把寄信、通知等耗時工作交給背景處理"
    ],
    "standalone": true,
    "resources": {
@@ -660,7 +668,9 @@
    "category": "監控",
    "scenarios": [
     "定期檢查網站有沒有掛掉並通知",
-    "監控服務是否在線"
+    "監控服務是否在線",
+    "固定檢查多個網站是否正常並在掛掉時通知",
+    "記錄網站的正常運作時間"
    ],
    "standalone": true,
    "resources": {
@@ -1077,6 +1087,1137 @@
    "sources": [
     "registry:library/node:20-alpine",
     "https://github.com/docker-library/docs/tree/master/node"
+   ]
+  },
+  {
+   "id": "limesurvey",
+   "repo": "martialblog/limesurvey",
+   "tag": "latest",
+   "category": "問卷",
+   "scenarios": [
+    "做線上問卷收集大家的意見",
+    "活動報名表或滿意度調查",
+    "設計題目讓填答者在網頁上作答並統計結果",
+    "取代紙本調查表"
+   ],
+   "standalone": false,
+   "requires": [
+    "mysql"
+   ],
+   "resources": {
+    "memory": "256Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 100,
+   "notes": "需要資料庫（MySQL／MariaDB 或 PostgreSQL）保存題目與回覆",
+   "image": "martialblog/limesurvey:latest",
+   "ports": [
+    80,
+    8080
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:martialblog/limesurvey:latest"
+   ]
+  },
+  {
+   "id": "formbricks",
+   "repo": "formbricks/formbricks",
+   "tag": "latest",
+   "category": "問卷",
+   "scenarios": [
+    "網頁表單和意見回饋收集",
+    "產品使用調查",
+    "嵌入網站的小問卷"
+   ],
+   "standalone": false,
+   "requires": [
+    "postgres"
+   ],
+   "resources": {
+    "memory": "512Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 100,
+   "notes": "需要 PostgreSQL",
+   "image": "formbricks/formbricks:latest",
+   "ports": [
+    3000
+   ],
+   "volumes": [
+    "/home/nextjs/apps/web/saml-connection",
+    "/home/nextjs/apps/web/uploads/"
+   ],
+   "doc_env": [],
+   "sources": [
+    "registry:formbricks/formbricks:latest"
+   ]
+  },
+  {
+   "id": "flarum",
+   "repo": "mondedie/flarum",
+   "tag": "latest",
+   "category": "論壇",
+   "scenarios": [
+    "社群討論區，大家可以發文、回覆",
+    "問答交流的論壇",
+    "社團或課程的留言板，可以分類討論"
+   ],
+   "standalone": false,
+   "requires": [
+    "mariadb"
+   ],
+   "resources": {
+    "memory": "256Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 150,
+   "notes": "需要 MySQL／MariaDB",
+   "image": "mondedie/flarum:latest",
+   "ports": [],
+   "volumes": [
+    "/etc/nginx/flarum",
+    "/flarum/app/extensions",
+    "/flarum/app/public/assets",
+    "/flarum/app/storage/logs"
+   ],
+   "doc_env": [],
+   "sources": [
+    "registry:mondedie/flarum:latest"
+   ]
+  },
+  {
+   "id": "nodebb",
+   "repo": "nodebb/docker",
+   "tag": "latest",
+   "category": "論壇",
+   "scenarios": [
+    "即時更新的討論區",
+    "社群成員互相發問回答的論壇"
+   ],
+   "standalone": false,
+   "requires": [
+    "redis"
+   ],
+   "resources": {
+    "memory": "512Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 150,
+   "notes": "需要 Redis 或 MongoDB／PostgreSQL",
+   "image": "nodebb/docker:latest",
+   "ports": [
+    4567
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:nodebb/docker:latest"
+   ]
+  },
+  {
+   "id": "easyappointments",
+   "repo": "alextselegidis/easyappointments",
+   "tag": "latest",
+   "category": "預約",
+   "scenarios": [
+    "線上預約時段，客人自己選時間",
+    "門診、諮詢或課程的預約系統",
+    "店家讓顧客網路訂位或掛號"
+   ],
+   "standalone": false,
+   "requires": [
+    "mysql"
+   ],
+   "resources": {
+    "memory": "256Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 100,
+   "notes": "需要 MySQL",
+   "image": "alextselegidis/easyappointments:latest",
+   "ports": [
+    80
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:alextselegidis/easyappointments:latest"
+   ]
+  },
+  {
+   "id": "actual-budget",
+   "repo": "actualbudget/actual-server",
+   "tag": "latest",
+   "category": "記帳",
+   "scenarios": [
+    "個人或家庭記帳、管理預算",
+    "記錄收入支出並看每月花費"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "256Mi",
+    "cpu": "100m"
+   },
+   "per_replica_users": 50,
+   "image": "actualbudget/actual-server:latest",
+   "ports": [
+    5006
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:actualbudget/actual-server:latest"
+   ]
+  },
+  {
+   "id": "firefly-iii",
+   "repo": "fireflyiii/core",
+   "tag": "latest",
+   "category": "記帳",
+   "scenarios": [
+    "多個帳戶的收支管理與報表",
+    "社團或小組的經費記錄"
+   ],
+   "standalone": false,
+   "requires": [
+    "mysql"
+   ],
+   "resources": {
+    "memory": "512Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 50,
+   "notes": "需要資料庫",
+   "image": "fireflyiii/core:latest",
+   "ports": [
+    8080,
+    8443,
+    9000
+   ],
+   "volumes": [
+    "/var/www/html/storage/upload"
+   ],
+   "doc_env": [],
+   "sources": [
+    "registry:fireflyiii/core:latest"
+   ]
+  },
+  {
+   "id": "kimai",
+   "repo": "kimai/kimai2",
+   "tag": "apache",
+   "category": "工時記錄",
+   "scenarios": [
+    "記錄每天做了哪些工作、花多少時間",
+    "接案或打工的工時統計，月底結算",
+    "團隊成員填寫工時"
+   ],
+   "standalone": false,
+   "requires": [
+    "mysql"
+   ],
+   "resources": {
+    "memory": "256Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 50,
+   "notes": "需要 MySQL",
+   "image": "kimai/kimai2:apache",
+   "ports": [
+    80,
+    8001
+   ],
+   "volumes": [
+    "/opt/kimai/var"
+   ],
+   "doc_env": [],
+   "sources": [
+    "registry:kimai/kimai2:apache"
+   ]
+  },
+  {
+   "id": "linkding",
+   "repo": "sissbruecker/linkding",
+   "tag": "latest",
+   "category": "書籤",
+   "scenarios": [
+    "收藏網址和書籤，可以加標籤搜尋",
+    "整理常用連結"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "128Mi",
+    "cpu": "100m"
+   },
+   "per_replica_users": 50,
+   "image": "sissbruecker/linkding:latest",
+   "ports": [
+    9090
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:sissbruecker/linkding:latest"
+   ]
+  },
+  {
+   "id": "freshrss",
+   "repo": "freshrss/freshrss",
+   "tag": "latest",
+   "category": "新聞訂閱",
+   "scenarios": [
+    "訂閱多個網站的新文章集中閱讀",
+    "RSS 閱讀器"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "128Mi",
+    "cpu": "100m"
+   },
+   "per_replica_users": 50,
+   "image": "freshrss/freshrss:latest",
+   "ports": [
+    80
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:freshrss/freshrss:latest"
+   ]
+  },
+  {
+   "id": "shlink",
+   "repo": "shlinkio/shlink",
+   "tag": "stable",
+   "category": "短網址",
+   "scenarios": [
+    "把長網址變成短網址並統計點擊",
+    "活動海報用的短連結"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "256Mi",
+    "cpu": "100m"
+   },
+   "per_replica_users": 200,
+   "image": "shlinkio/shlink:stable",
+   "ports": [
+    8080
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:shlinkio/shlink:stable"
+   ]
+  },
+  {
+   "id": "photoprism",
+   "repo": "photoprism/photoprism",
+   "tag": "latest",
+   "category": "相簿",
+   "scenarios": [
+    "整理和分享大量照片的網路相簿",
+    "活動照片集中存放、可以依時間地點瀏覽"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "1Gi",
+    "cpu": "500m"
+   },
+   "per_replica_users": 50,
+   "notes": "整理照片時需要較多記憶體",
+   "image": "photoprism/photoprism:latest",
+   "ports": [
+    2342,
+    2442,
+    2443
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:photoprism/photoprism:latest"
+   ]
+  },
+  {
+   "id": "paperless-ngx",
+   "repo": "paperlessngx/paperless-ngx",
+   "tag": "latest",
+   "category": "文件管理",
+   "scenarios": [
+    "把紙本文件掃描歸檔並能用文字搜尋",
+    "發票、合約等文件的電子化管理"
+   ],
+   "standalone": false,
+   "requires": [
+    "redis"
+   ],
+   "resources": {
+    "memory": "1Gi",
+    "cpu": "500m"
+   },
+   "per_replica_users": 30,
+   "notes": "需要 Redis",
+   "image": "paperlessngx/paperless-ngx:latest",
+   "ports": [
+    8000
+   ],
+   "volumes": [
+    "/usr/src/paperless/consume",
+    "/usr/src/paperless/data",
+    "/usr/src/paperless/export",
+    "/usr/src/paperless/media"
+   ],
+   "doc_env": [],
+   "sources": [
+    "registry:paperlessngx/paperless-ngx:latest"
+   ]
+  },
+  {
+   "id": "vikunja",
+   "repo": "vikunja/vikunja",
+   "tag": "latest",
+   "category": "待辦事項",
+   "scenarios": [
+    "團隊的待辦清單和工作分配",
+    "專案任務看板，追蹤誰負責什麼"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "256Mi",
+    "cpu": "100m"
+   },
+   "per_replica_users": 100,
+   "image": "vikunja/vikunja:latest",
+   "ports": [
+    3456
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:vikunja/vikunja:latest"
+   ]
+  },
+  {
+   "id": "radicale",
+   "repo": "tomsquest/docker-radicale",
+   "tag": "latest",
+   "category": "行事曆",
+   "scenarios": [
+    "共用行事曆和聯絡人，手機電腦同步",
+    "自己架的日曆伺服器"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "64Mi",
+    "cpu": "50m"
+   },
+   "per_replica_users": 100,
+   "image": "tomsquest/docker-radicale:latest",
+   "ports": [
+    5232
+   ],
+   "volumes": [
+    "/config",
+    "/data"
+   ],
+   "doc_env": [],
+   "sources": [
+    "registry:tomsquest/docker-radicale:latest"
+   ]
+  },
+  {
+   "id": "syncthing",
+   "repo": "syncthing/syncthing",
+   "tag": "latest",
+   "category": "檔案同步",
+   "scenarios": [
+    "多台電腦之間自動同步資料夾",
+    "檔案自動備份到另一台機器"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "256Mi",
+    "cpu": "100m"
+   },
+   "per_replica_users": 20,
+   "image": "syncthing/syncthing:latest",
+   "ports": [
+    8384,
+    21027,
+    22000
+   ],
+   "volumes": [
+    "/var/syncthing"
+   ],
+   "doc_env": [],
+   "sources": [
+    "registry:syncthing/syncthing:latest"
+   ]
+  },
+  {
+   "id": "alertmanager",
+   "repo": "prom/alertmanager",
+   "tag": "latest",
+   "category": "告警通知",
+   "scenarios": [
+    "監控出問題時發通知到信箱或聊天軟體",
+    "整理和轉發系統告警"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "128Mi",
+    "cpu": "100m"
+   },
+   "per_replica_users": 100,
+   "image": "prom/alertmanager:latest",
+   "ports": [
+    9093
+   ],
+   "volumes": [
+    "/alertmanager"
+   ],
+   "doc_env": [],
+   "sources": [
+    "registry:prom/alertmanager:latest"
+   ]
+  },
+  {
+   "id": "minecraft-server",
+   "repo": "itzg/minecraft-server",
+   "tag": "latest",
+   "category": "遊戲伺服器",
+   "scenarios": [
+    "朋友一起連線玩的 Minecraft 伺服器",
+    "自己架的遊戲伺服器"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "2Gi",
+    "cpu": "1000m"
+   },
+   "per_replica_users": 20,
+   "notes": "需要 EULA=TRUE；人多時記憶體要加大",
+   "image": "itzg/minecraft-server:latest",
+   "ports": [
+    25565
+   ],
+   "volumes": [
+    "/data"
+   ],
+   "doc_env": [],
+   "sources": [
+    "registry:itzg/minecraft-server:latest"
+   ]
+  },
+  {
+   "id": "privatebin",
+   "repo": "privatebin/nginx-fpm-alpine",
+   "tag": "latest",
+   "category": "程式碼片段分享",
+   "scenarios": [
+    "貼上文字或程式碼產生分享連結",
+    "暫時分享一段文字，可以設定過期"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "128Mi",
+    "cpu": "100m"
+   },
+   "per_replica_users": 200,
+   "image": "privatebin/nginx-fpm-alpine:latest",
+   "ports": [
+    8080
+   ],
+   "volumes": [
+    "/run",
+    "/srv/data",
+    "/tmp",
+    "/var/lib/nginx/tmp"
+   ],
+   "doc_env": [],
+   "sources": [
+    "registry:privatebin/nginx-fpm-alpine:latest"
+   ]
+  },
+  {
+   "id": "mockoon",
+   "repo": "mockoon/cli",
+   "tag": "latest",
+   "category": "API 模擬",
+   "scenarios": [
+    "後端還沒寫好時先模擬 API 給前端測試",
+    "假的 API 伺服器"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "128Mi",
+    "cpu": "100m"
+   },
+   "per_replica_users": 100,
+   "image": "mockoon/cli:latest",
+   "ports": [
+    3000
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:mockoon/cli:latest"
+   ]
+  },
+  {
+   "id": "nocodb",
+   "repo": "nocodb/nocodb",
+   "tag": "latest",
+   "category": "線上資料表",
+   "scenarios": [
+    "像試算表一樣的線上資料表，多人一起編輯",
+    "不用寫程式就能管理資料的表格"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "512Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 100,
+   "image": "nocodb/nocodb:latest",
+   "ports": [
+    8080
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:nocodb/nocodb:latest"
+   ]
+  },
+  {
+   "id": "bookstack",
+   "repo": "linuxserver/bookstack",
+   "tag": "latest",
+   "category": "維基或筆記",
+   "scenarios": [
+    "用書本、章節整理的知識庫",
+    "團隊的操作手冊與規章文件",
+    "需要權限管理的內部文件網站"
+   ],
+   "standalone": false,
+   "requires": [
+    "mariadb"
+   ],
+   "resources": {
+    "memory": "256Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 100,
+   "notes": "需要 MySQL／MariaDB",
+   "image": "linuxserver/bookstack:latest",
+   "ports": [
+    80,
+    443
+   ],
+   "volumes": [
+    "/config"
+   ],
+   "doc_env": [],
+   "sources": [
+    "registry:linuxserver/bookstack:latest"
+   ]
+  },
+  {
+   "id": "mediawiki",
+   "repo": "library/mediawiki",
+   "tag": "lts",
+   "category": "維基或筆記",
+   "scenarios": [
+    "像維基百科那樣大家一起編輯的百科網站",
+    "社群或課程的共同編輯知識庫",
+    "有編輯歷史可以回溯的條目式文件"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "256Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 100,
+   "notes": "第一次開啟要跑安裝精靈；小型使用可選 SQLite",
+   "image": "mediawiki:lts",
+   "ports": [
+    80
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:library/mediawiki:lts",
+    "https://github.com/docker-library/docs/tree/master/mediawiki"
+   ]
+  },
+  {
+   "id": "hedgedoc",
+   "repo": "linuxserver/hedgedoc",
+   "tag": "latest",
+   "category": "共筆",
+   "scenarios": [
+    "多人同時編輯的 Markdown 共筆",
+    "會議記錄、課堂筆記即時共寫",
+    "可以分享連結的線上筆記"
+   ],
+   "standalone": false,
+   "requires": [
+    "mariadb"
+   ],
+   "resources": {
+    "memory": "256Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 50,
+   "notes": "需要資料庫",
+   "image": "linuxserver/hedgedoc:latest",
+   "ports": [
+    3000
+   ],
+   "volumes": [
+    "/config"
+   ],
+   "doc_env": [],
+   "sources": [
+    "registry:linuxserver/hedgedoc:latest"
+   ]
+  },
+  {
+   "id": "kanboard",
+   "repo": "kanboard/kanboard",
+   "tag": "latest",
+   "category": "專案管理",
+   "scenarios": [
+    "看板式的待辦與工作分派",
+    "小團隊追蹤任務進度",
+    "把工作拆成卡片在欄位間移動"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "128Mi",
+    "cpu": "100m"
+   },
+   "per_replica_users": 50,
+   "notes": "預設用 SQLite，單一容器即可",
+   "image": "kanboard/kanboard:latest",
+   "ports": [
+    80,
+    443
+   ],
+   "volumes": [
+    "/etc/nginx/ssl",
+    "/var/www/app/data",
+    "/var/www/app/plugins"
+   ],
+   "doc_env": [],
+   "sources": [
+    "registry:kanboard/kanboard:latest"
+   ]
+  },
+  {
+   "id": "redmine",
+   "repo": "library/redmine",
+   "tag": "5",
+   "category": "專案管理",
+   "scenarios": [
+    "回報與追蹤程式錯誤的系統",
+    "問題單、需求單的處理流程",
+    "專案的議題追蹤與工時紀錄"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "512Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 50,
+   "notes": "小型使用可用 SQLite",
+   "image": "redmine:5",
+   "ports": [
+    3000
+   ],
+   "volumes": [
+    "/usr/src/redmine/files"
+   ],
+   "doc_env": [
+    "REDMINE_DB_MYSQL",
+    "REDMINE_DB_PORT",
+    "REDMINE_DB_USERNAME",
+    "REDMINE_DB_PASSWORD",
+    "REDMINE_DB_DATABASE",
+    "REDMINE_DB_ENCODING",
+    "REDMINE_NO_DB_MIGRATE",
+    "REDMINE_PLUGINS_MIGRATE",
+    "SECRET_KEY_BASE"
+   ],
+   "sources": [
+    "registry:library/redmine:5",
+    "https://github.com/docker-library/docs/tree/master/redmine"
+   ]
+  },
+  {
+   "id": "influxdb",
+   "repo": "library/influxdb",
+   "tag": "2",
+   "category": "資料庫",
+   "scenarios": [
+    "存放隨時間變化的感測數值",
+    "時間序列資料庫",
+    "記錄設備每隔幾秒回報的數據"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "512Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 0,
+   "notes": "資料要保存需掛載資料目錄",
+   "image": "influxdb:2",
+   "ports": [
+    8086
+   ],
+   "volumes": [
+    "/etc/influxdb2",
+    "/var/lib/influxdb2"
+   ],
+   "doc_env": [],
+   "sources": [
+    "registry:library/influxdb:2",
+    "https://github.com/docker-library/docs/tree/master/influxdb"
+   ]
+  },
+  {
+   "id": "loki",
+   "repo": "grafana/loki",
+   "tag": "latest",
+   "category": "日誌",
+   "scenarios": [
+    "集中收集與查詢多台機器的紀錄檔",
+    "搭配 Grafana 查看日誌"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "256Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 0,
+   "image": "grafana/loki:latest",
+   "ports": [
+    3100
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:grafana/loki:latest"
+   ]
+  },
+  {
+   "id": "fluent-bit",
+   "repo": "fluent/fluent-bit",
+   "tag": "latest",
+   "category": "日誌",
+   "scenarios": [
+    "在背景收集紀錄檔並轉送到集中的地方",
+    "輕量的日誌收集程式"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "64Mi",
+    "cpu": "50m"
+   },
+   "per_replica_users": 0,
+   "image": "fluent/fluent-bit:latest",
+   "ports": [
+    2020
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:fluent/fluent-bit:latest"
+   ]
+  },
+  {
+   "id": "netdata",
+   "repo": "netdata/netdata",
+   "tag": "stable",
+   "category": "監控",
+   "scenarios": [
+    "即時看主機的 CPU、記憶體、硬碟用量",
+    "伺服器效能儀表板"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "256Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 20,
+   "notes": "要看主機資訊需要額外權限",
+   "image": "netdata/netdata:stable",
+   "ports": [
+    19999
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:netdata/netdata:stable"
+   ]
+  },
+  {
+   "id": "mosquitto",
+   "repo": "library/eclipse-mosquitto",
+   "tag": "2",
+   "category": "訊息佇列",
+   "scenarios": [
+    "物聯網裝置傳資料用的 MQTT 伺服器",
+    "感測器與控制器之間的訊息轉送"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "64Mi",
+    "cpu": "50m"
+   },
+   "per_replica_users": 0,
+   "image": "eclipse-mosquitto:2",
+   "ports": [
+    1883
+   ],
+   "volumes": [
+    "/mosquitto/data",
+    "/mosquitto/log"
+   ],
+   "doc_env": [],
+   "sources": [
+    "registry:library/eclipse-mosquitto:2",
+    "https://github.com/docker-library/docs/tree/master/eclipse-mosquitto"
+   ]
+  },
+  {
+   "id": "nats",
+   "repo": "library/nats",
+   "tag": "2",
+   "category": "訊息佇列",
+   "scenarios": [
+    "輕量快速的訊息傳遞",
+    "程式之間發布與訂閱訊息"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "64Mi",
+    "cpu": "100m"
+   },
+   "per_replica_users": 0,
+   "image": "nats:2",
+   "ports": [
+    4222,
+    6222,
+    8222
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:library/nats:2",
+    "https://github.com/docker-library/docs/tree/master/nats"
+   ]
+  },
+  {
+   "id": "valkey",
+   "repo": "valkey/valkey",
+   "tag": "8",
+   "category": "快取",
+   "scenarios": [
+    "與 Redis 相容的開源快取",
+    "暫存資料、計數器"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "128Mi",
+    "cpu": "100m"
+   },
+   "per_replica_users": 0,
+   "image": "valkey/valkey:8",
+   "ports": [
+    6379
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:valkey/valkey:8"
+   ]
+  },
+  {
+   "id": "gogs",
+   "repo": "gogs/gogs",
+   "tag": "latest",
+   "category": "程式碼管理",
+   "scenarios": [
+    "輕量的自架 Git 程式碼倉庫",
+    "小團隊放程式碼、看版本紀錄"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "128Mi",
+    "cpu": "100m"
+   },
+   "per_replica_users": 50,
+   "image": "gogs/gogs:latest",
+   "ports": [
+    22,
+    3000
+   ],
+   "volumes": [
+    "/backup",
+    "/data"
+   ],
+   "doc_env": [],
+   "sources": [
+    "registry:gogs/gogs:latest"
+   ]
+  },
+  {
+   "id": "ctfd",
+   "repo": "ctfd/ctfd",
+   "tag": "latest",
+   "category": "競賽",
+   "scenarios": [
+    "資安搶旗（CTF）競賽平台",
+    "解題計分與排行榜"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "512Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 100,
+   "image": "ctfd/ctfd:latest",
+   "ports": [
+    8000
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:ctfd/ctfd:latest"
+   ]
+  },
+  {
+   "id": "rclone",
+   "repo": "rclone/rclone",
+   "tag": "latest",
+   "category": "備份同步",
+   "scenarios": [
+    "把檔案同步或備份到雲端硬碟",
+    "定期複製資料到另一個地方"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "128Mi",
+    "cpu": "100m"
+   },
+   "per_replica_users": 0,
+   "image": "rclone/rclone:latest",
+   "ports": [],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:rclone/rclone:latest"
+   ]
+  },
+  {
+   "id": "restic",
+   "repo": "restic/restic",
+   "tag": "latest",
+   "category": "備份同步",
+   "scenarios": [
+    "加密、增量的檔案備份",
+    "保留多個版本的備份"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "128Mi",
+    "cpu": "100m"
+   },
+   "per_replica_users": 0,
+   "image": "restic/restic:latest",
+   "ports": [],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:restic/restic:latest"
+   ]
+  },
+  {
+   "id": "curl",
+   "repo": "curlimages/curl",
+   "tag": "latest",
+   "category": "工具",
+   "scenarios": [
+    "定時去呼叫某個網址",
+    "定期觸發其他系統的網頁或 API"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "32Mi",
+    "cpu": "50m"
+   },
+   "per_replica_users": 0,
+   "notes": "通常搭配定時執行",
+   "image": "curlimages/curl:latest",
+   "ports": [],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:curlimages/curl:latest"
+   ]
+  },
+  {
+   "id": "wiremock",
+   "repo": "wiremock/wiremock",
+   "tag": "latest",
+   "category": "開發工具",
+   "scenarios": [
+    "模擬後端 API 回傳假資料",
+    "前端開發時先用的假伺服器"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "256Mi",
+    "cpu": "250m"
+   },
+   "per_replica_users": 50,
+   "image": "wiremock/wiremock:latest",
+   "ports": [
+    8080,
+    8443
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:wiremock/wiremock:latest"
+   ]
+  },
+  {
+   "id": "scipy-notebook",
+   "repo": "jupyter/scipy-notebook",
+   "tag": "latest",
+   "category": "開發工具",
+   "scenarios": [
+    "含科學計算套件的 Jupyter 筆記本",
+    "資料分析、畫圖的線上環境"
+   ],
+   "standalone": true,
+   "resources": {
+    "memory": "1Gi",
+    "cpu": "500m"
+   },
+   "per_replica_users": 1,
+   "image": "jupyter/scipy-notebook:latest",
+   "ports": [
+    8888
+   ],
+   "volumes": [],
+   "doc_env": [],
+   "sources": [
+    "registry:jupyter/scipy-notebook:latest"
    ]
   }
  ],

@@ -12,6 +12,11 @@ from agents.cost_agent import KNOWN_PORTS, _image_name
 LISTEN_PORTS = {
     **KNOWN_PORTS,
     "nginx": 80, "httpd": 80, "caddy": 80, "wordpress": 80, "nextcloud": 80, "mediawiki": 80, "phpmyadmin": 80,
+    # 2026-11-19：映像檔沒寫 EXPOSE、軟體目錄抓不到 port 的：flarum 8888（mondediefr/docker-flarum README）、
+    # Home Assistant 8123（官方文件預設）
+    "flarum": 8888, "home-assistant": 8123,
+    # 2026-11-19 目錄擴充：舊軟體表有這幾個但沒寫 port（Docker Hub 官方說明）
+    "nats": 4222, "redmine": 3000, "eclipse-mosquitto": 1883,
     "ghost": 2368, "grafana": 3000, "gitea": 3000, "prometheus": 9090, "influxdb": 8086, "minio": 9000,
     "node-red": 1880, "uptime-kuma": 3001, "jenkins": 8080, "tomcat": 8080, "adminer": 8080,
 }
@@ -54,7 +59,23 @@ def _catalog_entry(image: str) -> Optional[dict]:
     return next((it for it in software_rag.items() if it["image"] == repo), None)
 
 
+# 會自己保存資料或狀態的軟體類別（rag/knowledge/catalog.json 的 category）。gap_check._stateful_replicas 用：
+# 系統推的副本數大於 1 時改成 1（兩份會搶同一份資料；資料要保存靠儲存空間，不是多開副本）。
+# 日誌收集（fluent-bit）、備份同步（rclone、restic）本身不保存狀態，不列入。
+STATEFUL_CATEGORIES = {
+    "資料庫", "快取", "訊息佇列", "程式碼託管", "程式碼管理", "維基或筆記", "共筆", "檔案分享", "檔案同步", "密碼管理",
+    "監控", "監控儀表板", "專案管理", "待辦事項", "相簿", "影音", "記帳", "工時記錄", "搜尋引擎", "文件管理", "書籤",
+    "行事曆", "新聞訂閱", "映像檔倉庫", "智慧家庭", "遊戲伺服器", "預約", "短網址", "論壇", "問卷", "聊天",
+    "線上資料表", "程式碼片段分享",
+}
+
+# 映像檔 EXPOSE 的第一個 port 不是網頁的：gogs 先列 SSH 22，網頁在 3000（gogs 官方 docker 說明）
+PORT_OVERRIDES = {"gogs": 3000}
+
+
 def listen_port(image: str) -> Optional[int]:
+    if name(image) in PORT_OVERRIDES:
+        return PORT_OVERRIDES[name(image)]
     it = _catalog_entry(image)
     if it and it.get("port"):
         return int(it["port"])

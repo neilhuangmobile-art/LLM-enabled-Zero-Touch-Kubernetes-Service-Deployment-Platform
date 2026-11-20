@@ -1,0 +1,26 @@
+{
+ "n": 200,
+ "n_answer": 157,
+ "n_must_ask": 43,
+ "pass_answer": 25,
+ "pass_rate_answer": 0.159,
+ "image_ok": 71,
+ "false_ask": 107,
+ "false_ask_sources": {
+  "model": 102,
+  "image": 39,
+  "cron_command": 9,
+  "extra": 9,
+  "format": 2
+ },
+ "must_ask_recall": 0.86,
+ "latency_p50_ms": 11256,
+ "latency_p90_ms": 14436,
+ "set": "scenario",
+ "tag": "ask_all",
+ "ask_policy": "all",
+ "select_rule": "agree",
+ "rag_backend": "field",
+ "llm_calls": 902,
+ "llm_failures": 0
+}

@@ -29,7 +29,9 @@ def resume(prior: Dict, answers: Dict[str, str], local: Optional[LLM]) -> Dict:
     notes = []
     for q in questions:
         ans = str(answers.get(q["id"], "") or "").strip()
-        if ans == "__auto__":
+        # 「幫我決定」＝採用系統推薦，不是使用者自己講的：來源記成 inferred，部署單不會顯示 100%（2026-11-19）
+        auto = ans == "__auto__"
+        if auto:
             ans = str(q.get("recommended") or "")
         if not ans:
             schema.add_question(spec, q["field"], q["question"], q.get("options"), q.get("recommended"), q.get("reason", ""))
@@ -46,7 +48,7 @@ def resume(prior: Dict, answers: Dict[str, str], local: Optional[LLM]) -> Dict:
             for v in spec["manifest"].get("volumes") or []:
                 v["size"] = ans if ans.endswith("Gi") else v["size"]
         elif field.startswith("verify:"):
-            verify.resume_answer(spec, field, ans)
+            verify.resume_answer(spec, field, ans, auto=auto)
         elif field.startswith("format:") or field == "schedule_interval":
             format_check.resume_answer(spec, field, ans)
         elif field == "cron_command":
@@ -58,6 +60,12 @@ def resume(prior: Dict, answers: Dict[str, str], local: Optional[LLM]) -> Dict:
                 for e in spec["extras"]:
                     if e["evidence"][:30] == field[len("extra:"):]:
                         e["status"] = "dropped"
+        elif field == "image" and auto:
+            if schema.set_field(spec, "image", ans, "inferred", "幫我決定（系統推薦）"):
+                # 選軟體步驟不要再重算一次（同一句話、就是這個推薦）
+                from agents.pipeline import software_rag
+                spec["choose_pick"] = software_rag.repo_of(schema.value(spec, "image"))
+                spec["choose_text"] = spec["text"]
         elif field == "image" and schema.set_field(spec, "image", ans, "user", "使用者回答"):
             pass
         else:
@@ -81,6 +89,8 @@ def _finish(spec: Dict, local: Optional[LLM], t0: float) -> None:
     # 意圖符合檢查（11-17）：系統填的值有沒有和使用者講的矛盾。有問題卡還沒回答就先不檢查，回答完 resume 會再跑一次
     if not spec["questions"]:
         verify.run(spec, local, refill=lambda s: gap_check.run(s, local))
+        # 意圖檢查可能把副本數改回 2、把記憶體改低：依軟體目錄的修正再套一次（冪等，使用者講的不動）
+        gap_check.adjust_resources(spec)
     reasoner.apply_extras(spec)
     # 最後的整合與格式檢查（手稿「agent_格式及負荷檢查」）：格式不合格的值試著修正、修正後重新檢查
     format_check.run(spec, local)
@@ -118,5 +128,5 @@ def to_payload(spec: Dict) -> Dict:
 def _public(spec: Dict) -> Dict:
     """給前端與紀錄看的部分（含原句的中間 JSON，回答問題時整份送回來）。"""
     keep = ("text", "purpose", "base", "workload", "expose", "extras", "manifest", "questions", "notices", "verified", "verify_skip", "format_fixed", "rejected",
-            "trace", "attempts", "backend", "total_ms", "cancelled")
+            "trace", "attempts", "backend", "total_ms", "cancelled", "choose_scores", "choose_reason", "choose_text", "choose_pick")
     return {k: copy.deepcopy(spec[k]) for k in keep if k in spec}

@@ -1,0 +1,25 @@
+{
+ "n": 200,
+ "n_answer": 157,
+ "n_must_ask": 43,
+ "pass_answer": 40,
+ "pass_rate_answer": 0.255,
+ "image_ok": 67,
+ "false_ask": 62,
+ "false_ask_sources": {
+  "image": 61,
+  "cron_command": 8,
+  "verify": 1
+ },
+ "must_ask_recall": 0.512,
+ "latency_p50_ms": 10609,
+ "latency_p90_ms": 13996,
+ "set": "scenario",
+ "tag": "cat57_cands",
+ "ask_policy": "essential",
+ "select_rule": "agree",
+ "rag_backend": "field",
+ "llm_calls": 823,
+ "llm_failures": 0,
+ "gemini": false
+}

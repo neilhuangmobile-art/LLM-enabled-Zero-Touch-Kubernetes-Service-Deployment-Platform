@@ -127,6 +127,35 @@ Only choose from the listed candidates. Do not invent image names.
 Output only JSON: {"image": "<exact image name from the list>", "reason": "<short reason>"}"""
 
 
+# 2026-11-18：選軟體改成「從清單選編號」（實體連結的做法：GenDecider NAACL 2024、LELA、BeLink），
+# 一定有「都不符合」選項，避免小模型被迫硬選；不告訴模型「目前的選擇」，避免錨定。
+CHOOSE_SYSTEM = """You match a user's request to the software they want to run.
+
+You get the user's request (any language) and a numbered list of software, each with a short description.
+Pick the number of the software that is the kind of thing the user asked for (for example a forum, a wiki,
+a survey form, a database, a cache, a monitoring page).
+Answer 0 if none of them is that kind of software, or if the user wants to run a program they wrote themselves.
+Judge by what the software IS, not by words that merely appear in its description.
+
+Output only JSON: {"choice": <number>}"""
+
+
+# 逐一判斷版（pointwise）：一次只看一個候選，沒有清單位置偏誤（list 版實測 4B 兩種順序都挑同一個位置）
+FIT_SYSTEM = """You check whether one piece of software is the kind of thing a user asked to run.
+
+You get the user's request (any language) and ONE software with a short description.
+Answer yes if this software is the kind of software the user wants (for example they want a forum and this is a forum,
+they want a relational database and this is a relational database). Answer no if it is a different kind of software,
+or if the user wants to run a program they wrote themselves.
+Judge by what the software IS, not by words that merely appear in its description.
+
+Output only JSON: {"fits": true} or {"fits": false}"""
+
+
+# 信心度版：只回 Yes／No（1 個 token），程式讀 Yes 的機率當信心度
+FIT_PROB_SYSTEM = FIT_SYSTEM.rsplit("Output only", 1)[0] + "Answer with exactly one word: Yes or No."
+
+
 # 2026-11-17：意圖符合檢查（手稿「agent_意圖檢查」第一點：填寫結果是否符合 user 的意圖）。
 # 只看系統填的值；使用者講的不檢查。evidence 一定要是原句裡的字，程式會核對。
 VERIFY_SYSTEM = """You check whether a deployment plan that a system filled in matches what the user asked for.
@@ -166,3 +195,13 @@ Rules for valid values:
 
 If the value cannot be fixed without guessing a different amount or meaning, answer null.
 Output only JSON: {"value": <fixed value or null>}"""
+
+
+# 2026-11-19：副本數規則補充（PIPELINE_REPLICAS_RULE，預設開）。dev_claude 副本數錯的 31 題有 25 題是答案 1、模型給 2，
+# 幾乎都是「資料不能不見」被當成要多開；資料不見靠保存空間，不是多開副本（多開還會搶同一顆磁碟）
+REPLICAS_RULE = """
+- replicas, more: "data must never be lost" is handled by storage, NOT by more replicas. Software that keeps its own
+  data or state (databases, caches, message queues, git hosting, wikis, file storage, password managers,
+  uptime/monitoring tools) runs as 1 replica unless the user clearly expects many people using it AT THE SAME TIME
+  (hundreds or more) or explicitly asks it to survive a machine failure."""
+

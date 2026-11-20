@@ -27,7 +27,7 @@ def _fake_local(normalized, reason):
             return json.dumps(normalized)
         if system == INTENT_SYSTEM:
             return json.dumps({"missing": []})
-        if system == REASON_SYSTEM:
+        if system.startswith(REASON_SYSTEM):
             return json.dumps(reason)
         if system == SELECT_SYSTEM:
             return json.dumps({})
@@ -41,6 +41,13 @@ def _norm(base=None, extras=None):
     b = {f: None for f in schema.BASE_FIELDS}
     b.update(base or {})
     return {"purpose": "x", "base": b, "extras": extras or []}
+
+
+@pytest.fixture(autouse=True)
+def _no_choose_mode(monkeypatch):
+    # web_demo 載入時會讀 .env，可能開了 PIPELINE_SELECT_MODE=choose（會呼叫真的模型算信心度）；
+    # 這裡測網站流程，選軟體的新做法在 tests/test_choose_software.py
+    monkeypatch.delenv("PIPELINE_SELECT_MODE", raising=False)
 
 
 @pytest.fixture

@@ -19,7 +19,7 @@ def fake(normalized=None, intent_rounds=None, reason=None, calls=None, select=No
             return json.dumps(normalized) if normalized is not None else None
         if system == INTENT_SYSTEM:
             return json.dumps({"missing": intent_rounds.pop(0) if intent_rounds else []})
-        if system == REASON_SYSTEM:
+        if system.startswith(REASON_SYSTEM):
             return json.dumps(reason or {})
         if system == SELECT_SYSTEM:
             return json.dumps(select or {})
@@ -38,7 +38,10 @@ def fake_embed(texts):
 
 
 @pytest.fixture(autouse=True)
-def _fake_rag():
+def _fake_rag(monkeypatch):
+    # .env 可能開了 PIPELINE_SELECT_MODE=choose（會呼叫真的模型算信心度）；這裡測原本的選軟體規則，
+    # 新做法在 tests/test_choose_software.py
+    monkeypatch.delenv("PIPELINE_SELECT_MODE", raising=False)
     software_rag.set_embedder(fake_embed)
     yield
     software_rag.set_embedder(None)
@@ -140,7 +143,7 @@ def test_gap_check_stops_when_no_progress():
     local = fake(normalized=norm(), reason={"questions": [{"question": "什麼軟體？"}], "replicas": 1,
                                             "workload": "service", "expose": "public"}, calls=calls)
     runner.run("幫我弄一個", None, local)
-    assert calls.count(REASON_SYSTEM) == 1             # 第一次就補不出映像檔，不重試
+    assert sum(c.startswith(REASON_SYSTEM) for c in calls) == 1             # 第一次就補不出映像檔，不重試
 
 
 def test_gap_check_retries_at_most_three_times():
@@ -151,13 +154,26 @@ def test_gap_check_retries_at_most_three_times():
     assert any(q["field"] == "image" for q in s["questions"])
 
 
-def test_intent_check_max_three_rounds_then_asks():
+def test_intent_check_max_three_rounds_then_asks(monkeypatch):
+    """PIPELINE_ASK_POLICY=all（原本做法）：3 輪後還有新漏項就拿片段反問。"""
+    monkeypatch.setenv("PIPELINE_ASK_POLICY", "all")
     text = "要 A 設定、要 B 設定、要 C 設定、要 D 設定"
     rounds = [[{"kind": "other", "desc": x, "evidence": f"要 {x} 設定"}] for x in "ABCD"]
     s = schema.new_spec(text)
     intent_check.run(s, fake(intent_rounds=rounds))
     assert s["attempts"]["intent"] == 3 and len(s["extras"]) == 3
     assert s["questions"] and s["questions"][0]["field"].startswith("extra:")
+
+
+def test_intent_check_essential_policy_notices_instead_of_asking(monkeypatch):
+    """預設 essential（2026-11-18）：不拿片段反問，照使用者講的處理並在部署單上提示。"""
+    monkeypatch.delenv("PIPELINE_ASK_POLICY", raising=False)
+    text = "要 A 設定、要 B 設定、要 C 設定、要 D 設定"
+    rounds = [[{"kind": "other", "desc": x, "evidence": f"要 {x} 設定"}] for x in "ABCD"]
+    s = schema.new_spec(text)
+    intent_check.run(s, fake(intent_rounds=rounds))
+    assert len(s["extras"]) == 3 and not s["questions"]
+    assert any("要 C 設定" in n and "請確認" in n for n in s["notices"])
 
 
 def test_schedule_becomes_cronjob():
@@ -280,7 +296,7 @@ def test_invented_image_becomes_question_with_candidates():
     assert q["recommended"] == "mediawiki" and q["options"][0]["value"] == "mediawiki"
     assert q["options"][-1]["value"] == "__auto__"
     s2 = runner.resume(s, {q["id"]: "__auto__"}, fake(reason={}))
-    assert schema.value(s2, "image") == "mediawiki" and s2["base"]["image"]["source"] == "user"
+    assert schema.value(s2, "image") == "mediawiki" and s2["base"]["image"]["source"] == "inferred"   # 幫我決定≠使用者講的（11-19）
 
 
 def test_user_stated_image_is_not_checked_against_catalog():
@@ -303,7 +319,7 @@ def test_reasoner_gets_only_the_original_sentence():
     seen = []
 
     def llm(system, user):
-        if system == REASON_SYSTEM:
+        if system.startswith(REASON_SYSTEM):
             seen.append(user)
             return json.dumps({"image": "nginx"})
         return fake(normalized=norm({"replicas": 2}))(system, user)
@@ -445,6 +461,24 @@ def test_verify_drops_wrong_schedule_so_no_cronjob_question():
     assert s["workload"]["value"] == "service"
 
 
+def test_verify_schedule_time_doubt_becomes_notice_not_question(monkeypatch):
+    """2026-11-19：模型懷疑排程「時間」不對（建議值是另一個時間）時，改成部署單提醒並寫出實際時間，不出現「schedule 是 要」的問題卡。"""
+    text = "每天半夜兩點把資料庫備份一次，跑完就好"
+
+    def local_():
+        return fake(normalized=norm({}, [{"kind": "schedule", "desc": "定時", "value": "0 2 * * *", "evidence": "每天半夜兩點"}]),
+                    reason={"image": "alpine", "workload": "cronjob", "expose": "none", "schedule": "0 2 * * *"},
+                    verify_rounds=[[{"field": "schedule", "issue": "時間可能不對", "evidence": "每天半夜兩點", "suggest": "0 3 * * *"}]])
+    s = runner.run(text, None, local_())
+    assert not any(q["field"] == "verify:schedule" for q in s["questions"])
+    assert any("請確認時間" in n and "02:00" in n for n in s["notices"])
+    assert s["workload"]["value"] == "cronjob"
+    # 對照：反問策略 all 時維持原本的問題卡
+    monkeypatch.setenv("PIPELINE_ASK_POLICY", "all")
+    s = runner.run(text, None, local_())
+    assert any(q["field"] == "verify:schedule" for q in s["questions"])
+
+
 def test_verify_no_problem_calls_once(verify_all):
     calls = []
     runner.run(_BG, None, fake(normalized=norm(), reason={"image": "python", "workload": "worker", "expose": "internal"},
@@ -458,7 +492,7 @@ def test_verify_resume_keep_and_accept(verify_all):
     kept = runner.resume(s, {qid: "keep"}, fake(verify_rounds=[[{"field": "cpu", "issue": "x", "evidence": "每小時", "suggest": "50m"}]]))
     assert kept["base"]["cpu"]["source"] == "user" and schema.value(kept, "cpu") == "500m" and not kept["questions"]
     took = runner.resume(s, {qid: "__auto__"}, fake())
-    assert schema.value(took, "cpu") == "100m" and took["base"]["cpu"]["source"] == "user"
+    assert schema.value(took, "cpu") == "100m" and took["base"]["cpu"]["source"] == "inferred"   # 幫我決定≠使用者講的（11-19）
 
 
 def test_verify_default_only_checks_schedule():
@@ -536,3 +570,17 @@ def test_unfixable_value_asks_after_three_rounds():
 def test_app_name_must_start_with_letter():
     s = runner.run("開 redis", None, fake(normalized=norm({"image": "redis"}), reason={"app_name": "123-cache"}))
     assert schema.value(s, "app_name") == "app-123-cache"
+
+
+def test_reasoner_side_questions_become_notices(monkeypatch):
+    """2026-11-18：軟體已經決定時，推理代理自己加的追問（網頁還是 App）不擋流程，改成部署單提示。"""
+    monkeypatch.delenv("PIPELINE_ASK_POLICY", raising=False)
+    text = "幫我架一個 wordpress 部落格"
+    local = fake(normalized=norm({"image": "wordpress"}), reason={"questions": [{"question": "你希望用網頁還是 App 存取？"}],
+                                                               "image": "wordpress", "replicas": 1, "workload": "service", "expose": "public"})
+    s = runner.run(text, None, local)
+    assert not any(q["field"].startswith("model:") for q in s["questions"])
+    assert any("網頁還是 App" in n for n in s["notices"])
+    monkeypatch.setenv("PIPELINE_ASK_POLICY", "all")
+    s2 = runner.run(text, None, local)
+    assert any(q["field"].startswith("model:") for q in s2["questions"])

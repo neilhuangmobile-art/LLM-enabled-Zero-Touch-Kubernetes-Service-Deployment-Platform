@@ -1,0 +1,31 @@
+{
+ "n": 5,
+ "n_answer": 5,
+ "n_must_ask": 0,
+ "pass_answer": 4,
+ "pass_rate_answer": 0.8,
+ "image_ok": 4,
+ "false_ask": 0,
+ "false_ask_sources": {},
+ "must_ask_recall": 0.0,
+ "latency_p50_ms": 9849,
+ "latency_p90_ms": 10731,
+ "set": "claude",
+ "tag": "gemini5",
+ "ask_policy": "essential",
+ "select_rule": "agree",
+ "rag_backend": "field",
+ "select_mode": "choose",
+ "choose_style": "confidence",
+ "choose_threshold": "0.8",
+ "llm_calls": 15,
+ "llm_failures": 0,
+ "gemini": true,
+ "gemini_usage": {
+  "calls": 5,
+  "prompt_tokens": 4240,
+  "output_tokens": 838,
+  "thought_tokens": 0,
+  "blocked": 0
+ }
+}

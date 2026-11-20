@@ -46,6 +46,13 @@ def run(spec: Dict, local: Optional[LLM]) -> None:
         leftover = added
     # 3 輪都還在找到新東西：最後一輪加的項目請使用者確認，避免無止境地加下去
     for it in leftover:
+        # 2026-11-18：不再拿句子片段反問（「你提到『記得加密碼』，我不確定理解得對不對」），直接採用原本的推薦值
+        # 「照我說的做」，部署單上寫明，使用者可以拿掉。PIPELINE_ASK_POLICY=all 恢復原本做法（對照用）。
+        if schema.ask_policy() != "all":
+            ev = str(it.get("evidence") or "").strip()
+            if ev:   # 部署單上有「已套用／注意到但沒處理」清單，這裡只提醒使用者去確認，不說可以在卡片上拿掉（沒有那個按鈕）
+                schema.add_notice(spec, f"你提到「{ev[:60]}」，系統已盡量照你說的設定，請確認部署單是否符合")
+            continue
         schema.add_question(spec, f"extra:{it.get('evidence', '')[:30]}",
                             f"你提到「{it.get('evidence', '')}」，我不確定理解得對不對，這部分要怎麼處理？",
                             options=[{"value": "keep", "label": "照我說的做"}, {"value": "drop", "label": "不用了"}],

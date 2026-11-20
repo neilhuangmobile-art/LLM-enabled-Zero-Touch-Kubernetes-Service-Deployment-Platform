@@ -16,6 +16,9 @@
 > **⚠ 2026-10-23 組員接手**：先讀 [docs/handoff/TEAM_HANDOFF_2026-10-23.md](../handoff/TEAM_HANDOFF_2026-10-23.md)
 > （接手步驟、新功能、改程式的規則與陷阱、組員負責的分時擴縮／個人化要先對齊的事、已知問題）。
 
+> **⚠ 2026-11-20 情境部署交接**：先讀 [docs/handoff/TEAM_HANDOFF_2026-11-20.md](../handoff/TEAM_HANDOFF_2026-11-20.md)
+> （盲測結果、踩過的雷、評估做法、NVIDIA 電腦設定）。
+
 ## 專案是什麼
 
 LLM-enabled Zero-Touch Kubernetes Service Deployment Platform：使用者以自然語言描述需求，

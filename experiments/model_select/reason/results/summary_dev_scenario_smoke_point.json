@@ -1,0 +1,23 @@
+{
+ "n": 12,
+ "n_answer": 12,
+ "n_must_ask": 0,
+ "pass_answer": 7,
+ "pass_rate_answer": 0.583,
+ "image_ok": 8,
+ "false_ask": 2,
+ "false_ask_sources": {
+  "image": 2
+ },
+ "must_ask_recall": 0.0,
+ "latency_p50_ms": 11543,
+ "latency_p90_ms": 13027,
+ "set": "scenario",
+ "tag": "smoke_point",
+ "ask_policy": "essential",
+ "select_rule": "agree",
+ "rag_backend": "field",
+ "llm_calls": 81,
+ "llm_failures": 0,
+ "gemini": false
+}

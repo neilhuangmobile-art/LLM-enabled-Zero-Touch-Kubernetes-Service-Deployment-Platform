@@ -7,12 +7,13 @@ port 一律以查表為準（映像檔名稱查得到時，蓋過推理代理猜
 from __future__ import annotations
 
 import os
+import re
 import time
 from typing import Dict, Optional
 
 from agents.pipeline import defaults, reasoner, schema, software_rag
 from agents.pipeline.llm import LLM, extract_json
-from agents.pipeline.prompts import SELECT_SYSTEM
+from agents.pipeline.prompts import CHOOSE_SYSTEM, FIT_SYSTEM, SELECT_SYSTEM
 
 MAX_ROUNDS = 3
 
@@ -34,13 +35,122 @@ def run(spec: Dict, local: Optional[LLM]) -> None:
         if out and out.get("questions") and schema.value(spec, "image") is None:
             break
     _verify_image(spec)
-    _select_software(spec, local)
+    if select_mode() == "choose":
+        _choose_software(spec, local)
+    else:
+        _select_software(spec, local)
     _table_and_defaults(spec)
+    adjust_resources(spec)
     still = schema.empty_fields(spec)
     if "image" in still:
         _ask_image(spec)
     spec["trace"].append({"step": "gap", "ms": int((time.time() - t0) * 1000),
                           "detail": f"推理 {spec['attempts']['gap']} 次；仍空著：{', '.join(still) or '無'}"})
+
+
+# 句子裡有上百、上千的人數，或要求一台壞了也要能用：保留推理代理推的副本數。
+# 數字要接著人、學生、訂單這類單位才算（不把 port 8080、512Mi、密碼數字、「千萬不要」「萬一」當成人數）；
+# 「網站壞掉就通知我」是監控需求，不是高可用，所以「壞掉」要接「一台」才算。
+_MANY_USERS = re.compile(
+    r"(?:\d{3,}|[一二兩三四五六七八九十幾上數好]+[百千萬])\s*多?\s*[個位名張筆]?.{0,4}?"
+    r"(?:人|學生|員工|粉絲|會員|使用者|用戶|客人|顧客|觀眾|訂單|單|users?\b|people)"
+    r"|上百|上千|幾百|幾千|數百|數千|成千|上萬", re.I)
+_WANTS_HA = re.compile(
+    r"壞[掉了]?一台|一台壞|掛[掉了]?一台|一台掛|不能(?:隨便)?(?:停|中斷|斷|掛|當機)|不停機|零停機|高可用|備援|容錯"
+    r"|high.?availab|no.?downtime|fail.?over|\bHA\b", re.I)
+
+
+def _switch_on(name: str) -> bool:
+    """開關型環境變數：0／false／off／no 關閉，沒設或 1／true／on／yes 開啟，其他值警告後當成開啟。"""
+    v = os.environ.get(name, "1").strip().lower()
+    if v in ("0", "false", "off", "no"):
+        return False
+    if v not in ("1", "true", "on", "yes", ""):
+        _warn_once(f"{name}={v!r} 不認得，當成開啟")
+    return True
+
+
+def adjust_resources(spec: Dict) -> None:
+    """副本數、記憶體依軟體目錄修正。空缺檢查結尾跑一次；意圖檢查（verify）可能改回欄位，runner 之後再跑一次。
+    兩個步驟都只改系統推的值、改過一次後再跑不會再變（冪等）。"""
+    if not software_rag.field_catalog_ok():
+        if not any(t.get("detail") == _NO_CATALOG for t in spec["trace"]):
+            spec["trace"].append({"step": "gap", "ms": 0, "detail": _NO_CATALOG})
+        return
+    _stateful_replicas(spec)
+    _memory_floor(spec)
+
+
+_NO_CATALOG = "軟體目錄讀取失敗，跳過副本數／記憶體依軟體的調整"
+
+
+def _stateful_replicas(spec: Dict) -> None:
+    """會自己保存資料的軟體（資料庫、快取、佇列、維基、檔案分享、密碼管理、監控…）系統推的副本數改成 1。
+
+    2026-11-19：推理代理的提示詞已有這條規則（prompts.REPLICAS_RULE），4B 模型仍常給 2～3 份
+    （uptime-kuma、vaultwarden、redis 等）。多份同時寫同一份資料本來就不對，資料要保存靠儲存空間。
+    例外：使用者講的、句子裡有上百上千的人數、或要求一台壞了也要能用（_MANY_USERS、_WANTS_HA）。
+    離線模擬（dev_kbfix）：dev_claude 整張全對 +5／−0，dev_scenario 0／0。PIPELINE_STATEFUL_REPLICAS=0 關閉。"""
+    if not _switch_on("PIPELINE_STATEFUL_REPLICAS"):
+        return
+    b = spec["base"]["replicas"]
+    try:
+        n = int(b["value"])
+    except (TypeError, ValueError):
+        return
+    image = schema.value(spec, "image")
+    if b["source"] == "user" or n <= 1 or not image:
+        return
+    cat = software_rag.category(image)
+    if cat not in defaults.STATEFUL_CATEGORIES:
+        return
+    hit = _MANY_USERS.search(spec["text"]) or _WANTS_HA.search(spec["text"])
+    if hit:
+        detail = f"副本數維持 {n}：句子提到大量使用者或要能撐過故障（「{hit.group(0)}」）"
+        if not any(t.get("detail") == detail for t in spec["trace"]):
+            spec["trace"].append({"step": "gap", "ms": 0, "detail": detail})
+        return
+    spec["base"]["replicas"] = {"value": 1, "source": b["source"], "evidence": f"{cat}會自己保存資料，先開 1 份"}
+    schema.add_notice(spec, f"這類軟體（{cat}）會自己保存資料，先開 1 份；如果同時有上百人使用、或需要一台壞了也能繼續用，請把副本數調高")
+    spec["trace"].append({"step": "gap", "ms": 0, "detail": f"副本數 {n} → 1（{cat}）"})
+
+
+def _mi(v) -> float:
+    """「512Mi」「1Gi」→ MiB；看不懂回 -1。"""
+    s = str(v or "").strip()
+    try:
+        if s.endswith("Gi"):
+            return float(s[:-2]) * 1024
+        if s.endswith("Mi"):
+            return float(s[:-2])
+    except ValueError:
+        pass
+    return -1
+
+
+def _memory_floor(spec: Dict) -> None:
+    """系統推的記憶體低於知識庫對這套軟體的建議值時，拉到建議值（2026-11-19）。
+
+    推理代理常給得比軟體本身需要的少（rabbitmq 建議 512Mi 給 128Mi、elasticsearch 建議 1Gi 給 512Mi），
+    記憶體不夠容器會被系統砍掉（OOMKilled）。只往上調、不往下調；使用者講的不動。
+    試過直接改用建議值（會把推得比較多的也降下來）：兩組都變差；當下限：dev_claude 整張全對 +4／−0、dev_scenario +1／−0。
+    CPU 同樣做法是持平（+3／−2），不做。PIPELINE_MEMORY_FLOOR=0 關閉。"""
+    if not _switch_on("PIPELINE_MEMORY_FLOOR"):
+        return
+    b = spec["base"]["memory"]
+    image = schema.value(spec, "image")
+    if b["source"] == "user" or not image:
+        return
+    # python、node 這類執行環境跑的是使用者自己的程式，目錄的建議值只是通用猜測，不當下限（意圖檢查依句子調低的要留著）
+    if defaults.name(image) in defaults.RUNTIME_IMAGES:
+        return
+    rec = software_rag.recommended_memory(image)
+    cur, want = _mi(b["value"]), _mi(rec)
+    if cur < 0 or want < 0 or cur >= want:
+        return
+    spec["base"]["memory"] = {"value": rec, "source": b["source"], "evidence": f"這套軟體建議至少 {rec}"}
+    schema.add_notice(spec, f"這套軟體建議至少 {rec} 記憶體，已從 {b['value']} 調高，避免記憶體不足被系統停掉")
+    spec["trace"].append({"step": "gap", "ms": 0, "detail": f"記憶體 {b['value']} → {rec}（軟體建議值）"})
 
 
 def _needs_model(spec: Dict) -> bool:
@@ -125,6 +235,240 @@ def _ask_image(spec: Dict) -> None:
                         reason="沒辦法從你的描述確定要用哪個軟體，下面是依你的描述找到的候選")
 
 
+def select_mode() -> str:
+    """choose：從清單選編號、正反兩種順序一致才採用（2026-11-18）；select：原本的重選做法（對照用）。"""
+    return "choose" if os.environ.get("PIPELINE_SELECT_MODE", "select").strip().lower() == "choose" else "select"
+
+
+_NONE = "__none__"
+
+
+def _choose_once(spec: Dict, local: LLM, order: list, desc: Dict[str, str]) -> Optional[str]:
+    """問一次：回傳選到的映像檔、_NONE（都不符合），或 None（輸出看不懂）。"""
+    lines = "\n".join(f"{i + 1}. {img}: {desc.get(img, '')[:150]}" for i, img in enumerate(order))
+    out = extract_json(local(CHOOSE_SYSTEM, f"User request: {spec['text']}\nSoftware:\n{lines}", 64))
+    try:
+        n = int(out.get("choice")) if isinstance(out, dict) else None
+    except (TypeError, ValueError):
+        n = None
+    if n == 0:
+        return _NONE
+    return order[n - 1] if n is not None and 1 <= n <= len(order) else None
+
+
+def _choose_software(spec: Dict, local: Optional[LLM]) -> None:
+    """選軟體（2026-11-18，PIPELINE_SELECT_MODE=choose）：使用者沒指定軟體時，在「RAG 前 5 名＋推理代理的選擇」裡決定。
+    預設 confidence：逐一問每個候選「是不是使用者要的那類軟體」，讀模型回答 Yes 的機率；最高分過門檻才採用，否則反問。
+    （逐一判斷避開清單位置偏誤：實測 4B 不管清單怎麼排都選同一個位置。）拿不到機率時退回 pointwise（第一個說是的），
+    list（正反兩序選編號）只留作對照。
+    不動的情況：使用者指定的、同一句話已經選過。
+    推理代理選的是執行環境（python、node、alpine…）時（2026-11-19）：
+      - 定時執行、或使用者給了啟動指令 → 真的是要跑一段程式，維持執行環境
+      - 其他 → 仍然檢查現成軟體（實測推理代理常把訊息佇列、快取、網站監控當成「自己的程式」選 node／alpine，
+        兩份開發題組共 34 題）；有現成軟體過門檻就換，沒有就維持執行環境，不改成反問
+      （試過用關鍵字判斷「使用者自己的程式」：32 題只抓到 8 題、誤判 45 題，不採用）"""
+    b = spec["base"]["image"]
+    if local is None or b["source"] == "user":
+        return
+    cur = b["value"]
+    runtime = bool(cur) and defaults.name(cur) in defaults.RUNTIME_IMAGES
+    if runtime and (os.environ.get("PIPELINE_RUNTIME_CHOOSE", "1") == "0" or spec["workload"]["value"] == "cronjob"
+                    or any(e["kind"] == "command" and e.get("source") == "user" for e in spec["extras"])):
+        return
+    # 回答問題後會再跑一次 gap_check：原句沒變、軟體也還是上次選的，就沿用，不重算（省 5 次模型呼叫、結果也不會跳動）
+    if spec.get("choose_text") == spec["text"] and spec.get("choose_pick") == (software_rag.repo_of(cur) if cur else None):
+        return
+    spec.pop("choose_scores", None)          # 上一輪的分數、理由不能沿用到這一輪
+    spec.pop("choose_reason", None)
+    spec["choose_text"] = spec["text"]
+    pool = [c["image"] for c in software_rag.candidates(spec["text"], k=choose_k())]
+    cur_repo = software_rag.repo_of(cur) if cur else ""
+    if runtime:   # 執行環境本身不參加比較（它是「沒有現成軟體」時的退路）
+        pool = [i for i in pool if defaults.name(i) not in defaults.RUNTIME_IMAGES]
+    elif cur_repo and cur_repo not in pool:
+        pool.append(cur_repo)
+    if not pool:
+        return
+    desc = software_rag.choose_desc()
+    t0 = time.time()
+    style = os.environ.get("PIPELINE_CHOOSE_STYLE", "confidence").strip().lower()
+    if style not in ("confidence", "pointwise", "list"):
+        _warn_once(f"PIPELINE_CHOOSE_STYLE={style!r} 不認得，改用 confidence")
+        style = "confidence"
+    scored = _confidence_scores(spec, pool, desc) if style == "confidence" else None
+    if style == "confidence" and scored is None:
+        # 拿不到信心度（llama.cpp 沒回 logprobs、逾時、不是 llama.cpp）：改用逐一判斷，並明白告訴使用者
+        style = "pointwise"
+        spec["trace"].append({"step": "select", "ms": 0, "detail": "信心度查詢失敗，改用逐一判斷"})
+        schema.add_notice(spec, "這次沒有取得系統對軟體的信心度（本地模型沒有回傳機率），軟體欄位不會顯示信心度數字，請自己確認是不是你要的軟體")
+    if scored is not None:
+        a = z = _decide_by_confidence(spec, scored, desc)
+        # 資料庫、快取：推理代理選的這個本身就過門檻，就維持（原本 select 模式的 _NO_SELECT 保護）
+        own = dict(scored).get(cur_repo)
+        if cur_repo and defaults.name(cur_repo) in _NO_SELECT and own is not None and own >= choose_threshold():
+            a = z = cur_repo
+    elif style == "list":
+        a, z = (_choose_once(spec, local, order, desc) for order in (pool, pool[::-1]))
+    else:
+        # 逐一判斷：依 RAG 名次，第一個說是的就採用；全部明確說不是＝都不符合。
+        # 模型沒回應或輸出看不懂不算「不是」：全部都這樣時維持推理代理原本的選擇，不因暫時的錯誤清掉
+        a, answered = _NONE, 0
+        if cur_repo in pool and defaults.name(cur_repo) in _NO_SELECT:
+            # 資料庫、快取：先問推理代理原本選的（confidence 模式的 _NO_SELECT 保護），說是就維持
+            pool = [cur_repo] + [i for i in pool if i != cur_repo]
+        for img in pool:
+            out = extract_json(local(FIT_SYSTEM, f"User request: {spec['text']}\nSoftware: {img}: {desc.get(img, '')[:200]}", 16))
+            fits = out.get("fits") if isinstance(out, dict) else None
+            answered += isinstance(fits, bool)
+            if fits is True:
+                a = img
+                break
+        if a == _NONE and answered == 0:
+            spec["trace"].append({"step": "select", "ms": int((time.time() - t0) * 1000),
+                                  "detail": f"本地模型沒有給出判斷，維持 {cur_repo or '未填'}"})
+            spec.pop("choose_text", None)    # 模型暫時沒回應：下一輪（回答問題後）要重新判斷，不沿用
+            return
+        z = a
+    ms = int((time.time() - t0) * 1000)
+    if runtime and (a != z or a in (None, _NONE) or defaults.name(a) in defaults.RUNTIME_IMAGES):
+        # 沒有現成軟體過門檻：維持執行環境（推理代理原本的判斷），不反問
+        spec["choose_pick"] = cur_repo
+        spec.pop("choose_reason", None)
+        spec["trace"].append({"step": "select", "ms": ms, "detail": f"沒有現成軟體過門檻，維持執行環境 {cur_repo}"})
+        return
+    if a == z and a not in (None, _NONE):
+        if a != cur_repo:
+            spec["base"]["image"] = {"value": a, "source": "inferred", "evidence": "依原句從知識表的候選選出"}
+            # 換了軟體：推理代理照舊軟體推的 port、名稱不再適用（例：ghost 的 2368 留給 flarum），清掉讓查表重填。
+            # 使用者講的不動。記憶體／CPU 是依用量推的、和軟體種類關係較小，保留
+            for f in ("port", "app_name"):
+                if spec["base"][f]["source"] != "user":
+                    spec["base"][f] = {"value": None, "source": None, "evidence": None}
+        spec["choose_pick"] = a
+        spec["questions"] = [q for q in spec["questions"] if q["field"] != "image"]
+        spec["trace"].append({"step": "select", "ms": ms, "detail": f"選 {a}（{style}；原本 {cur_repo or '未填'}）"})
+        return
+    spec["choose_pick"] = None
+    why = spec.get("choose_reason") or ("都不符合" if a == z == _NONE else f"兩次不一致（{a} / {z}）")
+    spec["base"]["image"] = {"value": None, "source": None, "evidence": None}
+    spec["trace"].append({"step": "select", "ms": ms, "detail": f"{why}，改問使用者；候選：{', '.join(pool)}"})
+    # 推薦值：選到的那個（在清單內才算），否則信心度最高的
+    rec = a if a not in (None, _NONE) else None
+    if rec is None and spec.get("choose_scores"):
+        rec = max(spec["choose_scores"], key=lambda x: x[1])[0]
+    _ask_image(spec)
+    q = next((q for q in spec["questions"] if q["field"] == "image"), None)
+    if q is not None and rec:
+        q["recommended"] = rec
+        scores = spec.get("choose_scores")
+        if scores:
+            # 有信心度：選項依分數排序；只有落在校準範圍內的才標數字（低分的沒量過，不顯示，避免看起來一樣可靠）
+            from agents.pipeline.calibration import reliability
+            opts = []
+            for img, p in sorted(scores, key=lambda x: -x[1]):
+                rel = reliability(p)
+                tail = f"（信心度 {rel['pct']}%）" if rel else ""
+                opts.append({"value": img, "label": f"{img}：{desc.get(img, '')[:60]}{tail}", "confidence": rel})
+            q["options"] = opts + [{"value": "__auto__", "label": "幫我決定"}]
+        else:
+            opts = [o for o in q.get("options") or [] if o.get("value") not in (rec, "__auto__")]
+            q["options"] = [{"value": rec, "label": rec}] + opts + [{"value": "__auto__", "label": "幫我決定"}]
+
+
+_warned: set = set()
+
+
+def _warn_once(msg: str) -> None:
+    if msg not in _warned:
+        _warned.add(msg)
+        print(f"[pipeline] 設定警告：{msg}")
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        v = float(raw)
+        if 0.0 <= v <= 1.0:
+            return v
+    except ValueError:
+        pass
+    _warn_once(f"{name}={raw!r} 不是 0～1 的數字，改用 {default}")
+    return default
+
+
+def choose_k() -> int:
+    """選軟體時比較 RAG 前幾名（預設 5；每多一個候選多一次模型呼叫）。"""
+    raw = os.environ.get("PIPELINE_CHOOSE_K", "").strip()
+    if not raw:
+        return 5
+    if raw.isdigit() and 1 <= int(raw) <= 15:
+        return int(raw)
+    _warn_once(f"PIPELINE_CHOOSE_K={raw!r} 不是 1～15 的整數，改用 5")
+    return 5
+
+
+def choose_threshold() -> float:
+    """信心度門檻：最高分的候選要超過這個值才自動採用，否則反問。用 dev_scenario 校準、dev_claude 驗證。"""
+    return _env_float("PIPELINE_CHOOSE_THRESHOLD", 0.8)
+
+
+def choose_margin() -> float:
+    """第一、二名是不同類型的軟體、而且信心度差距小於這個值＝需求有歧義，反問。0＝不檢查。"""
+    return _env_float("PIPELINE_CHOOSE_MARGIN", 0.0)
+
+
+def _category(img: str, desc: Dict[str, str]) -> str:
+    return (desc.get(img) or img).split("：", 1)[0]
+
+
+def _confidence_scores(spec: Dict, pool: list, desc: Dict[str, str]):
+    """每個候選的信心度＝模型回答 Yes 的機率（llama.cpp logprob）。拿不到（非 llama.cpp、連不上）回 None，
+    呼叫端改用逐一判斷。結果記在 spec["choose_scores"]，評估時可以離線掃描門檻。"""
+    from agents.pipeline import llm as pllm
+    from agents.pipeline.prompts import FIT_PROB_SYSTEM
+    scored = []
+    for img in pool:
+        p = pllm.local_yes_prob(FIT_PROB_SYSTEM, f"User request: {spec['text']}\nSoftware: {img}: {desc.get(img, '')[:200]}")
+        if p is None:
+            return None
+        scored.append((img, round(p, 4)))
+    spec["choose_scores"] = scored
+    return scored
+
+
+def choose_tie() -> float:
+    """分數差距在這個範圍內視為同分，取 RAG 名次較前的（2026-11-19：模型分數常常擠在 0.95～0.99 分不開，
+    離線模擬 0.01 在兩份開發題組都最好）。"""
+    return _env_float("PIPELINE_CHOOSE_TIE", 0.01)
+
+
+def _decide_by_confidence(spec: Dict, scored: list, desc: Dict[str, str]) -> str:
+    """最高分超過門檻才採用；差距在 choose_tie() 內的視為同分，取 RAG 名次較前的。第一、二名類型不同且分數接近也算沒把握。"""
+    order = sorted(range(len(scored)), key=lambda i: (-scored[i][1], i))
+    top = scored[order[0]][1]
+    tie = choose_tie()
+    # scored 依 RAG 名次排列。最高分過門檻時，同分只在過門檻的候選之間比（不能讓同分規則換成門檻以下的軟體而變成反問）
+    floor = max(top - tie, choose_threshold()) if top >= choose_threshold() else top - tie
+    first = min(i for i in range(len(scored)) if scored[i][1] >= floor)
+    order = [first] + [i for i in order if i != first]
+    best_img, best = scored[order[0]]
+    thr, margin = choose_threshold(), choose_margin()
+    if best < thr:
+        spec["choose_reason"] = f"最高信心度 {best:.2f}（{best_img}）低於門檻 {thr:.2f}"
+        return _NONE
+    if margin > 0:
+        for i in order[1:]:
+            img, p = scored[i]
+            if _category(img, desc) != _category(best_img, desc):
+                if best - p < margin:
+                    spec["choose_reason"] = f"{best_img} {best:.2f} 和 {img} {p:.2f} 類型不同又分數接近"
+                    return _NONE
+                break
+    return best_img
+
+
 # 資料庫、程式執行環境不換：使用者說要資料庫或跑自己的程式時，推理代理挑的通常就對，候選反而會換成別種
 _NO_SELECT = {"postgres", "mysql", "mariadb", "mongo", "redis", "memcached"}
 
@@ -150,7 +494,7 @@ def _select_software(spec: Dict, local: Optional[LLM]) -> None:
     pool = [cur] + [c["image"] for c in cands if c["image"] != cur]
     if len(pool) < 2:
         return
-    desc = {it["image"]: it["desc"] for it in software_rag.items()}
+    desc = software_rag.choose_desc()
     lines = "\n".join(f"{i + 1}. {img}: {desc.get(img, '')[:150]}" for i, img in enumerate(pool))
     t0 = time.time()
     out = extract_json(local(SELECT_SYSTEM, f"User request: {spec['text']}\nCurrent choice: {cur}\nCandidates:\n{lines}"))
