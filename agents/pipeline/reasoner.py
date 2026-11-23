@@ -11,7 +11,7 @@ from typing import Dict, Optional
 from agents.pipeline import cron as cron_util
 from agents.pipeline import defaults, schema
 from agents.pipeline.llm import LLM, extract_json
-from agents.pipeline.prompts import REASON_SYSTEM, REPLICAS_RULE
+from agents.pipeline.prompts import REASON_SIZING_TIERS, REASON_SYSTEM, REPLICAS_RULE
 
 _ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,100}$")
 
@@ -188,6 +188,9 @@ def apply_extras(spec: Dict) -> None:
     _need_cron_command(spec, image)
 
 
+CRON_EXAMPLE_COMMAND = ("sh", "-c", "echo 請把這行換成要定時執行的指令")
+
+
 def _need_cron_command(spec: Dict, image: str) -> None:
     """定時執行一定要有要跑的指令：程式執行環境（python、node、busybox…）沒有指令就什麼都不會做，
     也不能像背景程式那樣先放空殼（跑完就結束）。使用者 11-17 決定在問題卡上問。"""
@@ -195,6 +198,13 @@ def _need_cron_command(spec: Dict, image: str) -> None:
         return
     if image and defaults.name(image) not in defaults.RUNTIME_IMAGES:
         return      # 軟體本身就有預設要做的事（例如資料庫備份工具），不硬問
+    # 2026-11-22 使用者決定：預設改成先放範例指令＋部署單提醒（跟背景程式「保持運作的空殼」同一種做法），不出問題卡。
+    # 開發題組這類題目的標準答案都是不用問（16 題被算成多問）。PIPELINE_CRON_COMMAND=ask 恢復成問問題卡（對照用）
+    if os.environ.get("PIPELINE_CRON_COMMAND", "example").strip().lower() != "ask":
+        spec["manifest"]["command"] = list(CRON_EXAMPLE_COMMAND)
+        schema.add_notice(spec, "你沒有說每次定時執行要跑什麼指令，先放一個範例指令（目前只會印一行字、不會做事），"
+                                "請改成你的程式，例如：python /app/backup.py")
+        return
     schema.add_question(spec, "cron_command",
                         "每次定時執行時，要跑什麼指令？例如：python /app/backup.py，或 echo hello",
                         recommended=None, reason="定時執行的程式跑完就結束，沒有指令就什麼都不會做")
@@ -229,7 +239,9 @@ def _apply_storage(spec: Dict, e: Dict, image: str) -> None:
 
 def reason_system() -> str:
     """推理代理的系統提示詞；PIPELINE_REPLICAS_RULE=0 時不加副本數補充規則（對照實驗用）。"""
+    # PIPELINE_REASON_SIZING=tiers（2026-11-23，實驗）：拿掉範本裡會被照抄的 250m／256Mi，改成依負載選刻度
+    base = REASON_SIZING_TIERS if os.environ.get("PIPELINE_REASON_SIZING", "").strip().lower() == "tiers" else REASON_SYSTEM
     if os.environ.get("PIPELINE_REPLICAS_RULE", "1") == "0":
-        return REASON_SYSTEM
-    return REASON_SYSTEM + REPLICAS_RULE
+        return base
+    return base + REPLICAS_RULE
 

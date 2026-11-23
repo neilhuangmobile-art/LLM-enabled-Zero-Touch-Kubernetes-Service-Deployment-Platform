@@ -5,13 +5,64 @@ Gemini 優先，失敗（沒有 key、額度用完、輸出不是 JSON）改用�
 （11-11 實測 Gemini 會把軟體名稱抄進 app_name，那不算使用者講的）。"""
 from __future__ import annotations
 
+import os
 import re
 import time
 from typing import Dict, Optional
 
 from agents.pipeline import schema
 from agents.pipeline.llm import LLM, extract_json
-from agents.pipeline.prompts import NORMALIZE_SYSTEM
+from agents.pipeline.prompts import CLARITY_ADDON, NORMALIZE_SYSTEM
+
+
+def clarity_mode() -> str:
+    """PIPELINE_CLARITY（2026-11-22，反問改善）：
+    off（預設）＝和原本完全一樣；on＝依「軟體講清楚了沒」決定要不要問軟體；
+    log＝Gemini 一樣會判斷並記錄，但不影響結果（評估時用同一份 Gemini 回應比較開與關）。"""
+    import os
+    v = os.environ.get("PIPELINE_CLARITY", "off").strip().lower()
+    return v if v in ("on", "log") else "off"
+
+
+def apply_clarity(spec: Dict, c) -> None:
+    """把 Gemini 的 clarity 存進 spec；矛盾或做不到的地方在 on 模式加到部署單提醒。格式不對就當作沒有（改用本地判斷）。"""
+    # prompt 的欄位叫 kind_clear（2026-11-22 第二版；第一版叫 software_clear，Gemini 誤解成「使用者有沒有講出產品名」）
+    clear = c.get("kind_clear", c.get("software_clear")) if isinstance(c, dict) else None
+    if not isinstance(clear, bool):
+        spec["trace"].append({"step": "clarity", "ms": 0, "detail": "Gemini 沒有回清不清楚的判斷"})
+        return
+    notes = [str(n).strip()[:200] for n in (c.get("notes") or []) if str(n).strip()][:5] \
+        if isinstance(c.get("notes"), list) else []
+    spec["clarity"] = {"source": "gemini", "software_clear": clear,
+                       "category": str(c.get("category") or "")[:80] or None,
+                       "suggest": str(c.get("suggest") or "").strip()[:120] or None, "notes": notes}
+    if clarity_mode() == "on":
+        for n in notes:
+            schema.add_notice(spec, f"系統注意到：{n}")
+    spec["trace"].append({"step": "clarity", "ms": 0,
+                          "detail": f"Gemini：{'清楚' if clear else '沒講清楚'}要哪一類軟體（{spec['clarity']['category'] or '不知道'}）"})
+
+
+def _second_check(spec: Dict, gemini: Optional[LLM]) -> None:
+    """PIPELINE_CLARITY_CHECK=gemini2（2026-11-23，預設關）：Gemini 正規化時說「講清楚了」，再用獨立的短 prompt 問一次。
+    結果存在 clarity["check_clear"]，由 gap_check 決定要不要問。holdout 該問沒問的 7 題有 6 題是 Gemini 說講清楚了。
+    第二次沒回應或格式不對：不存，維持第一次的判斷。"""
+    c = spec.get("clarity")
+    if gemini is None or not c or c.get("software_clear") is not True \
+            or os.environ.get("PIPELINE_CLARITY_CHECK", "").strip().lower() != "gemini2":
+        return
+    from agents.pipeline.prompts import CLARITY_CHECK_SYSTEM
+    out = extract_json(gemini(CLARITY_CHECK_SYSTEM, spec["text"]))
+    ok = out.get("kind_clear") if isinstance(out, dict) else None
+    if not isinstance(ok, bool):
+        spec["trace"].append({"step": "clarity", "ms": 0, "detail": "第二次判斷沒有回應，維持第一次的判斷"})
+        return
+    c["check_clear"] = ok
+    kinds = [str(k)[:40] for k in out.get("kinds") or []][:5] if isinstance(out.get("kinds"), list) else []
+    c["check_kinds"] = kinds
+    spec["trace"].append({"step": "clarity", "ms": 0,
+                          "detail": f"第二次判斷：{'清楚' if ok else '沒講清楚'}（可能的種類：{'、'.join(kinds) or '無'}）"})
+
 
 EXTRA_KINDS = ("env", "secret", "storage", "command", "schedule", "no_expose", "extra_port", "other")
 
@@ -114,7 +165,10 @@ def normalize(spec: Dict, gemini: Optional[LLM], local: Optional[LLM]) -> None:
     for name, fn in (("gemini", gemini), ("local", local)):
         if fn is None:
             continue
-        raw = fn(NORMALIZE_SYSTEM, spec["text"])
+        # 2026-11-22：PIPELINE_CLARITY 開著時，Gemini 順便判斷「使用者有沒有講清楚要哪一類軟體」（方案 E，不多一次呼叫）。
+        # 本地正規化照舊用原本的 prompt
+        system = NORMALIZE_SYSTEM + CLARITY_ADDON if name == "gemini" and clarity_mode() != "off" else NORMALIZE_SYSTEM
+        raw = fn(system, spec["text"])
         data = extract_json(raw)
         if isinstance(data, dict):
             used = name
@@ -124,4 +178,7 @@ def normalize(spec: Dict, gemini: Optional[LLM], local: Optional[LLM]) -> None:
         spec["trace"].append({"step": "normalize", "ms": int((time.time() - t0) * 1000), "detail": "兩個模型都失敗"})
         return
     apply_normalized(spec, data)
+    if used == "gemini" and clarity_mode() != "off":
+        apply_clarity(spec, data.get("clarity"))
+        _second_check(spec, gemini)
     spec["trace"].append({"step": "normalize", "ms": int((time.time() - t0) * 1000), "detail": f"用 {used}"})

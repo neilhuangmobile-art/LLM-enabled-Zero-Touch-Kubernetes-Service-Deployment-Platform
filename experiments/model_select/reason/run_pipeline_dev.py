@@ -58,7 +58,25 @@ def score(t, p):
     return s
 
 SETS = {"scenario": "dev_scenario.jsonl", "claude": "dev_claude.jsonl",
-        "blind": "blind_scenario.jsonl"}   # 盲測（2026-11-20 使用者同意跑一次；跑完不拿來調整）
+        "blind": "blind_scenario.jsonl",   # 盲測（2026-11-20 使用者同意跑一次；跑完不拿來調整）
+        # 2026-11-23 獨立驗證題組：另開、不知情的 Claude 出題，使用者抽查後鎖定；只跑不調、只看統計
+        "holdout": "holdout_20261123.jsonl", "holdout2": "holdout2_20261124.jsonl",
+        # 2026-11-23：柏碩 11-18 打包的題組（zt_testsets_20261118.zip）。s40＝組員原本的 S01～S40（repo 裡已有同內容）；
+        # perturb＝dev_scenario／dev_claude 各題的錯字、極短、囉嗦、中英夾雜改寫，標準答案沿用原題
+        "s40": "../../experiments/model_select/reason/testset_s.jsonl", "perturb": "dev_perturb.jsonl"}
+
+
+def load_tasks(set_: str) -> list:
+    """讀題組。perturb 只有 id／kind／text：標準答案從原題（dev_scenario、dev_claude）帶入，id 改成 D001_typo 避免重複。"""
+    def read(name):
+        return [json.loads(x) for x in open(os.path.normpath(os.path.join(ROOT, "docs", "bench_blind", name)), encoding="utf-8")
+                if x.strip().startswith("{")]
+    tasks = read(SETS[set_])
+    if set_ == "perturb":
+        base = {t["id"]: t for t in read(SETS["scenario"]) + read(SETS["claude"])}
+        tasks = [dict(base[t["id"]], id=f"{t['id']}_{t['kind']}", base_id=t["id"], kind=t["kind"], text=t["text"])
+                 for t in tasks if t["id"] in base]
+    return tasks
 
 
 def _source(field: str) -> str:
@@ -88,16 +106,16 @@ def run(a):
         fails["n"] += out is None
         return out
 
-    tasks = [json.loads(x) for x in open(os.path.join(ROOT, "docs", "bench_blind", SETS[a.set]), encoding="utf-8")
-             if x.strip().startswith("{")]
+    tasks = load_tasks(a.set)
     tasks = tasks[: a.limit] if a.limit else tasks
     path = os.path.join(HERE, "results", f"dev_{a.set}_{a.tag}.jsonl")
+    gem, gstat = _gemini_fn(a)
     rows = []
     with open(path, "w", encoding="utf-8") as f:
         for t in tasks:
             t0 = time.time()
             with contextlib.redirect_stdout(io.StringIO()):
-                spec = runner.run(t["text"], pllm.gemini_llm if a.gemini else None, llm)
+                spec = runner.run(t["text"], gem, llm)
             pred = to_pred(spec)
             s = score(t, pred)
             row = {"id": t["id"], "difficulty": t.get("difficulty"), "input": t["text"], "pred": pred, "score": s,
@@ -107,7 +125,10 @@ def run(a):
                    # 選軟體的信心度（每個候選的 P(Yes)），離線掃描門檻用
                    "choose_scores": spec.get("choose_scores"), "choose_reason": spec.get("choose_reason"),
                    # 每個欄位是誰填的（user／inferred／default），算各欄位的信心度用
-                   "sources": {f: spec["base"][f]["source"] for f in spec["base"]}}
+                   "sources": {f: spec["base"][f]["source"] for f in spec["base"]},
+                   # 2026-11-22：軟體講清楚了沒（來源 gemini／local、判斷、本地機率）與正規化用了哪個模型
+                   "clarity": {k: v for k, v in (spec.get("clarity") or {}).items() if k != "text"} or None,
+                   "normalize_backend": spec["backend"].get("normalize")}
             rows.append(row)
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
             f.flush()
@@ -117,13 +138,51 @@ def run(a):
                  "select_rule": os.environ.get("PIPELINE_SELECT_RULE", "agree"), "rag_backend": os.environ.get("RAG_BACKEND", "field"),
                  "select_mode": os.environ.get("PIPELINE_SELECT_MODE", "select"), "choose_style": os.environ.get("PIPELINE_CHOOSE_STYLE", "confidence"),
                  "choose_threshold": os.environ.get("PIPELINE_CHOOSE_THRESHOLD", "0.8"),
-                 "llm_calls": fails["total"], "llm_failures": fails["n"], "gemini": bool(a.gemini)})
+                 "llm_calls": fails["total"], "llm_failures": fails["n"], "gemini": bool(a.gemini),
+                 "clarity_mode": os.environ.get("PIPELINE_CLARITY", "off"),
+                 "clarity_bounds": [os.environ.get("PIPELINE_CLARITY_LO", "0.1"), os.environ.get("PIPELINE_CLARITY_HI", "0.9")],
+                 "cron_command": os.environ.get("PIPELINE_CRON_COMMAND", "example"),
+                 "clarity_sources": dict(collections.Counter((r["clarity"] or {}).get("source", "無") for r in rows)),
+                 "normalize_backends": dict(collections.Counter(str(r["normalize_backend"]) for r in rows)),
+                 "gemini_cache": gstat})
     if a.gemini:
         from core import gemini_client
         summ["gemini_usage"] = gemini_client.usage()   # 呼叫次數與 token 數，換算實際花費用
     json.dump(summ, open(os.path.join(HERE, "results", f"summary_dev_{a.set}_{a.tag}.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
     print(json.dumps(summ, ensure_ascii=False, indent=1))
+
+
+def _gemini_fn(a):
+    """正規化用的 Gemini 函式（2026-11-22）。--gemini-cache 時把回應存檔，同一份 prompt＋原句第二次直接讀檔：
+    比較「開／關」時兩次用同一份 Gemini 結果，只花一次的呼叫。只給 --gemini-cache 不給 --gemini＝只讀檔、不呼叫。"""
+    stat = {"hits": 0, "calls": 0, "misses_without_gemini": 0} if a.gemini_cache else None
+    if not a.gemini_cache:
+        return (pllm.gemini_llm if a.gemini else None), stat
+    import hashlib
+    cache = {}
+    if os.path.exists(a.gemini_cache):
+        for line in open(a.gemini_cache, encoding="utf-8"):
+            if line.strip():
+                j = json.loads(line)
+                cache[j["key"]] = j["out"]
+
+    def g(system, user):
+        key = hashlib.sha256((system + "\0" + user).encode("utf-8")).hexdigest()
+        if key in cache:
+            stat["hits"] += 1
+            return cache[key]
+        if not a.gemini:
+            stat["misses_without_gemini"] += 1
+            return None
+        stat["calls"] += 1
+        out = pllm.gemini_llm(system, user)
+        if out is not None:
+            cache[key] = out
+            with open(a.gemini_cache, "a", encoding="utf-8") as fc:
+                fc.write(json.dumps({"key": key, "out": out}, ensure_ascii=False) + "\n")
+        return out
+    return g, stat
 
 
 def summarize(rows):
@@ -162,12 +221,12 @@ if __name__ == "__main__":
     ap.add_argument("--compare", nargs=2)
     ap.add_argument("--gemini", action="store_true", help="正規化走 Gemini（正式路徑，會花錢）")
     ap.add_argument("--max-gemini-calls", type=int, help="Gemini 呼叫上限（--gemini 必填）")
+    ap.add_argument("--gemini-cache", help="Gemini 回應存檔的路徑（同一句話第二次直接讀檔；不加 --gemini 時只讀不呼叫）")
     ap.add_argument("--rescore", help="用目前的評分重算某個 tag 的結果檔（不重跑模型）")
     a = ap.parse_args()
     if a.rescore:
         p = os.path.join(HERE, "results", f"dev_{a.set}_{a.rescore}.jsonl")
-        tasks = {t["id"]: t for t in (json.loads(x) for x in open(os.path.join(ROOT, "docs", "bench_blind", SETS[a.set]), encoding="utf-8")
-                                      if x.strip().startswith("{"))}
+        tasks = {t["id"]: t for t in load_tasks(a.set)}
         rows = [json.loads(x) for x in open(p, encoding="utf-8")]
         for r in rows:
             r["score"] = score(tasks[r["id"]], r["pred"])

@@ -60,9 +60,10 @@ _WANTS_HA = re.compile(
     r"|high.?availab|no.?downtime|fail.?over|\bHA\b", re.I)
 
 
-def _switch_on(name: str) -> bool:
-    """開關型環境變數：0／false／off／no 關閉，沒設或 1／true／on／yes 開啟，其他值警告後當成開啟。"""
-    v = os.environ.get(name, "1").strip().lower()
+def _switch_on(name: str, default: str = "1") -> bool:
+    """開關型環境變數：0／false／off／no 關閉，沒設或 1／true／on／yes 開啟，其他值警告後當成開啟。
+    default：沒設時的值（2026-11-23 加；預設關的新開關傳 "0"）。"""
+    v = os.environ.get(name, default).strip().lower()
     if v in ("0", "false", "off", "no"):
         return False
     if v not in ("1", "true", "on", "yes", ""):
@@ -79,9 +80,70 @@ def adjust_resources(spec: Dict) -> None:
         return
     _stateful_replicas(spec)
     _memory_floor(spec)
+    _tier_resources(spec)
 
 
 _NO_CATALOG = "軟體目錄讀取失敗，跳過副本數／記憶體依軟體的調整"
+
+# 資源刻度（2026-11-23）：知識表的建議值和題組的標準答案都用這些常見值，倍數算出來的值（×1.5、×1.75）會落在刻度之間
+CPU_TIERS = (50, 100, 250, 500, 1000, 2000, 4000)          # m
+MEM_TIERS = (64, 128, 256, 512, 1024, 2048, 4096)          # Mi
+
+
+def _mc(v) -> float:
+    """「250m」「1」「0.5」→ 毫核；看不懂回 -1。"""
+    s = str(v or "").strip()
+    try:
+        return float(s[:-1]) if s.endswith("m") else float(s) * 1000
+    except ValueError:
+        return -1
+
+
+def _tier_up(tiers, v: float) -> int:
+    """v 換到最接近的刻度，再往上一格（已經是最高格就維持）。"""
+    i = min(range(len(tiers)), key=lambda j: abs(tiers[j] - v))
+    return tiers[min(i + 1, len(tiers) - 1)]
+
+
+def _fmt_mem(mi: float) -> str:
+    return f"{int(mi // 1024)}Gi" if mi >= 1024 and mi % 1024 == 0 else f"{int(mi)}Mi"
+
+
+def size_tier_mode() -> str:
+    v = os.environ.get("PIPELINE_SIZE_TIER", "").strip().lower()
+    return v if v in ("floor", "set") else "off"
+
+
+def _tier_resources(spec: Dict) -> None:
+    """資源改用「知識表建議值高一格」（2026-11-23，PIPELINE_SIZE_TIER=floor｜set，預設關）。
+
+    推理代理的 CPU 有 98/157 題（dev_scenario）照抄 prompt 範本的 250m（錨定效應，arXiv 2505.15392）。
+    數字交給知識表＋規則、模型只判斷軟體（LASER arXiv 2512.19701 的分工）。開發題組離線模擬：
+      現在 scenario 75／claude 202；直接用建議值 64／199；高一格 85／208；高一格當下限 86／205；
+      ×2 是 90／208，但 ×1.75、×2.25 就崩（63／194、51／108），所以用刻度、不用倍數。
+    floor：低於高一格才調高，不把推得比較大的調小；set：直接設成高一格。
+    使用者講的、執行環境（使用者自己的程式）、知識表沒有建議值的都不動。"""
+    mode = size_tier_mode()
+    image = schema.value(spec, "image")
+    if mode == "off" or not image or defaults.name(image) in defaults.RUNTIME_IMAGES:
+        return
+    rec = {"cpu": software_rag.recommended_cpu(image), "memory": software_rag.recommended_memory(image)}
+    changed = []
+    for f, conv, tiers, fmt in (("cpu", _mc, CPU_TIERS, lambda x: f"{int(x)}m"), ("memory", _mi, MEM_TIERS, _fmt_mem)):
+        b = spec["base"][f]
+        r = conv(rec[f])
+        if b["source"] == "user" or r <= 0:
+            continue
+        want = _tier_up(tiers, r)
+        cur = conv(b["value"])
+        if (mode == "floor" and cur >= want) or cur == want:
+            continue
+        spec["base"][f] = {"value": fmt(want), "source": b["source"] or "default",
+                           "evidence": f"這套軟體建議 {rec[f]}，多留一格餘裕"}
+        changed.append(f"{'CPU' if f == 'cpu' else '記憶體'} {fmt(want)}")
+    if changed:
+        schema.add_notice(spec, "依這套軟體的建議值多留一格餘裕：" + "、".join(changed))
+        spec["trace"].append({"step": "gap", "ms": 0, "detail": f"資源刻度（{mode}）：" + "、".join(changed)})
 
 
 def _stateful_replicas(spec: Dict) -> None:
@@ -272,8 +334,10 @@ def _choose_software(spec: Dict, local: Optional[LLM]) -> None:
         return
     cur = b["value"]
     runtime = bool(cur) and defaults.name(cur) in defaults.RUNTIME_IMAGES
-    if runtime and (os.environ.get("PIPELINE_RUNTIME_CHOOSE", "1") == "0" or spec["workload"]["value"] == "cronjob"
-                    or any(e["kind"] == "command" and e.get("source") == "user" for e in spec["extras"])):
+    if runtime and (os.environ.get("PIPELINE_RUNTIME_CHOOSE", "1") == "0" or spec["workload"]["value"] == "cronjob"):
+        return
+    if runtime and any(e["kind"] == "command" and e.get("source") == "user" for e in spec["extras"]):
+        _adopt_over_command(spec, cur)
         return
     # 回答問題後會再跑一次 gap_check：原句沒變、軟體也還是上次選的，就沿用，不重算（省 5 次模型呼叫、結果也不會跳動）
     if spec.get("choose_text") == spec["text"] and spec.get("choose_pick") == (software_rag.repo_of(cur) if cur else None):
@@ -329,8 +393,28 @@ def _choose_software(spec: Dict, local: Optional[LLM]) -> None:
             spec.pop("choose_text", None)    # 模型暫時沒回應：下一輪（回答問題後）要重新判斷，不沿用
             return
         z = a
+    # 2026-11-22 反問改善（PIPELINE_CLARITY=on）：信心度只看「軟體符不符合」，看不出「句子有沒有講清楚」。
+    # 沒講清楚要哪一類 → 就算信心度高也問；講清楚了但信心度低 → 不問，用 Gemini 建議的或信心度最高的
+    clear = _clarity(spec, local)
+    if clear is False:
+        a = z = _NONE
+        spec["choose_reason"] = "判斷你沒有講清楚要哪一類軟體"
+    elif clear is True and _switch_on("PIPELINE_TRUST_SUGGEST", "0") and _gemini_suggest(spec):
+        # 2026-11-23（PIPELINE_TRUST_SUGGEST=1）：講清楚了而且 Gemini 建議的軟體在知識表裡，就直接用它，不看信心度。
+        # scenario 開發題組：選錯軟體的 41 題有 23 題是 Gemini 建議對、系統沒採用；離線模擬選對 116→128、整張全對 67→74
+        pick = _gemini_suggest(spec)
+        if pick != a or a != z:
+            spec["trace"].append({"step": "select", "ms": 0, "detail": f"採用 Gemini 建議的 {pick}（原本 {a if a == z else '未定'}）"})
+        a = z = pick
+        spec.pop("choose_reason", None)
+    elif clear is True and not runtime and (a != z or a in (None, _NONE)):
+        pick = _clear_pick(spec)
+        if pick:
+            a = z = pick
+            spec.pop("choose_reason", None)
+            schema.add_notice(spec, f"系統依你的描述選了 {pick}，請確認是不是你要的軟體")
     ms = int((time.time() - t0) * 1000)
-    if runtime and (a != z or a in (None, _NONE) or defaults.name(a) in defaults.RUNTIME_IMAGES):
+    if runtime and clear is not False and (a != z or a in (None, _NONE) or defaults.name(a) in defaults.RUNTIME_IMAGES):
         # 沒有現成軟體過門檻：維持執行環境（推理代理原本的判斷），不反問
         spec["choose_pick"] = cur_repo
         spec.pop("choose_reason", None)
@@ -421,6 +505,116 @@ def choose_margin() -> float:
 
 def _category(img: str, desc: Dict[str, str]) -> str:
     return (desc.get(img) or img).split("：", 1)[0]
+
+
+def clarity_bounds():
+    """方案 C（本地備援）的門檻：Yes 機率 ≥ 上門檻＝清楚、≤ 下門檻＝沒講清楚、中間＝不判斷（照原本做法）。"""
+    return _env_float("PIPELINE_CLARITY_LO", 0.1), _env_float("PIPELINE_CLARITY_HI", 0.9)
+
+
+def _clarity(spec: Dict, local: Optional[LLM]) -> Optional[bool]:
+    """使用者有沒有講清楚要哪一類軟體（2026-11-22）。True／False；不判斷或開關沒開回 None。
+    優先用 Gemini 正規化時順便給的判斷（方案 E）；沒有就用本地模型讀「Yes」的機率（方案 C）。
+    log 模式照樣判斷並記錄，但回 None（不影響結果，評估用）。"""
+    from agents.pipeline import normalize
+    mode = normalize.clarity_mode()
+    if mode == "off":
+        return None
+    c = spec.get("clarity")
+    if c and c.get("source") == "gemini" and c.get("software_clear") is False and _gemini_contradicts(c):
+        # Gemini 說沒講清楚，卻自己說得出類別、還建議了知識表裡的軟體：前後矛盾（第一版 prompt 實測 16/36 題這樣），
+        # 不採用它的判斷，改用本地判斷
+        spec["trace"].append({"step": "clarity", "ms": 0, "detail": f"Gemini 說沒講清楚但建議了 {c.get('suggest')}，改用本地判斷"})
+        spec["gemini_clarity"] = c
+        c = spec["clarity"] = None
+    if not (c and (c.get("source") == "gemini" or c.get("text") == spec["text"])):
+        if local is None:
+            return None
+        from agents.pipeline import llm as pllm
+        from agents.pipeline.prompts import CLARITY_PROB_SYSTEM
+        p = pllm.local_yes_prob(CLARITY_PROB_SYSTEM, f"User request: {spec['text']}")
+        if p is None:
+            spec["trace"].append({"step": "clarity", "ms": 0, "detail": "本地判斷拿不到機率，照原本做法"})
+            return None
+        lo, hi = clarity_bounds()
+        res = True if p >= hi else False if p <= lo else None
+        c = spec["clarity"] = {"source": "local", "p": round(p, 4), "software_clear": res, "text": spec["text"]}
+        spec["trace"].append({"step": "clarity", "ms": 0, "detail": f"本地判斷講清楚的機率 {p:.2f}（門檻 {lo}～{hi}）"})
+    elif c.get("source") == "gemini" and c.get("software_clear") is True and local is not None \
+            and os.environ.get("PIPELINE_CLARITY_COMBINE", "").strip().lower() == "or":
+        # 2026-11-23（PIPELINE_CLARITY_COMBINE=or）：Gemini 說清楚時，再問本地；本地很確定沒講清楚（≤ 下門檻）就照樣問。
+        # claude 開發題組：Gemini 該問有問 23/38、本地 29/38，Gemini 判斷偏寬鬆
+        if c.get("local_text") != spec["text"]:
+            from agents.pipeline import llm as pllm
+            from agents.pipeline.prompts import CLARITY_PROB_SYSTEM
+            p = pllm.local_yes_prob(CLARITY_PROB_SYSTEM, f"User request: {spec['text']}")
+            c["local_p"], c["local_text"] = (None if p is None else round(p, 4)), spec["text"]
+        if c.get("local_p") is not None and c["local_p"] <= clarity_bounds()[0]:
+            spec["trace"].append({"step": "clarity", "ms": 0, "detail": f"Gemini 說清楚，但本地判斷講清楚的機率只有 {c['local_p']:.2f}，照樣問"})
+            return False if mode == "on" else None
+    if c.get("source") == "gemini" and c.get("software_clear") is True and c.get("check_clear") is False:
+        # 2026-11-23（PIPELINE_CLARITY_CHECK=gemini2）：第二次獨立判斷說沒講清楚 → 問
+        spec["trace"].append({"step": "clarity", "ms": 0, "detail": "第二次判斷說沒講清楚要哪一類軟體，照樣問"})
+        return False if mode == "on" else None
+    return c.get("software_clear") if mode == "on" else None
+
+
+def _gemini_contradicts(c: Dict) -> bool:
+    sug = c.get("suggest")
+    if not (c.get("category") and sug):
+        return False
+    repo = software_rag.repo_of(software_rag.full_name(sug))
+    return software_rag.is_known(repo) and defaults.name(repo) not in defaults.RUNTIME_IMAGES
+
+
+def _gemini_suggest(spec: Dict) -> Optional[str]:
+    """Gemini 判斷時建議的軟體：在知識表裡、而且不是執行環境（python、alpine…）才回傳，否則 None。"""
+    c = spec.get("clarity") or {}
+    sug = c.get("suggest")
+    if c.get("source") != "gemini" or not sug:
+        return None
+    repo = software_rag.repo_of(software_rag.full_name(sug))
+    return repo if software_rag.is_known(repo) and defaults.name(repo) not in defaults.RUNTIME_IMAGES else None
+
+
+def _adopt_over_command(spec: Dict, cur: str) -> None:
+    """推理代理選了執行環境、而且有「使用者給的指令」時（2026-11-23，PIPELINE_TRUST_SUGGEST=1 才做）。
+    Gemini 會把「一個小程式在背後默默跑，把紀錄收起來」這種描述抽成指令，而 Gemini 抽出來的額外欄位一律標成使用者給的，
+    原本這裡直接維持執行環境，現成軟體（rabbitmq、redis、fluentd…）沒機會被選到（claude 開發題組 11 題）。
+    Gemini 也判斷講清楚了、建議的軟體在知識表裡又不是執行環境 → 改用它；那條「指令」標成不處理並在部署單說明，
+    不把描述當成指令塞給現成軟體。定時執行不走這裡（模擬 2 對 1 錯，維持執行環境）。"""
+    c = spec.get("clarity") or {}
+    if not (_switch_on("PIPELINE_TRUST_SUGGEST", "0") and normalize_clarity_on() and c.get("source") == "gemini"
+            and c.get("software_clear") is True and c.get("check_clear") is not False):
+        return
+    pick = _gemini_suggest(spec)
+    if not pick:
+        return
+    spec["base"]["image"] = {"value": pick, "source": "inferred", "evidence": "採用 Gemini 依原句建議的現成軟體"}
+    for f in ("port", "app_name"):
+        if spec["base"][f]["source"] != "user":
+            spec["base"][f] = {"value": None, "source": None, "evidence": None}
+    for e in spec["extras"]:
+        if e["kind"] == "command" and e["status"] == "pending":
+            e["status"] = "unsupported"
+            e["note"] = f"已改用現成軟體 {pick}，不另外設啟動指令；如果其實是你自己寫的程式，請回上一步改軟體並填指令"
+    spec["questions"] = [q for q in spec["questions"] if q["field"] != "image"]
+    spec["choose_text"], spec["choose_pick"] = spec["text"], pick
+    spec["trace"].append({"step": "select", "ms": 0, "detail": f"採用 Gemini 建議的 {pick}（原本執行環境 {cur}，描述不當成指令）"})
+
+
+def normalize_clarity_on() -> bool:
+    from agents.pipeline import normalize
+    return normalize.clarity_mode() == "on"
+
+
+def _clear_pick(spec: Dict) -> Optional[str]:
+    """講清楚了但信心度不夠時要用哪個：Gemini 建議的在知識表裡（而且不是執行環境）就用它，否則用信心度最高的候選。"""
+    sug = _gemini_suggest(spec)
+    if sug:
+        return sug
+    scores = spec.get("choose_scores")
+    return max(scores, key=lambda x: x[1])[0] if scores else None
 
 
 def _confidence_scores(spec: Dict, pool: list, desc: Dict[str, str]):

@@ -2053,3 +2053,49 @@ Docker Hub 對照映像檔，Gemini 改寫中文情境）、`scripts/rag/fetch_k
 
   整張全對配對：新版對、舊版錯 29 題，反過來 0 題（McNemar p < 0.0001）。
 - **結論**：改動在沒看過的題目上確實有效，但盲測 50.6% 比 dev_claude 的 66.8% 低 16 個百分點，開發題組的數字偏樂觀；「應反問的有問」從 11/13 掉到 2/13，是這兩天少問造成的副作用，要處理。盲測集已用過，之後不再拿來比較。
+
+## 2026-11-23
+
+### 04:40 — 改善：反問判斷（軟體講清楚了沒）、選軟體採用 Gemini 建議、定時指令改範例指令
+- **為什麼**：學校電腦對齊柏碩的環境後（`docs/bench_record/2026-11-22_學校電腦llamacpp對齊.md`），反問的問題是「該問的沒問、不該問的問了」：選軟體信心度只看軟體符不符合，看不出句子有沒有講清楚。
+- **改了什麼**（開關都預設關，網站行為不變；`.env.example` 有說明）：
+  - `PIPELINE_CLARITY`：Gemini 正規化時順便判斷「有沒有講清楚要哪一類軟體」（prompt 另接 `CLARITY_ADDON`，`NORMALIZE_SYSTEM` 一字未改）；沒有 Gemini 時用本地模型讀 Yes 機率（`CLARITY_PROB_SYSTEM`，範例自己寫、不取自題組）。沒講清楚 → 就算信心度高也問；講清楚 → 信心度低也不問。設定上的矛盾、做不到的要求加到部署單提醒。
+  - `PIPELINE_TRUST_SUGGEST`：講清楚而且 Gemini 建議的軟體在知識表裡（不是執行環境），直接採用。
+  - `PIPELINE_CRON_COMMAND`：定時執行沒給指令時，預設改成先放範例指令＋提醒（**這項預設就生效**，`ask` 恢復問問題卡）。
+  - `run_pipeline_dev.py --gemini-cache`（Gemini 回應存檔，開／關比較只花一次額度）、`sweep_clarity.py`（本地門檻掃描）、`--set holdout`。
+- **驗證**（開發題組；數字細節在 `docs/bench_record/2026-11-23_反問與選軟體改善.md`）：claude 組整張全對 173→195/262（p=0.002）、多問 37→8；scenario 組 63→75/157（p=0.017）、多問 20→6。資源下限（CPU 500m、記憶體 512Mi）模擬後兩組都變差，不做。tests/test_clarity.py 新增 18 項。
+
+### 15:10 — 修正獨立驗證題組找到的 5 個缺點（知識表、描述被當成指令、第二次判斷、代選提示、Gemini 退化橫幅）
+- **為什麼**：第一組獨立驗證題組（不知情的 Claude 出 100 題，只跑一次）：不該問的題目整張全對，本地原版 61.3%、網站現況 70.0%、Gemini＋採用建議 75.0%。錯誤統計顯示：Gemini 建議對、系統卻沒採用的，多半是因為知識表沒有那套軟體，或描述被當成指令擋掉；另外沒有 Gemini 時畫面上看不出準確度下降。
+- **改了什麼**：
+  - **知識表**：`scripts/build_software_catalog.py --add-selfhosted [--out 路徑]`，從 awesome-selfhosted-data 星數前 300 名補自架軟體。只收原作者發布的映像檔（或 bitnami），名稱完全一樣優先、零件不收、下載至少 10 萬；port、資料夾取自 Docker Hub 上的 EXPOSE／VOLUME（不含 UDP）。兩份知識表已有的一律不覆蓋。`rag/software_catalog.json` 331→450 筆，原本的筆數內容不變。
+  - **描述被當成指令**（`gap_check._adopt_over_command`，`PIPELINE_TRUST_SUGGEST=1` 才生效）：推理代理選了執行環境、又有 Gemini 抽出的「指令」時，Gemini 講清楚而且建議的軟體在知識表裡，就改用建議；那段指令標成不處理並在部署單說明。定時執行不變。
+  - **第二次判斷**（`PIPELINE_CLARITY_CHECK=gemini2`，`CLARITY_CHECK_SYSTEM`）：實測反效果，**預設關、不建議開**。
+  - **網站**：部署單上方新增「系統替你選了 X」區塊，可一鍵換成候選（新端點 `/api/pipeline/software_info`）；沒用上 Gemini 時，部署單與問題卡上方顯示紅色橫幅，依原因（沒有 key／額度用完／測試上限／錯誤／被截斷／看不懂）給不同的下一步。`core/gemini_client.last_failure()` 記下最近一次失敗原因。
+- **驗證**：
+  - 開發題組 claude：整張全對 195→202/262（逐題 8 對 1，p=0.039），該問有問、多問都不變。scenario 組見紀錄第 7 節。
+  - 第二次判斷：該問有問多 4～8 題，但整張全對 claude 201→170、scenario 75→66（都 p<0.01）。
+  - 第一次補知識表沒排除柏碩那份，syncthing 的 port 被 EXPOSE 的 22000 蓋掉（C094 變錯），已修正並加測試。
+  - 新增測試：`tests/test_clarity.py`（描述型指令、第二次判斷）、`tests/test_pipeline_web_pick.py`、`tests/test_build_catalog_selfhosted.py`。
+  - 第二組獨立驗證題組（holdout2）等使用者抽查後跑一次。細節在 `docs/bench_record/2026-11-23_反問與選軟體改善.md` 第 7 節、`docs/security_review.md` 第 69 節。
+
+### 17:10 — 提醒與問題改用台灣用語；測試不受網站 .env 開關影響
+- **為什麼**：網站實測時，部署單的提醒出現「存儲」「信息」「內存」（模型寫的）。另外 `.env` 打開反問改善後，`tests/test_pipeline.py` 有 3 項失敗：測試讀到 `.env` 的開關，假模型不認得多出來的 prompt。
+- **改了什麼**：`agents/pipeline/schema.py` 新增 `tw_terms()`，`add_notice`、`add_question`（問題、理由、選項文字）顯示前換成台灣用語（資料庫、伺服器、儲存、記憶體、資訊、預設…）；「支持」「配置」「用戶」台灣也常用，不換。只改顯示文字，不影響判斷與評分。`tests/conftest.py` 預設關閉 `PIPELINE_CLARITY`、`PIPELINE_TRUST_SUGGEST`、`PIPELINE_CLARITY_COMBINE`、`PIPELINE_CLARITY_CHECK`。
+- **驗證**：新增 `tests/test_tw_terms.py`；完整 pytest 全過。
+
+## 2026-11-24
+
+### 資源大小改用「知識表建議值高一格」（實驗，開關預設關）；評估加 s40、perturb 題組；實驗結果與柏碩版本比較
+- **為什麼**：dev_scenario 低的主因是資源大小（CPU＋記憶體對了，整張全對 75→108/157）。推理 prompt 範本的 `250m` 被照抄（98/157 題，錨定效應）；兩組題目的資源標準相反，一律調高行不通。
+- **改了什麼**：
+  - `PIPELINE_SIZE_TIER=floor|set`（`gap_check._tier_resources`）：知識表建議值換成刻度後高一格（CPU 50／100／250／500／1000m，記憶體 64Mi～2Gi）；floor 只往上調。使用者講的、執行環境、知識表沒有建議值的不動。`software_rag.recommended_cpu()`。
+  - `PIPELINE_REASON_SIZING=tiers`（`prompts.REASON_SIZING_TIERS`）：推理 prompt 不寫固定數字，改依負載選刻度。原本的 REASON_SYSTEM 一字不改。
+  - `run_pipeline_dev.py`：`--set s40`（組員 S01～S40）、`--set perturb`（1900 題改寫，標準答案沿用原題）。
+  - 部署單「換成」候選只列信心度 ≥ 0.3 的。
+- **驗證**：
+  - 刻度 floor：scenario 75→86/157（逐題 19 對 8，p=0.052）、claude 202→206/262；跟柏碩版設定比 scenario p=0.001、claude p<0.0001。
+  - 模擬時「×2」看起來最好但 ×1.75、×2.25 就崩（碰巧落在標準答案邊界），所以用刻度。
+  - `PIPELINE_REASON_SIZING` 評估進行中，還沒結論。s40：77.8%→83.3%；perturb：極短句 −13 個百分點。
+  - 新增 `tests/test_tier_resources.py`；完整 pytest 全過。
+  - 細節：`docs/bench_record/2026-11-24_實驗結果與柏碩版本比較.md`、`docs/handoff/工作紀錄_2026-11-21至24_反問與準確率改善.md`。

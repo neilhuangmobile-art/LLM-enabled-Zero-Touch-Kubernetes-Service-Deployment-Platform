@@ -112,12 +112,29 @@ def value(spec: Dict, field: str) -> Any:
     return spec["base"][field]["value"]
 
 
+# 模型（Gemini、本地 Qwen）寫的提醒和問題，偶爾會用中國用語（2026-11-23 網站實測：「存儲」「信息」「內存」）。
+# 顯示給使用者前換成台灣用語；只收意思不會變的詞（「支持」「配置」「用戶」台灣也常用，不換）。
+# 只改顯示的文字，不影響任何判斷（評分只看有沒有問、欄位值）
+_TW_TERMS = (("數據庫", "資料庫"), ("服務器", "伺服器"), ("存儲", "儲存"), ("內存", "記憶體"), ("信息", "資訊"),
+             ("默認", "預設"), ("網絡", "網路"), ("軟件", "軟體"), ("硬件", "硬體"), ("視頻", "影片"), ("質量", "品質"),
+             ("數據", "資料"), ("文件夾", "資料夾"), ("端口", "port"), ("鏡像", "映像檔"), ("集群", "叢集"))
+
+
+def tw_terms(text: str) -> str:
+    for a, b in _TW_TERMS:
+        text = text.replace(a, b)
+    return text
+
+
 def add_question(spec: Dict, field: str, question: str, options: Optional[List[Dict]] = None,
                  recommended: Any = None, reason: str = "") -> None:
     """同一個欄位只問一次。options 的最後一定有「幫我決定」（採用推薦值）。"""
     if any(q["field"] == field for q in spec["questions"]):
         return
-    opts = list(options or [])
+    question = tw_terms(question) if isinstance(question, str) else question
+    reason = tw_terms(reason) if isinstance(reason, str) else reason
+    opts = [dict(o, label=tw_terms(o["label"])) if isinstance(o, dict) and isinstance(o.get("label"), str) else o
+            for o in (options or [])]
     if recommended is not None and not any(o.get("value") == "__auto__" for o in opts):
         opts.append({"value": "__auto__", "label": "幫我決定"})
     spec["questions"].append({"id": f"q{len(spec['questions']) + 1}", "field": field, "question": question,
@@ -132,5 +149,6 @@ def ask_policy() -> str:
 
 
 def add_notice(spec: Dict, text: str) -> None:
+    text = tw_terms(text) if isinstance(text, str) else text
     if text and text not in spec["notices"]:
         spec["notices"].append(text)

@@ -14,6 +14,14 @@ os.environ["CUSTOMER_CLUSTER_MODE"] = "0"
 # 2026-11-17：網站的 .env 開了多代理人部署解析，測試不能跟著去呼叫真的本地模型（8766）；
 # 預設關閉，要測新流程的測試自己用 monkeypatch.setenv 打開（tests/test_pipeline_web.py）
 os.environ["DEPLOY_PIPELINE"] = ""
+# 2026-11-23：網站的 .env 開了反問改善（PIPELINE_CLARITY=on、PIPELINE_TRUST_SUGGEST=1），測試的假模型不認得
+# 它多出來的 prompt（tests/test_pipeline.py 3 項失敗）。預設關閉，要測的測試自己 monkeypatch（tests/test_clarity.py）
+os.environ["PIPELINE_CLARITY"] = "off"
+os.environ["PIPELINE_TRUST_SUGGEST"] = "0"
+os.environ["PIPELINE_CLARITY_COMBINE"] = ""
+os.environ["PIPELINE_CLARITY_CHECK"] = ""
+os.environ["PIPELINE_SIZE_TIER"] = ""
+os.environ["PIPELINE_REASON_SIZING"] = ""
 
 # 事件紀錄（core/event_store.py）寫到暫存檔，不要混進開發者 data/events.db 的真實紀錄
 import tempfile

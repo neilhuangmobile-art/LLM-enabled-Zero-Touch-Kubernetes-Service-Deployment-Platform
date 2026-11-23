@@ -66,3 +66,11 @@ parse_full.json
 # 盲測題組與含題目原文的盲測逐題結果不上傳（2026-11-20）
 docs/bench_blind/blind_scenario.jsonl
 experiments/model_select/reason/results/dev_blind_*.jsonl
+# 2026-11-23 獨立驗證題組（不知情的 Claude 出題，只跑不調）
+docs/bench_blind/holdout_*.jsonl
+experiments/model_select/reason/results/dev_holdout_*.jsonl
+docs/bench_blind/holdout2_*.jsonl
+experiments/model_select/reason/results/dev_holdout2_*.jsonl
+experiments/model_select/reason/results/gemini_cache_holdout*.jsonl
+# 2026-11-24 Gemini 回應快取（評估用，內容是 Gemini 的回答，不上傳）
+experiments/model_select/reason/results/gemini_cache_*.jsonl

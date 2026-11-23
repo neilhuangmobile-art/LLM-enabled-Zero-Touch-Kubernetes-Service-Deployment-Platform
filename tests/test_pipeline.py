@@ -203,7 +203,9 @@ def test_schedule_too_frequent_asks_without_auto_and_can_cancel():
     assert runner.resume(s, {q["id"]: "cancel"}, fake())["cancelled"]
 
 
-def test_cronjob_without_command_asks_for_it():
+def test_cronjob_without_command_asks_for_it(monkeypatch):
+    # 2026-11-22 預設改成範例指令（tests/test_clarity.py）；這裡測 ask 模式（原本做法）還能用
+    monkeypatch.setenv("PIPELINE_CRON_COMMAND", "ask")
     text = "每天早上八點用 python 自動跑一下"
     gem = fake(normalized=norm({"image": "python"}, [
         {"kind": "schedule", "value": {"cron": "0 8 * * *"}, "evidence": "每天早上八點"}]))

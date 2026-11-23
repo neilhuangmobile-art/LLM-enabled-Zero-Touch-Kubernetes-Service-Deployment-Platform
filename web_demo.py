@@ -2079,6 +2079,11 @@ tbody tr:hover td{background:var(--signal-soft)}
 .scn-notes li::before{content:"";position:absolute;left:11px;top:14px;width:6px;height:6px;border-radius:50%;background:var(--caution)}
 .fill-notices{margin:12px 0;padding:10px 14px;border-left:4px solid var(--caution);background:color-mix(in srgb,var(--caution) 12%,transparent);border-radius:6px;font-size:14px;line-height:1.6}
 .fill-notices ul{margin:6px 0 0;padding-left:18px}
+/* 2026-11-23：系統代選軟體的提示（可一鍵換）、沒用上 Gemini 的橫幅 */
+.pick-box{margin:12px 0;padding:12px 14px;border:1px solid var(--signal-line);border-left:4px solid var(--signal);background:var(--signal-soft);border-radius:6px;font-size:14px;line-height:1.6}
+.pick-box .pick-alts{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.pick-box .pick-alts .btn[aria-pressed="true"]{border-color:var(--signal);color:var(--signal)}
+.fallback-banner{margin:12px 0;padding:12px 14px;border-left:4px solid var(--stop);background:var(--stop-soft);border-radius:6px;font-size:14px;line-height:1.6}
 .pipe-extras{margin:12px 0;padding:10px 14px;border-left:4px solid var(--signal);background:color-mix(in srgb,var(--signal) 8%,transparent);border-radius:6px;font-size:14px;line-height:1.6}
 .pipe-extras ul{margin:6px 0 0;padding-left:18px}
 .pipe-unsup{margin:8px 0 12px;font-size:13.5px;color:var(--text-2)}
@@ -5813,6 +5818,47 @@ function specExtras(src){
   return o;
 }
 
+// 2026-11-23：沒用上 Gemini（改用本機模型理解描述）時的整條橫幅，依原因給不同的下一步
+const FALLBACK_MSG = {
+  no_key: '目前沒有設定 Gemini，系統改用本機模型理解你的描述，準確度比較低（實測約 61%，有 Gemini 約 75%）。請仔細確認下面每個欄位。管理員可以在 .env 設定 GEMINI_API_KEYS 後重新啟動網站。',
+  quota: 'Gemini 的使用額度已經用完，這次改用本機模型理解你的描述，準確度比較低（實測約 61%，有 Gemini 約 75%）。請仔細確認下面每個欄位。管理員可以到 Google AI Studio 查看額度或儲值。',
+  budget: '已經達到這台伺服器設定的 Gemini 呼叫上限（GEMINI_MAX_CALLS／GEMINI_MAX_TOKENS），這次改用本機模型，準確度比較低（實測約 61%）。正式網站不需要設這兩個值，管理員拿掉後重新啟動即可。',
+  error: 'Gemini 這次沒有回應（可能是網路或服務暫時異常），已改用本機模型理解你的描述，準確度比較低（實測約 61%）。請仔細確認下面每個欄位，或稍後再說一次。',
+  truncated: 'Gemini 這次的回答不完整，已改用本機模型理解你的描述，準確度比較低（實測約 61%）。請仔細確認下面每個欄位，或稍後再說一次。',
+  bad_output: 'Gemini 這次的回答看不懂，已改用本機模型理解你的描述，準確度比較低（實測約 61%）。請仔細確認下面每個欄位，或稍後再說一次。',
+};
+function fallbackHTML(flow){
+  const p = flow.pipeline;
+  if(!p || !p.normalizer_reason) return '';
+  return `<section class="fallback-banner" role="alert"><b>注意：這次沒有用到 Gemini</b><div>${esc(FALLBACK_MSG[p.normalizer_reason] || FALLBACK_MSG.error)}</div></section>`;
+}
+// 2026-11-23：系統沒問就替你選了軟體時，部署單最上面明顯標出來，可以一鍵換成其他候選
+function pickHTML(flow){
+  const ip = flow.pipeline && flow.pipeline.image_pick;
+  if(!ip || !ip.picked) return '';
+  const alts = (ip.alternatives || []);
+  const btns = alts.map(a => `<button type="button" class="btn" data-pick="${esc(a)}" aria-pressed="false" onclick="swapPickedImage('${flow.id}', this.dataset.pick, this)">${esc(a)}</button>`).join('');
+  return `<section class="pick-box" role="note" aria-label="系統替你選的軟體"><div>系統替你選了 <b>${esc(ip.picked)}</b>（${esc(ip.reason || '')}）。不是你要的？</div>
+    ${alts.length ? `<div class="pick-alts"><span class="dim">換成：</span>${btns}<button type="button" class="btn" data-pick="${esc(ip.picked)}" aria-pressed="true" onclick="swapPickedImage('${flow.id}', this.dataset.pick, this)">維持 ${esc(ip.picked)}</button></div>` : ''}
+    <div class="hint">${alts.length ? '按了會換掉下面的映像檔和 Port；' : ''}也可以直接在下面的「映像檔」欄位改成你要的。</div>
+    <div class="err" data-role="pick-msg" role="status"></div></section>`;
+}
+async function swapPickedImage(id, image, btn){
+  const root = document.querySelector(`[data-flow-id="${id}"]`);
+  if(!root) return;
+  const msg = root.querySelector('[data-role="pick-msg"]');
+  const show = t => { if(msg){ msg.style.display = t ? 'block' : 'none'; msg.textContent = t || ''; } };
+  let d;
+  try{ d = await getJSON('/api/pipeline/software_info?image=' + encodeURIComponent(image)); }
+  catch(e){ show('查不到這套軟體的預設設定，請直接在下面的欄位改。（' + (e.message || e) + '）'); return; }
+  if(!d || d.error || !d.image){ show((d && d.error) || '查不到這套軟體的預設設定，請直接在下面的欄位改。'); return; }
+  const img = root.querySelector('[data-field="image"]');
+  if(img) img.value = d.image;
+  const port = root.querySelector('[data-field="port"]');
+  if(port && d.port) port.value = d.port;
+  root.querySelectorAll('.pick-alts .btn').forEach(b => b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'));
+  show(`已換成 ${d.image}${d.port ? `，Port ${d.port}` : '（這套軟體查不到預設 Port，請自己確認）'}。${d.desc ? '說明：' + d.desc : ''}`);
+}
 // ── 多代理人部署解析（DEPLOY_PIPELINE=multiagent，2026-11-17）──
 // 欄位旁的小標籤：系統依你的描述推出來的標「系統建議」，沒有線索時用的標「預設」；你自己講的不標
 function srcTag(flow, key){
@@ -5928,6 +5974,7 @@ function renderQuestionsCard(flow){
   }).join('');
   return flowShell(flow, flowHead('部署前想先問你', stepsHTML(1)) + `<div class="body">
     <div class="lead">下面${qs.length > 1 ? '這幾件事' : '這件事'}我沒辦法替你決定。有推薦的已經先選好，看過沒問題直接按「送出」。</div>
+    ${fallbackHTML(flow)}
     ${block}
     <div class="err" data-role="error" role="alert"></div></div>
     <div class="foot"><button type="button" class="btn" onclick="cancelFlow('${flow.id}')">取消</button>
@@ -5965,6 +6012,8 @@ function renderSpecCard(flow){
     <div class="lead">${flow.scenario && flow.scenario.applies ? '我依你描述的情境推算出下面的規格，推算過程如下。' : '我照你的描述整理成下面的規格。'}有不對的地方直接改，再按「下一步」。${flow.schedOn ? `<br><b>這是預約部署</b>${flow.when && flow.when.ts ? `（${esc(fmtTW(flow.when.ts))}）` : ''}，審查通過後可以在下一步調整時間。` : ''}</div>
     ${scenarioHTML(flow.scenario)}
     ${(flow.grounding || []).length ? `<ul class="scn-notes">${flow.grounding.map(n => `<li>${esc(n)}，請確認是不是你要的。</li>`).join('')}</ul>` : ''}
+    ${fallbackHTML(flow)}
+    ${pickHTML(flow)}
     ${noticesHTML(flow)}
     ${pipelineExtrasHTML(flow)}
     ${confLegend(flow)}
@@ -8653,7 +8702,58 @@ def _pipeline_summary(spec: dict) -> dict:
     return {"sources": sources, "confidence": _pipeline_confidence(spec), "applied": applied, "unsupported": unsupported,
             "verified": [dict(v) for v in spec.get("verified", [])][:10],   # 意圖符合檢查改過的（11-17）
             "workload": (spec.get("workload") or {}).get("value"),
-            "normalizer": (spec.get("backend") or {}).get("normalize"), "total_ms": spec.get("total_ms")}
+            "normalizer": (spec.get("backend") or {}).get("normalize"), "total_ms": spec.get("total_ms"),
+            "normalizer_reason": spec.get("normalizer_reason"), "image_pick": _pipeline_image_pick(spec)}
+
+
+PICK_ALT_MIN = 0.3   # 部署單「換成」候選的最低信心度
+
+
+def _pipeline_image_pick(spec: dict):
+    """系統替使用者選了軟體（沒有問）時，部署單最上面要顯示的區塊（2026-11-23）：選了什麼、為什麼、還有哪些可以換。
+    holdout 實測：不再反問後，原本會問的題目直接選，選對 3、選錯 7，所以要讓使用者一眼看到、一鍵換掉。
+    使用者自己講的軟體、還在問軟體的時候、沒有選出軟體時回 None。候選只放知識表裡的。"""
+    from agents.pipeline import defaults, software_rag
+    b = spec["base"]["image"]
+    if b.get("source") != "inferred" or not b.get("value") or any(q["field"] == "image" for q in spec.get("questions", [])):
+        return None
+    picked = software_rag.repo_of(b["value"])
+    details = [str(t.get("detail") or "") for t in spec.get("trace", []) if t.get("step") == "select"]
+    if any(d.startswith("採用 Gemini 建議") for d in details):
+        reason = "依你的描述，採用 AI 建議的軟體"
+    elif spec.get("choose_scores"):
+        reason = "依你的描述，從候選軟體裡挑最符合的"
+    else:
+        reason = "依你的描述推出來的"
+    alts = []
+    sug = ((spec.get("clarity") or {}).get("suggest") or "").strip()
+    if sug:
+        r = software_rag.repo_of(software_rag.full_name(sug) or sug)
+        if software_rag.is_known(r):
+            alts.append(r)
+    # 只列信心度夠高的候選（2026-11-23 實測：「排隊軟體」選 rabbitmq 時，redis 0.70 合理，
+    # mattermost、fluent-bit 都只有 0.03，列出來只會讓人困惑）；Gemini 建議的照樣列
+    for img, p in sorted(spec.get("choose_scores") or [], key=lambda x: -x[1]):
+        if p is not None and p >= PICK_ALT_MIN:
+            alts.append(img)
+    out = []
+    for a in alts:
+        if a and a != picked and a not in out and software_rag.is_known(a) and defaults.name(a) not in defaults.RUNTIME_IMAGES:
+            out.append(a)
+    return {"picked": picked, "reason": reason, "alternatives": out[:3]}
+
+
+def _normalizer_reason(spec: dict):
+    """沒用上 Gemini 時的原因（2026-11-23）：no_key／quota／budget／error／bad_output。有用上回 None。"""
+    if (spec.get("backend") or {}).get("normalize") == "gemini":
+        return None
+    try:
+        from core import gemini_client
+        if not gemini_client.is_available():
+            return "no_key"
+        return gemini_client.last_failure() or "bad_output"
+    except Exception:  # noqa: BLE001
+        return "error"
 
 
 def _pipeline_questions(spec: dict) -> list:
@@ -8695,6 +8795,7 @@ def _pipeline_deploy_parse(data: dict, user_input: str):
             print(f"[多代理人解析] 本地模型（{pllm.LOCAL_URL}）沒有回應，這次改走原本的 ask_llama")
             return None
         spec = runner.run(user_input, pllm.gemini_llm, local_llm)
+        spec["normalizer_reason"] = _normalizer_reason(spec)   # 存在 spec 裡，回答問題卡後的部署單也看得到
     if llm_fail["n"]:
         spec.setdefault("notices", []).append(
             f"處理過程中本地模型有 {llm_fail['n']} 次沒有回應，部分自動檢查（理解需求、找矛盾）可能沒有完成，"
@@ -9029,6 +9130,21 @@ def _is_cronjob_only(name, ns) -> bool:
         return False
     except Exception:
         return True
+
+
+@app.route("/api/pipeline/software_info")
+def api_pipeline_software_info():
+    """部署單「換一套軟體」用（2026-11-23）：回傳知識表裡這套軟體的預設 port、資料夾、說明。只接受知識表裡有的名稱。"""
+    if "username" not in session:
+        return jsonify({"error": "Not authenticated"}), 401
+    from agents.pipeline import defaults, software_rag
+    img = str(request.args.get("image") or "").strip()[:200]
+    repo = software_rag.repo_of(img)
+    if not repo or not software_rag.is_known(repo):
+        return jsonify({"error": "知識表裡沒有這套軟體，請直接在部署單上填映像檔和 port"}), 404
+    desc = next((it.get("desc") for it in software_rag.items() if it["image"] == repo), "") or ""
+    return jsonify({"image": repo, "port": defaults.listen_port(repo), "data_path": defaults.data_path(repo),
+                    "desc": desc[:300]})
 
 
 @app.route("/api/cronjobs")

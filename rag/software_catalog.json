@@ -1,5 +1,5 @@
 {
- "_about": "部署解析選軟體用的知識表（多代理人流程）。official=Docker 官方映像檔，說明取自 docker-library/docs 的 README-short.txt；其餘是廠商自己發布的常用映像檔，說明取自 Docker Hub 或該專案的 GitHub 描述；linuxserver/* 取自 LinuxServer.io 官方 API，port 與 data_path 是它設定資料裡必填的第一個。重抓：scripts/build_software_catalog.py",
+ "_about": "部署解析選軟體用的知識表（多代理人流程）。official=Docker 官方映像檔，說明取自 docker-library/docs 的 README-short.txt；其餘是廠商自己發布的常用映像檔，說明取自 Docker Hub 或該專案的 GitHub 描述；linuxserver/* 取自 LinuxServer.io 官方 API，port 與 data_path 是它設定資料裡必填的第一個。重抓：scripts/build_software_catalog.py；2026-11-23 起另外補 awesome-selfhosted-data 星數前 300 名的自架軟體（說明取自該資料，port／data_path 取自 Docker Hub 上映像檔的 EXPOSE／VOLUME，只新增不覆蓋：--add-selfhosted）",
  "fetched": "2026-11-17",
  "items": [
   {
@@ -2686,6 +2686,959 @@
    "port": 3000,
    "data_path": "/config",
    "source": "api.linuxserver.io/api/v1/images（https://github.com/linuxserver/docker-zotero）"
+  },
+  {
+   "image": "ollama/ollama",
+   "desc": "Get up and running with Llama 3.3, DeepSeek-R1, Phi-4, Gemma 3, and other large language models.",
+   "official": false,
+   "deprecated": false,
+   "port": 11434,
+   "source": "awesome-selfhosted-data（Ollama，github.com/ollama/ollama）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "langgenius/dify-api",
+   "desc": "Build, test and deploy LLM applications.",
+   "official": false,
+   "deprecated": false,
+   "port": 5001,
+   "source": "awesome-selfhosted-data（Dify.ai，github.com/langgenius/dify）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "openwebui/open-webui",
+   "desc": "User-friendly AI Interface, supports Ollama, OpenAI API.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "source": "awesome-selfhosted-data（Open-WebUI，github.com/open-webui/open-webui）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "stirlingtools/stirling-pdf",
+   "desc": "Local hosted web application that allows you to perform various operations on PDF files, such as merging, splitting, file conversions and OCR.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "source": "awesome-selfhosted-data（Stirling-PDF，github.com/Stirling-Tools/Stirling-PDF）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "lobehub/lobehub",
+   "desc": "Modern design AI chat framework supporting multiple AI providers, one click install MCP Marketplace and Artifacts / Thinking.",
+   "official": false,
+   "deprecated": false,
+   "port": 3210,
+   "source": "awesome-selfhosted-data（LobeHub，github.com/lobehub/lobehub）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "hoppscotch/hoppscotch",
+   "desc": "Fast and beautiful API request builder.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "source": "awesome-selfhosted-data（Hoppscotch Community Edition，github.com/hoppscotch/hoppscotch）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "apache/superset",
+   "desc": "Modern data exploration and visualization platform.",
+   "official": false,
+   "deprecated": false,
+   "port": 8088,
+   "source": "awesome-selfhosted-data（Superset，github.com/apache/superset）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "mintplexlabs/anythingllm",
+   "desc": "All-in-one desktop & Docker AI application with built-in RAG, AI agents, No-code agent builder, MCP compatibility, and more.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（AnythingLLM，github.com/Mintplex-Labs/anything-llm）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "appwrite/appwrite",
+   "desc": "End to end backend server for web, native, and mobile developers 🚀.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "source": "awesome-selfhosted-data（Appwrite，github.com/appwrite/appwrite）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "joplin/server",
+   "desc": "Note taking application with markdown editor and encryption support for mobile and desktop platforms. Runs client-side and syncs through your own Nextcloud instance or similar (alternative to Evernote).",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Joplin，github.com/laurent22/joplin）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "bitnami/mastodon",
+   "desc": "Federated microblogging server.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Mastodon，github.com/mastodon/mastodon）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "huginn/huginn",
+   "desc": "Build agents that monitor and act on your behalf.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/var/lib/mysql",
+   "source": "awesome-selfhosted-data（Huginn，github.com/huginn/huginn）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "localai/localai",
+   "desc": "Run your AI models locally and generate images and audio (alternative to OpenAI and Claude).",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "data_path": "/models",
+   "source": "awesome-selfhosted-data（LocalAI，github.com/mudler/LocalAI）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "metabase/metabase",
+   "desc": "Easy way for everyone in your company to ask questions and learn from data.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "source": "awesome-selfhosted-data（Metabase，github.com/metabase/metabase）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "bitnami/discourse",
+   "desc": "Advanced forum / community solution based on Ruby and JS.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Discourse，github.com/discourse/discourse）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "apache/airflow",
+   "desc": "Platform to programmatically author, schedule, and monitor workflows.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "source": "awesome-selfhosted-data（Apache Airflow，github.com/apache/airflow）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "librechat/librechat",
+   "desc": "Enhanced ChatGPT-compatible AI chat interface supporting multiple AI providers, with multi-user auth, message search, and plugin support.",
+   "official": false,
+   "deprecated": false,
+   "port": 3080,
+   "source": "awesome-selfhosted-data（LibreChat，github.com/LibreChat-AI/LibreChat）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "diygod/rsshub",
+   "desc": "Easy to use, and extensible RSS feed aggregator capable of generating RSS feeds from pretty much everything ranging from social media to university departments.",
+   "official": false,
+   "deprecated": false,
+   "port": 1200,
+   "source": "awesome-selfhosted-data（RSSHub，github.com/DIYgod/RSSHub）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "getsentry/sentry",
+   "desc": "Powerful error tracking platform with wide language support and a robust API.",
+   "official": false,
+   "deprecated": false,
+   "port": 9000,
+   "data_path": "/data",
+   "source": "awesome-selfhosted-data（Sentry Self-Hosted，github.com/getsentry/sentry）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "frappe/erpnext",
+   "desc": "ERP system to help you run your business.",
+   "official": false,
+   "deprecated": false,
+   "data_path": "/home/frappe/frappe-bench/sites",
+   "source": "awesome-selfhosted-data（ERPNext，github.com/frappe/erpnext）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "bitnami/appsmith",
+   "desc": "Build admin panels, CRUD apps and workflows. Build everything you need, 10x faster.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Appsmith，github.com/appsmithorg/appsmith）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "tooljet/tooljet",
+   "desc": "Low-code framework to build & deploy internal tools with minimal engineering effort (alternative to Retool and Mendix).",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（ToolJet，github.com/ToolJet/ToolJet）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "posthog/posthog",
+   "desc": "Product analytics, session recording, feature flagging and a/b testing that you can self-host (alternative to Mixpanel, Amplitude, Heap).",
+   "official": false,
+   "deprecated": false,
+   "port": 8000,
+   "source": "awesome-selfhosted-data（PostHog，github.com/posthog/posthog）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "chatwoot/chatwoot",
+   "desc": "Customer communication platform (alternative to Intercom and Zendesk).",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "source": "awesome-selfhosted-data（Chatwoot，github.com/chatwoot/chatwoot）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "umamisoftware/umami",
+   "desc": "Simple, fast, privacy-focused (alternative to Google Analytics).",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "source": "awesome-selfhosted-data（Umami，github.com/umami-software/umami）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "mindsdb/mindsdb",
+   "desc": "AI layer for existing databases that allows you to effortlessly develop, train and deploy state-of-the-art machine learning models using standard queries.",
+   "official": false,
+   "deprecated": false,
+   "port": 47334,
+   "source": "awesome-selfhosted-data（MindsDB，github.com/mindsdb/mindshub）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "searxng/searxng",
+   "desc": "Internet metasearch engine which aggregates results from various search services and databases (fork of Searx).",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "source": "awesome-selfhosted-data（SearXNG，github.com/searxng/searxng）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "triliumnext/trilium",
+   "desc": "Cross-platform hierarchical note taking application with focus on building large personal knowledge bases (fork of Trilium Notes).",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "source": "awesome-selfhosted-data（TriliumNext Notes，github.com/TriliumNext/Trilium）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "directus/directus",
+   "desc": "Instant App & API for your SQL Database. Directus wraps your new or existing SQL database with a realtime GraphQL+REST API for developers, and an intuitive admin app for non-technical users.",
+   "official": false,
+   "deprecated": false,
+   "port": 8055,
+   "source": "awesome-selfhosted-data（Directus，github.com/directus/directus）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "glanceapp/glance",
+   "desc": "Highly customizable dashboard that puts all your feeds in one place.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "source": "awesome-selfhosted-data（Glance，github.com/glanceapp/glance）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "blakeblackshear/frigate",
+   "desc": "Monitor your security cameras with locally processed AI.",
+   "official": false,
+   "deprecated": false,
+   "port": 5000,
+   "source": "awesome-selfhosted-data（Frigate，github.com/blakeblackshear/frigate）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "langfuse/langfuse",
+   "desc": "LLM engineering platform for model tracing, prompt management, and application evaluation. Langfuse helps teams collaboratively debug, analyze, and iterate on their LLM applications such as chatbots or AI agents.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Langfuse，github.com/langfuse/langfuse）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "dgtlmoon/changedetection.io",
+   "desc": "Stay up-to-date with web-site content changes.",
+   "official": false,
+   "deprecated": false,
+   "port": 5000,
+   "source": "awesome-selfhosted-data（changedetection.io，github.com/dgtlmoon/changedetection.io）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "binwiederhier/ntfy",
+   "desc": "Push notifications to phone or desktop using HTTP PUT/POST, with Android app, CLI and web app, similar to Pushover and Gotify.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "source": "awesome-selfhosted-data（ntfy，github.com/binwiederhier/ntfy）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "gethomepage/homepage",
+   "desc": "Highly customizable homepage (or startpage / application dashboard) with Docker and service API integrations.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "source": "awesome-selfhosted-data（Homepage by gethomepage，github.com/gethomepage/homepage）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "hasura/graphql-engine",
+   "desc": "Fast, instant realtime GraphQL APIs on Postgres with fine grained access control, also trigger webhooks on database events.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Hasura，github.com/hasura/graphql-engine）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "infisical/infisical",
+   "desc": "Platform for secrets, certificates, and privileged access management.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "source": "awesome-selfhosted-data（Infisical Community Edition，github.com/Infisical/infisical）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "kestra/kestra",
+   "desc": "Event-driven, language-agnostic platform to create, schedule, and monitor workflows. In code. Coordinate data pipelines and tasks such as ETL and ELT.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Kestra，github.com/kestra-io/kestra）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "plausible/analytics",
+   "desc": "Simple, lightweight (< 1 KB) and privacy-friendly web analytics.",
+   "official": false,
+   "deprecated": false,
+   "port": 8000,
+   "source": "awesome-selfhosted-data（Plausible Analytics，github.com/plausible/analytics）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "ossrs/srs",
+   "desc": "Simple, high efficiency and real-time video server, supports RTMP, WebRTC, HLS, HTTP-FLV and SRT.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "source": "awesome-selfhosted-data（SRS，github.com/ossrs/srs）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "archivebox/archivebox",
+   "desc": "Create HTML & screenshot archives of sites from your bookmarks, browsing history, RSS feeds, or other sources (alternative to Wayback Machine).",
+   "official": false,
+   "deprecated": false,
+   "port": 5797,
+   "data_path": "/out",
+   "source": "awesome-selfhosted-data（ArchiveBox，github.com/ArchiveBox/ArchiveBox）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "cloudreve/cloudreve",
+   "desc": "File management and sharing system, supports multiple storage providers.",
+   "official": false,
+   "deprecated": false,
+   "port": 443,
+   "data_path": "/cloudreve/data",
+   "source": "awesome-selfhosted-data（Cloudreve，github.com/cloudreve/cloudreve）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "redash/redash",
+   "desc": "Connect and query your data sources, build dashboards to visualize data and share them with your company.",
+   "official": false,
+   "deprecated": false,
+   "port": 5000,
+   "source": "awesome-selfhosted-data（Redash，github.com/getredash/redash）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "budibase/budibase",
+   "desc": "Build and automate internal tools, admin panels, dashboards, CRUD apps, and more, in minutes (alternative to Outsystems, Retool, Mendix).",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/data",
+   "source": "awesome-selfhosted-data（Budibase，github.com/Budibase/budibase）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "typesense/typesense",
+   "desc": "Blazing fast, typo-tolerant search engine optimized for developer happiness and ease of use.",
+   "official": false,
+   "deprecated": false,
+   "port": 8108,
+   "source": "awesome-selfhosted-data（Typesense，github.com/typesense/typesense）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "lissy93/dashy",
+   "desc": "Feature-rich homepage for your homelab, with easy YAML configuration.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "source": "awesome-selfhosted-data（Dashy，github.com/lissy93/dashy）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "activepieces/activepieces",
+   "desc": "No-code business automation tool like Zapier or Tray. For example, you can send a Slack notification for each new Trello card.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "source": "awesome-selfhosted-data（Activepieces，github.com/activepieces/activepieces）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "navidrome/navidrome",
+   "desc": "Modern Music Server and Streamer, compatible with Subsonic/Airsonic.",
+   "official": false,
+   "deprecated": false,
+   "port": 4533,
+   "data_path": "/data",
+   "source": "awesome-selfhosted-data（Navidrome Music Server，github.com/navidrome/navidrome）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "listmonk/listmonk",
+   "desc": "High performance newsletter and mailing list manager with a modern dashboard.",
+   "official": false,
+   "deprecated": false,
+   "port": 9000,
+   "source": "awesome-selfhosted-data（Listmonk，github.com/knadh/listmonk）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "fosrl/pangolin",
+   "desc": "Identity-aware tunneled reverse proxy with dashboard UI, access control, and WireGuard-based tunnels (alternative to Cloudflare Tunnel, Tailscale).",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Pangolin，github.com/fosrl/pangolin）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "chaitin/safeline-mgt",
+   "desc": "Web application firewall / reverse proxy to protect your web apps from attacks and exploits.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "source": "awesome-selfhosted-data（SafeLine，github.com/chaitin/SafeLine）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "m1k1o/neko",
+   "desc": "Virtual browser that runs in docker and uses WebRTC.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Neko，github.com/m1k1o/neko）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "docmost/docmost",
+   "desc": "Collaborative wiki and documentation software (alternative to Confluence, Notion).",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/app/data/storage",
+   "source": "awesome-selfhosted-data（docmost Community Edition，github.com/docmost/docmost）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "allinurl/goaccess",
+   "desc": "Real-time web log analyzer and interactive viewer that runs in a terminal.",
+   "official": false,
+   "deprecated": false,
+   "port": 7890,
+   "data_path": "/var/www/goaccess",
+   "source": "awesome-selfhosted-data（GoAccess，github.com/allinurl/goaccess）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "bluenviron/mediamtx",
+   "desc": "Ready-to-use, zero-dependency real-time media server and proxy to publish, read, record, playback and route video/audio streams over SRT, WebRTC, RTSP, RTMP, HLS, MPEG-TS, RTP.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（MediaMTX，github.com/bluenviron/mediamtx）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "c4illin/convertx",
+   "desc": "Online file converter which supports over a thousand different formats.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "source": "awesome-selfhosted-data（ConvertX，github.com/C4illin/ConvertX）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "docuseal/docuseal",
+   "desc": "Create, fill, and sign digital documents (alternative to DocuSign).",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "source": "awesome-selfhosted-data（Docuseal，github.com/docusealco/docuseal）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "etherpad/etherpad",
+   "desc": "Highly customizable online editor providing collaborative editing in real-time.",
+   "official": false,
+   "deprecated": false,
+   "port": 9001,
+   "source": "awesome-selfhosted-data（Etherpad，github.com/ether/etherpad）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "janeczku/calibre-web",
+   "desc": "Browse, read and download eBooks using an existing Calibre database.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Calibre Web，github.com/janeczku/calibre-web）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "libretranslate/libretranslate",
+   "desc": "Machine Translation API.",
+   "official": false,
+   "deprecated": false,
+   "port": 5000,
+   "source": "awesome-selfhosted-data（Libre Translate，github.com/LibreTranslate/LibreTranslate）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "caronc/apprise",
+   "desc": "Apprise allows you to send a notification to almost all of the most popular notification services available to us today such as: Telegram, Discord, Slack, Amazon SNS, Gotify, etc.",
+   "official": false,
+   "deprecated": false,
+   "port": 8000,
+   "data_path": "/config",
+   "source": "awesome-selfhosted-data（Apprise，github.com/caronc/apprise）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "openproject/openproject",
+   "desc": "Manage your projects, tasks and goals. Collaborate via work packages and link them to your pull requests on Github.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（OpenProject，github.com/opf/openproject）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "bentopdf/bentopdf",
+   "desc": "Powerful, privacy-first, client-side PDF toolkit that allows you to manipulate, edit, merge, and process PDF files directly in your browser.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "source": "awesome-selfhosted-data（BentoPDF，github.com/alam00000/bentopdf）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "gotify/server",
+   "desc": "Notification server with Android and CLI clients (alternative to PushBullet).",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "source": "awesome-selfhosted-data（Gotify，github.com/gotify/server）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "stalwartlabs/stalwart",
+   "desc": "All-in-one mail server with JMAP, IMAP4, and SMTP support and a wide range of modern features.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "data_path": "/etc/stalwart",
+   "source": "awesome-selfhosted-data（Stalwart Mail Server，github.com/stalwartlabs/stalwart）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "dutchcoders/transfer.sh",
+   "desc": "Easy file sharing from the command line.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "source": "awesome-selfhosted-data（transfer.sh，github.com/dutchcoders/transfer.sh）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "documenso/documenso",
+   "desc": "Digital document signing platform (alternative to DocuSign).",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Documenso，github.com/documenso/documenso）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "apache/answer",
+   "desc": "Knowledge-based community software. You can use it to quickly build your Q&A community for product technical support, customer support, user communication, and more.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/data",
+   "source": "awesome-selfhosted-data（Answer，github.com/apache/answer）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "chocobozzz/peertube",
+   "desc": "Decentralized video streaming platform using P2P (BitTorrent) directly in the web browser.",
+   "official": false,
+   "deprecated": false,
+   "port": 9000,
+   "data_path": "/data",
+   "source": "awesome-selfhosted-data（PeerTube，github.com/Chocobozzz/PeerTube）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "alexta69/metube",
+   "desc": "Web GUI for youtube-dl, with playlist support. Allows downloading videos from dozens of websites.",
+   "official": false,
+   "deprecated": false,
+   "port": 8081,
+   "data_path": "/downloads",
+   "source": "awesome-selfhosted-data（MeTube，github.com/alexta69/metube）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "advplyr/audiobookshelf",
+   "desc": "Audiobook and podcast server. It streams all audio formats, keeps and syncs progress across devices. Comes with apps for Android and iOS.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "source": "awesome-selfhosted-data（Audiobookshelf，github.com/advplyr/audiobookshelf）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "bytebase/bytebase",
+   "desc": "Safe database schema change and version control for DevOps teams, supports MySQL, PostgreSQL, TiDB, ClickHouse, and Snowflake.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Bytebase，github.com/bytebase/bytebase）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "rommapp/romm",
+   "desc": "ROM manager for organizing, enriching, and playing retro games, with support for 400+ platforms.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "data_path": "/romm",
+   "source": "awesome-selfhosted-data（RomM，github.com/rommapp/romm）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "apache/druid",
+   "desc": "Distributed, column-oriented, real-time analytics data store.",
+   "official": false,
+   "deprecated": false,
+   "data_path": "/opt/druid/var",
+   "source": "awesome-selfhosted-data（Druid，github.com/apache/druid）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "opensearchproject/opensearch",
+   "desc": "Distributed and RESTful search engine.",
+   "official": false,
+   "deprecated": false,
+   "port": 9200,
+   "source": "awesome-selfhosted-data（OpenSearch，github.com/opensearch-project/OpenSearch）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "gotenberg/gotenberg",
+   "desc": "Developer-friendly API to interact with powerful tools like Chromium and LibreOffice for converting numerous document formats (HTML, Markdown, Word, Excel, etc.) into PDF files, and more.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "source": "awesome-selfhosted-data（Gotenberg，github.com/gotenberg/gotenberg）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "stashapp/stash",
+   "desc": "Web-based library organizer and player for your adult media stash, with auto-tagging and metadata scraping support.",
+   "official": false,
+   "deprecated": false,
+   "port": 9999,
+   "source": "awesome-selfhosted-data（Stash，github.com/stashapp/stash）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "seerr/seerr",
+   "desc": "Manage requests for your media library, supports Plex, Jellyfin and Emby media servers (fork of Overseerr).",
+   "official": false,
+   "deprecated": false,
+   "port": 5055,
+   "source": "awesome-selfhosted-data（Seerr，github.com/seerr-team/seerr）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "wallabag/wallabag",
+   "desc": "Web application, formerly Poche, allowing you to save articles to read them later with improved readability.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "source": "awesome-selfhosted-data（Wallabag，github.com/wallabag/wallabag）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "drakkan/sftpgo",
+   "desc": "Flexible, fully featured and highly configurable SFTP server with optional FTP/S and WebDAV support.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（sftpgo Community Edition，github.com/drakkan/sftpgo）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "jason5ng32/myip",
+   "desc": "All in one IP Toolbox. Easy to check what's your IPs, IP geolocation, check for DNS leaks, examine WebRTC connections, speed test, ping test, MTR test, check website availability and more.",
+   "official": false,
+   "deprecated": false,
+   "port": 18966,
+   "source": "awesome-selfhosted-data（MyIP，github.com/jason5ng32/MyIP）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "leantime/leantime",
+   "desc": "Lean project management system for small teams and startups helping to manage projects from ideation through delivery.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "source": "awesome-selfhosted-data（Leantime，github.com/leantime/leantime）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "gristlabs/grist",
+   "desc": "Next-generation spreadsheet with relational structure, formula-based access control, and a portable, self-contained format (alternative to Airtable).",
+   "official": false,
+   "deprecated": false,
+   "port": 8484,
+   "source": "awesome-selfhosted-data（Grist，github.com/gristlabs/grist-core）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "owncast/owncast",
+   "desc": "Decentralized single-user live video streaming and chat server for running your own live streams similar in style to the large mainstream options.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Owncast，github.com/owncast/owncast）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "misskey/misskey",
+   "desc": "Decentralized app-like microblogging server/SNS for the Fediverse, using the ActivityPub protocol like GNU social and Mastodon.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Misskey，github.com/misskey-dev/misskey）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "bunkerity/bunkerweb",
+   "desc": "Next-gen Web Application Firewall (WAF) that will protect your web services.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "source": "awesome-selfhosted-data（BunkerWeb，github.com/bunkerity/bunkerweb）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "blinkospace/blinko",
+   "desc": "Personal note tool with AI features.",
+   "official": false,
+   "deprecated": false,
+   "port": 1111,
+   "source": "awesome-selfhosted-data（Blinko，github.com/blinkospace/blinko）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "kutt/kutt",
+   "desc": "Modern URL shortener with support for custom domains and custom URLs.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "source": "awesome-selfhosted-data（Kutt，github.com/thedevs-network/kutt）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "mautic/mautic",
+   "desc": "Marketing automation software (email, social and more).",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/var/www/html/config",
+   "source": "awesome-selfhosted-data（Mautic，github.com/mautic/mautic）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "centrifugo/centrifugo",
+   "desc": "Language-agnostic real-time messaging (Websocket or SockJS) server.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Centrifugo，github.com/centrifugal/centrifugo）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "iib0011/omni-tools",
+   "desc": "Collection of powerful web-based tools for everyday tasks (coding, manipulating images/videos, PDFs or crunching numbers...).",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "source": "awesome-selfhosted-data（OmniTools，github.com/iib0011/omni-tools）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "screego/server",
+   "desc": "Simple tool to quickly share your screen to one or multiple people via web browser.",
+   "official": false,
+   "deprecated": false,
+   "port": 3478,
+   "source": "awesome-selfhosted-data（Screego，github.com/screego/server）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "invoiceninja/invoiceninja",
+   "desc": "Powerful tool to invoice clients online.",
+   "official": false,
+   "deprecated": false,
+   "port": 9000,
+   "source": "awesome-selfhosted-data（Invoice Ninja，github.com/invoiceninja/invoiceninja）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "healthchecks/healthchecks",
+   "desc": "Listen for pings and sends alerts when pings are late.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Healthchecks，github.com/healthchecks/healthchecks）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "akaunting/akaunting",
+   "desc": "Accounting software designed for small businesses and freelancers.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "source": "awesome-selfhosted-data（Akaunting，github.com/akaunting/akaunting）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "miniflux/miniflux",
+   "desc": "Minimalist news reader.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "source": "awesome-selfhosted-data（Miniflux，github.com/miniflux/v2）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "ghostfolio/ghostfolio",
+   "desc": "Wealth management software to keep track of stocks, ETFs and cryptocurrencies.",
+   "official": false,
+   "deprecated": false,
+   "port": 3333,
+   "source": "awesome-selfhosted-data（Ghostfolio，github.com/ghostfolio/ghostfolio）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "localdeepresearch/local-deep-research",
+   "desc": "AI-powered deep research tool with multi-source search (arXiv, PubMed, web), PDF text extraction, and encrypted local storage.",
+   "official": false,
+   "deprecated": false,
+   "port": 5000,
+   "data_path": "/app/.config/local_deep_research",
+   "source": "awesome-selfhosted-data（Local Deep Research，github.com/LearningCircuit/local-deep-research）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "jgraph/drawio",
+   "desc": "Diagram software for making flowcharts, process diagrams, org charts, UML, ER and network diagrams.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "source": "awesome-selfhosted-data（draw.io，github.com/jgraph/drawio）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "gitbucket/gitbucket",
+   "desc": "Git platform powered with easy installation, high extensibility & GitHub API compatibility (alternative to GitHub).",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "data_path": "/gitbucket",
+   "source": "awesome-selfhosted-data（gitbucket，github.com/gitbucket/gitbucket）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "rssbridge/rss-bridge",
+   "desc": "Generate RSS/ATOM feeds for websites which don't have one.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "source": "awesome-selfhosted-data（RSS-Bridge，github.com/RSS-Bridge/rss-bridge）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "teslamate/teslamate",
+   "desc": "Powerful data logger for Tesla vehicles.",
+   "official": false,
+   "deprecated": false,
+   "port": 4000,
+   "source": "awesome-selfhosted-data（TeslaMate，github.com/teslamate-org/teslamate）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "prestashop/prestashop",
+   "desc": "Fully scalable e-commerce solution.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "source": "awesome-selfhosted-data（PrestaShop，github.com/PrestaShop/PrestaShop）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "octoprint/octoprint",
+   "desc": "Snappy web interface for controlling consumer 3D printers.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/octoprint",
+   "source": "awesome-selfhosted-data（Octoprint，github.com/OctoPrint/OctoPrint）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "firezone/firezone",
+   "desc": "Secure remote access gateway that supports the WireGuard protocol. It offers a Web GUI, 1-line install script, multi-factor auth (MFA), and SSO.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（Firezone，github.com/firezone/firezone）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "solidtime/solidtime",
+   "desc": "Modern time tracking application for freelancers and agencies.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "source": "awesome-selfhosted-data（solidtime，github.com/solidtime-io/solidtime）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "heyform/community-edition",
+   "desc": "Form builder that allows anyone to create engaging conversational forms for surveys, questionnaires, quizzes, and polls.",
+   "official": false,
+   "deprecated": false,
+   "port": 9157,
+   "source": "awesome-selfhosted-data（HeyForm，github.com/heyform/heyform）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "owncloud/server",
+   "desc": "All-in-one solution for saving, synchronizing, viewing, editing and sharing files, calendars, address books and more.",
+   "official": false,
+   "deprecated": false,
+   "port": 8080,
+   "data_path": "/mnt/data",
+   "source": "awesome-selfhosted-data（ownCloud，github.com/owncloud/core）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "flagsmith/flagsmith",
+   "desc": "Dashboard, API and SDKs for adding Feature Flags to your applications (alternative to LaunchDarkly).",
+   "official": false,
+   "deprecated": false,
+   "port": 8000,
+   "source": "awesome-selfhosted-data（Flagsmith，github.com/flagsmith/flagsmith）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "svenstaro/miniserve",
+   "desc": "CLI tool to serve files and dirs over HTTP.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（miniserve，github.com/svenstaro/miniserve）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "cryptpad/cryptpad",
+   "desc": "Collaboration suite built to enable collaboration, synchronizing changes to documents in real time.",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "data_path": "/cryptpad/blob",
+   "source": "awesome-selfhosted-data（CryptPad，github.com/cryptpad/cryptpad）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "sysadminsmedia/homebox",
+   "desc": "Inventory and organization system built for the home user.",
+   "official": false,
+   "deprecated": false,
+   "port": 7745,
+   "data_path": "/data",
+   "source": "awesome-selfhosted-data（HomeBox (SysAdminsMedia)，github.com/sysadminsmedia/homebox）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "btcpayserver/btcpayserver",
+   "desc": "Bitcoin and other cryptocurrencies payment processor.",
+   "official": false,
+   "deprecated": false,
+   "data_path": "/datadir",
+   "source": "awesome-selfhosted-data（BTCPay Server，github.com/btcpayserver/btcpayserver）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "inventree/inventree",
+   "desc": "Inventory management system which provides intuitive parts management and stock control.",
+   "official": false,
+   "deprecated": false,
+   "port": 8000,
+   "source": "awesome-selfhosted-data（Inventree，github.com/inventree/InvenTree）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "dolibarr/dolibarr",
+   "desc": "Modern CRM software package to manage your company or foundation activity (contacts, suppliers, invoices, orders, stocks, agenda, accounting, ...).",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/var/www/documents",
+   "source": "awesome-selfhosted-data（Dolibarr，github.com/Dolibarr/dolibarr）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "meshcentral/meshcentral",
+   "desc": "Run your own web server to remotely manage and control computers on a local network or anywhere on the internet.",
+   "official": false,
+   "deprecated": false,
+   "port": 80,
+   "data_path": "/opt/meshcentral/meshcentral-data",
+   "source": "awesome-selfhosted-data（MeshCentral，github.com/Ylianst/MeshCentral）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "newsblur/newsblur_python3",
+   "desc": "Personal news reader that brings people together to talk about the world. A new sound of an old instrument.",
+   "official": false,
+   "deprecated": false,
+   "source": "awesome-selfhosted-data（NewsBlur，github.com/samuelclay/NewsBlur）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "evcc/evcc",
+   "desc": "Extensible Electric Vehicle Charge Controller and home energy management system.",
+   "official": false,
+   "deprecated": false,
+   "port": 4712,
+   "source": "awesome-selfhosted-data（evcc，github.com/evcc-io/evcc）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
+  },
+  {
+   "image": "opensign/opensign",
+   "desc": "Document signing software (alternative to DocuSign).",
+   "official": false,
+   "deprecated": false,
+   "port": 3000,
+   "source": "awesome-selfhosted-data（OpenSign，github.com/opensignlabs/opensign）＋Docker Hub 映像檔的 EXPOSE／VOLUME"
   }
- ]
+ ],
+ "selfhosted_added": "2026-11-23"
 }

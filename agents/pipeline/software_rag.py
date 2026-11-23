@@ -72,7 +72,7 @@ def _field_items() -> List[Dict]:
                     "deprecated": False, "port": (e.get("ports") or [None])[0],
                     "data_path": (e.get("volumes") or [None])[0], "source": "rag/knowledge/catalog.json",
                     "_field_id": e.get("id"), "category": e.get("category", ""),
-                    "memory": res.get("memory"),
+                    "memory": res.get("memory"), "cpu": res.get("cpu"),
                     "has_scenarios": bool(e.get("scenarios"))})
     return out
 
@@ -118,6 +118,11 @@ def _field_entry(image: str) -> Dict:
 def recommended_memory(image: str) -> str:
     """知識庫對這套軟體建議的記憶體（例如 512Mi）；不在知識庫回空字串。"""
     return _field_entry(image).get("memory") or ""
+
+
+def recommended_cpu(image: str) -> str:
+    """知識庫對這套軟體建議的 CPU（例如 250m）；不在知識庫回空字串（2026-11-23，資源刻度規則用）。"""
+    return _field_entry(image).get("cpu") or ""
 
 
 def category(image: str) -> str:

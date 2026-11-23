@@ -1,0 +1,52 @@
+{
+ "n": 300,
+ "n_answer": 262,
+ "n_must_ask": 38,
+ "pass_answer": 170,
+ "pass_rate_answer": 0.649,
+ "image_ok": 187,
+ "false_ask": 47,
+ "false_ask_sources": {
+  "image": 45,
+  "schedule_interval": 2
+ },
+ "must_ask_recall": 0.711,
+ "latency_p50_ms": 17962,
+ "latency_p90_ms": 26256,
+ "set": "claude",
+ "tag": "fix5check",
+ "ask_policy": "essential",
+ "select_rule": "agree",
+ "rag_backend": "field",
+ "select_mode": "choose",
+ "choose_style": "confidence",
+ "choose_threshold": "0.8",
+ "llm_calls": 1043,
+ "llm_failures": 0,
+ "gemini": true,
+ "clarity_mode": "on",
+ "clarity_bounds": [
+  "0.1",
+  "0.6"
+ ],
+ "cron_command": "example",
+ "clarity_sources": {
+  "gemini": 295,
+  "local": 5
+ },
+ "normalize_backends": {
+  "gemini": 300
+ },
+ "gemini_cache": {
+  "hits": 300,
+  "calls": 266,
+  "misses_without_gemini": 0
+ },
+ "gemini_usage": {
+  "calls": 266,
+  "prompt_tokens": 94360,
+  "output_tokens": 6016,
+  "thought_tokens": 0,
+  "blocked": 0
+ }
+}

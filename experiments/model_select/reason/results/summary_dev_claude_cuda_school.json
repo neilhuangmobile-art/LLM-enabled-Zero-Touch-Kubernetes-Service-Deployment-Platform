@@ -1,0 +1,28 @@
+{
+ "n": 300,
+ "n_answer": 262,
+ "n_must_ask": 38,
+ "pass_answer": 173,
+ "pass_rate_answer": 0.66,
+ "image_ok": 196,
+ "false_ask": 37,
+ "false_ask_sources": {
+  "image": 26,
+  "cron_command": 11,
+  "schedule_interval": 1
+ },
+ "must_ask_recall": 0.474,
+ "latency_p50_ms": 12014,
+ "latency_p90_ms": 16352,
+ "set": "claude",
+ "tag": "cuda_school",
+ "ask_policy": "essential",
+ "select_rule": "agree",
+ "rag_backend": "field",
+ "select_mode": "choose",
+ "choose_style": "confidence",
+ "choose_threshold": "0.8",
+ "llm_calls": 1298,
+ "llm_failures": 0,
+ "gemini": false
+}

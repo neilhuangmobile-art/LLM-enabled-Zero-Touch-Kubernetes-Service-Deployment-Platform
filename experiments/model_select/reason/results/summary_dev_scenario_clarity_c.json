@@ -1,0 +1,41 @@
+{
+ "n": 200,
+ "n_answer": 157,
+ "n_must_ask": 43,
+ "pass_answer": 65,
+ "pass_rate_answer": 0.414,
+ "image_ok": 111,
+ "false_ask": 8,
+ "false_ask_sources": {
+  "format": 2,
+  "image": 7
+ },
+ "must_ask_recall": 0.163,
+ "latency_p50_ms": 12221,
+ "latency_p90_ms": 16388,
+ "set": "scenario",
+ "tag": "clarity_c",
+ "ask_policy": "essential",
+ "select_rule": "agree",
+ "rag_backend": "field",
+ "select_mode": "choose",
+ "choose_style": "confidence",
+ "choose_threshold": "0.8",
+ "llm_calls": 884,
+ "llm_failures": 0,
+ "gemini": false,
+ "clarity_mode": "on",
+ "clarity_bounds": [
+  "0.05",
+  "0.6"
+ ],
+ "cron_command": "example",
+ "clarity_sources": {
+  "local": 190,
+  "無": 10
+ },
+ "normalize_backends": {
+  "local": 200
+ },
+ "gemini_cache": null
+}

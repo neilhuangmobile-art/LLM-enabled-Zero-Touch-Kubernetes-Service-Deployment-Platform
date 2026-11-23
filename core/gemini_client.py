@@ -111,10 +111,26 @@ def _count_usage(resp) -> None:
         _usage[key] += int(getattr(um, attr, 0) or 0) if um is not None else 0
 
 
+# 2026-11-23：上一次呼叫失敗的原因（網站在「沒用上 Gemini」時告訴使用者是哪一種，AGENT_RULES：不能靜默失敗）。
+# no_key＝沒有 key 或沒裝套件；budget＝測試用的花費上限；quota＝額度用完；error＝其他錯誤（連線、逾時）；truncated＝回答被截斷。
+# 成功時清成 None。多人同時使用時只代表「最近一次」，夠用來給提示
+_last_failure: Optional[str] = None
+
+
+def last_failure() -> Optional[str]:
+    return _last_failure
+
+
+def _fail(kind: Optional[str]) -> None:
+    global _last_failure
+    _last_failure = kind
+
+
 def _generate(system_instruction: str, contents: str, label: str) -> Optional[str]:
     """帶 key 輪換的單次生成；被截斷或全部 key 用盡時回 None。"""
     keys = _load_keys()
     if not keys:
+        _fail("no_key")
         return None
 
     model = os.environ.get("GEMINI_NORMALIZE_MODEL", "gemini-3.5-flash-lite")
@@ -131,6 +147,7 @@ def _generate(system_instruction: str, contents: str, label: str) -> Optional[st
         for _ in range(attempts):
             client = _current_client()
             if client is None:
+                _fail("no_key")
                 return None
             # 花費上限：每次真的送出前都檢查（換 key 重試也算一次），在 _lock 裡計數，多執行緒也不會超過
             stop = _budget_exceeded()
@@ -139,17 +156,21 @@ def _generate(system_instruction: str, contents: str, label: str) -> Optional[st
                 if _usage["blocked"] == 1 or _usage["blocked"] % 50 == 0:
                     print(f"[Gemini 翻譯層] {label}：{stop}（GEMINI_MAX_CALLS／GEMINI_MAX_TOKENS 是測試用的花費上限），"
                           f"這個程序到重啟前都不再呼叫 Gemini，已擋下 {_usage['blocked']} 次。正式網站不要設這兩個變數")
+                _fail("budget")
                 return None
             try:
                 _usage["calls"] += 1
                 resp = client.models.generate_content(model=model, contents=contents, config=config)
                 _count_usage(resp)
-                return _extract_text(resp, label)
+                out = _extract_text(resp, label)
+                _fail("truncated" if out is None else None)
+                return out
             except Exception as e:
                 if _is_quota_error(e) and len(keys) > 1:
                     print(f"[Gemini 翻譯層] {label} key 額度用盡，換下一把重試")
                     continue
                 print(f"[Gemini 翻譯層] {label}失敗：{e}")
+                _fail("quota" if _is_quota_error(e) else "error")
                 return None
             finally:
                 # 主動 round-robin：每次呼叫（成功與否）都前進到下一把 key，
@@ -157,6 +178,7 @@ def _generate(system_instruction: str, contents: str, label: str) -> Optional[st
                 # 而不是把第一把打爆才換。
                 _rotate_key()
         print(f"[Gemini 翻譯層] {label} 所有 key 額度都用盡，改用原始輸入")
+        _fail("quota")
         return None
 
 

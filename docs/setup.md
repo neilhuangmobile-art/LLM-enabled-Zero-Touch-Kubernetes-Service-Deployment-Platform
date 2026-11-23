@@ -181,8 +181,9 @@ curl http://127.0.0.1:8765/health
 
 1. 下載 llama.cpp（Windows 預先編好的版本，[GitHub Releases](https://github.com/ggml-org/llama.cpp/releases)，實驗用 b12477）：
    - AMD：`llama-<版本>-bin-win-vulkan-x64.zip`，解壓到 `D:\zt-venvs\llamacpp\vulkan\`
-   - NVIDIA：`llama-<版本>-bin-win-cuda-12.8-x64.zip`（RTX 50 系列要 CUDA 12.8 以上）與同版本的 `cudart-...zip`，
-     一起解壓到 `D:\zt-venvs\llamacpp\cuda\`
+   - NVIDIA：`llama-<版本>-bin-win-cuda-13.5-x64.zip` 與 `cudart-llama-bin-win-cuda-13.5-x64.zip`，
+     一起解壓到 `D:\zt-venvs\llamacpp\cuda\`。Windows 版只有 CUDA 12.4 與 13.5 兩種（b12477 沒有 12.8）；
+     RTX 50 系列要 CUDA 12.8 以上，所以用 13.5（2026-11-22 學校 RTX 5080 Laptop、驅動 610.88 實測可用）
    - 兩種顯卡都要：`llama-<版本>-bin-win-cpu-x64.zip`，解壓到 `D:\zt-venvs\llamacpp\cpu\`（監控模型跑 CPU）
 2. 下載 GGUF 到 `D:\zt-venvs\gguf\`（共約 7.7GB）：
 

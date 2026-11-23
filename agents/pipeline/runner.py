@@ -128,5 +128,6 @@ def to_payload(spec: Dict) -> Dict:
 def _public(spec: Dict) -> Dict:
     """給前端與紀錄看的部分（含原句的中間 JSON，回答問題時整份送回來）。"""
     keep = ("text", "purpose", "base", "workload", "expose", "extras", "manifest", "questions", "notices", "verified", "verify_skip", "format_fixed", "rejected",
-            "trace", "attempts", "backend", "total_ms", "cancelled", "choose_scores", "choose_reason", "choose_text", "choose_pick")
+            "trace", "attempts", "backend", "total_ms", "cancelled", "choose_scores", "choose_reason", "choose_text", "choose_pick",
+            "clarity")
     return {k: copy.deepcopy(spec[k]) for k in keep if k in spec}

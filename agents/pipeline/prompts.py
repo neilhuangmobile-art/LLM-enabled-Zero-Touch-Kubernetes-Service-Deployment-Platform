@@ -91,6 +91,18 @@ Rules:
 - db_password: true for database images that require an initial password, otherwise false.
 - memory / cpu: Kubernetes requests sized for the real load (small loads get small values)."""
 
+# 2026-11-23（PIPELINE_REASON_SIZING=tiers，實驗）：拿掉範本裡的 "256Mi"／"250m"。
+# dev_scenario 157 題有 98 題 CPU 照抄 250m（錨定效應，arXiv 2505.15392、2511.05766）。
+# 原本的 REASON_SYSTEM 一字不改，開關沒開時照舊
+REASON_SIZING_TIERS = (REASON_SYSTEM
+    .replace('"memory": "<e.g. 256Mi>"', '"memory": "<Mi or Gi>"')
+    .replace('"cpu": "<e.g. 250m>"', '"cpu": "<millicores>"')
+    .replace("- memory / cpu: Kubernetes requests sized for the real load (small loads get small values).",
+             "- memory / cpu: Kubernetes requests. First decide the software's own needs, then the load, and pick one step:\n"
+             "  cpu 50m / 100m / 250m / 500m / 1000m / 2000m; memory 64Mi / 128Mi / 256Mi / 512Mi / 1Gi / 2Gi.\n"
+             "  A tiny static page or a personal tool: the lowest steps. A database, search engine, CI server, chat or\n"
+             "  file-sharing service, or dozens of people at the same time: higher steps. Do not reuse one value for everything."))
+
 INTENT_SYSTEM = r"""You check a deployment request for things the user asked for that were NOT written down.
 You get the user's original text and the JSON that was extracted from it.
 List every request in the text that the JSON does not cover yet: a password, keeping data after restart,
@@ -204,4 +216,68 @@ REPLICAS_RULE = """
   data or state (databases, caches, message queues, git hosting, wikis, file storage, password managers,
   uptime/monitoring tools) runs as 1 replica unless the user clearly expects many people using it AT THE SAME TIME
   (hundreds or more) or explicitly asks it to survive a machine failure."""
+
+
+# 2026-11-22：反問改善方案 E（PIPELINE_CLARITY）。只接在送給 Gemini 的正規化 prompt 後面，NORMALIZE_SYSTEM 本身不改；
+# 本地正規化不用（本地改用 CLARITY_PROB_SYSTEM 讀機率）。
+# 規則照 2026-11-22 和使用者討論的結論：只有「沒講是哪一類」或「矛盾會改變要裝哪一套」才算不清楚；
+# 設定上的矛盾、做不到的要求寫進 notes，在部署單提醒，不反問。
+CLARITY_ADDON = """
+
+Also add one more top-level key "clarity" to the same JSON object. Fill it in this order:
+"clarity": {"category": "<the KIND of software that fits the request, in a few words, e.g. blog, file sharing, survey form,
+                         relational database, message queue, server monitoring, python script; null if you cannot tell>",
+            "suggest": "<one well-known public docker image of that kind, or null>",
+            "kind_clear": <true or false>,
+            "notes": ["<each contradiction or impossible demand in the request, one short sentence in the user's language>"]}
+Here you judge (everywhere else you only copy what the user said). Users almost never name a product; that is normal.
+The question is only: could a competent engineer pick the kind of software from this request without asking?
+- kind_clear = true whenever you could fill "category" with one specific kind. Examples that are TRUE:
+  "a page where my bakery posts news" (CMS or blog), "somewhere our team writes down how-tos" (wiki),
+  "tell me when my shop's website goes down" (uptime monitor), "run my R analysis every Monday" (R runtime).
+  Contradictions that only affect settings (keep data or not, public or not, huge traffic but tiny budget) and impossible
+  demands (must not be screenshotted, never down even if the building burns) do NOT make it unclear: put them in notes.
+  If the request asks for two services, judge the main one.
+- kind_clear = false ONLY in these cases:
+  * nothing says what it is for (only "the thing", "set it up like usual", "whatever works");
+  * the description fits several very different kinds (e.g. "let people share stuff" could be photos, files or links);
+  * the user wants to run their own program but nothing tells its language or runtime;
+  * a contradiction changes WHICH kind to install (e.g. "an online shop... no, just a catalog nobody can order from").
+- notes = [] when nothing is contradictory or impossible."""
+
+
+# 2026-11-23（PIPELINE_CLARITY_CHECK=gemini2）：Gemini 正規化時說「講清楚了」，再用這段獨立的短 prompt 問一次。
+# 角度不同（先列出可能的種類再判斷），範例是自己寫的，不取自任何題組
+CLARITY_CHECK_SYSTEM = """You review one deployment request from a non-technical user. Do not deploy anything.
+Step 1: list every clearly different KIND of software a competent engineer might reasonably install for it
+(e.g. "photo gallery", "file sharing", "wiki", "relational database", "python script"). Variants of one kind count once.
+Step 2: kind_clear = true only if exactly one kind fits and you know enough to pick an image for it.
+It is NOT unclear just because no product is named, settings conflict (budget, traffic, privacy) or a demand is impossible.
+It IS unclear when: nothing says what it is for ("make it like the old one", "something for the team");
+the purpose fits several different kinds; the user's own program has no language, runtime, image or file;
+or the user changes their mind about what it is.
+Examples: "a place for our choir to book rehearsal slots" -> ["booking/scheduling app"], true.
+"keep a shared shopping list for my family" -> ["shared list / to-do app"], true.
+"run the script my friend wrote for me" -> ["unknown program"], false.
+"a space where members can put things" -> ["file sharing", "forum", "photo gallery"], false.
+Reply with JSON only: {"kinds": ["..."], "kind_clear": true or false}"""
+
+
+# 方案 C（本地備援，Gemini 沒有回 clarity 時用）：只回 Yes／No，程式讀 Yes 的機率。範例是自己寫的，不取自任何題組
+CLARITY_PROB_SYSTEM = """You check whether a user's deployment request says clearly WHAT KIND of software they want.
+
+Answer Yes when the kind of software is clear, even as a general category, for example:
+- "A page where my bakery posts news" (a CMS or blog)
+- "Somewhere our team writes down how-tos" (a wiki)
+- "Tell me when my shop's website goes down" (an uptime monitor)
+- "Run my R analysis every Monday" (a scheduled script with a known runtime)
+- "A news page for 1 million readers on a tiny budget" (a CMS; the budget conflict does not matter)
+Answer No when it is not clear what kind of software to install, for example:
+- "Set up the thing, like usual"
+- "Whatever works, just get it running"
+- "Let people share stuff" (could be photos, files or links)
+- "Deploy my program" (no language, image or file given)
+- "An online shop... no, just a catalog nobody can order from" (the contradiction changes which software to install)
+
+Answer with exactly one word: Yes or No."""
 
