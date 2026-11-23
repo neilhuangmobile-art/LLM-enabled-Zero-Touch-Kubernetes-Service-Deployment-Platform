@@ -135,41 +135,9 @@ ZeroTouch 是一套網頁平台，讓不熟 Kubernetes 的人，只要用一句�
 
 ## 系統架構流程圖
 
-```mermaid
-flowchart TD
-    U["使用者：對話、語音、上傳 compose 或 YAML"] --> R["意圖判斷<br/>固定規則 → Gemini 附服務清單 → 規則查核"]
-    R -->|查詢、擴縮、刪除、問答| OPS["服務管理與問答<br/>變更前兩步確認"]
-    R -->|部署| N
+![ZeroTouch 系統架構流程圖](docs/diagrams/readme_flow.png)
 
-    subgraph P["多代理人部署解析 agents/pipeline"]
-        N["① 輸入正規化<br/>Gemini，失敗改用本地 4B"] --> IC["② 意圖檢查<br/>原句與中間資料比對，最多 3 輪"]
-        IC --> GC["③ 空缺檢查<br/>推理代理補欄位"]
-        GC --> SW["選軟體<br/>知識庫取前 5 名，逐一算信心度"]
-        SW --> TB["查表補 port、資料路徑、記憶體下限"]
-        TB --> VF["意圖符合檢查<br/>系統填的值不得與原句矛盾"]
-        VF --> EX["④ 額外需求對應<br/>Secret、PVC、CronJob"]
-        EX --> FC["⑤ 格式檢查與修正"]
-    end
-
-    FC -->|有不能替使用者決定的事| Q["問題卡，一次問完"]
-    Q -->|回答後從原進度接續| GC
-    FC --> CARD["部署規格確認<br/>各欄位標示來源與信心度"]
-
-    CARD --> REV["部署前審查<br/>安全、成本、效能三個審查模組"]
-    REV --> DRY["guardian：YAML 政策檢查、kubectl 試跑驗證"]
-    DRY --> OK{"使用者確認"}
-    OK -->|確認| YAML["Python 樣板產生 YAML<br/>模型不直接寫 YAML"]
-    YAML --> GIT["gitops：寫入部署紀錄 repo"]
-    GIT --> K8S[("Kubernetes 叢集<br/>每個帳號一個命名空間")]
-    GIT -.->|客戶自帶叢集| FLUX["客戶叢集的 Flux 拉取套用"]
-
-    K8S --> W["自我修復模組 healer<br/>每 30 秒掃描"]
-    W --> D["診斷：固定規則優先<br/>比對不到才交給 1.5B 監控模型"]
-    D --> FIX["自動修復或通知使用者"]
-    FIX --> K8S
-    K8S --> MON["Prometheus、Grafana"]
-    FIX --> PUSH["手機推播"]
-```
+流程圖的原始檔是 [docs/diagrams/readme_flow.mmd](docs/diagrams/readme_flow.mmd)（Mermaid 格式）。GitHub 直接顯示 Mermaid 時會把中文字切掉，所以這裡放的是先畫好的圖片，修改原始檔之後要重新匯出。
 
 ### 各階段說明
 
