@@ -1561,14 +1561,14 @@ HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ZeroTouch</title>
+<title>Hyperion</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0B1622">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/icons/apple-touch-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="ZeroTouch">
+<meta name="apple-mobile-web-app-title" content="Hyperion">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <script src="/static/push-client.js" defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2535,7 +2535,7 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
 <!-- ── Login Page ── -->
 <div class="auth-wrap">
   <div class="auth-card card">
-    <div class="auth-logo"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13 3.5v19M3.5 13h19M6.3 6.3l13.4 13.4M19.7 6.3 6.3 19.7"/></g><circle cx="13" cy="13" r="3.4" fill="var(--panel)" stroke="currentColor" stroke-width="2"/></svg><span>ZeroTouch</span></div>
+    <div class="auth-logo"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13 3.5v19M3.5 13h19M6.3 6.3l13.4 13.4M19.7 6.3 6.3 19.7"/></g><circle cx="13" cy="13" r="3.4" fill="var(--panel)" stroke="currentColor" stroke-width="2"/></svg><span>Hyperion</span></div>
     <div class="auth-title">登入</div>
     <div class="auth-sub">用自然語言部署和管理你的 Kubernetes 服務</div>
     {% if error %}<div class="auth-error">{{ error }}</div>{% endif %}
@@ -2565,7 +2565,7 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
 <!-- ── Register Page ── -->
 <div class="auth-wrap">
   <div class="auth-card card">
-    <div class="auth-logo"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13 3.5v19M3.5 13h19M6.3 6.3l13.4 13.4M19.7 6.3 6.3 19.7"/></g><circle cx="13" cy="13" r="3.4" fill="var(--panel)" stroke="currentColor" stroke-width="2"/></svg><span>ZeroTouch</span></div>
+    <div class="auth-logo"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13 3.5v19M3.5 13h19M6.3 6.3l13.4 13.4M19.7 6.3 6.3 19.7"/></g><circle cx="13" cy="13" r="3.4" fill="var(--panel)" stroke="currentColor" stroke-width="2"/></svg><span>Hyperion</span></div>
     <div class="auth-title">建立帳號</div>
     <div class="auth-sub">註冊後就能用對話部署第一個服務</div>
     {% if error %}<div class="auth-error">{{ error }}</div>{% endif %}
@@ -2600,7 +2600,7 @@ details.why ul{margin:6px 0 0;padding-left:1.2em;color:var(--text-2)}
 <div class="layout">
   <!-- 左側選單：固定不跟著內容捲動 -->
   <aside class="sidebar" aria-label="主選單">
-    <div class="sidebar-logo"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13 3.5v19M3.5 13h19M6.3 6.3l13.4 13.4M19.7 6.3 6.3 19.7"/></g><circle cx="13" cy="13" r="3.4" fill="var(--panel)" stroke="currentColor" stroke-width="2"/></svg><span>ZeroTouch</span></div>
+    <div class="sidebar-logo"><svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13 3.5v19M3.5 13h19M6.3 6.3l13.4 13.4M19.7 6.3 6.3 19.7"/></g><circle cx="13" cy="13" r="3.4" fill="var(--panel)" stroke="currentColor" stroke-width="2"/></svg><span>Hyperion</span></div>
     <div class="new-chat-wrap"><button class="new-chat-btn" type="button" onclick="newChat()"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>新對話</button></div>
     <nav class="sidebar-nav" aria-label="功能">
       <button class="nav-item active" type="button" data-page="chat" onclick="showPage('chat')"><svg viewBox="0 0 16 16" fill="none"><path d="M2.5 3.5a2 2 0 012-2h7a2 2 0 012 2v5a2 2 0 01-2 2H8l-3.5 3v-3a2 2 0 01-2-2v-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>對話</button>
@@ -2826,7 +2826,7 @@ const I18N = {
   zh: {
     langBtn: 'EN',
     manualBtn: '說明書',
-    chatTitle: 'ZeroTouch K8s 助理',
+    chatTitle: 'Hyperion K8s 助理',
     chatSubtitle: '聊天、部署、檢視並修復 Kubernetes 服務',
     workspaceReady: '系統就緒',
     sendBtn: '送出',
@@ -2845,7 +2845,7 @@ const I18N = {
   en: {
     langBtn: '中文',
     manualBtn: 'Guide',
-    chatTitle: 'ZeroTouch K8s Assistant',
+    chatTitle: 'Hyperion K8s Assistant',
     chatSubtitle: 'Chat, deploy, inspect, and recover Kubernetes services',
     workspaceReady: 'Workspace ready',
     sendBtn: 'Send',
@@ -4945,7 +4945,7 @@ W.report = {
     else aiHTML = `<div class="rp-ai">${ai.sentences.length ? ai.sentences.map(x => `<p>${esc(x)}</p>`).join('') : '<p>AI 寫的句子都提到統計裡沒有的數字，全部刪掉了。</p>'}
         ${ai.dropped ? `<p class="note">有 ${ai.dropped} 句提到統計裡查不到的數字，已經刪掉，避免讓你看到沒有根據的說法。</p>` : ''}</div>`;
     return `<div class="rp">
-      <div class="print-title">ZeroTouch 分析報告</div>
+      <div class="print-title">Hyperion 分析報告</div>
       <div class="rp-kpis">${kpis.map((k, i) => `<div class="rp-kpi" style="--i:${i};--kc:${k[3]}"><span>${k[0]}</span>${k[1]}<small>${esc(k[2])}</small></div>`).join('')}</div>
       <section class="rp-sec"><h3>每日活動<span class="rp-tag fact">統計</span></h3>${rpDaily(d.series)}</section>
       <section class="rp-sec"><h3>部署前把關<span class="rp-tag fact">統計</span></h3>
@@ -5192,7 +5192,7 @@ function printReport(w){
   document.body.classList.add('print-report');
   const prevTitle = document.title;
   const data = decState(w.dataset.wData) || {};
-  document.title = 'ZeroTouch 分析報告 ' + ((data.period && data.period.start) || '') + ' 到 ' + ((data.period && data.period.end) || '');
+  document.title = 'Hyperion 分析報告 ' + ((data.period && data.period.start) || '') + ' 到 ' + ((data.period && data.period.end) || '');
   const restore = () => {
     document.body.classList.remove('print-report');
     if(prevTheme) root.setAttribute('data-theme', prevTheme); else root.removeAttribute('data-theme');
@@ -7271,8 +7271,8 @@ def _cluster_base_url() -> str:
 
 
 _EXPIRED_SCRIPT = (
-    "Write-Host '這個安裝指令已經失效或過期（有效 30 分鐘）。請回到 ZeroTouch 網頁，按「返回」再按「同意並繼續」"
-    "取得新的指令。 / This install command has expired. Go back to the ZeroTouch page to get a new one.' "
+    "Write-Host '這個安裝指令已經失效或過期（有效 30 分鐘）。請回到 Hyperion 網頁，按「返回」再按「同意並繼續」"
+    "取得新的指令。 / This install command has expired. Go back to the Hyperion page to get a new one.' "
     "-ForegroundColor Yellow\n")
 
 
@@ -7293,8 +7293,8 @@ def onboard_bundle(token):
     # 安裝失敗要重跑時，網頁的「返回 → 同意並繼續」會給一個新的指令。
     username = CLUSTERS.claim_bundle(token)
     if not username:
-        return ("# 這個安裝指令已經用過或已過期。請回到 ZeroTouch 網頁按「返回」再按「同意並繼續」取得新的指令。\n"
-                "# This install command was already used or has expired. Get a new one from the ZeroTouch page.\n"), \
+        return ("# 這個安裝指令已經用過或已過期。請回到 Hyperion 網頁按「返回」再按「同意並繼續」取得新的指令。\n"
+                "# This install command was already used or has expired. Get a new one from the Hyperion page.\n"), \
             410, {"Content-Type": "text/plain; charset=utf-8"}
     try:
         repo, host, info = _tenant_repo_for(username)
@@ -7786,7 +7786,7 @@ def _verify_grounded_reply(message: str, reply: str, namespace: str = None) -> s
 def _looks_like_system_help(message: str) -> bool:
     low = (message or '').lower()
     product_terms = (
-        'zerotouch', 'this system', 'this app', 'use this', 'how to use', 'how to deploy',
+        'zerotouch', 'hyperion', 'this system', 'this app', 'use this', 'how to use', 'how to deploy',
         'healer', 'gitops', 'metrics',
         '這套', '系統', '怎麼用', '如何使用', '教學', '功能', '使用方式',
         '怎麼部署', '如何部署', '怎麼部屬', '如何部屬', '怎麼佈署', '如何佈署'
@@ -7844,7 +7844,7 @@ def _system_help_reply(message: str) -> str:
         )
 
     return (
-        "這套 ZeroTouch K8s 主要有幾個區塊：\n\n"
+        "這套 Hyperion K8s 主要有幾個區塊：\n\n"
         "- `Chat`：問問題、部署服務、查 Pod 狀態/健康、scale/update/rollback，一個地方全部搞定。\n"
         "- `Pods`：查看 Pod 狀態、IP、node、restart。\n"
         "- `Deployments`：查看 app image、replicas、ready 數與刪除部署。\n"
@@ -7862,7 +7862,7 @@ def _fallback_chat_reply(message: str, history: list = None, namespace: str = No
     low = text.lower()
     greetings = ("hi", "hello", "hey", "嗨", "你好", "哈囉", "早安", "午安", "晚安")
     if any(g in low for g in greetings):
-        return "嗨，我是 ZeroTouch K8s Assistant。你可以跟我閒聊，也可以問 Kubernetes、查 Pods/Deployments、排查錯誤，或用自然語言部署服務。", []
+        return "嗨，我是 Hyperion K8s Assistant。你可以跟我閒聊，也可以問 Kubernetes、查 Pods/Deployments、排查錯誤，或用自然語言部署服務。", []
     if "pod" in low or "pods" in low or "容器" in low:
         pods = k8s_get_pods(namespace=namespace)
         if pods:
@@ -11855,7 +11855,7 @@ self.addEventListener('fetch', e => {
 self.addEventListener('push', e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (x) { d = {body: e.data ? e.data.text() : ''}; }
-  e.waitUntil(self.registration.showNotification(d.title || 'ZeroTouch', {
+  e.waitUntil(self.registration.showNotification(d.title || 'Hyperion', {
     body: d.body || '', tag: d.tag || undefined, renotify: !!d.tag,
     icon: '/icons/icon-192.png', badge: '/icons/badge-96.png',
     data: {url: (typeof d.url === 'string' && d.url.startsWith('/')) ? d.url : '/?page=healer'},
@@ -11878,7 +11878,7 @@ self.addEventListener('notificationclick', e => {
 
 _OFFLINE_HTML = """<!DOCTYPE html>
 <html lang="zh-TW"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ZeroTouch｜平台離線</title><meta name="theme-color" content="#0B1622">
+<title>Hyperion｜平台離線</title><meta name="theme-color" content="#0B1622">
 <style>
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0B1622;color:#DCE8F0;
 font-family:"Noto Sans TC",system-ui,sans-serif;padding:16px;box-sizing:border-box}
@@ -11888,7 +11888,7 @@ ul{padding-left:20px;color:#93AABB;line-height:1.7}button{margin-top:8px;width:1
 background:#5CC8FF;color:#0B1622;font-size:16px;font-weight:700}
 </style></head><body><main>
 <h1>平台目前連不上</h1>
-<p>手機連到了網路，但 ZeroTouch 平台沒有回應。最常見的原因是平台的主機關機或重新開機中，通常幾分鐘內會自動恢復。</p>
+<p>手機連到了網路，但 Hyperion 平台沒有回應。最常見的原因是平台的主機關機或重新開機中，通常幾分鐘內會自動恢復。</p>
 <ul><li>你叢集裡已經部署的服務<b>照常運作</b>，不受影響。</li>
 <li>平台離線期間 Healer 不會檢查，也<b>不會送通知</b>，沒收到通知不代表一切正常。</li></ul>
 <p lang="en">The platform is unreachable, most likely because its host is off or restarting. Your deployed services keep running; Healer checks and notifications resume when the platform is back.</p>
@@ -11899,7 +11899,7 @@ background:#5CC8FF;color:#0B1622;font-size:16px;font-weight:700}
 @app.route("/manifest.webmanifest")
 def pwa_manifest():
     manifest = {
-        "name": "ZeroTouch 部署平台", "short_name": "ZeroTouch",
+        "name": "Hyperion 部署平台", "short_name": "Hyperion",
         "description": "用一句話部署服務，Healer 自動修復並通知你",
         "id": "/", "start_url": "/m", "scope": "/", "display": "standalone",
         "background_color": _THEME_COLOR, "theme_color": _THEME_COLOR, "lang": "zh-TW",
@@ -11976,7 +11976,7 @@ def api_push_test():
     sub = _push.subscription(session["username"], endpoint)
     if not sub:
         return jsonify({"ok": False, "error": "這台裝置還沒開啟通知，請先按「開啟通知」。"}), 400
-    r = _push.send_one(sub, {"title": "🔔 ZeroTouch 通知已開啟",
+    r = _push.send_one(sub, {"title": "🔔 Hyperion 通知已開啟",
                              "body": "之後 Healer 發現問題或修好時，會用這種方式通知你。",
                              "url": "/?page=healer", "tag": "zt-test"})
     if r == "sent":
@@ -12302,7 +12302,7 @@ def mobile_view():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  ZeroTouch K8s Web Demo v2")
+    print("  Hyperion K8s Web Demo v2")
     print("=" * 60)
     print(f"  K8s   : {'Connected' if K8S_ENABLED else 'Simulation'}")
     print(f"  Open  : http://localhost:{WEB_PORT}")

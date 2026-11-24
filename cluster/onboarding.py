@@ -142,7 +142,7 @@ def build_bundle(namespace: str, owner: str, base_url: str, repo_ssh_url: str,
                           "volumes": [{"name": "src", "configMap": {"name": "zt-reporter-src"}},
                                       {"name": "token", "secret": {"secretName": "zt-reporter-token"}}]}}}},
     ]
-    header = (f"# ZeroTouch 安裝包：{owner} 的叢集設定（namespace {namespace}）\n"
+    header = (f"# Hyperion 安裝包：{owner} 的叢集設定（namespace {namespace}）\n"
               f"# 解除安裝：\n# " + uninstall_commands(namespace).replace("\n", "\n# ") + "\n")
     return header + yaml.safe_dump_all(docs, allow_unicode=True, sort_keys=False)
 
@@ -158,9 +158,9 @@ def build_install_script(base_url: str, token: str, namespace: str) -> str:
         .replace("{{FLUX_VERSION}}", FLUX_VERSION)
 
 
-_PS_TEMPLATE = r'''# ZeroTouch 叢集連線安裝腳本（namespace {{NS}}）
+_PS_TEMPLATE = r'''# Hyperion 叢集連線安裝腳本（namespace {{NS}}）
 # 這個腳本會：檢查 kubectl 與叢集 → 安裝 Flux {{FLUX_VERSION}}（若尚未安裝）→ 套用平台設定 → 等回報程式啟動
-# 每一步的結果會回報給 ZeroTouch 網站，讓網頁告訴你下一步怎麼做。
+# 每一步的結果會回報給 Hyperion 網站，讓網頁告訴你下一步怎麼做。
 function Install-ZeroTouch {
     $ErrorActionPreference = 'Continue'
     $ZtBase = '{{BASE}}'; $ZtToken = '{{TOKEN}}'; $ZtNs = '{{NS}}'
@@ -177,12 +177,12 @@ function Install-ZeroTouch {
         Write-Host "X $Msg" -ForegroundColor Red
         if ($Detail) { Write-Host $Detail -ForegroundColor DarkGray }
         Send-ZtProgress $Step $false $Detail
-        Write-Host "請回到 ZeroTouch 網頁按「繼續」，會告訴你怎麼處理。" -ForegroundColor Yellow
+        Write-Host "請回到 Hyperion 網頁按「繼續」，會告訴你怎麼處理。" -ForegroundColor Yellow
     }
     # PowerShell 5.1 會把 kubectl 的錯誤輸出包成 NativeCommandError（一堆紅字 At line…），用 "$_" 只取訊息本身
     function Invoke-Kubectl { $out = & kubectl @args 2>&1 | ForEach-Object { "$_" } | Out-String; return @{ code = $LASTEXITCODE; out = $out.Trim() } }
 
-    Write-Host "== ZeroTouch 叢集連線 ==" -ForegroundColor Cyan
+    Write-Host "== Hyperion 叢集連線 ==" -ForegroundColor Cyan
     Send-ZtProgress 'start' $true ''
 
     Write-Host "[1/5] 檢查 kubectl ..."
@@ -223,7 +223,7 @@ function Install-ZeroTouch {
     }
     Send-ZtProgress 'crds' $true ''
 
-    Write-Host "[4/5] 套用 ZeroTouch 設定到 namespace $ZtNs ..."
+    Write-Host "[4/5] 套用 Hyperion 設定到 namespace $ZtNs ..."
     $r = Invoke-Kubectl apply -f "$ZtBase/onboard/$ZtToken/bundle.yaml"
     if ($r.code -ne 0) { Show-ZtFail 'bundle' '套用平台設定失敗（指令可能已過期）。' $r.out; return }
     Send-ZtProgress 'bundle' $true ''
@@ -234,7 +234,7 @@ function Install-ZeroTouch {
     Send-ZtProgress 'done' $true ''
 
     Write-Host ""
-    Write-Host "完成！請回到 ZeroTouch 網頁按「繼續」。" -ForegroundColor Green
+    Write-Host "完成！請回到 Hyperion 網頁按「繼續」。" -ForegroundColor Green
 }
 Install-ZeroTouch
 '''

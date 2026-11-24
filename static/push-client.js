@@ -44,14 +44,14 @@
     }
     if (isIOS() && !isStandalone()) {
       show('<div>iPhone／iPad 要先把平台加到主畫面，才能收到通知（需要 iOS 16.4 以上）：</div>' +
-        '<ol><li>用 <b>Safari</b> 打開這個網址</li><li>點下方的「分享」按鈕（方框加向上箭頭）</li><li>選「加入主畫面」</li><li>從主畫面的 ZeroTouch 圖示打開，再回到這裡按「開啟通知」</li></ol>'); return;
+        '<ol><li>用 <b>Safari</b> 打開這個網址</li><li>點下方的「分享」按鈕（方框加向上箭頭）</li><li>選「加入主畫面」</li><li>從主畫面的 Hyperion 圖示打開，再回到這裡按「開啟通知」</li></ol>'); return;
     }
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
       show('<div class="t-warn">這個瀏覽器不支援推播通知。請改用 Chrome、Edge、Firefox，或 iPhone 上加到主畫面的 Safari。</div>'); return;
     }
     if (Notification.permission === 'denied') {
       show('<div class="t-warn">你之前拒絕了這個網站的通知，瀏覽器不會再問一次。</div>' +
-        '<div>請到瀏覽器的網站設定（網址列左邊的圖示 → 網站設定 → 通知）改成「允許」，再重新整理這一頁。手機上的 App 版本請到手機的「設定 → 通知 → ZeroTouch」打開。</div>'); return;
+        '<div>請到瀏覽器的網站設定（網址列左邊的圖示 → 網站設定 → 通知）改成「允許」，再重新整理這一頁。手機上的 App 版本請到手機的「設定 → 通知 → Hyperion」打開。</div>'); return;
     }
     let st;
     try { st = await getJSON('/api/push/status'); } catch (e) { show('<div class="t-warn">讀不到通知設定：' + esc(e.message || String(e)) + '</div>'); return; }

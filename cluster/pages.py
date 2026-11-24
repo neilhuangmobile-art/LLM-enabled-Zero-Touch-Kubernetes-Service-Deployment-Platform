@@ -13,7 +13,7 @@ ONBOARD_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>連線你的叢集 | ZeroTouch</title>
+<title>連線你的叢集 | Hyperion</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@600;700&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -112,7 +112,7 @@ summary{cursor:pointer;color:var(--signal)}
 <div class="wrap">
   <div class="top">
     <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13 3.5v19M3.5 13h19M6.3 6.3l13.4 13.4M19.7 6.3 6.3 19.7"/></g><circle cx="13" cy="13" r="3.4" fill="var(--panel)" stroke="currentColor" stroke-width="2"/></svg>
-    <b>ZeroTouch</b>
+    <b>Hyperion</b>
     <form method="post" action="/auth/logout"><button class="btn small" type="submit">登出</button></form>
   </div>
 
@@ -128,7 +128,7 @@ summary{cursor:pointer;color:var(--signal)}
     <div class="sub"><span>帳號 {{ username }}</span><span>同意書版本 {{ consent_version }}</span></div>
 
     <h2>這是什麼？</h2>
-    <p>ZeroTouch 會把你用自然語言描述的服務，部署到<strong>你自己電腦上的 Kubernetes</strong>，使用的是你電腦的 CPU 和記憶體。平台不會直接連進你的電腦：部署設定放在平台替你建立的私有 GitHub repo，由你電腦上的 Flux 自己去拉取、套用。</p>
+    <p>Hyperion 會把你用自然語言描述的服務，部署到<strong>你自己電腦上的 Kubernetes</strong>，使用的是你電腦的 CPU 和記憶體。平台不會直接連進你的電腦：部署設定放在平台替你建立的私有 GitHub repo，由你電腦上的 Flux 自己去拉取、套用。</p>
 
     <h2>開始前請先準備好</h2>
     <ul>
@@ -220,7 +220,7 @@ summary{cursor:pointer;color:var(--signal)}
     <div class="actions">
       <a class="btn" href="/onboarding?step=install">返回</a>
       <button class="btn" type="button" onclick="check()">重新檢查</button>
-      <a class="btn primary" id="enter-btn" href="/" style="display:none">進入 ZeroTouch</a>
+      <a class="btn primary" id="enter-btn" href="/" style="display:none">進入 Hyperion</a>
     </div>
   </div>
 {% endif %}
@@ -258,7 +258,7 @@ async function check(){
     if(d.ok){ clearInterval(timer); document.getElementById('auto-note').innerText = '連線成功，可以進入網站了。'; }
   }catch(e){
     box.className = 'box err';
-    box.innerHTML = '<span class="lamp"></span><div>連不到 ZeroTouch 網站，請確認網路後按「重新檢查」。</div>';
+    box.innerHTML = '<span class="lamp"></span><div>連不到 Hyperion 網站，請確認網路後按「重新檢查」。</div>';
   }
 }
 if(document.getElementById('status-box')){ check(); timer = setInterval(check, 5000); }

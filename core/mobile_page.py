@@ -14,14 +14,14 @@ MOBILE_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>ZeroTouch 監控</title>
+<title>Hyperion 監控</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0B1622">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/icons/apple-touch-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="ZeroTouch">
+<meta name="apple-mobile-web-app-title" content="Hyperion">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <script src="/static/push-client.js" defer></script>
 <style>
@@ -160,7 +160,7 @@ dl.kv dt{color:var(--text-3)} dl.kv dd{margin:0;word-break:break-word}
 {% if view == 'login' %}
 <div class="login">
   <img src="/icons/icon-192.png" alt="" width="56" height="56" style="border-radius:14px;margin-bottom:14px">
-  <h1>ZeroTouch 監控</h1>
+  <h1>Hyperion 監控</h1>
   <p>手機版只能查看服務狀態和自動修復紀錄。部署、擴縮等操作請用電腦開啟平台。</p>
   {% if error %}<div class="err">{{ error }}</div>{% endif %}
   <form method="post" action="/auth/login">
