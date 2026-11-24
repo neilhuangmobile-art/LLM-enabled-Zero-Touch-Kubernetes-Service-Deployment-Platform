@@ -183,9 +183,28 @@ def apply_extras(spec: Dict) -> None:
                 e["status"], e["note"] = "unsupported", "不知道這個設定對應哪個環境變數"
         else:
             e["status"], e["note"] = "unsupported", "這部分目前沒辦法自動處理"
+            if kind == "other":
+                # 2026-11-24：other 多半是把需求本身、使用人數、背景重講一次（開發題組 419 題出現 817 則「沒辦法自動處理」），
+                # 不一則一則警告，迴圈後合併成一行參考；final＝回答問題卡後 runner.resume 不要把它改回待處理
+                e["final"] = True
+                continue
         if e["status"] == "unsupported":
             schema.add_notice(spec, f"「{e['evidence'] or e['desc']}」：{e['note']}")
+    _other_notice(spec)
     _need_cron_command(spec, image)
+
+
+OTHER_NOTICE = "這些描述沒有對應到特定設定，只當參考："
+
+
+def _other_notice(spec: Dict) -> None:
+    """kind=other 的額外描述合併成一行提醒（最多列 3 則）。重跑時先拿掉舊的那行，不會重複。"""
+    spec["notices"] = [n for n in spec["notices"] if not n.startswith(OTHER_NOTICE)]
+    items = [str(e["evidence"] or e["desc"])[:30] for e in spec["extras"]
+             if e["kind"] == "other" and e["status"] == "unsupported" and e.get("final")]
+    if items:
+        more = f" 等 {len(items)} 則" if len(items) > 3 else ""
+        schema.add_notice(spec, OTHER_NOTICE + "、".join(f"「{x}」" for x in items[:3]) + more)
 
 
 CRON_EXAMPLE_COMMAND = ("sh", "-c", "echo 請把這行換成要定時執行的指令")

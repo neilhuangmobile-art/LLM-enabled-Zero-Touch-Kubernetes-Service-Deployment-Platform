@@ -318,6 +318,26 @@ def _choose_once(spec: Dict, local: LLM, order: list, desc: Dict[str, str]) -> O
     return order[n - 1] if n is not None and 1 <= n <= len(order) else None
 
 
+def _perm_vote(spec: Dict, local: LLM, pool: list, desc: Dict[str, str]) -> Optional[str]:
+    """2026-11-24（PIPELINE_CHOOSE_STYLE=perm）：Permutation Self-Consistency（Tang 等，NAACL 2024，arXiv 2310.07712）。
+    整份清單一次選，4B 有位置偏誤（list 版不管怎麼排都選同一個位置）；把清單輪換 len(pool) 次，每個候選在每個位置
+    各出現一次，各問一次再投票，位置偏誤互相抵銷。某個軟體拿到過半票才回傳；「都不符合」過半、沒有過半、
+    看不懂的都回 None，交回原本的信心度決定（不新增反問）。票數記在 spec["choose_votes"]。"""
+    from collections import Counter
+    if len(pool) < 2:
+        return None
+    votes: Counter = Counter()
+    for k in range(len(pool)):
+        got = _choose_once(spec, local, pool[k:] + pool[:k], desc)
+        if got is not None:
+            votes[got] += 1
+    spec["choose_votes"] = dict(votes)
+    if not votes:
+        return None
+    win, n = votes.most_common(1)[0]
+    return win if win != _NONE and n * 2 > len(pool) else None
+
+
 def _choose_software(spec: Dict, local: Optional[LLM]) -> None:
     """選軟體（2026-11-18，PIPELINE_SELECT_MODE=choose）：使用者沒指定軟體時，在「RAG 前 5 名＋推理代理的選擇」裡決定。
     預設 confidence：逐一問每個候選「是不是使用者要的那類軟體」，讀模型回答 Yes 的機率；最高分過門檻才採用，否則反問。
@@ -344,6 +364,7 @@ def _choose_software(spec: Dict, local: Optional[LLM]) -> None:
         return
     spec.pop("choose_scores", None)          # 上一輪的分數、理由不能沿用到這一輪
     spec.pop("choose_reason", None)
+    spec.pop("choose_votes", None)
     spec["choose_text"] = spec["text"]
     pool = [c["image"] for c in software_rag.candidates(spec["text"], k=choose_k())]
     cur_repo = software_rag.repo_of(cur) if cur else ""
@@ -356,8 +377,11 @@ def _choose_software(spec: Dict, local: Optional[LLM]) -> None:
     desc = software_rag.choose_desc()
     t0 = time.time()
     style = os.environ.get("PIPELINE_CHOOSE_STYLE", "confidence").strip().lower()
-    if style not in ("confidence", "pointwise", "list"):
+    if style not in ("confidence", "pointwise", "list", "perm"):
         _warn_once(f"PIPELINE_CHOOSE_STYLE={style!r} 不認得，改用 confidence")
+        style = "confidence"
+    perm = style == "perm"
+    if perm:   # perm＝信心度照算（問題卡選項、網站候選要用），再用輪換順序的清單投票決定
         style = "confidence"
     scored = _confidence_scores(spec, pool, desc) if style == "confidence" else None
     if style == "confidence" and scored is None:
@@ -371,6 +395,12 @@ def _choose_software(spec: Dict, local: Optional[LLM]) -> None:
         own = dict(scored).get(cur_repo)
         if cur_repo and defaults.name(cur_repo) in _NO_SELECT and own is not None and own >= choose_threshold():
             a = z = cur_repo
+        elif perm:
+            win = _perm_vote(spec, local, pool, desc)
+            if win:
+                if win != a:
+                    spec["trace"].append({"step": "select", "ms": 0, "detail": f"輪換投票選 {win}（信心度原本 {a}）"})
+                a = z = win
     elif style == "list":
         a, z = (_choose_once(spec, local, order, desc) for order in (pool, pool[::-1]))
     else:
@@ -596,7 +626,7 @@ def _adopt_over_command(spec: Dict, cur: str) -> None:
             spec["base"][f] = {"value": None, "source": None, "evidence": None}
     for e in spec["extras"]:
         if e["kind"] == "command" and e["status"] == "pending":
-            e["status"] = "unsupported"
+            e["status"], e["final"] = "unsupported", True
             e["note"] = f"已改用現成軟體 {pick}，不另外設啟動指令；如果其實是你自己寫的程式，請回上一步改軟體並填指令"
     spec["questions"] = [q for q in spec["questions"] if q["field"] != "image"]
     spec["choose_text"], spec["choose_pick"] = spec["text"], pick

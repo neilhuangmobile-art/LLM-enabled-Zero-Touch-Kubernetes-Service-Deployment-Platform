@@ -74,7 +74,8 @@ def resume(prior: Dict, answers: Dict[str, str], local: Optional[LLM]) -> Dict:
         spec["text"] += "\n（使用者補充）" + "；".join(notes)
     # 先前對應不到的額外欄位（例如當時還不知道映像檔），用新資訊再試一次
     for e in spec["extras"]:
-        if e["status"] == "unsupported" and e["kind"] != "schedule":
+        # final＝系統刻意不處理的（other 的背景描述、改用現成軟體後不當指令的描述），回答問題後也不重試（2026-11-24）
+        if e["status"] == "unsupported" and e["kind"] != "schedule" and not e.get("final"):
             msg = f"「{e['evidence'] or e['desc']}」：{e['note']}"
             spec["notices"] = [n for n in spec["notices"] if n != msg]
             e["status"], e["note"] = "pending", ""

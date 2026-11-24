@@ -197,12 +197,12 @@ def _embedder():
     if _model is None:
         from sentence_transformers import SentenceTransformer
         try:
-            from rag.vector_store import EMBED_MODEL_NAME, get_device
-            device = get_device()
+            from rag.vector_store import embed_model_path, get_device
+            name, device = embed_model_path(), get_device()
         except Exception:  # noqa: BLE001
-            EMBED_MODEL_NAME, device = "BAAI/bge-m3", "cpu"
+            name, device = "BAAI/bge-m3", "cpu"
         kw: dict = {"model_kwargs": {"dtype": "float16"}} if str(device).startswith("cuda") else {}
-        _model = SentenceTransformer(EMBED_MODEL_NAME, device=device, **kw)
+        _model = SentenceTransformer(name, device=device, **kw)
     return _model
 
 
@@ -238,12 +238,12 @@ def sparse_encode(texts: List[str]) -> List[Dict[str, float]]:
     if _m3 is None:
         from FlagEmbedding import BGEM3FlagModel
         try:
-            from rag.vector_store import get_device
-            device = str(get_device())
+            from rag.vector_store import embed_model_path, get_device
+            name, device = embed_model_path(), str(get_device())
         except Exception:  # noqa: BLE001
-            device = "cpu"
+            name, device = "BAAI/bge-m3", "cpu"
         dev = "cuda:0" if device.startswith("cuda") else "cpu"
-        _m3 = BGEM3FlagModel("BAAI/bge-m3", use_fp16=dev != "cpu", devices=dev)
+        _m3 = BGEM3FlagModel(name, use_fp16=dev != "cpu", devices=dev)
     out = _m3.encode(texts, batch_size=32, return_dense=False, return_sparse=True)["lexical_weights"]
     return [{k: float(v) for k, v in d.items()} for d in out]
 

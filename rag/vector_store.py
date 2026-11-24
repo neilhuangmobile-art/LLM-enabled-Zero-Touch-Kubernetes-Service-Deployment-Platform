@@ -15,6 +15,19 @@ COLLECTION_NAME = "k8s_knowledge"
 # 100+ 語言、8192 token 上下文，中文效果明顯更好。換模型後舊的 collection 向量空間
 # 不相容，第一次用新模型要整個 rebuild（見 rag/build_index.py --rebuild）。
 EMBED_MODEL_NAME = "BAAI/bge-m3"
+# 2026-11-24：固定用這個版本。Hugging Face 上 bge-m3 的 main 換了版本，程式啟動時上網對到新版，
+# 本機新版快取只有 model.safetensors（下載不完整、沒有斷詞檔），載入失敗 → 選軟體的候選清單全空
+# （評估每題 13 秒、claude 開發題組前 76 題少對 18 題）。這個版本是索引建立時用的那份。
+EMBED_MODEL_REVISION = "5617a9f61b028005a4858fdac845db406aefb181"
+
+
+def embed_model_path() -> str:
+    """本機快取裡固定版本的資料夾；這台沒有那個版本就回傳模型名稱（照原本的方式載入，不會比原本差）。"""
+    try:
+        from huggingface_hub import snapshot_download
+        return snapshot_download(EMBED_MODEL_NAME, revision=EMBED_MODEL_REVISION, local_files_only=True)
+    except Exception:  # noqa: BLE001
+        return EMBED_MODEL_NAME
 
 
 def _default_chroma_dir() -> str:
@@ -72,7 +85,7 @@ def _get_embedding_function():
     # chromadb 只接受基本型別的 kwargs，所以 dtype 用字串。
     extra = {"model_kwargs": {"torch_dtype": "float16"}} if device.startswith("cuda") else {}
     _embed_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name=EMBED_MODEL_NAME,
+        model_name=embed_model_path(),
         device=device,
         normalize_embeddings=True,
         **extra,

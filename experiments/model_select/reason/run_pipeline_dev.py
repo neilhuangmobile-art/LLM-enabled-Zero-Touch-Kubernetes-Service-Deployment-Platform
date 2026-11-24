@@ -79,6 +79,19 @@ def load_tasks(set_: str) -> list:
     return tasks
 
 
+def sample_tasks(tasks: list, n: int, seed: int) -> list:
+    """2026-11-24：時間不夠跑整組時隨機抽 n 題。依「該問／不該問」分層、照原比例抽，固定 seed 可重現；順序照原題組。"""
+    import random
+    if n >= len(tasks):
+        return tasks
+    rng = random.Random(seed)
+    ask = [t for t in tasks if t["expected"]["image"].get("must_ask")]
+    ans = [t for t in tasks if not t["expected"]["image"].get("must_ask")]
+    k_ask = round(n * len(ask) / len(tasks))
+    pick = {t["id"] for t in rng.sample(ask, k_ask) + rng.sample(ans, n - k_ask)}
+    return [t for t in tasks if t["id"] in pick]
+
+
 def _source(field: str) -> str:
     """反問來自哪個步驟（統計用）。"""
     for p in ("model:", "extra:", "verify:", "format:"):
@@ -108,6 +121,8 @@ def run(a):
 
     tasks = load_tasks(a.set)
     tasks = tasks[: a.limit] if a.limit else tasks
+    if a.sample:
+        tasks = sample_tasks(tasks, a.sample, a.seed)
     path = os.path.join(HERE, "results", f"dev_{a.set}_{a.tag}.jsonl")
     gem, gstat = _gemini_fn(a)
     rows = []
@@ -124,6 +139,7 @@ def run(a):
                    "notices": spec.get("notices", [])[:8],
                    # 選軟體的信心度（每個候選的 P(Yes)），離線掃描門檻用
                    "choose_scores": spec.get("choose_scores"), "choose_reason": spec.get("choose_reason"),
+                   "choose_votes": spec.get("choose_votes"),
                    # 每個欄位是誰填的（user／inferred／default），算各欄位的信心度用
                    "sources": {f: spec["base"][f]["source"] for f in spec["base"]},
                    # 2026-11-22：軟體講清楚了沒（來源 gemini／local、判斷、本地機率）與正規化用了哪個模型
@@ -218,6 +234,8 @@ if __name__ == "__main__":
     ap.add_argument("--set", choices=list(SETS), default="scenario")
     ap.add_argument("--tag")
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--sample", type=int, help="隨機抽 n 題（依該問／不該問分層）")
+    ap.add_argument("--seed", type=int, default=20261124)
     ap.add_argument("--compare", nargs=2)
     ap.add_argument("--gemini", action="store_true", help="正規化走 Gemini（正式路徑，會花錢）")
     ap.add_argument("--max-gemini-calls", type=int, help="Gemini 呼叫上限（--gemini 必填）")
