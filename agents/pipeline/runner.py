@@ -55,6 +55,14 @@ def resume(prior: Dict, answers: Dict[str, str], local: Optional[LLM]) -> Dict:
             # 定時執行要跑的指令（使用者自己打的）：當成使用者講的啟動指令
             spec["extras"].append({"kind": "command", "desc": "定時執行的指令", "value": ans[:1000], "evidence": "",
                                    "source": "user", "status": "pending", "note": ""})
+        elif field == "ask:expose":
+            # 2026-11-24 面向卡：要不要對外開放（使用者自己選的，來源記成 user；「幫我決定」記成 inferred）
+            schema.set_choice(spec, "expose", "internal" if ans == "internal" else "public", "inferred" if auto else "user")
+        elif field == "ask:storage":
+            if ans == "keep" and not any(e["kind"] == "storage" for e in spec["extras"]):
+                spec["extras"].append({"kind": "storage", "desc": "保存資料（回答問題卡）", "value": {"size": None},
+                                       "evidence": "", "source": "inferred" if auto else "user",
+                                       "status": "pending", "note": ""})
         elif field.startswith("extra:"):
             if ans == "drop":
                 for e in spec["extras"]:
@@ -130,5 +138,5 @@ def _public(spec: Dict) -> Dict:
     """給前端與紀錄看的部分（含原句的中間 JSON，回答問題時整份送回來）。"""
     keep = ("text", "purpose", "base", "workload", "expose", "extras", "manifest", "questions", "notices", "verified", "verify_skip", "format_fixed", "rejected",
             "trace", "attempts", "backend", "total_ms", "cancelled", "choose_scores", "choose_reason", "choose_text", "choose_pick",
-            "clarity")
+            "clarity", "target")
     return {k: copy.deepcopy(spec[k]) for k in keep if k in spec}

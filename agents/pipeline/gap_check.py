@@ -44,6 +44,7 @@ def run(spec: Dict, local: Optional[LLM]) -> None:
     still = schema.empty_fields(spec)
     if "image" in still:
         _ask_image(spec)
+    facet_questions(spec)
     spec["trace"].append({"step": "gap", "ms": int((time.time() - t0) * 1000),
                           "detail": f"推理 {spec['attempts']['gap']} 次；仍空著：{', '.join(still) or '無'}"})
 
@@ -278,8 +279,71 @@ def _as_image(text) -> str:
     return t if software_rag.is_known(t) else ""
 
 
+def _target_ask(spec: Dict) -> Optional[str]:
+    """PIPELINE_TARGET_CHECK=on（2026-11-24）：依獨立的目標判斷（normalize._target_check）決定要不要改問。
+    回傳理由；不用問就回傳 None。有講語言的自己的程式照原本做法（維持執行環境），不問。"""
+    from agents.pipeline.normalize import target_check_mode
+    t = spec.get("target")
+    if target_check_mode() != "on" or not t or t.get("artifact_given"):
+        return None
+    # 定時執行的工作不套用（2026-11-24，開發題組驗證）：原本的設計是維持執行環境＋範例指令直接部署。
+    # 套用時 scenario 抽樣 80 題多問 7 題、不該問的題 34 → 30；排除後兩組不該問的題都不變，該問的題 9 → 11
+    if any(e["kind"] == "schedule" and e["status"] != "dropped" for e in spec["extras"]):
+        return None
+    if t["target"] == "own_program" and not t.get("runtime_known"):
+        return "你要部署的是自己（或別人）寫的程式，但還不知道映像檔或程式語言"
+    if t["target"] == "existing_system":
+        return f"你說的「{t.get('name_or_ref') or '那一套系統'}」沒有講是哪一套軟體"
+    return None
+
+
+# 自己的程式還沒打包時，可以選的執行環境（值會成為使用者指定的映像檔）
+_OWN_RUNTIMES = [("python:3.12-slim", "Python"), ("node:20-alpine", "Node.js（JavaScript）"),
+                 ("eclipse-temurin:21-jre", "Java"), ("golang:1.22-alpine", "Go")]
+
+
+def _ask_own_program(spec: Dict) -> None:
+    schema.add_question(spec, "image",
+                        "你的程式有打包好的映像檔嗎？有的話請填名稱（例如 yourname/app:1.0）；還沒打包的話，請選程式是用什麼語言寫的",
+                        options=[{"value": v, "label": f"用 {n} 寫的，還沒打包"} for v, n in _OWN_RUNTIMES],
+                        reason="這是你自己（或別人）寫的程式，系統不能用現成軟體代替")
+
+
+def facet_questions(spec: Dict) -> None:
+    """PIPELINE_TARGET_CHECK=on（2026-11-24）：已經要問軟體時，順便問原句沒講過的面向，最多 2 張
+    （SAGE-Agent arXiv 2511.08798：只問有價值、還沒講過的）。每張都有推薦值，看過沒問題可以直接送出。"""
+    from agents.pipeline.normalize import target_check_mode
+    if target_check_mode() != "on" or not any(q["field"] == "image" for q in spec["questions"]):
+        return
+    added = 0
+    if spec["expose"]["source"] != "user":
+        rec = "internal" if spec["expose"]["value"] in ("internal", "none") else "public"
+        schema.add_question(spec, "ask:expose", "要讓外面的人（例如用手機）連進來，還是只有內部的程式會用？",
+                            options=[{"value": "public", "label": "要讓外面的人連進來"},
+                                     {"value": "internal", "label": "只有內部的程式會用"}],
+                            recommended=rec, reason="決定要不要對外開放")
+        added += 1
+    if added < 2 and not any(e["kind"] == "storage" and e.get("source") == "user" for e in spec["extras"]):
+        rec = "keep" if any(e["kind"] == "storage" for e in spec["extras"]) else "no"
+        schema.add_question(spec, "ask:storage", "資料要不要保存？（重新啟動之後還在）",
+                            options=[{"value": "keep", "label": "要保存"}, {"value": "no", "label": "不用保存"}],
+                            recommended=rec, reason="決定要不要準備保存資料的空間")
+
+
 def _ask_image(spec: Dict) -> None:
     """問「要用哪個軟體」：附上用原句查到的候選；推理代理自己推薦的軟體在知識表裡就排第一個。"""
+    t = spec.get("target") or {}
+    if _target_ask(spec) and t.get("target") == "own_program":
+        if not any(q["field"] == "image" for q in spec["questions"]):
+            _ask_own_program(spec)
+        return
+    if _target_ask(spec) and t.get("target") == "existing_system" \
+            and not any(q["field"] == "image" for q in spec["questions"]):
+        cands = software_rag.candidates(spec["text"])
+        schema.add_question(spec, "image", f"你說的「{t.get('name_or_ref') or '那一套系統'}」是哪一套軟體？請填名稱或映像檔",
+                            options=software_rag.options(cands),
+                            reason="你提到的系統沒有講是哪一套，系統不能自己挑一個代替；下面是依你的描述找到的候選")
+        return
     cands = software_rag.candidates(spec["text"])
     q = next((q for q in spec["questions"] if q["field"] == "image"), None)
     rec = _as_image(q.get("recommended")) if q else ""
@@ -350,7 +414,19 @@ def _choose_software(spec: Dict, local: Optional[LLM]) -> None:
         兩份開發題組共 34 題）；有現成軟體過門檻就換，沒有就維持執行環境，不改成反問
       （試過用關鍵字判斷「使用者自己的程式」：32 題只抓到 8 題、誤判 45 題，不採用）"""
     b = spec["base"]["image"]
-    if local is None or b["source"] == "user":
+    if b["source"] == "user":
+        return
+    why = _target_ask(spec)
+    if why:
+        # 2026-11-24（PIPELINE_TARGET_CHECK=on）：使用者自己的程式、或指一套沒講名字的系統，不能用現成軟體代替
+        spec["trace"].append({"step": "select", "ms": 0, "detail": f"目標判斷：{why}，不用現成軟體代替，改問使用者"})
+        spec["base"]["image"] = {"value": None, "source": None, "evidence": None}
+        spec["choose_pick"] = None
+        spec["choose_reason"] = why
+        spec["questions"] = [q for q in spec["questions"] if q["field"] != "image"]
+        _ask_image(spec)
+        return
+    if local is None:
         return
     cur = b["value"]
     runtime = bool(cur) and defaults.name(cur) in defaults.RUNTIME_IMAGES

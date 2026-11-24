@@ -27,6 +27,7 @@ from agents.pipeline import runner  # noqa: E402
 from agents.pipeline.llm import gemini_llm, local_llm  # noqa: E402
 from agents.deploy_fill import _DB_ENV  # noqa: E402
 from agents.cost_agent import _image_name  # noqa: E402
+from agents.pipeline.reasoner import STORAGE_LIMIT_NOTICE  # noqa: E402
 
 
 def to_pred(spec):
@@ -39,12 +40,15 @@ def to_pred(spec):
     from agents.pipeline.reasoner import valid_cron
     cron = valid_cron(sched[0]["value"]) if sched else None
     vols = spec["manifest"].get("volumes") or []
-    # 有保存需求但超過上限（等使用者回答）也算有辨識出來；大小用使用者要的
+    # 有保存需求但超過上限（等使用者回答）也算有辨識出來。
+    # 2026-11-24：size 改成實際部署的大小（原本記使用者或推理代理要的，被調到上限也照原本的數字算，評分偏寬）；
+    # requested 記原本要的大小，limit_notice 記部署單有沒有告訴使用者「超過上限」
     st = None
     for e in spec["extras"]:
         if e["kind"] == "storage" and e["status"] in ("applied", "unsupported", "pending"):
             want = (e["value"] or {}).get("size") if isinstance(e["value"], dict) else None
-            st = {"size": want or (vols[0]["size"] if vols else "1Gi")}
+            st = {"size": vols[0]["size"] if vols and vols[0].get("size") else (want or "1Gi"), "requested": want,
+                  "limit_notice": any(str(n).startswith(STORAGE_LIMIT_NOTICE) for n in spec.get("notices") or [])}
     return {"questions": spec["questions"], "workload": "cronjob" if sched else wl,
             "image": b["image"]["value"], "app_name": b["app_name"]["value"], "replicas": b["replicas"]["value"],
             "port": port, "memory": b["memory"]["value"], "cpu": b["cpu"]["value"],

@@ -22,6 +22,9 @@ os.environ["PIPELINE_CLARITY_COMBINE"] = ""
 os.environ["PIPELINE_CLARITY_CHECK"] = ""
 os.environ["PIPELINE_SIZE_TIER"] = ""
 os.environ["PIPELINE_REASON_SIZING"] = ""
+# 2026-11-24：網站的 .env 開了目標判斷（PIPELINE_TARGET_CHECK=on），會多出面向問題卡；要測的測試自己 monkeypatch（tests/test_target_check.py）
+os.environ["PIPELINE_TARGET_CHECK"] = "off"
+os.environ["PIPELINE_CHOOSE_STYLE"] = ""
 
 # 事件紀錄（core/event_store.py）寫到暫存檔，不要混進開發者 data/events.db 的真實紀錄
 import tempfile

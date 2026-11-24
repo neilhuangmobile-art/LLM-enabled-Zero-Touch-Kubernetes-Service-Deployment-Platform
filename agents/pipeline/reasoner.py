@@ -229,6 +229,12 @@ def _need_cron_command(spec: Dict, image: str) -> None:
                         recommended=None, reason="定時執行的程式跑完就結束，沒有指令就什麼都不會做")
 
 
+# 2026-11-24：保存空間碰到上限時的提醒（開頭固定，評估程式用它判斷有沒有告知使用者）
+STORAGE_LIMIT_NOTICE = "保存空間上限："
+# 描述暗示資料量可能很大（影片、大量照片、備份、以 GB/TB 計）：只加提醒，不改大小
+_BIG_DATA_HINT = re.compile(r"影片|影音|錄影|video|照片|相片|photo|備份|backup|\d+\s*(?:G|GB|T|TB)\b|很大|大檔|大量", re.I)
+
+
 def _apply_storage(spec: Dict, e: Dict, image: str) -> None:
     man = spec["manifest"]
     path = defaults.data_path(image)
@@ -246,6 +252,13 @@ def _apply_storage(spec: Dict, e: Dict, image: str) -> None:
                             options=[{"value": f"{defaults.MAX_STORAGE_GI}Gi", "label": f"先用 {defaults.MAX_STORAGE_GI}GB"},
                                      {"value": "cancel", "label": "先不部署"}],
                             recommended=None, reason="超過上限不自動調低")
+    elif want and want > defaults.MAX_STORAGE_GI:
+        # 系統自己估的大小超過上限：照樣調到上限，但一定要告訴使用者（原本默默調低）
+        schema.add_notice(spec, f"{STORAGE_LIMIT_NOTICE}系統估計你可能需要約 {want}GB，但目前每個服務最多 "
+                                f"{defaults.MAX_STORAGE_GI}GB，這次先給 {size}；資料超過時會寫不進去，請先清理或改用外部空間")
+    elif _BIG_DATA_HINT.search(spec.get("text") or ""):
+        schema.add_notice(spec, f"{STORAGE_LIMIT_NOTICE}這次給 {size}；目前每個服務最多 {defaults.MAX_STORAGE_GI}GB，"
+                                f"如果影片、照片或備份這類資料會超過，請在部署單調大，或先清理舊資料")
     vol = {"name": "data", "mount": path, "kind": "pvc", "size": size, "read_only": False}
     man["volumes"] = [vol]
     extra_env = defaults.DATA_ENV.get(defaults.name(image))

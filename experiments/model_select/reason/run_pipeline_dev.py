@@ -24,6 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from run_pipeline_eval import ROOT, runner, to_pred  # noqa: E402
 from run_pipeline_claude import score as _strict_score  # noqa: E402
+from passif_score import score_must_ask, score_passif  # noqa: E402
 from run_reason import _ALIAS, norm_image  # noqa: E402
 from agents.pipeline import llm as pllm  # noqa: E402
 
@@ -50,12 +51,22 @@ def score(t, p):
     """組員的評分要求映像檔名稱完全相同，開發題組的答案多半只寫短名（gitea、grafana），
     會把 gitea/gitea 這種正確答案算錯。2026-11-18 改成比對最後一段名稱，其他判定不變。"""
     s = _strict_score(t, p)
+    # 2026-11-24：問題卡只有「超過平台上限」這類（保存空間超過 5GB、排程太頻繁）時，照平台規則本來就該問，不算多問；
+    # 該問的題也不能靠這類問題卡算成有問到
+    fields = [q.get("field") for q in p.get("questions") or []]
+    if fields and all(f in LIMIT_FIELDS for f in fields):
+        s["asked"], s["limit_asked"] = False, True
+        if s["kind"] == "must_ask":
+            s["passed"] = False
     if s["kind"] == "answer":
         acc = {_base(a) for a in t["expected"]["image"]["accept"]}
         s["checks"]["image"] = _base(p.get("image")) in acc
         s["passed"] = all(s["checks"].values()) and not s["asked"]
-        s["rule"] += "；映像檔比對最後一段名稱（2026-11-18）"
+        s["rule"] += "；映像檔比對最後一段名稱（2026-11-18）；超過上限的問題卡不算多問（2026-11-24）"
     return s
+
+
+LIMIT_FIELDS = {"storage_size", "schedule_interval"}
 
 SETS = {"scenario": "dev_scenario.jsonl", "claude": "dev_claude.jsonl",
         "blind": "blind_scenario.jsonl",   # 盲測（2026-11-20 使用者同意跑一次；跑完不拿來調整）
@@ -63,6 +74,8 @@ SETS = {"scenario": "dev_scenario.jsonl", "claude": "dev_claude.jsonl",
         "holdout": "holdout_20261123.jsonl", "holdout2": "holdout2_20261124.jsonl",
         # 2026-11-24：使用者提供的 40 題測試樣本（k8s_40_jsonl.txt）；只跑不調、只看統計
         "k8s40": "k8s40_20261124.jsonl",
+        # 2026-11-24：使用者在對話中貼上的另一份 40 題（S01 麵包店…），S33 的引號已跳脫
+        "k8s40b": "k8s40b_20261124.jsonl",
         # 2026-11-23：柏碩 11-18 打包的題組（zt_testsets_20261118.zip）。s40＝組員原本的 S01～S40（repo 裡已有同內容）；
         # perturb＝dev_scenario／dev_claude 各題的錯字、極短、囉嗦、中英夾雜改寫，標準答案沿用原題
         "s40": "../../experiments/model_select/reason/testset_s.jsonl", "perturb": "dev_perturb.jsonl"}
@@ -135,8 +148,12 @@ def run(a):
                 spec = runner.run(t["text"], gem, llm)
             pred = to_pred(spec)
             s = score(t, pred)
+            man = spec.get("manifest") or {}
+            mkeys = {"secret_keys": list(man.get("secret_keys") or []), "env_keys": sorted((man.get("env") or {}).keys())}
+            # 2026-11-24：照題目的 pass_if 評分（保存空間、排程、對不對外、密碼、多服務），只用在不該問的題
+            pif = score_passif(t, pred, s["passed"], mkeys) if s["kind"] == "answer" else None
             row = {"id": t["id"], "difficulty": t.get("difficulty"), "input": t["text"], "pred": pred, "score": s,
-                   "passed": s["passed"], "latency_ms": int((time.time() - t0) * 1000),
+                   "passed": s["passed"], "passif": pif, "manifest_keys": mkeys, "latency_ms": int((time.time() - t0) * 1000),
                    "questions": [{"field": q["field"], "q": q["question"][:120]} for q in spec["questions"]],
                    "notices": spec.get("notices", [])[:8],
                    # 選軟體的信心度（每個候選的 P(Yes)），離線掃描門檻用
@@ -146,7 +163,10 @@ def run(a):
                    "sources": {f: spec["base"][f]["source"] for f in spec["base"]},
                    # 2026-11-22：軟體講清楚了沒（來源 gemini／local、判斷、本地機率）與正規化用了哪個模型
                    "clarity": {k: v for k, v in (spec.get("clarity") or {}).items() if k != "text"} or None,
-                   "normalize_backend": spec["backend"].get("normalize")}
+                   "normalize_backend": spec["backend"].get("normalize"),
+                   # 2026-11-24：獨立的目標判斷（PIPELINE_TARGET_CHECK）
+                   "target": spec.get("target")}
+            _strict_rows(a.set, [row])
             rows.append(row)
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
             f.flush()
@@ -158,6 +178,7 @@ def run(a):
                  "choose_threshold": os.environ.get("PIPELINE_CHOOSE_THRESHOLD", "0.8"),
                  "llm_calls": fails["total"], "llm_failures": fails["n"], "gemini": bool(a.gemini),
                  "clarity_mode": os.environ.get("PIPELINE_CLARITY", "off"),
+                 "target_check": os.environ.get("PIPELINE_TARGET_CHECK", "off"),
                  "clarity_bounds": [os.environ.get("PIPELINE_CLARITY_LO", "0.1"), os.environ.get("PIPELINE_CLARITY_HI", "0.9")],
                  "cron_command": os.environ.get("PIPELINE_CRON_COMMAND", "example"),
                  "clarity_sources": dict(collections.Counter((r["clarity"] or {}).get("source", "無") for r in rows)),
@@ -203,6 +224,16 @@ def _gemini_fn(a):
     return g, stat
 
 
+def _strict_rows(set_, rows, tasks=None):
+    """2026-11-24：補上 pass_if 嚴格分數（不該問的題）與該問的題嚴格判定（沒部署＋人工判斷問句有沒有涵蓋）。"""
+    for r in rows:
+        if r["score"]["kind"] == "answer":
+            if tasks is not None:
+                r["passif"] = score_passif(tasks[r["id"]], r["pred"], r["passed"], r.get("manifest_keys"))
+        else:
+            r["must_ask_strict"] = score_must_ask(set_, r["id"], r["pred"], r.get("questions") or [])
+
+
 def summarize(rows):
     ans = [r for r in rows if r["score"]["kind"] == "answer"]
     ask = [r for r in rows if r["score"]["kind"] == "must_ask"]
@@ -213,6 +244,13 @@ def summarize(rows):
             "image_ok": sum(r["score"]["checks"]["image"] for r in ans),
             "false_ask": sum(r["score"]["asked"] for r in ans), "false_ask_sources": dict(src),
             "must_ask_recall": round(sum(r["passed"] for r in ask) / max(1, len(ask)), 3),
+            # 2026-11-24：照題目 pass_if 的嚴格分數（五格全對＋保存空間、排程、對不對外、密碼、多服務）
+            "pass_if_answer": sum(bool((r.get("passif") or {}).get("passed")) for r in ans),
+            "pass_if_rate_answer": round(sum(bool((r.get("passif") or {}).get("passed")) for r in ans) / max(1, len(ans)), 3),
+            "pass_if_unknown": sorted({u for r in ans for u in (r.get("passif") or {}).get("unknown", [])}),
+            # 該問的題嚴格版：沒部署＋問句有涵蓋 pass_if 點名的項目（人工判定檔 must_ask_judgments.json）
+            "must_ask_strict_pass": sum((r.get("must_ask_strict") or {}).get("passed") is True for r in ask),
+            "must_ask_unjudged": [r["id"] for r in ask if (r.get("must_ask_strict") or {}).get("judged") is False],
             "latency_p50_ms": lat[len(lat) // 2] if lat else None, "latency_p90_ms": lat[int(0.9 * (len(lat) - 1))] if lat else None}
 
 
@@ -251,6 +289,7 @@ if __name__ == "__main__":
         for r in rows:
             r["score"] = score(tasks[r["id"]], r["pred"])
             r["passed"] = r["score"]["passed"]
+        _strict_rows(a.set, rows, tasks)
         with open(p, "w", encoding="utf-8") as f:
             f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
         sp = os.path.join(HERE, "results", f"summary_dev_{a.set}_{a.rescore}.json")

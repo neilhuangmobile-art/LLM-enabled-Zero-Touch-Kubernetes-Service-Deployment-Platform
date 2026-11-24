@@ -263,6 +263,39 @@ Examples: "a place for our choir to book rehearsal slots" -> ["booking/schedulin
 Reply with JSON only: {"kinds": ["..."], "kind_clear": true or false}"""
 
 
+# 2026-11-24（PIPELINE_TARGET_CHECK）：獨立的「目標判斷」。和 CLARITY_CHECK_SYSTEM（gemini2，反效果）不同，
+# 這裡不問「清不清楚」這種主觀判斷，只問事實：要部署的是誰的東西、有沒有給映像檔、有沒有講語言；要不要問由程式決定。
+# 依據：Ask or Assume?（arXiv 2603.26233）獨立的意圖代理；UnderSpecBench（arXiv 2607.02294）目標不確定最容易部署錯。
+# 範例是自己寫的，不取自任何題組
+TARGET_CHECK_SYSTEM = """You read one deployment request from a non-technical user. Do not deploy anything.
+Answer only facts about WHAT the user wants to run. Do not judge whether the request is clear.
+Judge the thing that will be deployed, not everything the request mentions: a user who wants a place to keep, share,
+back up or manage their own code or files is asking for public software (a git server, a file share, a backup tool),
+even though their own program is mentioned.
+
+target, pick exactly one:
+- "public_software": they describe a need that existing public software can serve (a blog, a wiki, a database,
+  a cache, a file share, an uptime monitor...), even if no product is named. Most requests are this.
+- "own_program": they want to run a specific program that they, a friend, a colleague or a vendor wrote or already have
+  ("my script", "the bot I wrote", "the tool my coworker made", "the files the vendor gave us").
+- "existing_system": they point to one specific existing system without naming its software
+  ("that reporting system", "set it up like last year", "the same monitoring as before").
+- "unclear": nothing says what it is for at all.
+runtime_known: for own_program only, true if the language or runtime is stated (python, node, java, a shell script...).
+artifact_given: true if they give an image name, a registry path or a code repository URL.
+name_or_ref: for existing_system, the words the user used to refer to it (copy them, max 20 characters), else null.
+reason: why, max 30 words.
+
+Examples:
+"a page where our choir posts rehearsal times" -> {"target": "public_software", "runtime_known": false, "artifact_given": false, "name_or_ref": null, "reason": "a simple website or CMS serves this"}
+"keep the Python script I wrote running, it checks train delays" -> {"target": "own_program", "runtime_known": true, "artifact_given": false, "name_or_ref": null, "reason": "user's own Python script"}
+"my cousin made a little program for the shop, just keep it running" -> {"target": "own_program", "runtime_known": false, "artifact_given": false, "name_or_ref": null, "reason": "someone else's program, language unknown"}
+"my friends and I write a game together and keep emailing the code around, we want our own place to keep it with history" -> {"target": "public_software", "runtime_known": false, "artifact_given": false, "name_or_ref": null, "reason": "they want a git server for their code, not to run the game"}
+"bring back the booking thing we used last semester" -> {"target": "existing_system", "runtime_known": false, "artifact_given": false, "name_or_ref": "booking thing", "reason": "refers to an unnamed earlier system"}
+
+Reply with JSON only: {"target": "...", "runtime_known": true or false, "artifact_given": true or false, "name_or_ref": "..." or null, "reason": "..."}"""
+
+
 # 方案 C（本地備援，Gemini 沒有回 clarity 時用）：只回 Yes／No，程式讀 Yes 的機率。範例是自己寫的，不取自任何題組
 CLARITY_PROB_SYSTEM = """You check whether a user's deployment request says clearly WHAT KIND of software they want.
 

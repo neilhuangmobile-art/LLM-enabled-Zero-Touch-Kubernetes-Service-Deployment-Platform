@@ -64,6 +64,34 @@ def _second_check(spec: Dict, gemini: Optional[LLM]) -> None:
                           "detail": f"第二次判斷：{'清楚' if ok else '沒講清楚'}（可能的種類：{'、'.join(kinds) or '無'}）"})
 
 
+def target_check_mode() -> str:
+    """PIPELINE_TARGET_CHECK（2026-11-24）：off（預設）＝完全不變；log＝呼叫並記錄、不影響結果；on＝依規則反問。"""
+    v = os.environ.get("PIPELINE_TARGET_CHECK", "off").strip().lower()
+    return v if v in ("on", "log") else "off"
+
+
+_TARGETS = ("public_software", "own_program", "existing_system", "unclear")
+
+
+def _target_check(spec: Dict, gemini: Optional[LLM]) -> None:
+    """獨立的目標判斷（2026-11-24）：只問事實（要部署的是誰的東西、有沒有給映像檔、有沒有講語言），存在 spec["target"]。
+    使用者已經講了映像檔就不問；Gemini 沒回應或格式不對就不存（行為和沒開一樣）。"""
+    if gemini is None or target_check_mode() == "off" or spec["base"]["image"]["source"] == "user":
+        return
+    from agents.pipeline.prompts import TARGET_CHECK_SYSTEM
+    out = extract_json(gemini(TARGET_CHECK_SYSTEM, spec["text"]))
+    tgt = out.get("target") if isinstance(out, dict) else None
+    if tgt not in _TARGETS:
+        spec["trace"].append({"step": "target", "ms": 0, "detail": "目標判斷沒有回應或格式不對，照原本做法"})
+        return
+    ref = out.get("name_or_ref")
+    spec["target"] = {"target": tgt, "runtime_known": out.get("runtime_known") is True,
+                      "artifact_given": out.get("artifact_given") is True,
+                      "name_or_ref": str(ref).strip()[:20] if ref else None,
+                      "reason": str(out.get("reason") or "")[:120]}
+    spec["trace"].append({"step": "target", "ms": 0, "detail": f"目標判斷：{tgt}（{spec['target']['reason']}）"})
+
+
 EXTRA_KINDS = ("env", "secret", "storage", "command", "schedule", "no_expose", "extra_port", "other")
 
 _CN_NUM = {1: "一壹單", 2: "二兩两貳", 3: "三參", 4: "四肆", 5: "五伍", 6: "六陸", 7: "七柒", 8: "八捌", 9: "九玖",
@@ -181,4 +209,6 @@ def normalize(spec: Dict, gemini: Optional[LLM], local: Optional[LLM]) -> None:
     if used == "gemini" and clarity_mode() != "off":
         apply_clarity(spec, data.get("clarity"))
         _second_check(spec, gemini)
+    if used == "gemini":
+        _target_check(spec, gemini)
     spec["trace"].append({"step": "normalize", "ms": int((time.time() - t0) * 1000), "detail": f"用 {used}"})
