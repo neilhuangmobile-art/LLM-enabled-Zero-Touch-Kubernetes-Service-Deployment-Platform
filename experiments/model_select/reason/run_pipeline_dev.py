@@ -61,6 +61,8 @@ SETS = {"scenario": "dev_scenario.jsonl", "claude": "dev_claude.jsonl",
         "blind": "blind_scenario.jsonl",   # 盲測（2026-11-20 使用者同意跑一次；跑完不拿來調整）
         # 2026-11-23 獨立驗證題組：另開、不知情的 Claude 出題，使用者抽查後鎖定；只跑不調、只看統計
         "holdout": "holdout_20261123.jsonl", "holdout2": "holdout2_20261124.jsonl",
+        # 2026-11-24：使用者提供的 40 題測試樣本（k8s_40_jsonl.txt）；只跑不調、只看統計
+        "k8s40": "k8s40_20261124.jsonl",
         # 2026-11-23：柏碩 11-18 打包的題組（zt_testsets_20261118.zip）。s40＝組員原本的 S01～S40（repo 裡已有同內容）；
         # perturb＝dev_scenario／dev_claude 各題的錯字、極短、囉嗦、中英夾雜改寫，標準答案沿用原題
         "s40": "../../experiments/model_select/reason/testset_s.jsonl", "perturb": "dev_perturb.jsonl"}

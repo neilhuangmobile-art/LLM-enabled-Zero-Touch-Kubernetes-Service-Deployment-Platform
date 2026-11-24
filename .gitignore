@@ -74,3 +74,6 @@ experiments/model_select/reason/results/dev_holdout2_*.jsonl
 experiments/model_select/reason/results/gemini_cache_holdout*.jsonl
 # 2026-11-24 Gemini 回應快取（評估用，內容是 Gemini 的回答，不上傳）
 experiments/model_select/reason/results/gemini_cache_*.jsonl
+docs/bench_blind/k8s40_*.jsonl
+experiments/model_select/reason/results/dev_k8s40_*.jsonl
+experiments/model_select/reason/results/gemini_cache_k8s40*.jsonl
