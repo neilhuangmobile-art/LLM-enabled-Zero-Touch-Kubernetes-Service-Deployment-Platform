@@ -27,8 +27,14 @@ def _to_mi(mem: Optional[str]) -> Optional[int]:
 
 
 def heal(repo, issue: Dict[str, Any], diagnosis: Dict[str, Any],
-         current_memory: Optional[str] = None) -> Dict[str, Any]:
-    """依診斷動作執行對應的 Git 操作。回傳格式對齊 healer.remediate.remediate()。"""
+         current_memory: Optional[str] = None, replicas: Optional[int] = None,
+         memory_bumps: int = 0) -> Dict[str, Any]:
+    """依診斷動作執行對應的 Git 操作。回傳格式對齊 healer.remediate.remediate()。
+    2026-11-25（Healer 補強方案，和本機共用規則）：replicas 已知而且只有 1 個時不重新啟動（會停機，反覆崩潰多半是
+    程式的錯）；記憶體同一服務最多自動調 2 次、沒設上限不自動加。回傳的 expect 是修正後回報裡
+    應該看到的值，給 cluster/remote_verify 判斷同步與退回。"""
+    from healer import guard
+    guarded = guard.enabled()
     action = diagnosis.get("action") or "manual_inspect"
     app = issue.get("app") or ""
     base = {"action": action, "pending_sync": False}
@@ -39,8 +45,12 @@ def heal(repo, issue: Dict[str, Any], diagnosis: Dict[str, Any],
     sync_note = "已送出修正，等你的叢集同步（約 30~60 秒）。"
     try:
         if action == "analyze_logs":
+            if guarded and replicas is not None and replicas <= 1:
+                return {**base, "ok": True, "action": "manual_inspect", "blocked_action": "analyze_logs",
+                        "message": f"{app} 只有一個副本，重新啟動會讓服務中斷，而且反覆崩潰多半是程式本身的錯，"
+                                   "所以只通知、不重新啟動。請看 Pod 的 log 找原因。"}
             res = repo.restart_app(app)
-            return {**base, "ok": True, "pending_sync": True, "commit": res.get("commit"),
+            return {**base, "ok": True, "pending_sync": True, "commit": res.get("commit"), "expect": {},
                     "message": f"已重新啟動 {app}。{sync_note} 如果是程式本身的錯誤，重啟後可能還會再壞，"
                                "請看上方的根因說明。"}
         if action == "fix_image":
@@ -48,17 +58,27 @@ def heal(repo, issue: Dict[str, Any], diagnosis: Dict[str, Any],
             # 讓設定在好壞之間來回跳（2026-10-09 實測跳了 5 次）。改成恢復「最近一個不同的映像檔」。
             res = repo.restore_previous_image(app)
             return {**base, "ok": True, "pending_sync": True, "commit": res.get("commit"),
+                    "expect": {"image": res.get("restored_image")} if res.get("restored_image") else {},
                     "message": f"已把 {app} 的映像檔從 {res.get('previous_image')} 恢復成 "
                                f"{res.get('restored_image')}。{sync_note}"}
         if action == "increase_memory":
+            if guarded and not _to_mi(current_memory):
+                return {**base, "ok": False, "blocked_action": "increase_memory",
+                        "message": f"{app} 記憶體不足，但這個服務沒有設定記憶體上限，自動加上限可能反而造成新的記憶體不足，"
+                                   "所以只通知。請到「我的服務」設定記憶體。"}
             cur = _to_mi(current_memory) or 128
             if cur >= MAX_MEMORY_MI:
                 return {**base, "ok": False,
                         "message": f"{app} 的記憶體上限已經是 {cur}Mi，不再自動加大：一直記憶體不足多半是程式"
                                    "本身的問題（例如記憶體洩漏），請檢查程式或手動調整。"}
+            if guarded and memory_bumps >= guard.MAX_MEMORY_BUMPS:
+                return {**base, "ok": False, "blocked_action": "increase_memory",
+                        "message": f"{app} 已經自動調高記憶體 {guard.MAX_MEMORY_BUMPS} 次還是不夠，可能是程式本身的問題，"
+                                   "停止自動調整，請檢查程式或手動調整。"}
             new = min(cur * 2, MAX_MEMORY_MI)
             repo.set_memory_limit(app, f"{new}Mi")
-            return {**base, "ok": True, "pending_sync": True,
+            return {**base, "ok": True, "pending_sync": True, "expect": {"memory_limit": f"{new}Mi"},
+                    "details": {"old": f"{cur}Mi", "new": f"{new}Mi"},
                     "message": f"已把 {app} 的記憶體上限從 {cur}Mi 調到 {new}Mi。{sync_note}"}
     except Exception as e:  # TenantRepoError 的訊息已經是中英雙語
         return {**base, "ok": False, "message": str(e)}

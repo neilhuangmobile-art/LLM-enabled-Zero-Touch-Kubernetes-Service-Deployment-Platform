@@ -4153,7 +4153,8 @@ function matchClientRule(text){
     ['scale', /scale\s+(\S+)\s+to\s+(\d+)/i, m=>({name:m[1],replicas:parseInt(m[2],10)})],
     ['scale', /\u628a?\s*(\S+?)\s*(?:\u64f4|\u7e2e|\u8abf).*?(\d+)/i, m=>({name:m[1],replicas:parseInt(m[2],10)})],
     ['update_image', /update\s+(\S+)\s+to\s+(\S+)/i, m=>({name:m[1],image:m[2]})],
-    ['update_image', /\u628a?\s*(\S+?)\s*\u7684?\s*(?:image|\u6620\u50cf\u6a94?|\u93e1\u50cf\u6a94?)\s*(?:\u63db\u6210|\u6539\u6210|\u6539\u70ba|\u66f4\u65b0\u6210|\u66f4\u65b0\u70ba|to)?\s*(\S+)/i, m=>({name:m[1],image:m[2]})],
+    // 2026-11-25\uff1a\u300c\u63db\u6210\uff0f\u6539\u6210\u2026\u300d\u4e00\u5b9a\u8981\u6709\uff0c\u4e0d\u7136\u300c\u90e8\u7f72 web \u6620\u50cf\u6a94\u662f nginx:1.27\u300d\u6703\u88ab\u5224\u6210\u628a\u6620\u50cf\u6a94\u63db\u6210\u300c\u662f\u300d\uff08\u5f8c\u7aef\u540c\u4e00\u689d\u898f\u5247\u4e00\u8d77\u6539\uff09
+    ['update_image', /\u628a?\s*(\S+?)\s*\u7684?\s*(?:image|\u6620\u50cf\u6a94?|\u93e1\u50cf\u6a94?)\s*(?:\u63db\u6210|\u6539\u6210|\u6539\u70ba|\u66f4\u65b0\u6210|\u66f4\u65b0\u70ba|to)\s*(\S+)/i, m=>({name:m[1],image:m[2]})],
     ['rollback', /([a-z][a-z0-9-]{0,58}).{0,30}?(?:換回|回到|退回|退到|恢復|還原|回復|改回)\s*(?:到\s*)?(?:上一版|上個版本|上一個版本|前一版|前一個版本|之前的版本|舊版)/i, m=>({name:m[1]})],
     ['rollback', /rollback\s+(\S+)/i, m=>({name:m[1]})],
     ['rollback', /(\S+)\s*(?:\u56de\u6efe|\u56de\u5fa9|\u9084\u539f)/i, m=>({name:m[1]})],
@@ -7537,7 +7538,8 @@ _INTENT_RULES = [
     ("scale", re.compile(r"把?\s*(\S+?)\s*(?:擴|縮|調).*?(\d+)", re.I), {1: "name", 2: "replicas"}),
     ("update_image", re.compile(r"update\s+(\S+)\s+to\s+(\S+)", re.I), {1: "name", 2: "image"}),
     # 「映像檔」的「檔」要一起吃掉，不然「映像檔換成 nginx:1.28」會把「檔換成」當成映像檔名稱（2026-10-23 全系統檢查）
-    ("update_image", re.compile(r"把?\s*(\S+?)\s*的?\s*(?:image|映像檔?|鏡像檔?)\s*(?:換成|改成|改為|更新成|更新為|to)?\s*(\S+)", re.I), {1: "name", 2: "image"}),
+    # 2026-11-25：「換成／改成…」一定要有（原本可省略）。「部署 web 映像檔是 nginx:1.27」被前端同一條規則判成把映像檔換成「是」，部署直接失敗
+    ("update_image", re.compile(r"把?\s*(\S+?)\s*的?\s*(?:image|映像檔?|鏡像檔?)\s*(?:換成|改成|改為|更新成|更新為|to)\s*(\S+)", re.I), {1: "name", 2: "image"}),
     # 2026-11-07 對照實驗：「shop-web 剛剛換的版本有問題，幫我換回上一版」原本沒有規則，被分類器判成換映像檔
     ("rollback", re.compile(r"([a-z][a-z0-9-]{0,58}).{0,30}?(?:換回|回到|退回|退到|恢復|還原|回復|改回)\s*(?:到\s*)?(?:上一版|上個版本|上一個版本|前一版|前一個版本|之前的版本|舊版)", re.I), {1: "name"}),
     ("rollback", re.compile(r"rollback\s+(\S+)", re.I), {1: "name"}),
@@ -9575,16 +9577,31 @@ def _real_heal_pod(pod_name: str, namespace: str = "default") -> dict:
         return {"ok": False, "action": "report_only", "root_cause": issue.get("reason"),
                 "message": (f"「{pod_name}」是定時執行跑出來的，這次執行失敗（{issue.get('reason')}）。定時執行不會自動修復："
                             "請看這個 Pod 的 log 找原因，修正後在「我的服務」按「立刻跑一次」重試，或刪掉後重新建立。")}
+    from healer import guard as _hguard
+    if _hguard.enabled():
+        # 2026-11-25（Healer 方案 0.1）：上層控制器從 ownerReferences 查
+        owner = _hguard.resolve_owner(pod, k8s_client.AppsV1Api())
+        issue["owner_kind"], issue["deployment"] = owner["kind"], owner["name"]
     logs = _get_pod_logs(issue["pod_name"], issue["namespace"], issue["container"])
     events = _get_pod_events(issue["pod_name"], issue["namespace"])
     context = {**issue, "logs": logs, "events": events}
     from healer.diagnose import diagnose_issue
     diagnosis = diagnose_issue(context)
+    if _hguard.enabled() and _hguard.notify_only_namespace(namespace) and diagnosis.get("action") in _hguard.AUTO_ACTIONS:
+        # 0.7：default 放的是共用資源，只通知不動手
+        diagnosis = {**diagnosis, "blocked_action": diagnosis["action"], "action": "manual_inspect"}
     from healer.remediate import remediate
     result = remediate(issue, diagnosis)
+    result["deployment"] = issue.get("deployment")
+    if diagnosis.get("blocked_action") and not result.get("blocked_action"):
+        result["blocked_action"] = diagnosis["blocked_action"]
+        result["auto_blocked"] = diagnosis.get("auto_blocked") or "這個 namespace 只通知、不自動修改"
     result["root_cause"] = diagnosis.get("root_cause")
     result["severity"] = diagnosis.get("severity")
     result["llm_raw_guess"] = diagnosis.get("llm_raw_guess")  # 近失事件可見化，見 healer/diagnose.py
+    # 2026-11-25（Healer 方案階段 4）：推播只用規則層的固定原因；過去修法記進事件紀錄
+    result["rule_root_cause"] = diagnosis.get("rule_root_cause")
+    result["history"] = diagnosis.get("history")
     return result
 
 
@@ -9676,6 +9693,150 @@ def _get_pod_history(namespace: str, name: str) -> list:
         return list(_pod_history.get(f"{namespace}/{app_key}", []))
 
 
+def _healer_verify_tick():
+    """2026-11-25（Healer 方案階段 1）：檢查修過、還在等驗證的服務。修好 → 記錄；超過期限沒好 → 退回快照、
+    寫進部署紀錄、停止對這個問題自動修復並推播。不在原地等，背景迴圈每一輪檢查一次。"""
+    try:
+        from healer import guard as hg, verify as hv
+        if not hv.enabled():
+            return
+        apps, core = k8s_client.AppsV1Api(), k8s_client.CoreV1Api()
+        for item in hv.PENDING.items():
+            r = hv.evaluate(apps, core, item)
+            if r["state"] == "wait":
+                continue
+            hv.PENDING.pop(item["key"])
+            ns, dep, action = item["namespace"], item["deployment"], item["action"]
+            label = _HEAL_ACTION_LABEL.get(action, action)
+            if r["state"] == "ok":
+                hg.LIMITER.succeeded(item["key"])
+                _events.record(ns, "heal", dep, "ok", {"action": action, "action_label": label, "verify": "ok", "key": item["key"],
+                                                       "message": f"確認修好了：{r['why']}"})
+                continue
+            back = hv.rollback(apps, item)
+            gitops = None
+            if back.get("ok"):
+                from gitops.heal_record import record_heal
+                try:
+                    gitops = record_heal(ns, dep, "rollback")
+                except Exception as e:  # noqa: BLE001
+                    gitops = {"ok": False, "error": str(e)[:200]}
+            # 每個問題最多修一次、退一次：之後停手，請使用者處理
+            for _ in range(hg.MAX_FAILURES):
+                hg.LIMITER.failed(item["key"])
+            msg = (f"{label}之後沒有修好（{r['why']}）。" + ("已退回修復前的設定。" if back.get("ok") else back.get("message", ""))
+                   + "Healer 不會再自動處理這個問題，請看服務的 log 和事件。")
+            _events.record(ns, "heal", dep, "fail", {"action": action, "action_label": label, "verify": "fail", "key": item["key"],
+                                                     "rolled_back": bool(back.get("ok")), "message": msg[:300],
+                                                     "gitops": gitops})
+            _push.send_async(ns, _push.heal_message(dep, "fail", r["why"], label, dep))
+    except Exception as e:  # noqa: BLE001
+        print(f"[healer] 驗證檢查略過：{e}")
+
+
+def _healer_last_good_tick():
+    """2026-11-25（Healer 方案 P7）：服務全部可用時，把目前的映像檔記成「曾經正常運作過」，壞掉時只退回到這個版本。
+    只改 Deployment 的 metadata（不改 Pod 範本），不會觸發重建；跟上次一樣就不寫。"""
+    try:
+        from healer import guard as hg
+        if not hg.enabled():
+            return
+        apps = k8s_client.AppsV1Api()
+        # 階段 3.1：同時記下目前 ReplicaSet 的 pod-template-hash（退回最近的更新時，退回到這個範本）
+        rs_by_ns = {}
+        try:
+            for rs in apps.list_replica_set_for_all_namespaces().items:
+                rs_by_ns.setdefault(rs.metadata.namespace, []).append(rs)
+        except Exception as e:  # noqa: BLE001
+            print(f"[healer] 讀 ReplicaSet 略過：{e}")
+        for d in apps.list_deployment_for_all_namespaces().items:
+            ns = d.metadata.namespace
+            if _is_remote_ns(ns) or not healer_owns_namespace(ns):
+                continue
+            # 休眠用的喚醒器由休眠模組管理，Healer 不碰（同 pod_watcher.scan_once 跳過喚醒器 Pod）
+            if "zerotouch/waker" in (d.metadata.labels or {}):
+                continue
+            cur = hg.current_replica_set(d, rs_by_ns.get(ns, []))
+            upd = hg.last_good_update(d, (cur.metadata.labels or {}).get("pod-template-hash") if cur else None)
+            if upd:
+                apps.patch_namespaced_deployment(d.metadata.name, ns, {"metadata": {"annotations": upd}})
+    except Exception as e:  # noqa: BLE001
+        print(f"[healer] 記錄正常版本略過：{e}")
+
+
+_healer_stop_noticed = set()
+
+
+def _healer_stop_notice(issue: dict, key: str):
+    """同一個問題連續修不好、停止自動修復：記一筆、推播一次。"""
+    if key in _healer_stop_noticed:
+        return
+    _healer_stop_noticed.add(key)
+    dep = issue.get("deployment") or issue["pod_name"]
+    try:
+        _events.record(issue["namespace"], "heal", dep, "fail",
+                       {"action": "manual_inspect", "action_label": "需要人工檢查", "verify": "stopped", "key": key,
+                        "message": f"{dep} 的「{issue['reason']}」連續自動處理還是沒好，Healer 已停止自動修復，請看服務的 log 和事件。"})
+        _push.send_async(issue["namespace"], _push.heal_message(dep, "fail", issue["reason"], "需要人工檢查", dep))
+    except Exception as e:  # noqa: BLE001
+        print(f"[healer] 停手通知略過：{e}")
+
+
+def _healer_restore_limiter():
+    """2026-11-25：網站重啟後從事件紀錄重建 Healer 的冷卻、每小時額度、停手狀態（原本只在記憶體，重啟就歸零）。
+    事件紀錄只能一個 namespace 一個 namespace 查（多租戶隔離），所以先列出 Healer 負責的 namespace。"""
+    try:
+        from healer import guard as hg
+        if not hg.enabled() or not K8S_ENABLED:
+            return
+        since = _time.time() - 24 * 3600
+        used = 0
+        for n in k8s_client.CoreV1Api().list_namespace().items:
+            ns = n.metadata.name
+            if _is_remote_ns(ns) or not healer_owns_namespace(ns):
+                continue
+            used += hg.LIMITER.restore(_events.query(ns, since=since, kinds=["heal"]))
+        if used:
+            print(f"[healer] 從事件紀錄還原 {used} 筆冷卻／停手狀態")
+    except Exception as e:  # noqa: BLE001
+        print(f"[healer] 還原冷卻狀態略過：{e}")
+
+
+_healer_detect_seen = {}   # (namespace, app, code) -> 上次記錄的時間
+
+
+def _healer_detect_tick():
+    """2026-11-25（Healer 方案階段 2）：Pending、沒就緒、Service 沒端點、更新卡住、掛載失敗、initContainer、
+    被驅逐這些原本偵測不到的問題，只記錄＋推播建議，不改設定。同一個問題 6 小時內只記一次（同 _heal_recently_recorded）。"""
+    try:
+        from healer import detect as hd
+        if not hd.enabled():
+            return
+        findings = hd.scan_extra(owns_ns=lambda ns: healer_owns_namespace(ns) and not _is_remote_ns(ns))
+        now = _time.time()
+        for f in findings:
+            k = (f["namespace"], f["app"], f["code"])
+            if now - _healer_detect_seen.get(k, 0) < 6 * 3600:
+                continue
+            _healer_detect_seen[k] = now
+            action = "detect_" + f["code"]
+            if _heal_recently_recorded(f["namespace"], f["app"], action):
+                continue
+            label = _HEAL_ACTION_LABEL.get(action, f["label"])
+            _events.record(f["namespace"], "heal", f["app"], "inspect",
+                           {"action": action, "action_label": label, "root_cause": f["root_cause"],
+                            "message": f["suggestion"][:300], "evidence": f["evidence"], "deployment": f["app"],
+                            "object": f["object"], "source": "detect"})
+            # 推播只用固定欄位（服務名稱＋規則寫好的原因），不放 log 或事件原文
+            _push.send_async(f["namespace"], _push.heal_message(f["app"], "inspect", f["label"], label, f["app"]))
+        # 已經不存在的問題清掉，之後再發生會重新記錄
+        live = {(f["namespace"], f["app"], f["code"]) for f in findings}
+        for k in [k for k in _healer_detect_seen if k not in live]:
+            _healer_detect_seen.pop(k, None)
+    except Exception as e:  # noqa: BLE001
+        print(f"[healer] 擴大偵測略過：{e}")
+
+
 def _healer_background_loop(interval: int = 30):
     """比照 healer/pod_watcher.py 的 watch_forever()，但常駐在 web_demo.py process 裡，
     讓部署完成後不需要使用者手動開另一個 terminal 跑 --watch 就會自動掃描+修復。
@@ -9687,11 +9848,17 @@ def _healer_background_loop(interval: int = 30):
     監控到，「零接觸自癒」才對所有使用者都成立，不是只對舊的共用資源成立。跟使用者
     主動觸發的 /api/healer/scan／fix／auto_fix（只看/只修自己 namespace）是不同範圍，
     刻意設計成不同——背景監控要顧到所有人，主動操作不能讓一個使用者修到別人的 Pod。"""
-    seen = set()
+    seen = {}   # key -> 上次處理的時間
     stop = threading.Event()
+    from healer import guard as _hguard
+    _healer_restore_limiter()
     while not stop.wait(interval):
         if not K8S_ENABLED:
             continue
+        # 2026-11-25（Healer 方案階段 1）：先檢查之前修過、還在等驗證的服務；P7：記下曾經正常的映像檔
+        _healer_verify_tick()
+        _healer_last_good_tick()
+        _healer_detect_tick()
         try:
             from healer.pod_watcher import scan_once
             issues = scan_once(namespace="") or []
@@ -9704,11 +9871,32 @@ def _healer_background_loop(interval: int = 30):
                 # 同一個叢集上的另一個網站負責的 namespace 不碰（見 core/config.py 的 HEALER_*_NAMESPACES）
                 if not healer_owns_namespace(issue.get("namespace") or ""):
                     continue
-                key = f"{issue['namespace']}/{issue['pod_name']}/{issue['reason']}"
-                now_keys.add(key)
-                if key in seen:
-                    continue
-                seen.add(key)
+                if not _hguard.enabled():
+                    key = f"{issue['namespace']}/{issue['pod_name']}/{issue['reason']}"
+                    now_keys.add(key)
+                    if key in seen:
+                        continue
+                    seen[key] = _time.time()
+                else:
+                    # 2026-11-25（Healer 方案 0.2）：用 namespace/服務/問題 去重（原本用 Pod 名稱，修完換新 Pod
+                    # 就被當成新問題：CrashLoop 每 30 秒重建一次、OOM 記憶體一路加倍）。冷卻過後同一個問題還在，
+                    # 算一次「沒修好」；連續 2 次就停手。每個 namespace 每小時最多自動處理 10 次。
+                    from healer import verify as _hverify
+                    key = _hguard.Limiter.key(issue["namespace"], issue.get("deployment") or issue["pod_name"],
+                                              _hguard.problem_class(issue["reason"]))
+                    now_keys.add(key)
+                    if _hverify.PENDING.has(key):
+                        continue   # 修過、還在等驗證
+                    last = seen.get(key)
+                    if last is not None and _time.time() - last < _hguard.COOLDOWN_S:
+                        continue
+                    if last is not None and _hguard.LIMITER.failed(key) >= _hguard.MAX_FAILURES:
+                        _healer_stop_notice(issue, key)
+                        continue
+                    why = _hguard.LIMITER.acquire(key, issue["namespace"])
+                    if why:
+                        continue
+                    seen[key] = _time.time()
                 # 開始處理這一個 issue 就先登記「正在處理中」，不是等整批都處理完
                 # 才更新狀態——根因診斷固定會打一次本地 LLM，實測一次 2-3 分鐘跑
                 # 不掉，前端要能顯示「正在修復 X」的進度，liveness 判斷也要能用
@@ -9737,7 +9925,9 @@ def _healer_background_loop(interval: int = 30):
                     _healer_bg_state["processing"] = None
                     _healer_bg_state["recent_actions"].insert(0, entry)
                     _healer_bg_state["recent_actions"] = _healer_bg_state["recent_actions"][:_HEALER_BG_MAX_HISTORY]
-            seen &= now_keys
+            # 問題消失的 key 清掉，之後再發生會重新處理（冷卻中的保留，避免修完馬上又被當成新問題）
+            seen = {k: t for k, t in seen.items()
+                    if k in now_keys or (_hguard.enabled() and _time.time() - t < _hguard.COOLDOWN_S)}
             with _healer_bg_lock:
                 _healer_bg_state["last_scan"] = _utc_now_iso()
         except Exception:
@@ -10305,18 +10495,85 @@ def _real_heal_pod(pod_name, namespace="default"):
     diagnosis = diagnose_issue({**issue, "reason": issue["reason"]})
     dep = next((d for d in rep.get("deployments") or [] if d["name"] == issue.get("app")), {})
     blocked = _remote_write_guard(namespace)
+    from healer import guard as _hguard
+    from cluster import remote_verify as _rverify
+    hkey = _hguard.Limiter.key(namespace, issue.get("app") or pod_name, _hguard.problem_class(issue["reason"]))
+    if not blocked and _hguard.enabled() and _hguard.LIMITER.stopped(hkey):
+        # 2026-11-25（和本機共用）：同一個問題修過、驗證失敗，停手等使用者處理
+        blocked = "這個問題自動修過但沒有修好，Healer 已停止自動修復，請看服務的 log 和事件。"
     if blocked:
         result = {"ok": False, "action": diagnosis.get("action"), "message": blocked}
     else:
         result = _rops.heal(_tenant_repo(_remote_owner(namespace)), issue, diagnosis,
-                            current_memory=dep.get("memory_limit"))
+                            current_memory=dep.get("memory_limit"), replicas=dep.get("replicas"),
+                            memory_bumps=_remote_memory_bumps(namespace, issue.get("app")))
+        if result.get("pending_sync") and _rverify.enabled() and issue.get("app"):
+            # 修正送出後登記待驗證：回報同步、健康 90 秒才算修好；10 分鐘沒好就退回（_remote_verify_tick）
+            _rverify.PENDING.register(hkey, namespace, issue["app"], diagnosis.get("action"), result.get("expect") or {})
+            result["verify_pending"] = True
+        result["problem_key"] = hkey
     if not result.get("pending_sync"):
         with _remote_heal_lock:  # 沒有真的送出修正（人工處理、失敗）→ 不佔冷卻時間
             _remote_heal_recent.pop(cool_key, None)
     result["root_cause"] = diagnosis.get("root_cause")
     result["severity"] = diagnosis.get("severity")
     result["llm_raw_guess"] = diagnosis.get("llm_raw_guess")
+    result["rule_root_cause"] = diagnosis.get("rule_root_cause")
     return result
+
+
+def _remote_memory_bumps(namespace, app, days=7) -> int:
+    """客戶叢集的服務最近自動調高記憶體幾次（從事件紀錄算；客戶叢集沒有 annotation 可以記）。"""
+    if not app:
+        return 0
+    try:
+        return sum(1 for e in _events.query(namespace, since=_time.time() - days * 86400, kinds=["heal"])
+                   if e.get("app") == app and e.get("outcome") == "ok"
+                   and (e.get("data") or {}).get("action") == "increase_memory"
+                   and (e.get("data") or {}).get("verify") in (None, "pending"))   # 驗證結果那筆不重複算
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+def _remote_verify_tick():
+    """2026-11-25（Healer 補強方案）：客戶叢集修復送出後的驗證。用回報器的資料判斷同步與健康
+    （cluster/remote_verify.py）；修好記一筆；10 分鐘沒好就退回這次修正（設定還是我們改的值才退）、停手並推播。"""
+    from cluster import remote_verify as rverify
+    from healer import guard as hg
+    if not rverify.enabled():
+        return
+    for item in rverify.PENDING.items():
+        ns, app, action = item["namespace"], item["app"], item["action"]
+        try:
+            rep = _remote_report(ns)
+            bad_apps = {i.get("app") for i in _rv.unhealthy_issues(rep, ns)}
+            r = rverify.evaluate(rep, item, bad_apps)
+            if r["state"] == "wait":
+                continue
+            rverify.PENDING.pop(item["key"])
+            label = _HEAL_ACTION_LABEL.get(action, action)
+            if r["state"] == "ok":
+                hg.LIMITER.succeeded(item["key"])
+                _events.record(ns, "heal", app, "ok", {"action": action, "action_label": label, "verify": "ok",
+                                                       "key": item["key"], "message": f"確認修好了：{r['why']}"})
+                continue
+            rolled, note = False, ""
+            if rverify.can_rollback(rep, item) and not _remote_write_guard(ns):
+                try:
+                    _tenant_repo(_remote_owner(ns)).revert_app(app)
+                    rolled, note = True, "已退回這次的修正（等你的叢集同步）。"
+                except Exception as e:  # noqa: BLE001
+                    note = f"退回失敗：{str(e)[:120]}。"
+            elif item["action"] in rverify.ROLLBACK_ACTIONS:
+                note = "設定在修正之後又被改過，所以沒有退回。"
+            for _ in range(hg.MAX_FAILURES):
+                hg.LIMITER.failed(item["key"])
+            msg = f"{label}之後沒有修好（{r['why']}）。{note}Healer 不會再自動處理這個問題，請看服務的 log 和事件。"
+            _events.record(ns, "heal", app, "fail", {"action": action, "action_label": label, "verify": "fail",
+                                                     "key": item["key"], "rolled_back": rolled, "message": msg[:300]})
+            _push.send_async(ns, _push.heal_message(app, "fail", r["why"], label, app))
+        except Exception as e:  # noqa: BLE001
+            print(f"[remote healer] 驗證 {ns}/{app} 略過：{e}")
 
 
 # 每位客戶的自動修復上限（2026-10-09 背景安全審查：resource exhaustion）。客戶可以不經過平台，
@@ -10348,6 +10605,10 @@ def _remote_healer_loop(interval: int = 30):
     stop = threading.Event()
     while not stop.wait(interval):
         try:
+            _remote_verify_tick()
+        except Exception as e:  # noqa: BLE001
+            print(f"[remote healer] 驗證略過：{e}")
+        try:
             now_keys = set()
             for username in list(CLUSTERS._data.keys()):
                 if not CLUSTERS.status(username)["ok"]:
@@ -10365,6 +10626,12 @@ def _remote_healer_loop(interval: int = 30):
                            f"{dep.get('memory_limit')}/{dep.get('image')}")
                     now_keys.add(key)
                     if key in seen:
+                        continue
+                    # 2026-11-25：修過、還在等驗證，或驗證失敗已停手的問題不再處理
+                    from healer import guard as _hg
+                    from cluster import remote_verify as _rvf
+                    hkey = _hg.Limiter.key(ns, issue.get("app") or issue["pod_name"], _hg.problem_class(issue["reason"]))
+                    if _rvf.PENDING.has(hkey) or (_hg.enabled() and _hg.LIMITER.stopped(hkey)):
                         continue
                     # 超過這一輪或這一小時的上限：先不處理，也不記進 seen，下一輪/額度恢復後再處理
                     if handled >= _REMOTE_HEAL_PER_SCAN or not _remote_heal_allowed(username):
@@ -10472,7 +10739,15 @@ _HEAL_ACTION_LABEL = {"analyze_logs": "重新建立 Pod", "fix_image": "退回�
                       "fix_probe": "放寬健康檢查的等待時間", "restore_previous_image": "換回上一個映像檔",
                       "restart_app": "重新啟動", "set_memory_limit": "調高記憶體上限", "revert_app": "回到上一版",
                       "check_dependencies": "檢查相依服務", "fix_permissions": "檢查權限設定",
-                      "create_config": "檢查設定檔", "fix_port_conflict": "檢查 Port 衝突", "manual_inspect": "需要人工檢查"}
+                      "create_config": "檢查設定檔", "fix_port_conflict": "檢查 Port 衝突", "manual_inspect": "需要人工檢查",
+                      # 2026-11-25（Healer 階段 2～3）
+                      "fix_command": "檢查啟動指令", "tune_heap": "調整程式的記憶體設定",
+                      "revert_recent_change": "退回剛才的更新",
+                      "detect_unschedulable": "資源不夠、排不上去", "detect_pvc_unbound": "保存空間沒有綁上",
+                      "detect_quota_exceeded": "超過資源配額", "detect_not_ready": "一直沒有就緒",
+                      "detect_no_endpoints": "Service 連不到 Pod", "detect_rollout_stuck": "更新卡住",
+                      "detect_mount_failed": "掛載失敗", "detect_init_failed": "初始化容器失敗",
+                      "detect_evicted": "被系統驅逐"}
 # 實際改動叢集（或送出修正 commit）的處理方式；其他的只列出資訊，回傳 ok 只代表「查完了」，不能算修好
 _HEAL_REPAIR_ACTIONS = {"analyze_logs", "fix_image", "increase_memory", "fix_probe", "restore_previous_image",
                         "restart_app", "set_memory_limit", "revert_app"}
@@ -10509,10 +10784,18 @@ def _real_heal_pod(pod_name, namespace="default"):
             _events.record(namespace, "heal", app_key, outcome,
                            {"pod": pod_name, "action": action, "action_label": label,
                             "root_cause": result.get("root_cause"), "message": str(result.get("message") or "")[:300],
-                            "llm_raw_guess": result.get("llm_raw_guess")})
+                            "llm_raw_guess": result.get("llm_raw_guess"),
+                            # 2026-11-25（Healer 方案 0.5）：稽核欄位——服務、改前改後、被擋下的動作與原因、驗證、GitOps
+                            "deployment": result.get("deployment"), "details": result.get("details"),
+                            "blocked_action": result.get("blocked_action"), "auto_blocked": result.get("auto_blocked"),
+                            "verify": "pending" if result.get("verify_pending") else None,
+                            "gitops": result.get("gitops"), "key": result.get("problem_key"),
+                            "history": result.get("history")})
             # 推播跟紀錄用同一個去重：同一個問題 6 小時內只通知一次。點通知用服務名稱查，
             # Healer 重建 Pod 後舊的 Pod 名稱就查不到了
-            _push.send_async(namespace, _push.heal_message(app_key, outcome, result.get("root_cause"), label, app_key))
+            # 2026-11-25（Healer 方案階段 4.5）：推播用固定模板，原因只用規則層寫好的文字，不放模型原文
+            _push.send_async(namespace, _push.heal_message(app_key, outcome, result.get("rule_root_cause") or label,
+                                                           label, app_key))
     except Exception as e:
         print(f"[事件紀錄] Healer 紀錄略過：{e}")
     return result

@@ -38,7 +38,8 @@ def test_cronjob_doc_limits_and_no_service_or_probes():
     assert js["activeDeadlineSeconds"] == 3600 and js["backoffLimit"] == 2
     pod = js["template"]["spec"]
     c = pod["containers"][0]
-    assert pod["restartPolicy"] == "OnFailure" and js["template"]["metadata"]["labels"]["app"] == "backup"
+    # 2026-11-25（Healer 方案階段 5）：改成 Never，podFailurePolicy 才能用（見 tests/test_cronjob_policy.py）
+    assert pod["restartPolicy"] == "Never" and js["template"]["metadata"]["labels"]["app"] == "backup"
     assert "readinessProbe" not in c and "ports" not in c
     assert c["securityContext"]["allowPrivilegeEscalation"] is False
     pw = [e for e in c["env"] if e["name"] == "DB_PASSWORD"][0]

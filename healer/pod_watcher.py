@@ -84,6 +84,7 @@ def scan_once(namespace: str = "default", auto_heal: bool = False) -> list:
         print(f"❌ 無法連線 K8s：{e}")
         return []
 
+    apps = None
     for pod in pods.items:
         # 2026-10-26 全系統測試：休眠用的喚醒器是平台自己的元件，啟動或被收回的那幾秒狀態看起來不正常，
         # Healer 曾對它執行「檢查相依服務」，可能干擾休眠流程。喚醒器的生命週期由休眠模組管理，Healer 不碰。
@@ -91,6 +92,14 @@ def scan_once(namespace: str = "default", auto_heal: bool = False) -> list:
             continue
         issue = _check_pod(pod)
         if issue:
+            # 2026-11-25（Healer 方案 0.1）：上層控制器從 ownerReferences 查，不從 Pod 名稱猜
+            try:
+                from healer import guard
+                apps = apps or k8s_client.AppsV1Api()
+                owner = guard.resolve_owner(pod, apps)
+                issue["owner_kind"], issue["deployment"] = owner["kind"], owner["name"]
+            except Exception:  # noqa: BLE001
+                pass
             # 2026-11-17 定時執行（Job 產生的 Pod）：只回報，不自動修復（修復動作都是改 Deployment，套不上去）
             issue["job_pod"] = any(getattr(o, "kind", None) == "Job"
                                    for o in (getattr(getattr(pod, "metadata", None), "owner_references", None) or []))
@@ -164,6 +173,9 @@ def _check_pod(pod) -> Optional[dict]:
 
         # ── 檢查 waiting 狀態（CrashLoopBackOff, ImagePullBackOff 等）
         if state.waiting and state.waiting.reason in WATCH_REASONS:
+            # 2026-11-25（Healer 階段 2 結束碼分類）：等待重啟時也帶上「上一次」怎麼結束的（結束碼、原因），
+            # 這是 K8s 的結構化資料；原本沒帶，exit 127／exit 0／OOMKilled 在 CrashLoopBackOff 時都看不出來
+            prev = cs.last_state.terminated if cs.last_state else None
             return {
                 "pod_name"    : pod_name,
                 "namespace"   : namespace,
@@ -171,6 +183,8 @@ def _check_pod(pod) -> Optional[dict]:
                 "reason"      : state.waiting.reason,
                 "message"     : state.waiting.message or "",
                 "restart_count": cs.restart_count,
+                "exit_code"   : prev.exit_code if prev else None,
+                "last_reason" : (prev.reason or "") if prev else "",
                 "phase"       : phase,
                 "detected_at" : datetime.utcnow().isoformat(),
                 "description" : WATCH_REASONS[state.waiting.reason],

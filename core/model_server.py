@@ -227,7 +227,9 @@ DIAGNOSE_SYSTEM = (
     '"severity": "high|medium|low", '
     '"action": "<EXACTLY ONE of: fix_image, increase_memory, check_dependencies, fix_permissions, '
     'create_config, fix_probe, fix_port_conflict, analyze_logs, manual_inspect>", '
-    '"suggestion": "<concrete fix steps, Traditional Chinese (zh-TW)>"}\n'
+    '"suggestion": "<concrete fix steps, Traditional Chinese (zh-TW)>", '
+    '"evidence": "<copy ONE short line EXACTLY as it appears in the Recent Logs or Events that supports '
+    'the root cause; empty string if there is none>"}\n'
     "The 'action' value must be one of those exact English snake_case codes, nothing else — do not "
     "invent a different code (e.g. write 'fix_permissions' not 'fix_permission', 'create_config' for "
     "a missing environment variable or ConfigMap/Secret, not a made-up code like 'fix_env_var').\n"
@@ -235,25 +237,29 @@ DIAGNOSE_SYSTEM = (
     "you do NOT have enough evidence for a specific root cause — do NOT guess something concrete like "
     "a bad image or a missing dependency. Instead say the evidence is insufficient, use severity "
     "'low' unless restart_count is high, and set action to 'manual_inspect'. Only name a specific root "
-    "cause when the logs or events actually contain a concrete signal supporting it."
+    "cause when the logs or events actually contain a concrete signal supporting it.\n"
+    # 2026-11-25（Healer 方案階段 4.2～4.4）：處理手冊與過去修法只是背景，不能當證據
+    "A 'Runbook' section, if present, is general background from the official docs; a 'Past fixes' "
+    "line, if present, lists what was tried before for this service. Use them only as hints. The "
+    "'evidence' must be copied from Recent Logs or Events, never from the Runbook or Past fixes."
 )
 
 DIAGNOSE_FEWSHOT = [
     (
         "Pod: mystery-pod\nContainer: app\nError State: Unknown\nRestart Count: 1\nRecent Logs:\n\nEvents: ",
-        '{"root_cause":"目前的 log 與事件都沒有明確訊號，證據不足以判斷具體根因","severity":"low","action":"manual_inspect","suggestion":"建議人工檢視 Pod 的完整日誌與事件記錄，或稍候重新掃描確認是否仍在發生"}',
+        '{"root_cause":"目前的 log 與事件都沒有明確訊號，證據不足以判斷具體根因","severity":"low","action":"manual_inspect","suggestion":"建議人工檢視 Pod 的完整日誌與事件記錄，或稍候重新掃描確認是否仍在發生","evidence":""}',
     ),
     (
         "Pod: worker-1\nContainer: app\nError State: CrashLoopBackOff\nRestart Count: 6\nRecent Logs:\nError: EACCES: permission denied, open '/data/app.lock'\nEvents: Started container app",
-        '{"root_cause":"應用程式對 /data 目錄沒有寫入權限","severity":"high","action":"fix_permissions","suggestion":"檢查容器的 securityContext 與掛載的 volume 權限設定，確保執行使用者對 /data 有寫入權限"}',
+        '{"root_cause":"應用程式對 /data 目錄沒有寫入權限","severity":"high","action":"fix_permissions","suggestion":"檢查容器的 securityContext 與掛載的 volume 權限設定，確保執行使用者對 /data 有寫入權限","evidence":"Error: EACCES: permission denied, open \'/data/app.lock\'"}',
     ),
     (
         "Pod: billing-api-1\nContainer: billing-api\nError State: CrashLoopBackOff\nRestart Count: 12\nRecent Logs:\npanic: environment variable DATABASE_URL is required but was not set\nEvents: Back-off restarting failed container",
-        '{"root_cause":"缺少必要的環境變數 DATABASE_URL","severity":"high","action":"create_config","suggestion":"在 Deployment 或對應的 ConfigMap/Secret 補上 DATABASE_URL 這個環境變數"}',
+        '{"root_cause":"缺少必要的環境變數 DATABASE_URL","severity":"high","action":"create_config","suggestion":"在 Deployment 或對應的 ConfigMap/Secret 補上 DATABASE_URL 這個環境變數","evidence":"panic: environment variable DATABASE_URL is required but was not set"}',
     ),
     (
         "Pod: cache-1\nContainer: redis\nError State: OOMKilled\nRestart Count: 4\nRecent Logs:\n\nEvents: Container cache-1 was OOMKilled",
-        '{"root_cause":"容器記憶體使用量超過設定上限被強制終止","severity":"high","action":"increase_memory","suggestion":"提高這個容器的 memory limit，或檢查是否有記憶體洩漏"}',
+        '{"root_cause":"容器記憶體使用量超過設定上限被強制終止","severity":"high","action":"increase_memory","suggestion":"提高這個容器的 memory limit，或檢查是否有記憶體洩漏","evidence":"Container cache-1 was OOMKilled"}',
     ),
 ]
 
@@ -1017,7 +1023,8 @@ def diagnose(req: DiagnoseRequest):
     # 直接被拿去自動執行 remediate()，如果惡意容器故意在自己的 log 裡塞假的 ChatML
     # 標記，理論上可以操縮監控模型的判斷去影響自動修復的動作，跟 /chat 是同一種
     # 攻擊面，一併淨化。
-    raw_logs = _sanitize_user_text(str(ctx.get("logs", ""))[:800], _monitor_tok)
+    # 2026-11-25（Healer 方案 P13）：取「結尾」800 字。錯誤訊息通常在 log 最後面，原本取開頭會把最關鍵的幾行切掉
+    raw_logs = _sanitize_user_text(str(ctx.get("logs", ""))[-800:], _monitor_tok)
     event_str = "; ".join(
         f"{e.get('reason', '?')}: {_sanitize_user_text(str(e.get('message', ''))[:120], _monitor_tok)}"
         for e in events[:5]
@@ -1030,6 +1037,11 @@ def diagnose(req: DiagnoseRequest):
         f"Recent Logs:\n{raw_logs}\n"
         f"Events: {event_str}"
     )
+    # 2026-11-25（Healer 方案階段 4）：處理手冊摘要與過去修法（healer/diagnose._llm_analyze 給的），都限長、淨化
+    if ctx.get("runbook"):
+        user_content += f"\nRunbook: {_sanitize_user_text(str(ctx['runbook'])[:500], _monitor_tok)}"
+    if ctx.get("history"):
+        user_content += f"\nPast fixes: {_sanitize_user_text(str(ctx['history'])[:200], _monitor_tok)}"
     messages = [{"role": "system", "content": DIAGNOSE_SYSTEM}]
     for ex_in, ex_out in DIAGNOSE_FEWSHOT:
         messages.append({"role": "user", "content": ex_in})
@@ -1055,6 +1067,8 @@ def diagnose(req: DiagnoseRequest):
             "severity": severity,
             "action": action,
             "suggestion": _to_tw(parsed.get("suggestion", "")),
+            # 引用的原文不轉繁體（要拿去跟 log 原文比對，healer/diagnose._evidence_found）
+            "evidence": str(parsed.get("evidence") or "")[:300],
             "raw": generated[:400],
         }
     }

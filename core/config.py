@@ -144,11 +144,18 @@ CUSTOMER_CLUSTER_MODE = os.environ.get("CUSTOMER_CLUSTER_MODE", "0").strip() == 
 # HEALER_ONLY_NAMESPACES：只處理這些（空白 = 全部）；HEALER_SKIP_NAMESPACES：這些不處理。
 HEALER_ONLY_NAMESPACES = {s.strip() for s in os.environ.get("HEALER_ONLY_NAMESPACES", "").split(",") if s.strip()}
 HEALER_SKIP_NAMESPACES = {s.strip() for s in os.environ.get("HEALER_SKIP_NAMESPACES", "").split(",") if s.strip()}
+# 2026-11-25（Healer 方案 0.7）：平台與 K8s 自己的 namespace 一律不處理（加在使用者設定的之外）
+HEALER_DEFAULT_SKIP = {"kube-system", "kube-public", "kube-node-lease", "monitoring", "flux-system",
+                       "local-path-storage"}   # Docker Desktop／kind 的儲存元件（2026-11-25 實測發現也被掃到）
+# 評估用的 namespace（experiments/healer_eval）：只有明確寫在 HEALER_ONLY_NAMESPACES 時才處理，網站背景迴圈不碰
+HEALER_EVAL_PREFIX = "healer-eval-"
 
 
 def healer_owns_namespace(ns: str) -> bool:
-    if ns in HEALER_SKIP_NAMESPACES:
+    if ns in HEALER_SKIP_NAMESPACES or ns in HEALER_DEFAULT_SKIP:
         return False
+    if (ns or "").startswith(HEALER_EVAL_PREFIX):
+        return ns in HEALER_ONLY_NAMESPACES
     return not HEALER_ONLY_NAMESPACES or ns in HEALER_ONLY_NAMESPACES
 # 平台、客戶狀態等執行期資料（不進版控）
 DATA_DIR         = os.path.join(ROOT, "data")

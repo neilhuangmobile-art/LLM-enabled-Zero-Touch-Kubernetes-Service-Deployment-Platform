@@ -28,15 +28,36 @@ _DEPENDENCY_RE = (r"ECONNREFUSED|connection refused|dial tcp.*refused|"
 
 # 規則型快速分析（不需要 LLM，速度快）
 _RULE_PATTERNS = [
-    # (正則, root_cause, action, severity)
-    (r"OOMKilled|out of memory|memory.*limit",
+    # (正則, root_cause, action, severity, 自動)
+    # 自動＝會改叢集的動作。2026-11-25（Healer 方案 0.4）：這類規則只比對 K8s 產生的結構化文字
+    # （reason、message、exitCode、事件），不比對容器自己的 log——原本容器印出「OOMKilled」就會觸發調高記憶體。
+    # 0.6：拿掉 `memory.*limit`（應用程式 log 常見的設定說明文字），只認 OOMKilled。
+    (r"OOMKilled|oomkilling|out of memory",
      "記憶體不足（OOMKilled）",
      "increase_memory",
-     "high"),
-    (r"ImagePullBackOff|ErrImagePull|image.*not found|manifest.*unknown",
+     "high", True),
+    # 2026-11-25（Healer 階段 3.5）：JVM／Node 自己的 heap 用完跟容器被 OOMKilled 是兩回事，加容器記憶體沒用。
+    # 排在 OOM 規則後面：容器真的被 OOMKilled 時仍然先比中上一條（那條只看結構化文字）。
+    (r"java\.lang\.OutOfMemoryError|javascript heap out of memory|heap out of memory",
+     "程式自己的記憶體（heap）用完了，不是容器的記憶體上限不夠",
+     "tune_heap",
+     "high", False),
+    # 2026-11-25 診斷誤判修正：缺 ConfigMap／Secret 原本被判成映像檔問題——事件用空白串成一行，
+    # `image.*not found` 會從「Container image ... already present」一路比到後面的「configmap ... not found」。
+    # 事件改成一行一個、規則改用 [^\n]*，而且設定檔規則排在映像檔規則前面。
+    (r"createcontainerconfigerror|configmap[^\n]*not found|secret[^\n]*not found|couldn't find key",
+     "ConfigMap 或 Secret 不存在",
+     "create_config",
+     "high", False),
+    # 指令找不到（exit 126／127）：映像檔裡沒有這個程式，或啟動指令打錯，換映像檔版本沒有幫助
+    (r"executable file not found|exitcode 12[67]\b|command not found|exec format error",
+     "啟動指令找不到或不能執行（映像檔裡沒有這個程式，或指令打錯）",
+     "fix_command",
+     "high", False),
+    (r"imagepullbackoff|errimagepull|failed to pull image|manifest[^\n]*unknown|image[^\n]*not found",
      "映像拉取失敗，tag 不存在或倉庫無法存取",
      "fix_image",
-     "high"),
+     "high", True),
     # 2026-10-07 近失事件可見化實測時發現的真實 bug：K8s 事件的 reason 欄位是
     # "BackOff"、message 是「Back-off restarting failed container」，不是這裡原本
     # 只比對的 "CrashLoopBackOff" 字面字串——Pod 被抓到的那一瞬間如果容器狀態剛好
@@ -47,30 +68,36 @@ _RULE_PATTERNS = [
     (_DEPENDENCY_RE,
      "依賴服務無法連線（資料庫/API 未啟動）",
      "check_dependencies",
-     "medium"),
-    (r"permission denied|unauthorized|403",
+     "medium", False),
+    # 0.6：單獨的「403」會把應用程式正常的 HTTP 403 存取紀錄判成權限問題，要搭配 forbidden／RBAC／serviceaccount
+    (r"permission denied|unauthorized|forbidden|\brbac\b|serviceaccount",
      "權限不足，可能是 RBAC 或掛載路徑問題",
      "fix_permissions",
-     "medium"),
-    (r"configmap.*not found|secret.*not found|no such file",
-     "ConfigMap 或 Secret 不存在",
+     "medium", False),
+    (r"no such file",
+     "找不到需要的檔案（可能是設定檔沒有掛進來）",
      "create_config",
-     "high"),
+     "high", False),
     (r"liveness.*probe|readiness.*probe|probe failed",
      "健康檢查探針失敗",
      "fix_probe",
-     "medium"),
+     "medium", True),
     (r"port.*already in use|address already in use",
      "連接埠衝突",
      "fix_port_conflict",
-     "medium"),
+     "medium", False),
     # 「反覆崩潰」只描述症狀、不是原因，排在最後：日誌裡有具體原因（例如連不上資料庫）時要先命中那一條。
     # 2026-10-10 實測：這條原本排第三，崩潰的 Pod 一定有「重啟中」的事件，所以永遠先命中這條，
     # 處理方式變成刪掉 Pod 重建；資料庫連不上時重建沒有用，Healer 每 30 秒重建一次，無限循環。
+    # 一啟動就正常結束（exit 0）：這個映像檔不是常駐服務，重建也一樣會結束
+    (r"exitcode 0\b",
+     "程式一啟動就正常結束（exit 0），這個映像檔可能不是常駐的服務",
+     "fix_command",
+     "medium", False),
     (r"crashloopbackoff|back-off restarting|back off restarting",
      "容器反覆崩潰，需分析應用程式日誌",
      "analyze_logs",
-     "high"),
+     "high", True),
 ]
 
 
@@ -83,10 +110,11 @@ _RULE_PATTERNS = [
 # 節）。這裡加一道不依賴模型是否遵守規則的保險：合併文字裡要真的含有具體錯誤
 # 關鍵字家族之一，才信任模型給的 root_cause，否則一律蓋成老實版本。
 _CONCRETE_SIGNAL_RE = re.compile(
-    r"oom|out of memory|image.*not found|manifest.*unknown|errimagepull|"
+    r"oom|out of memory|image[^\n]*not found|manifest[^\n]*unknown|errimagepull|"
+    r"executable file not found|heap out of memory|outofmemoryerror|"
     r"permission denied|unauthorized|403|"
     + _DEPENDENCY_RE + "|" +
-    r"configmap.*not found|secret.*not found|no such file|"
+    r"configmap[^\n]*not found|secret[^\n]*not found|no such file|"
     r"liveness.*probe|readiness.*probe|probe failed|"
     r"port.*already in use|address already in use",
     re.IGNORECASE,
@@ -165,23 +193,36 @@ def diagnose_issue(context: dict, use_llm: bool = True) -> dict:
     # 合併 reason（K8s 事件的 reason 欄位是獨立的簡短代碼，例如 "BackOff"、
     # "OOMKilling"，跟 message 是分開的兩個欄位，只看 message 會漏掉只出現在
     # reason 裡的訊號）。
-    combined_text = "\n".join([
-        reason, message, logs,
-        " ".join(e.get("reason", "") for e in events),
-        " ".join(_event_text(e.get("message", "")) for e in events),
-    ]).lower()
+    # 2026-11-25：事件一行一個（原本用空白串成一行，規則會跨事件比中，見 _RULE_PATTERNS 的說明）
+    exit_line = " ".join(x for x in (
+        f"exitcode {context.get('exit_code')}" if context.get("exit_code") is not None else "",
+        f"lastreason {context.get('last_reason')}" if context.get("last_reason") else "") if x)
+    event_lines = [f"{e.get('reason') or ''} {_event_text(e.get('message') or '')}" for e in events]
+    combined_text = "\n".join([reason, message, exit_line, logs, *event_lines]).lower()
+    # 2026-11-25（Healer 方案 0.4）：K8s 自己產生的文字（不含容器 log），會改叢集的動作只看這段
+    struct_text = "\n".join([reason, message, exit_line, *event_lines]).lower()
 
     # ── 層 1：規則型快速分析 ─────────────────────────────────────
-    rule_result = _rule_analyze(combined_text, reason)
+    rule_result = _rule_analyze(combined_text, reason, struct_text)
     if rule_result["confidence"] == "rule" and not use_llm:
         rule_result["pod_name"] = pod_name
-        return rule_result
+        return _finish(rule_result, rule_result, struct_text)
 
     # ── 層 2：LLM 深度分析 ──────────────────────────────────────
     if use_llm:
         llm_result = _llm_analyze(context)
         if llm_result:
             llm_result["pod_name"] = pod_name
+            # 2026-11-25（Healer 方案階段 4.3）：模型要引用一段證據原文，程式檢查真的出現在 log、事件或狀態裡；
+            # 引用不到（或沒給）就不採用模型的敘述。舊版 model server 不回傳 evidence 欄位時略過這道檢查。
+            if "evidence" in llm_result and not _evidence_found(llm_result.get("evidence"), context):
+                guess = llm_result.get("root_cause")
+                base = dict(rule_result) if rule_result["confidence"] == "rule" else {
+                    **rule_result, "root_cause": "證據不足：模型的判斷在 log 和事件裡找不到根據，需要人工查看完整日誌",
+                    "action": "manual_inspect", "suggestion": _action_to_suggestion("manual_inspect")}
+                base.update({"pod_name": pod_name, "llm_raw_guess": guess, "evidence_rejected": True,
+                             "history": llm_result.get("history"), "runbook": llm_result.get("runbook")})
+                return _finish(base, rule_result, struct_text)
             if rule_result["confidence"] == "rule":
                 # 規則層已經比中已知錯誤模式：補救動作(action)/嚴重度以規則為準（比較可靠，
                 # 且 remediate.py 靠 action 分派）。root_cause/suggestion 預設採用小模型的敘述
@@ -221,24 +262,70 @@ def diagnose_issue(context: dict, use_llm: bool = True) -> dict:
                         llm_result["suggestion"] = rule_result["suggestion"]
             elif rule_result["severity"] != "unknown":
                 llm_result.setdefault("severity", rule_result["severity"])
-            return llm_result
+            return _finish(llm_result, rule_result, struct_text)
 
     # ── 層 3：無法分析，回傳規則結果或未知 ──────────────────────
     rule_result["pod_name"] = pod_name
-    return rule_result
+    return _finish(rule_result, rule_result, struct_text)
+
+
+MAX_TEXT = 300
+
+
+def _finish(result: dict, rule_result: dict, struct_text: str) -> dict:
+    """2026-11-25（Healer 方案階段 4.5）：模型寫的文字限長；另外保留規則層的原因（rule_root_cause），
+    推播只用這個固定文字，不放模型原文。最後一樣經過結構化證據檢查。"""
+    for k in ("root_cause", "suggestion", "llm_raw_guess"):
+        if isinstance(result.get(k), str) and len(result[k]) > MAX_TEXT:
+            result[k] = result[k][:MAX_TEXT] + "…"
+    result["rule_root_cause"] = rule_result.get("root_cause") if rule_result.get("confidence") == "rule" else None
+    return _enforce_structured(result, struct_text)
+
+
+def _norm(text: str) -> str:
+    """忽略大小寫、空白、引號和冒號（送給模型的事件格式是「reason: message」，原始資料是分開的兩個欄位）。"""
+    return " ".join(re.sub(r"[`\"':]", " ", str(text or "").lower()).split())
+
+
+def _evidence_found(evidence, context: dict) -> bool:
+    """模型引用的證據（至少 8 個字）要在 log、事件、狀態訊息裡找得到（不分大小寫、忽略空白和引號）。"""
+    # 送給模型的 log 去重後會加上「(x3)」次數標記（healer/logsift.sift），比對原文前拿掉
+    ev = _norm(re.sub(r"\s*\(x\d+\)\s*$", "", str(evidence or "")))
+    if len(ev) < 8:
+        return False
+    hay = _norm("\n".join([str(context.get("logs") or ""), str(context.get("message") or ""),
+                           str(context.get("reason") or ""),
+                           *(f"{e.get('reason') or ''} {e.get('message') or ''}" for e in context.get("events") or [])]))
+    return ev in hay
+
+
+def _enforce_structured(result: dict, struct_text: str) -> dict:
+    """2026-11-25（Healer 方案 0.4）：會改叢集的動作（不管是規則還是模型給的）一定要有 K8s 結構化證據，
+    否則降成「人工檢查」，原因文字保留。HEALER_GUARD=0 時不檢查（對照實驗用）。"""
+    from healer import guard
+    action = result.get("action")
+    result["struct_excerpt"] = (struct_text or "")[:500]   # 補救時判斷 Docker Hub 限流（429）用
+    if guard.enabled() and action in guard.AUTO_ACTIONS and not guard.supports(action, struct_text):
+        result["blocked_action"] = action
+        result["action"] = "manual_inspect"
+        result["auto_blocked"] = "只有容器 log 提到這個問題，K8s 的狀態和事件沒有證據，不自動修改設定"
+    return result
 
 
 # ══════════════════════════════════════════════════════════════════
 # 內部：規則型分析
 # ══════════════════════════════════════════════════════════════════
 
-def _rule_analyze(text: str, reason: str) -> dict:
-    """用正規表示式快速比對已知錯誤模式。"""
-    for pattern, root_cause, action, severity in _RULE_PATTERNS:
-        if re.search(pattern, text, re.IGNORECASE):
+def _rule_analyze(text: str, reason: str, struct_text: str = None) -> dict:
+    """用正規表示式快速比對已知錯誤模式。struct_text：K8s 自己產生的文字（不含 log）；
+    有給而且 HEALER_GUARD 開著時，自動規則只比對它（2026-11-25，Healer 方案 0.4）。"""
+    from healer import guard
+    strict = struct_text is not None and guard.enabled()
+    for pattern, root_cause, action, severity, auto in _RULE_PATTERNS:
+        if re.search(pattern, struct_text if (auto and strict) else text, re.IGNORECASE):
             return {
                 "reason"    : reason,
-                "root_cause": root_cause,
+                "root_cause": root_cause + _exit_code_note(struct_text if struct_text is not None else text, action),
                 "severity"  : severity,
                 "action"    : action,
                 "suggestion": _action_to_suggestion(action),
@@ -256,6 +343,19 @@ def _rule_analyze(text: str, reason: str) -> dict:
     }
 
 
+def _exit_code_note(text: str, action: str) -> str:
+    """結束碼的意思（Healer 方案階段 2 的結束碼分類）。137 不一定是記憶體不足。"""
+    m = re.search(r"exitcode (-?\d+)", text or "")
+    if not m:
+        return ""
+    code = int(m.group(1))
+    if code == 137 and action != "increase_memory" and "oomkill" not in (text or ""):
+        return "。結束碼 137 是被系統強制結束，但沒有 OOMKilled 紀錄，比較可能是健康檢查失敗被重啟或被驅逐，不一定是記憶體不足"
+    if code in (1, 2) and action in ("analyze_logs", "manual_inspect", "check_dependencies"):
+        return f"。結束碼 {code} 是程式自己回報錯誤結束，原因通常寫在 log 最後幾行"
+    return ""
+
+
 def _action_to_suggestion(action: str) -> str:
     # 2026-10-09：建議都寫成平台裡就做得到的事，不叫使用者開終端機打 kubectl（零接觸定位）
     _map = {
@@ -267,6 +367,8 @@ def _action_to_suggestion(action: str) -> str:
         "create_config"     : "缺少需要的設定檔或密碼（ConfigMap、Secret），請確認部署時有一起建立。",
         "fix_probe"         : "健康檢查太早開始，應用程式還沒啟動完就被判定失敗，可以把啟動等待時間加長。",
         "fix_port_conflict" : "Port 可能設錯，或被其他程式占用。請到服務詳情確認 Port。",
+        "fix_command"       : "啟動指令可能打錯，或這個映像檔不是常駐服務（跑完就結束）。請確認映像檔和啟動指令；只是要定時跑一次的工作，請改用「定時執行」。",
+        "tune_heap"         : "Java 請調整 -Xmx（或 JAVA_TOOL_OPTIONS），Node.js 請加 --max-old-space-size；只加容器的記憶體上限沒有用。也可能是程式有記憶體洩漏。",
         "manual_inspect"    : "自動判斷不出原因。請看 Pod 詳情裡的「最近的 log」和「最近事件」，通常會寫出錯在哪裡。",
     }
     return _map.get(action, "請看 Pod 詳情裡的「最近的 log」和「最近事件」，通常會寫出錯在哪裡。")
@@ -287,15 +389,31 @@ def _llm_analyze(context: dict) -> dict:
         return None
 
     reason = context.get("reason", "Unknown")
+    # 2026-11-25（Healer 方案階段 4）：送給模型的內容先整理——log 去重＋挑重點、附一篇處理手冊摘要、
+    # 同一服務過去的修法（只有結構化欄位）。規則層與證據檢查仍然用原始 log。
+    ctx = dict(context)
+    query = " ".join([str(reason), str(context.get("message") or ""),
+                      *(str(e.get("reason") or "") for e in context.get("events") or [])])
     try:
-        diag = diagnose_with_llm(context)
+        from healer import logsift
+        ctx["logs"] = logsift.sift(str(context.get("logs") or ""), query)
+        book = logsift.pick_runbook(query + " " + ctx["logs"][-400:])
+        if book:
+            ctx["runbook"] = book["summary"]
+    except Exception:  # noqa: BLE001
+        book = None
+    history = context.get("history") or past_fixes(context.get("namespace"), context.get("deployment"))
+    if history:
+        ctx["history"] = history
+    try:
+        diag = diagnose_with_llm(ctx)
     except Exception:
         diag = None
 
     if not isinstance(diag, dict) or not diag.get("root_cause"):
         return None
 
-    return {
+    out = {
         "reason"    : reason,
         "root_cause": diag.get("root_cause", "LLM 分析完成但無法取得根因"),
         "severity"  : diag.get("severity", "unknown"),
@@ -303,7 +421,42 @@ def _llm_analyze(context: dict) -> dict:
         "suggestion": diag.get("suggestion", ""),
         "confidence": "llm",
         "raw_llm"   : diag.get("raw", ""),
+        "history"   : history or None,
+        "runbook"   : book["name"] if book else None,
     }
+    if "evidence" in diag:
+        out["evidence"] = diag.get("evidence") or ""
+    return out
+
+
+_PAST_LABELS = {"increase_memory": "調高記憶體", "fix_image": "退回映像檔", "fix_probe": "調整健康檢查",
+                "analyze_logs": "重建 Pod", "revert_recent_change": "退回剛才的更新", "rollback": "退回修復"}
+_PAST_RESULT = {"ok": "驗證通過", "fail": "沒有修好", "stopped": "已停手", "pending": "等待驗證"}
+
+
+def past_fixes(namespace, app, records=None, limit: int = 3) -> str:
+    """2026-11-25（Healer 方案階段 4.4）：同一個 namespace、同一個服務最近的自動修復，整理成一行給模型參考。
+    只用結構化欄位（動作代碼、驗證結果），不放 log 和模型原文（避免被當成可以持久化的注入）。"""
+    if not namespace or not app:
+        return ""
+    if records is None:
+        try:
+            import time as _t
+            from core import event_store
+            records = event_store.query(namespace, since=_t.time() - 7 * 86400, kinds=["heal"])
+        except Exception:  # noqa: BLE001
+            return ""
+    items = []
+    for r in records or []:
+        d = r.get("data") or {}
+        if r.get("app") != app or d.get("action") not in _PAST_LABELS:
+            continue
+        v = d.get("verify")
+        if v == "pending":
+            continue   # 動手當下那筆；之後會有一筆驗證結果
+        res = _PAST_RESULT.get(v) if v else ("已處理（沒有驗證）" if r.get("outcome") == "ok" else "失敗")
+        items.append(f"{_PAST_LABELS[d['action']]}→{res}")
+    return ("上次：" + "；".join(items[-limit:])) if items else ""
 
 
 # ══════════════════════════════════════════════════════════════════

@@ -235,8 +235,21 @@ STORAGE_LIMIT_NOTICE = "保存空間上限："
 _BIG_DATA_HINT = re.compile(r"影片|影音|錄影|video|照片|相片|photo|備份|backup|\d+\s*(?:G|GB|T|TB)\b|很大|大檔|大量", re.I)
 
 
+# 2026-11-25：靜態網頁伺服器不掛保存空間。資料夾就是網頁本身（/usr/share/nginx/html、htdocs），
+# 掛上一塊空的保存空間會蓋掉使用者打包好的網頁 → 403、容器一直重啟（使用者實測：看到「報名」就推論要保存資料）
+STATIC_WEB_IMAGES = {"nginx", "httpd"}
+STATIC_WEB_STORAGE_NOTICE = ("這次沒有掛保存空間：nginx／httpd 會直接提供資料夾裡的網頁，掛上空的保存空間會蓋掉你打包好的網頁"
+                             "（打開會出現 403）。網頁請打包進映像檔；如果需要讓人上傳或保存資料（例如報名資料），"
+                             "請改用表單、部落格或檔案分享這類軟體")
+
+
 def _apply_storage(spec: Dict, e: Dict, image: str) -> None:
     man = spec["manifest"]
+    if defaults.name(image) in STATIC_WEB_IMAGES:
+        # dropped＋final：回答問題卡後也不會重新掛上；評估的 to_pred 也不會算成有保存空間
+        e["status"], e["note"], e["final"] = "dropped", "靜態網頁伺服器不掛保存空間", True
+        schema.add_notice(spec, STATIC_WEB_STORAGE_NOTICE)
+        return
     path = defaults.data_path(image)
     if not path:
         e["status"], e["note"] = "unsupported", f"不知道 {image or '這個軟體'} 的資料存在哪個資料夾"

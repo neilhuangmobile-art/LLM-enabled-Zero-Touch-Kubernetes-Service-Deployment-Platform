@@ -2099,3 +2099,44 @@ Docker Hub 對照映像檔，Gemini 改寫中文情境）、`scripts/rag/fetch_k
   - `PIPELINE_REASON_SIZING` 評估進行中，還沒結論。s40：77.8%→83.3%；perturb：極短句 −13 個百分點。
   - 新增 `tests/test_tier_resources.py`；完整 pytest 全過。
   - 細節：`docs/bench_record/2026-11-24_實驗結果與柏碩版本比較.md`、`docs/handoff/工作紀錄_2026-11-21至24_反問與準確率改善.md`。
+
+## 2026-11-25
+
+### 修復：「映像檔是 nginx:1.27」被當成換映像檔；nginx／httpd 不掛保存空間
+- **為什麼**：使用者實測回報。(1) 前端換映像檔規則的「換成／改成」可以省略，「部署 web 映像檔是 nginx:1.27」被判成把映像檔換成「是」，部署失敗；(2) 句子有「報名」就推論要保存資料，空的保存空間掛在 nginx 的網頁資料夾上，蓋掉打包好的網頁（403、一直重啟）。
+- **改了什麼**：`web_demo.py` 前後端 `update_image` 規則一定要有換成／改成／改為／更新成／更新為／to；`agents/pipeline/reasoner._apply_storage` 遇到 nginx、httpd 不掛保存空間，部署單說明原因（回答問題卡後也不會重新掛上）。
+- **驗證**：新增 `tests/test_user_reported_fixes.py`（23 項，前端規則直接從網頁原始碼取出來測）；用真實模型跑 4 句確認；完整 pytest 全過。
+
+### Healer 補強階段 0＋階段 1（`docs/healer_plan_20261120.md`，issue #2）
+- **為什麼**：方案查證的問題——只取 log 開頭（P13）、記憶體沒上限（P1）、用 Pod 名稱去重沒冷卻（P2）、容器 log 能決定自動動作（P3）、從 Pod 名稱猜服務（P4）、修完不驗證（P5）、subprocess 回滾（P7）、403 規則太寬（P9）、本機修復不寫 GitOps（P10）、平台 namespace 沒排除（P12）。
+- **改了什麼**：
+  - `core/model_server.py`：log 改取結尾 800 字（P13）。
+  - 新 `healer/guard.py`（`HEALER_GUARD`，預設開）：ownerReferences 找服務，不是 Deployment 只通知；去重改成 namespace/服務/問題類別，冷卻 10 分鐘、每個 namespace 每小時 10 次、連續 2 次修不好停手；記憶體上限 4Gi（和客戶叢集共用）、最多調 2 次、requests 依比例一起調、沒設上限不自動加；會改設定的動作只認 K8s 狀態與事件；只退回到曾經正常的映像檔（annotation），Docker Hub 限流（429）不退回；多副本才重建 Pod。
+  - 新 `healer/verify.py`（`HEALER_VERIFY`，預設開）：動手前快照＋server-side dry-run；修完非阻塞驗證（90 秒～5 分鐘，看更新完成、Pod 就緒 90 秒、修復後沒重啟、沒有新的錯誤事件）；沒好就退回快照，之後停手推播。
+  - 新 `gitops/heal_record.py`（`HEALER_GITOPS`，預設開）：本機自動修復與退回寫回 `manifests/<ns>/<app>/deployment.yaml` 並提交（`healer: <服務> <動作>`，不放模型文字）。
+  - `healer/diagnose.py`：規則分「自動／只通知」，自動規則只比對結構化文字；403 要搭配 forbidden／RBAC／serviceaccount；OOM 拿掉 `memory.*limit`。
+  - `core/config.py`：kube-system、kube-public、kube-node-lease、monitoring、flux-system、local-path-storage 一律不處理；`healer-eval-*` 只有評估程式能碰；default 只通知。
+  - `web_demo.py`：背景迴圈改用上面的保護與驗證；事件紀錄加上服務、改前改後、被擋下的動作、驗證、GitOps；記曾經正常的映像檔時跳過休眠喚醒器。
+  - 新 `experiments/healer_eval/`：在專用 namespace 注入 14 類故障＋對照組，依 K8s 狀態判定。
+- **驗證**：
+  - 開發題組 22 題：舊版 17/22 → 新版 22/22（只有新版對 5、只有舊版對 0，p=0.062）。舊版對程式錯誤重建 24～46 次、log 假 OOM 把記憶體加到 128Ti；新版都停手，該修的 5 題都修好而且驗證通過。
+  - 評估中發現並修正：更新卡住時把壞映像檔記成正常（健康判斷加上「沒有卡住的舊 Pod」）、崩潰的 reason 在 Error／CrashLoopBackOff 切換造成重複處理、評分程式同樣的漏洞（第一輪作廢重跑）。有 bug 的版本在網站上跑約 25 分鐘，在系統儲存元件與 8 個喚醒器寫了標記，已移除並排除。
+  - 新增 `tests/test_healer_guard.py`、`tests/test_healer_verify.py`（含 GitOps）；完整 pytest 全過。
+  - 細節：`docs/bench_record/2026-11-25_Healer階段0與1評估.md`、`docs/security_review.md` 第 70 節。
+
+### Healer 補強：診斷誤判、階段 2～5、客戶叢集驗證、限流還原（`docs/healer_plan_20261120.md`）
+- **為什麼**：階段 0＋1 之後剩下的待辦。缺 ConfigMap 被診斷成映像檔問題；Pending、沒就緒、Service 連不到、更新卡住等新手常見問題偵測不到；客戶叢集修完沒有驗證；冷卻和停手狀態網站重啟就歸零。
+- **改了什麼**：
+  - `healer/diagnose.py`：事件一行一個（原本串成一行，規則會跨事件比中）；設定檔規則排在映像檔前面；新增 `fix_command`（指令找不到、exit 0）、`tune_heap`（JVM／Node heap 用完），都只通知；結束碼說明（137 不一定是 OOM）。`pod_watcher` 在 CrashLoopBackOff 時帶上一次的結束碼與原因。
+  - 新 `healer/detect.py`（`HEALER_DETECT`）：9 種擴大偵測，只記錄＋推播建議。休眠中與副本數 0 的服務不報。
+  - 階段 3（`HEALER_REVERT_RECENT`，使用者同意自動）：30 分鐘內剛更新、更新後崩潰或設定錯誤 → 整個 Pod 範本退回到最後一個全部可用過的版本，通知「已退回你剛才的更新」，照樣驗證與寫 GitOps。啟動太慢改成新增 startupProbe（最多等 300 秒），不再把每個探針的等待時間加 30 秒。
+  - 階段 4：新 `healer/logsift.py`（log 去重＋BM25 挑重點）、`healer/runbooks/`（12 篇處理手冊，附官方網址）；`core/model_server.py` 的診斷提示詞要求模型引用證據原文，程式檢查有沒有出現；同一服務過去的修法（只用結構化欄位）給模型參考；推播只用規則層的固定文字；模型文字限 300 字。**model server 要重啟才生效。**
+  - 階段 5：定時執行預設帶 `podFailurePolicy`（exit 126／127 直接失敗、被驅逐不算重試），`restartPolicy` 改成 `Never`（只影響新部署的）。Pod 原地調整決定不做（原因寫在方案文件）。
+  - 新 `cluster/remote_verify.py`（`HEALER_REMOTE_VERIFY`）：客戶叢集修正送出後，用回報器資料確認已同步且健康 90 秒；10 分鐘沒好就退回（設定還是 Healer 改的值才退）並停手。`remote_ops.heal` 和本機共用：單副本不重新啟動、記憶體最多調 2 次、沒設上限不自動加。
+  - `healer/guard.Limiter.restore`：網站啟動時從事件紀錄還原冷卻、每小時額度、停手狀態（事件紀錄多存一個 key）。
+  - `healer/verify.py`：退回一律整個物件取代；startupProbe 啟動期間的失敗事件不算修壞（兩個都是評估時發現的 bug）。
+  - 評估：`faults.py` 新增 13 題；`run_eval.py` 加上擴大偵測判定、`--faults` 外部盲測題組；新 `BLIND_GUIDE.md` 給出盲測題的組員。
+- **驗證**：
+  - 開發題組 35 題最終版 35/35：該修的 7 題都驗證通過、9 題擴大偵測都報對、對照組沒有誤報、修壞 0。
+  - 新增 `tests/test_healer_detect.py`、`test_healer_stage3.py`、`test_healer_logsift.py`、`test_healer_evidence.py`、`test_remote_verify.py`、`test_cronjob_policy.py`；兩個客戶叢集測試改成 2 個副本（單副本現在只通知）；完整 pytest 全過。
+  - 細節：`docs/bench_record/2026-11-25_Healer階段2到5評估.md`、`docs/security_review.md` 第 71 節。

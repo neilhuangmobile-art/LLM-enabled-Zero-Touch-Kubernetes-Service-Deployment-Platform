@@ -296,8 +296,21 @@ def test_writes_blocked_when_cluster_offline(remote):
     assert remote.repo.calls == []
 
 
+def _api_two_replicas(monkeypatch):
+    """2026-11-25（Healer 補強方案，和本機共用的權限表）：客戶叢集只有一個副本的服務不重新啟動，只通知。
+    這兩個測試要測的是「重新啟動走 Git」與冷卻，所以把 api 改成 2 個副本。單副本的行為見 tests/test_remote_verify.py。"""
+    orig = web_demo._remote_report
+
+    def rep(ns):
+        r = orig(ns)
+        r["deployments"] = [{**d, "replicas": 2} if d["name"] == "api" else d for d in r.get("deployments") or []]
+        return r
+    monkeypatch.setattr(web_demo, "_remote_report", rep)
+
+
 def test_heal_pod_goes_through_git(remote, monkeypatch):
     import healer.diagnose as hd
+    _api_two_replicas(monkeypatch)
     monkeypatch.setattr(hd, "diagnose_issue", lambda ctx: {"action": "analyze_logs", "root_cause": "crash"})
     r = remote.post("/api/healer/fix", json={"pod_name": "api-xyz-1"}).get_json()
     assert r["success"], r
@@ -323,6 +336,7 @@ def test_app_from_commit_message():
 def test_heal_cooldown_prevents_stacked_fixes(remote, monkeypatch):
     """修復 commit 後到叢集同步前，回報裡還看得到同一個問題：第二次（手動或背景迴圈）不能再動手。"""
     import healer.diagnose as hd
+    _api_two_replicas(monkeypatch)
     monkeypatch.setattr(hd, "diagnose_issue", lambda ctx: {"action": "analyze_logs", "root_cause": "crash"})
     first = remote.post("/api/healer/fix", json={"pod_name": "api-xyz-1"}).get_json()
     second = remote.post("/api/healer/fix", json={"pod_name": "api-xyz-1"}).get_json()

@@ -76,6 +76,8 @@ SETS = {"scenario": "dev_scenario.jsonl", "claude": "dev_claude.jsonl",
         "k8s40": "k8s40_20261124.jsonl",
         # 2026-11-24：使用者在對話中貼上的另一份 40 題（S01 麵包店…），S33 的引號已跳脫
         "k8s40b": "k8s40b_20261124.jsonl",
+        # 2026-11-24：Claude 依使用者要求出的 50 題（新手／情境／老手、含雜訊）；出題者知道系統弱點，不算獨立驗證
+        "gen50": "gen50_20261124.jsonl",
         # 2026-11-23：柏碩 11-18 打包的題組（zt_testsets_20261118.zip）。s40＝組員原本的 S01～S40（repo 裡已有同內容）；
         # perturb＝dev_scenario／dev_claude 各題的錯字、極短、囉嗦、中英夾雜改寫，標準答案沿用原題
         "s40": "../../experiments/model_select/reason/testset_s.jsonl", "perturb": "dev_perturb.jsonl"}

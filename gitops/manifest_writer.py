@@ -331,9 +331,17 @@ def build_cronjob_doc(llm_result: dict, namespace: str) -> dict:
                     "backoffLimit": 2,
                     "activeDeadlineSeconds": MAX_RUN_SECONDS,
                     "ttlSecondsAfterFinished": 86400,
+                    # 2026-11-25（Healer 方案階段 5）：依結束碼決定要不要重試。指令找不到或不能執行（126／127）
+                    # 重試也一樣，直接判定失敗；被驅逐、被搶占（DisruptionTarget）不是程式的錯，不算進重試次數。
+                    # podFailurePolicy 需要 restartPolicy: Never（原本 OnFailure）：每次重試是新的 Pod，失敗的那次 log 也留得住。
+                    "podFailurePolicy": {"rules": [
+                        {"action": "FailJob", "onExitCodes": {"containerName": app_name, "operator": "In",
+                                                              "values": [126, 127]}},
+                        {"action": "Ignore", "onPodConditions": [{"type": "DisruptionTarget"}]},
+                    ]},
                     "template": {
                         "metadata": {"labels": {"app": app_name}},
-                        "spec": {"restartPolicy": "OnFailure", "containers": [container],
+                        "spec": {"restartPolicy": "Never", "containers": [container],
                                  **({"volumes": _vols} if _vols else {})},
                     },
                 },

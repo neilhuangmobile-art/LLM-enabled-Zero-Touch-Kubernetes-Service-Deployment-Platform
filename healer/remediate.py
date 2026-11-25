@@ -66,12 +66,47 @@ def remediate(issue: dict, diagnosis: dict, dry_run: bool = False) -> dict:
           f"（Pod: {namespace}/{pod_name}, 嚴重度: {severity}）"
           + ("  [dry-run]" if dry_run else ""))
 
+    # 2026-11-25（Healer 方案 0.1）：會改叢集的動作先確認上層控制器真的是 Deployment；
+    # StatefulSet、Job、DaemonSet、沒有 owner 的 Pod 只通知不動手（原本用 Pod 名稱猜，會改到別的服務）
+    from healer import guard
+    # 2026-11-25（Healer 方案階段 3.1，使用者同意自動）：崩潰或設定錯誤，而且 30 分鐘內剛更新過 → 先退回最後一個
+    # 正常運作過的版本。依 issue 的 K8s reason 決定（結構化證據），不看 log；default 這類只通知的 namespace 不做。
+    wants_revert = (not dry_run and guard.revert_recent_enabled()
+                    and guard.problem_class(issue.get("reason")) in ("crash", "config")
+                    and not guard.notify_only_namespace(namespace))
+    if not dry_run and guard.enabled() and (action in guard.AUTO_ACTIONS or wants_revert):
+        owner = _resolve_owner(issue)
+        if owner.get("kind") != "Deployment" and action not in guard.AUTO_ACTIONS:
+            owner, wants_revert = None, False   # 不是一般服務：不退回，照原本的只通知流程
+        elif owner.get("kind") != "Deployment":
+            kind = owner.get("kind") or "沒有上層控制器"
+            result = {"ok": True, "action": "manual_inspect", "blocked_action": action,
+                      "message": (f"「{pod_name}」不是由一般服務（Deployment）管理的（{kind}），自動修復可能改到別的東西，"
+                                  f"所以只通知、不動手。診斷建議：{diagnosis.get('suggestion', '')}")}
+            result.setdefault("timestamp", datetime.utcnow().isoformat())
+            _log_remediation(pod_name, namespace, action, result)
+            return result
+        if owner:
+            issue = {**issue, "deployment": owner["name"]}
+    if wants_revert and issue.get("deployment"):
+        r = _guarded_revert_recent(issue)
+        if r is not None:
+            r.setdefault("timestamp", datetime.utcnow().isoformat())
+            r["diagnosed_action"] = action
+            r["problem_key"] = guard.Limiter.key(namespace, issue["deployment"], guard.problem_class(issue.get("reason")))
+            _log_remediation(pod_name, namespace, "revert_recent_change", r)
+            return r
+
     # 根據 action 分派
     handler = _ACTION_HANDLERS.get(action, _handle_manual_inspect)
     result  = handler(issue, diagnosis, dry_run)
 
     result.setdefault("action",    action)
     result.setdefault("timestamp", datetime.utcnow().isoformat())
+    if issue.get("deployment"):
+        # 事件紀錄帶上限流用的 key，網站重啟後才能重建冷卻與停手狀態（guard.Limiter.restore）
+        result.setdefault("problem_key", guard.Limiter.key(namespace, issue["deployment"],
+                                                           guard.problem_class(issue.get("reason"))))
 
     _log_remediation(pod_name, namespace, action, result)
     return result
@@ -99,6 +134,14 @@ def _handle_analyze_logs(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
     try:
         _load_k8s_config()
         v1 = k8s_client.CoreV1Api()
+        from healer import guard
+        if guard.enabled() and issue.get("deployment"):
+            # 2026-11-25（Healer 方案權限表）：只有多副本才重建；單副本重建會停機，而且反覆崩潰多半是程式本身的錯
+            dep = k8s_client.AppsV1Api().read_namespaced_deployment(issue["deployment"], namespace)
+            if (dep.spec.replicas or 0) <= 1:
+                return {"ok": True, "action": "manual_inspect", "blocked_action": "analyze_logs",
+                        "message": (f"{issue['deployment']} 只有一個副本，重建 Pod 會讓服務中斷，而且反覆崩潰多半是程式本身的錯，"
+                                    "所以只通知、不重建。請看 Pod 詳情裡「最近的 log」找原因。")}
 
         # 取崩潰前日誌
         try:
@@ -112,6 +155,8 @@ def _handle_analyze_logs(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
 
         # 刪除 Pod（Deployment 會自動重建）
         v1.delete_namespaced_pod(name=pod_name, namespace=namespace)
+        if issue.get("deployment"):
+            _register_verify(issue, "analyze_logs", None, rollback_allowed=False)
         return {
             "ok"     : True,
             "message": f"已刪除 Pod {pod_name}，Deployment 控制器將自動重建",
@@ -141,6 +186,10 @@ def _handle_fix_image(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
 
     if not K8S_AVAILABLE:
         return {"ok": False, "message": "kubernetes 套件未安裝，無法執行自動補救"}
+
+    from healer import guard
+    if guard.enabled() and issue.get("deployment"):
+        return _guarded_fix_image(issue, diagnosis)
 
     try:
         _load_k8s_config()
@@ -248,6 +297,143 @@ def _handle_fix_image(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
         return {"ok": False, "message": f"回滾時發生錯誤：{e}"}
 
 
+def _guarded_fix_image(issue: dict, diagnosis: dict) -> dict:
+    """2026-11-25（Healer 方案 P7）：只退回到「曾經正常運作過」的映像檔（背景迴圈看到服務全部可用時記在
+    annotation），用 Python client patch（原本用 subprocess 執行 kubectl，可能和 Python client 指向不同叢集）。
+    Docker Hub 限流（429）時映像檔本身沒問題，不退回。"""
+    from healer import guard
+    from healer.verify import apply_patch, SkipPatch
+    namespace, name = issue["namespace"], issue["deployment"]
+    struct = " ".join([str(issue.get("message") or ""), str(diagnosis.get("struct_excerpt") or "")])
+    if guard.rate_limited_pull(struct):
+        return {"ok": True, "action": "manual_inspect", "blocked_action": "fix_image",
+                "message": "映像檔下載被 Docker Hub 限流（429 Too Many Requests），映像檔本身沒有問題，所以不退回版本；"
+                           "過一陣子會自動重試，或改用有登入的映像檔倉庫。"}
+    _load_k8s_config()
+    apps = k8s_client.AppsV1Api()
+
+    def mutate(d):
+        good = (d.metadata.annotations or {}).get(guard.ANN_LAST_GOOD_IMAGE)
+        cs = d.spec.template.spec.containers or []
+        c = next((x for x in cs if x.name == issue.get("container")), cs[0] if cs else None)
+        if not c:
+            raise SkipPatch("找不到容器設定")
+        if not good:
+            raise SkipPatch(f"{name} 沒有「曾經正常運作過」的映像檔紀錄，沒辦法自動退回。目前的映像檔是 {c.image}，"
+                            "最可能是 tag 打錯或不存在，或是私有映像檔需要登入。請在「我的服務」改成正確的映像檔。")
+        if good == c.image:
+            raise SkipPatch(f"目前的映像檔 {c.image} 曾經正常運作過，問題可能是映像檔倉庫暫時連不上或需要登入，"
+                            "退回版本沒有幫助。請看 Pod 詳情裡的事件。")
+        old = c.image
+        c.image = good
+        return {"container": c.name, "old_image": old, "new_image": good}
+
+    r = apply_patch(apps, namespace, name, mutate)
+    if r.get("skipped") or not r.get("ok"):
+        return {"ok": bool(r.get("skipped")), "action": "manual_inspect" if r.get("skipped") else "fix_image",
+                "blocked_action": "fix_image" if r.get("skipped") else None, "message": r["message"]}
+    ch = r["change"]
+    _register_verify(issue, "fix_image", r["snapshot"], rollback_allowed=True)
+    gitops = _record_gitops(issue, "fix_image")
+    return {"ok": True, "message": f"已把 {name} 的映像檔從 {ch['old_image']} 退回到曾經正常運作的 {ch['new_image']}，接下來會確認有沒有修好",
+            "details": {"old": ch["old_image"], "new": ch["new_image"]}, "verify_pending": True, "gitops": gitops}
+
+
+def _guarded_revert_recent(issue: dict) -> Optional[dict]:
+    """階段 3.1：30 分鐘內剛更新過、更新後開始崩潰 → 整個 Pod 範本退回到最後一個全部可用過的版本
+    （背景迴圈記在 annotation zerotouch.k8s/last-good-template）。不符合條件回傳 None，讓原本的處理接手。
+    跟其他自動修復一樣：dry-run、快照、驗證（失敗就換回快照）、寫 GitOps；通知寫明退回了使用者的更新。"""
+    import copy
+    from healer import guard
+    from healer.verify import apply_patch, SkipPatch
+    namespace, name = issue["namespace"], issue["deployment"]
+    try:
+        _load_k8s_config()
+        apps = k8s_client.AppsV1Api()
+        replica_sets = apps.list_namespaced_replica_set(namespace).items
+    except Exception as e:  # noqa: BLE001
+        print(f"   ⚠️  查不到版本紀錄，不退回：{e}")
+        return None
+
+    def mutate(d):
+        target, why = guard.recent_change_plan(d, replica_sets)
+        if target is None:
+            raise SkipPatch(why)
+        cur = guard.current_replica_set(d, replica_sets)
+        tmpl = copy.deepcopy(target.spec.template)
+        labels = dict(tmpl.metadata.labels or {})
+        labels.pop("pod-template-hash", None)
+        tmpl.metadata.labels = labels
+        old_imgs = [c.image for c in d.spec.template.spec.containers or []]
+        d.spec.template = tmpl
+        return {"old_image": ", ".join(old_imgs), "new_image": ", ".join(c.image for c in tmpl.spec.containers or []),
+                "from_revision": (cur.metadata.annotations or {}).get(guard.ANN_REVISION) if cur else None,
+                "to_revision": (target.metadata.annotations or {}).get(guard.ANN_REVISION)}
+
+    r = apply_patch(apps, namespace, name, mutate, replace=True)
+    if r.get("skipped"):
+        print(f"   ↪ 不退回最近的更新：{r['message']}")
+        return None
+    if not r.get("ok"):
+        return {"ok": False, "action": "revert_recent_change", "message": r["message"]}
+    ch = r["change"]
+    from healer import verify
+    key = guard.Limiter.key(namespace, name, guard.problem_class(issue.get("reason")))
+    verify.PENDING.register(key, namespace, name, "revert_recent_change", r["snapshot"], True, full_template=True)
+    gitops = _record_gitops(issue, "revert_recent_change")
+    what = (f"映像檔 {ch['old_image']} → {ch['new_image']}" if ch["old_image"] != ch["new_image"]
+            else f"版本 {ch['from_revision']} → {ch['to_revision']}")
+    return {"ok": True, "action": "revert_recent_change", "verify_pending": True, "gitops": gitops,
+            "message": (f"{name} 在剛才的更新之後開始出問題，已退回你剛才的更新（{what}），回到最後一個正常運作過的版本。"
+                        "接下來會確認有沒有修好；要再更新，請先修正問題。"),
+            "details": {"old": ch["old_image"], "new": ch["new_image"], "from_revision": ch["from_revision"],
+                        "to_revision": ch["to_revision"]}}
+
+
+def _guarded_increase_memory(issue: dict, diagnosis: dict) -> dict:
+    """2026-11-25（Healer 方案 0.3）：上限 4Gi（和客戶叢集共用）、同一服務最多 2 次、requests 依比例一起調
+    （保持 QoS 類別）、沒設上限的不自動加。先 dry-run、存快照、登記驗證。"""
+    from healer import guard
+    from healer.verify import apply_patch, SkipPatch
+    namespace, name = issue["namespace"], issue["deployment"]
+    _load_k8s_config()
+    apps = k8s_client.AppsV1Api()
+
+    def mutate(d):
+        cs = d.spec.template.spec.containers or []
+        c = next((x for x in cs if x.name == issue.get("container")), cs[0] if cs else None)
+        if not c:
+            raise SkipPatch("找不到容器設定")
+        res = c.resources or k8s_client.V1ResourceRequirements()
+        limit = (res.limits or {}).get("memory")
+        request = (res.requests or {}).get("memory")
+        plan, why = guard.plan_memory_bump(limit, request, guard.memory_bumps(d))
+        if not plan:
+            raise SkipPatch(why)
+        res.limits = {**(res.limits or {}), "memory": plan["limit"]}
+        if plan["request"]:
+            res.requests = {**(res.requests or {}), "memory": plan["request"]}
+        c.resources = res
+        ann = dict(d.metadata.annotations or {})
+        ann[guard.ANN_MEMORY_BUMPS] = str(guard.memory_bumps(d) + 1)
+        d.metadata.annotations = ann
+        return {"container": c.name, **plan}
+
+    r = apply_patch(apps, namespace, name, mutate)
+    if r.get("skipped"):
+        return {"ok": True, "action": "manual_inspect", "blocked_action": "increase_memory",
+                "message": f"{name} 記憶體不足，但{r['message']}。"}
+    if not r.get("ok"):
+        return {"ok": False, "message": r["message"]}
+    ch = r["change"]
+    _register_verify(issue, "increase_memory", r["snapshot"], rollback_allowed=True)
+    gitops = _record_gitops(issue, "increase_memory")
+    req = f"，保留量 {ch['old_request']} → {ch['request']}" if ch.get("request") else ""
+    return {"ok": True, "message": f"已把 {name} 的記憶體上限從 {ch['old_limit']} 調到 {ch['limit']}{req}，接下來會確認有沒有修好",
+            "details": {"old": ch["old_limit"], "new": ch["limit"], "old_request": ch.get("old_request"),
+                        "new_request": ch.get("request")}, "verify_pending": True, "gitops": gitops}
+
+
 def _handle_increase_memory(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
     """
     OOMKilled — 將 Deployment 的記憶體 Limit 翻倍。
@@ -269,6 +455,10 @@ def _handle_increase_memory(issue: dict, diagnosis: dict, dry_run: bool) -> dict
 
     if not K8S_AVAILABLE:
         return {"ok": False, "message": "kubernetes 套件未安裝"}
+
+    from healer import guard
+    if guard.enabled() and issue.get("deployment"):
+        return _guarded_increase_memory(issue, diagnosis)
 
     try:
         _load_k8s_config()
@@ -369,6 +559,10 @@ def _handle_fix_probe(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
     if not K8S_AVAILABLE:
         return {"ok": False, "message": "kubernetes 套件未安裝"}
 
+    from healer import guard
+    if guard.enabled() and issue.get("deployment"):
+        return _guarded_fix_probe(issue)
+
     try:
         _load_k8s_config()
         apps_v1 = k8s_client.AppsV1Api()
@@ -409,6 +603,80 @@ def _handle_fix_probe(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
         }
     except Exception as e:
         return {"ok": False, "message": f"調整探針失敗：{e}"}
+
+
+ANN_PROBE_ADJUSTED = "zerotouch.k8s/healer-probe-adjusted"
+STARTUP_ALLOW_S = 300       # startupProbe 最多等 5 分鐘
+STARTUP_PERIOD_S = 10
+
+
+def startup_probe_plan(c) -> Optional[str]:
+    """有 startupProbe：把 failureThreshold 放大到能等 STARTUP_ALLOW_S 秒；沒有：照 liveness（沒有就 readiness）的
+    檢查方式新增一個。回傳說明文字，沒有可以參考的探針回傳 None。直接改 c。"""
+    import copy
+    sp = getattr(c, "startup_probe", None)
+    if sp is not None:
+        period = sp.period_seconds or STARTUP_PERIOD_S
+        need = -(-STARTUP_ALLOW_S // period)
+        old = sp.failure_threshold or 3
+        if old >= need:
+            return None
+        sp.failure_threshold = need
+        return f"startupProbe 最多等 {old * period}s→{need * period}s"
+    base = getattr(c, "liveness_probe", None) or getattr(c, "readiness_probe", None)
+    if base is None:
+        return None
+    sp = copy.deepcopy(base)
+    sp.initial_delay_seconds = base.initial_delay_seconds or 0
+    sp.period_seconds = STARTUP_PERIOD_S
+    sp.failure_threshold = -(-STARTUP_ALLOW_S // STARTUP_PERIOD_S)
+    sp.success_threshold = 1
+    c.startup_probe = sp
+    return f"新增 startupProbe（啟動最多等 {sp.failure_threshold * STARTUP_PERIOD_S}s，啟動完才開始健康檢查）"
+
+
+def _guarded_fix_probe(issue: dict) -> dict:
+    """2026-11-25（Healer 方案權限表）：探針只自動調一次（port 設錯就改成正確 port，否則等待時間 +30 秒），
+    先 dry-run、存快照、登記驗證。"""
+    from healer.verify import apply_patch, SkipPatch
+    namespace, name, container = issue["namespace"], issue["deployment"], issue.get("container", "")
+    _load_k8s_config()
+    apps = k8s_client.AppsV1Api()
+
+    def mutate(d):
+        if (d.metadata.annotations or {}).get(ANN_PROBE_ADJUSTED):
+            raise SkipPatch("健康檢查已經自動調整過一次，不再重複調整")
+        fixes, delays = [], []
+        for c in d.spec.template.spec.containers or []:
+            if container and c.name != container:
+                continue
+            fixes += _fix_probe_ports(c)
+        if not fixes:
+            # 2026-11-25（Healer 方案階段 3.2）：啟動太慢改用 startupProbe，不再把每個探針的 initialDelaySeconds 加 30。
+            # 官方建議 failureThreshold × periodSeconds 要涵蓋最慢的啟動時間；啟動期間 liveness 不會跑，啟動後照常檢查。
+            for c in d.spec.template.spec.containers or []:
+                if container and c.name != container:
+                    continue
+                plan = startup_probe_plan(c)
+                if plan:
+                    delays.append(plan)
+        if not fixes and not delays:
+            raise SkipPatch("找不到健康檢查設定")
+        d.metadata.annotations = {**(d.metadata.annotations or {}), ANN_PROBE_ADJUSTED: datetime.utcnow().isoformat()}
+        return {"ports": fixes, "delays": delays}
+
+    r = apply_patch(apps, namespace, name, mutate)
+    if r.get("skipped"):
+        return {"ok": True, "action": "manual_inspect", "blocked_action": "fix_probe", "message": f"{name}：{r['message']}。"}
+    if not r.get("ok"):
+        return {"ok": False, "message": r["message"]}
+    ch = r["change"]
+    _register_verify(issue, "fix_probe", r["snapshot"], rollback_allowed=True)
+    gitops = _record_gitops(issue, "fix_probe")
+    what = ("健康檢查 port 設錯，已改成容器實際監聽的 port（" + "、".join(ch["ports"]) + "）") if ch["ports"] \
+        else ("啟動比較慢，已放寬啟動時間（" + "、".join(ch["delays"]) + "）")
+    return {"ok": True, "message": f"{name}：{what}，接下來會確認有沒有修好",
+            "details": {"old": None, "new": ch}, "verify_pending": True, "gitops": gitops}
 
 
 def _handle_check_dependencies(issue: dict, diagnosis: dict, dry_run: bool) -> dict:
@@ -578,6 +846,40 @@ def _load_k8s_config():
         k8s_config.load_incluster_config()
     except Exception:
         k8s_config.load_kube_config()
+
+
+def _resolve_owner(issue: dict) -> dict:
+    """呼叫端（背景迴圈、評估程式）已經查過就直接用；沒有就讀 Pod 的 ownerReferences（Healer 方案 0.1）。"""
+    if issue.get("owner_kind"):
+        return {"kind": issue["owner_kind"], "name": issue.get("deployment")}
+    if not K8S_AVAILABLE:
+        return {"kind": None, "name": None}
+    try:
+        from healer import guard
+        _load_k8s_config()
+        pod = k8s_client.CoreV1Api().read_namespaced_pod(issue["pod_name"], issue["namespace"])
+        return guard.resolve_owner(pod, k8s_client.AppsV1Api())
+    except Exception:  # noqa: BLE001
+        return {"kind": None, "name": None}
+
+
+def _register_verify(issue: dict, action: str, snap, rollback_allowed: bool) -> None:
+    """動手之後登記「待驗證」，背景迴圈下一輪起檢查（Healer 方案階段 1）。key 和背景迴圈的去重 key 相同。"""
+    from healer import guard, verify
+    key = guard.Limiter.key(issue["namespace"], issue["deployment"], guard.problem_class(issue.get("reason") or action))
+    verify.PENDING.register(key, issue["namespace"], issue["deployment"], action, snap, rollback_allowed)
+
+
+def _record_gitops(issue: dict, action: str) -> dict:
+    """自動修復寫進部署紀錄 repo（使用者 2026-11-25 決定）。HEALER_GITOPS=0 關閉。失敗不影響修復本身。"""
+    if os.environ.get("HEALER_GITOPS", "1").strip().lower() in ("0", "false", "off", "no"):
+        return {"ok": False, "skipped": "HEALER_GITOPS=0"}
+    try:
+        from gitops.heal_record import record_heal
+        return record_heal(issue["namespace"], issue["deployment"], action)
+    except Exception as e:  # noqa: BLE001
+        print(f"   ⚠️  修復沒有寫進部署紀錄：{e}")
+        return {"ok": False, "error": str(e)[:200]}
 
 
 def _infer_deployment_name(pod_name: str) -> Optional[str]:

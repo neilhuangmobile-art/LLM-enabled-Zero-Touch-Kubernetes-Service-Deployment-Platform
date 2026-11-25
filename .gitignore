@@ -80,3 +80,6 @@ experiments/model_select/reason/results/gemini_cache_k8s40*.jsonl
 docs/bench_blind/k8s40b_*.jsonl
 experiments/model_select/reason/results/dev_k8s40b_*.jsonl
 experiments/model_select/reason/results/gemini_cache_k8s40b*.jsonl
+docs/bench_blind/gen50_*.jsonl
+experiments/model_select/reason/results/dev_gen50_*.jsonl
+experiments/model_select/reason/results/gemini_cache_gen50*.jsonl

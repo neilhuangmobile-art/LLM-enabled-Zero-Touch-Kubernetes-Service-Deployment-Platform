@@ -6,6 +6,21 @@
 相關程式：`healer/pod_watcher.py`、`healer/diagnose.py`、`healer/remediate.py`、`cluster/remote_ops.py`、
 `web_demo.py` 的 `_healer_background_loop`、`_real_heal_pod`、`_remote_healer_loop`。
 
+**進度（2026-11-25）**：
+- [x] P13（log 取結尾）
+- [x] 階段 0：0.1～0.7 全部（`healer/guard.py`；記憶體上限本機與客戶叢集都是 4Gi；`default` 只通知）
+- [x] 階段 1（本機）：快照、dry-run、非阻塞驗證、沒好退回（`healer/verify.py`）；客戶叢集的驗證退回還沒做
+- [x] 自動修復寫進 GitOps（`gitops/heal_record.py`，使用者 11-25 決定要寫）
+- [x] 評估工具與開發題組（`experiments/healer_eval/`，22 題）：舊版 17/22 → 新版 22/22，結果在 `docs/bench_record/2026-11-25_Healer階段0與1評估.md`
+- [ ] 盲測題（由不調整 Healer 的人出）——出題說明與執行工具已準備（`experiments/healer_eval/BLIND_GUIDE.md`、`run_eval.py --faults`）
+- [x] 診斷誤判修正（缺 ConfigMap／Secret 不再判成映像檔；新增 `fix_command`、`tune_heap`；結束碼說明）
+- [x] 階段 2：擴大偵測，只通知（`healer/detect.py`，9 種）
+- [x] 階段 3：剛更新完就崩潰 → 退回最後一個正常運作過的版本（使用者同意自動）；啟動太慢改用 startupProbe；heap 用完只通知
+- [x] 階段 4：log 去重＋BM25、處理手冊（`healer/runbooks/`）、證據引用檢查、過去修法、推播固定模板（model server 要重啟才生效）
+- [x] 階段 5：定時執行預設帶 podFailurePolicy；Pod 原地調整決定不做（原因見第 3 節）
+- [x] 客戶叢集修復的驗證與退回（`cluster/remote_verify.py`）；限流與停手狀態在網站重啟後從事件紀錄還原
+- 開發題組擴充到 35 題，最終版 35/35：`docs/bench_record/2026-11-25_Healer階段2到5評估.md`
+
 ---
 
 ## 1. 結論先講
@@ -121,7 +136,12 @@
   **限制**：只改 Pod，不會改 Deployment 的設定，下次更新又會回到舊值，所以仍要同步改 Deployment。
   官方文件的例子把記憶體設成需要重啟容器。客戶叢集的版本不一定支援，要先偵測。
   效益有限，放最後。
+  **2026-11-25 決定不做**（使用者同意）：Healer 修 OOM 一定要同步改 Deployment（不然下次更新又回到舊值），
+  而一改 Deployment 的 Pod 範本，K8s 就會用新設定重建 Pod，原地調整省下的那一次重建就沒有了。
+  只有「只改 Pod、不改 Deployment」才有好處，但那樣設定會跟部署紀錄不一致，違反 P10 的原則。
 - **定時執行（CronJob）預設帶 `podFailurePolicy`**：依結束碼決定要重試還是直接失敗，從部署時就減少無意義的重跑。這要改部署樣板，不是 Healer。
+  **2026-11-25 已做**：exit 126／127 直接判定失敗、被驅逐（DisruptionTarget）不算重試次數；`restartPolicy` 改成 `Never`
+  （podFailurePolicy 的要求）。只影響之後新部署的定時執行。
 
 ---
 
